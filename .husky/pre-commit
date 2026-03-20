@@ -1,13 +1,10 @@
 #!/usr/bin/env sh
-. "$(dirname "$0")/_/husky.sh"
 
 # Exit immediately if any command fails
 set -e
 
 echo "💅 Fixing lint & formatting staged files..."
-npm run lint:fix
-
-echo "🧪 Running frontend & backend tests..."
+npx lint-staged
 npm run test
 
 echo "✅ Pre-commit checks passed."
