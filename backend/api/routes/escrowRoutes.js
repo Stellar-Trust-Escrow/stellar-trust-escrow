@@ -47,4 +47,20 @@ router.get('/:id/milestones', escrowController.getMilestones);
  */
 router.get('/:id/milestones/:milestoneId', escrowController.getMilestone);
 
+/**
+ * @route  GET /api/escrows/stats/:address
+ * @desc   Aggregated per-user stats: total, active, completed, disputed escrows,
+ *         success rate %, and total value locked across active escrows.
+ * @param  address — Stellar public key (G...)
+ */
+router.get('/stats/:address', escrowController.getUserStats);
+
+/**
+ * @route  GET /api/escrows/activity/:address
+ * @desc   10 most recent escrows for the given address, ordered by last update.
+ *         Used by the dashboard activity timeline.
+ * @param  address — Stellar public key (G...)
+ */
+router.get('/activity/:address', escrowController.getUserActivity);
+
 export default router;
