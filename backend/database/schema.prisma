@@ -43,6 +43,8 @@ model Escrow {
   @@index([clientAddress])
   @@index([freelancerAddress])
   @@index([status])
+  // Composite index for filtered + sorted list queries
+  @@index([status, createdAt(sort: Desc)])
   @@map("escrows")
 }
 
@@ -97,9 +99,12 @@ model Dispute {
   freelancerAmount String?  @map("freelancer_amount")
   /// Address that resolved the dispute (arbiter or admin)
   resolvedBy      String?   @map("resolved_by")
+  /// Outcome description
+  resolution      String?
 
   escrow          Escrow    @relation(fields: [escrowId], references: [id])
 
+  @@index([raisedByAddress])
   @@map("disputes")
 }
 

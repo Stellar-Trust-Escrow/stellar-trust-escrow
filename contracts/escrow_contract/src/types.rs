@@ -30,10 +30,12 @@ pub enum MilestoneStatus {
     Pending,
     /// Freelancer has submitted work for this milestone.
     Submitted,
-    /// Client has approved the milestone. Funds can be released.
+    /// Client has approved the milestone. Funds have been released.
     Approved,
     /// Client rejected the submission. Freelancer should resubmit.
     Rejected,
+    /// A dispute has been raised on this milestone. Funds are frozen.
+    Disputed,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
