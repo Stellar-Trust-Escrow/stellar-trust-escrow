@@ -113,6 +113,27 @@ model IndexerState {
   @@map("indexer_state")
 }
 
+// ── Admin Audit Log ───────────────────────────────────────────────────────────
+
+/// Immutable record of every admin action for accountability and audit trails.
+model AdminAuditLog {
+  id              Int      @id @default(autoincrement())
+  /// Action taken, e.g. SUSPEND_USER, BAN_USER, RESOLVE_DISPUTE
+  action          String
+  /// The address or resource the action was taken against
+  targetAddress   String   @map("target_address")
+  /// Human-readable reason supplied by the admin
+  reason          String   @default("")
+  /// Identifier of the admin who performed the action
+  performedBy     String   @map("performed_by")
+  performedAt     DateTime @map("performed_at")
+
+  @@index([action])
+  @@index([targetAddress])
+  @@index([performedAt(sort: Desc)])
+  @@map("admin_audit_logs")
+}
+
 // ── Enums ─────────────────────────────────────────────────────────────────────
 
 enum EscrowStatus {

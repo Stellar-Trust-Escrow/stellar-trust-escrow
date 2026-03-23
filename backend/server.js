@@ -21,6 +21,7 @@ import escrowRoutes from './api/routes/escrowRoutes.js';
 import userRoutes from './api/routes/userRoutes.js';
 import reputationRoutes from './api/routes/reputationRoutes.js';
 import disputeRoutes from './api/routes/disputeRoutes.js';
+import adminRoutes from './api/routes/adminRoutes.js';
 
 // TODO (contributor — easy, Issue #17): Import and start the escrow indexer
 // const { startIndexer } = require('./services/escrowIndexer');
@@ -66,6 +67,7 @@ app.use('/api/escrows', escrowRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/reputation', reputationRoutes);
 app.use('/api/disputes', disputeRoutes);
+app.use('/api/admin', adminRoutes);
 
 // ── 404 Handler ───────────────────────────────────────────────────────────────
 
