@@ -7,6 +7,8 @@
 //! Event topics follow the pattern: `(event_name, primary_identifier)`
 //! Event data carries the payload relevant to that event type.
 
+#![allow(dead_code)]
+
 use soroban_sdk::{symbol_short, Address, Env};
 
 /// Emitted when a new escrow is created and funds are locked.
