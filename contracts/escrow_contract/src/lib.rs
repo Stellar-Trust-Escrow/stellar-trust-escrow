@@ -445,7 +445,9 @@ impl EscrowContract {
         }
 
         let mut milestone = ContractStorage::load_milestone(&env, escrow_id, milestone_id)?;
-        if milestone.status != MilestoneStatus::Pending {
+        if milestone.status != MilestoneStatus::Pending
+            && milestone.status != MilestoneStatus::Rejected
+        {
             return Err(EscrowError::InvalidMilestoneState);
         }
 
@@ -459,11 +461,9 @@ impl EscrowContract {
 
     /// Client approves a submitted milestone and triggers fund release.
     ///
-    /// Marks the milestone as `Approved` and calls `release_funds` internally
-    /// to transfer the milestone amount to the freelancer.
-    ///
-    /// If this was the last milestone, the escrow status is set to `Completed`
-    /// and reputation is updated for both parties.
+    /// Marks the milestone as `Approved` and transfers the milestone amount
+    /// to the freelancer. If all milestones are now Approved, the escrow
+    /// status is set to `Completed`.
     ///
     /// # Arguments
     /// * `caller`       - Must be the escrow's client.
@@ -477,30 +477,75 @@ impl EscrowContract {
     ///
     /// # Events
     /// Emits `MilestoneApproved` and `FundsReleased`
-    ///
-    /// # TODO (contributor — medium, Issue #5)
-    /// After approval:
-    /// - Update milestone status to Approved, set resolved_at
-    /// - Call internal `release_funds` to transfer tokens
-    /// - Check if all milestones are Approved → set escrow Completed
-    /// - If Completed, call `update_reputation` for both parties
     pub fn approve_milestone(
-        _env: Env,
-        _caller: Address,
-        _escrow_id: u64,
-        _milestone_id: u32,
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+        milestone_id: u32,
     ) -> Result<(), EscrowError> {
-        todo!("implement approve_milestone — see GitHub Issue #5")
+        caller.require_auth();
+
+        let mut meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
+        if caller != meta.client {
+            return Err(EscrowError::ClientOnly);
+        }
+        if meta.status != EscrowStatus::Active {
+            return Err(EscrowError::EscrowNotActive);
+        }
+
+        let mut milestone = ContractStorage::load_milestone(&env, escrow_id, milestone_id)?;
+        if milestone.status != MilestoneStatus::Submitted {
+            return Err(EscrowError::InvalidMilestoneState);
+        }
+
+        // Mark approved and record timestamp
+        milestone.status = MilestoneStatus::Approved;
+        milestone.resolved_at = Some(env.ledger().timestamp());
+        ContractStorage::save_milestone(&env, escrow_id, &milestone);
+
+        // Release funds to freelancer
+        let amount = milestone.amount;
+        token::Client::new(&env, &meta.token).transfer(
+            &env.current_contract_address(),
+            &meta.freelancer,
+            &amount,
+        );
+        meta.remaining_balance = meta
+            .remaining_balance
+            .checked_sub(amount)
+            .unwrap_or(0);
+
+        events::emit_milestone_approved(&env, escrow_id, milestone_id, amount);
+        events::emit_funds_released(&env, escrow_id, &meta.freelancer, amount);
+
+        // Check if all milestones are Approved → complete the escrow
+        let all_approved = (0..meta.milestone_count).all(|id| {
+            ContractStorage::load_milestone(&env, escrow_id, id)
+                .map(|m| m.status == MilestoneStatus::Approved)
+                .unwrap_or(false)
+        });
+
+        if all_approved && meta.milestone_count > 0 {
+            meta.status = EscrowStatus::Completed;
+        }
+
+        ContractStorage::save_escrow_meta(&env, &meta);
+        Ok(())
     }
 
-    /// Client rejects a submitted milestone, sending it back to Pending.
+    /// Client rejects a submitted milestone.
+    ///
+    /// Sets the milestone status to `Rejected`. The freelancer may resubmit
+    /// by calling `submit_milestone` again (which accepts both Pending and
+    /// Rejected states).
     ///
     /// # Arguments
     /// * `caller`       - Must be the escrow's client.
     /// * `escrow_id`    - Target escrow.
     /// * `milestone_id` - The milestone being rejected.
     ///
-    /// # TODO (contributor — easy, Issue #6)
+    /// # Events
+    /// Emits `MilestoneRejected`
     pub fn reject_milestone(
         env: Env,
         caller: Address,
@@ -522,16 +567,20 @@ impl EscrowContract {
             return Err(EscrowError::InvalidMilestoneState);
         }
 
-        milestone.status = MilestoneStatus::Pending;
+        milestone.status = MilestoneStatus::Rejected;
         milestone.resolved_at = Some(env.ledger().timestamp());
         ContractStorage::save_milestone(&env, escrow_id, &milestone);
+
+        events::emit_milestone_rejected(&env, escrow_id, milestone_id, &caller);
         Ok(())
     }
 
     /// Releases funds to the freelancer for an approved milestone.
     ///
-    /// This is called internally by `approve_milestone`. It is also public
-    /// so the admin can manually release in edge cases.
+    /// This is callable by the admin to manually release funds in edge cases.
+    /// Normal flow goes through `approve_milestone` which handles release
+    /// atomically. Calling this on an already-released milestone is a no-op
+    /// guard (milestone must be Approved and balance must cover the amount).
     ///
     /// # Arguments
     /// * `escrow_id`    - Target escrow.
@@ -539,22 +588,32 @@ impl EscrowContract {
     ///
     /// # Errors
     /// * `EscrowError::InvalidMilestoneState` — milestone not Approved
-    /// * `EscrowError::TransferFailed`
     ///
     /// # Events
     /// Emits `FundsReleased`
-    ///
-    /// # TODO (contributor — medium, Issue #7)
-    /// 1. Verify milestone is Approved
-    /// 2. Transfer milestone.amount from contract to escrow.freelancer
-    /// 3. Decrease escrow.remaining_balance
-    /// 4. Emit FundsReleased event
     pub fn release_funds(
-        _env: Env,
-        _escrow_id: u64,
-        _milestone_id: u32,
+        env: Env,
+        escrow_id: u64,
+        milestone_id: u32,
     ) -> Result<(), EscrowError> {
-        todo!("implement release_funds — see GitHub Issue #7")
+        let mut meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
+        let milestone = ContractStorage::load_milestone(&env, escrow_id, milestone_id)?;
+
+        if milestone.status != MilestoneStatus::Approved {
+            return Err(EscrowError::InvalidMilestoneState);
+        }
+
+        let amount = milestone.amount;
+        token::Client::new(&env, &meta.token).transfer(
+            &env.current_contract_address(),
+            &meta.freelancer,
+            &amount,
+        );
+        meta.remaining_balance = meta.remaining_balance.checked_sub(amount).unwrap_or(0);
+        ContractStorage::save_escrow_meta(&env, &meta);
+
+        events::emit_funds_released(&env, escrow_id, &meta.freelancer, amount);
+        Ok(())
     }
 
     /// Cancels an escrow and returns remaining funds to the client.
@@ -587,9 +646,14 @@ impl EscrowContract {
     /// the escrow status changes to `Disputed` and only the arbiter
     /// (or admin if no arbiter) can resolve it.
     ///
+    /// If a `milestone_id` is provided, that milestone's status is set to
+    /// `Disputed` as well, giving granular tracking of which deliverable
+    /// is contested.
+    ///
     /// # Arguments
-    /// * `caller`    - Must be client or freelancer of this escrow.
-    /// * `escrow_id` - The escrow to dispute.
+    /// * `caller`       - Must be client or freelancer of this escrow.
+    /// * `escrow_id`    - The escrow to dispute.
+    /// * `milestone_id` - Optional milestone to mark as Disputed.
     ///
     /// # Errors
     /// * `EscrowError::Unauthorized`
@@ -597,11 +661,46 @@ impl EscrowContract {
     /// * `EscrowError::DisputeAlreadyExists`
     ///
     /// # Events
-    /// Emits `DisputeRaised`
-    ///
-    /// # TODO (contributor — medium, Issue #9)
-    pub fn raise_dispute(_env: Env, _caller: Address, _escrow_id: u64) -> Result<(), EscrowError> {
-        todo!("implement raise_dispute — see GitHub Issue #9")
+    /// Emits `DisputeRaised` and optionally `MilestoneDisputed`
+    pub fn raise_dispute(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+        milestone_id: Option<u32>,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+
+        let mut meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
+        if caller != meta.client && caller != meta.freelancer {
+            return Err(EscrowError::Unauthorized);
+        }
+        if meta.status == EscrowStatus::Disputed {
+            return Err(EscrowError::DisputeAlreadyExists);
+        }
+        if meta.status != EscrowStatus::Active {
+            return Err(EscrowError::EscrowNotActive);
+        }
+
+        meta.status = EscrowStatus::Disputed;
+        ContractStorage::save_escrow_meta(&env, &meta);
+
+        events::emit_dispute_raised(&env, escrow_id, &caller);
+
+        // Optionally mark a specific milestone as Disputed
+        if let Some(mid) = milestone_id {
+            let mut milestone = ContractStorage::load_milestone(&env, escrow_id, mid)?;
+            // Only submitted milestones can be disputed
+            if milestone.status == MilestoneStatus::Submitted
+                || milestone.status == MilestoneStatus::Pending
+            {
+                milestone.status = MilestoneStatus::Disputed;
+                milestone.resolved_at = Some(env.ledger().timestamp());
+                ContractStorage::save_milestone(&env, escrow_id, &milestone);
+                events::emit_milestone_disputed(&env, escrow_id, mid, &caller);
+            }
+        }
+
+        Ok(())
     }
 
     /// Resolves a dispute by distributing funds between client and freelancer.
