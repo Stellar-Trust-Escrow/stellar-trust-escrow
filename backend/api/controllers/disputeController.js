@@ -1,23 +1,10 @@
-/**
- * Dispute Controller
- *
- * Performance optimizations:
- *  - select projection to avoid loading full escrow rows
- *  - TTL cache for dispute list (30 s) and individual disputes (60 s)
- */
-
 import prisma from '../../lib/prisma.js';
 import cache from '../../lib/cache.js';
+import { buildPaginatedResponse, parsePagination } from '../../lib/pagination.js';
 
-/**
- * GET /api/disputes
- * All escrows in Disputed status, paginated.
- */
 const listDisputes = async (req, res) => {
   try {
-    const page = Math.max(1, parseInt(req.query.page) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = parsePagination(req.query);
 
     const cacheKey = `disputes:list:${page}:${limit}`;
     const cached = cache.get(cacheKey);
@@ -48,7 +35,7 @@ const listDisputes = async (req, res) => {
       prisma.dispute.count(),
     ]);
 
-    const result = { data, total, page, limit };
+    const result = buildPaginatedResponse(data, { total, page, limit });
     cache.set(cacheKey, result, 30);
     res.json(result);
   } catch (err) {
@@ -56,9 +43,6 @@ const listDisputes = async (req, res) => {
   }
 };
 
-/**
- * GET /api/disputes/:escrowId
- */
 const getDispute = async (req, res) => {
   try {
     const escrowId = BigInt(req.params.escrowId);

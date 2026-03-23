@@ -1,23 +1,12 @@
-/**
- * Reputation Controller
- *
- * Performance optimizations:
- *  - Leaderboard cached for 5 min (expensive sorted query)
- *  - Individual reputation records cached for 60 s
- *  - select projection on leaderboard to avoid loading all columns
- */
-
 import prisma from '../../lib/prisma.js';
 import cache from '../../lib/cache.js';
+import { buildPaginatedResponse, parsePagination } from '../../lib/pagination.js';
 
 const STELLAR_ADDRESS_RE = /^G[A-Z2-7]{55}$/;
 
-const LEADERBOARD_TTL = 300; // 5 minutes
+const LEADERBOARD_TTL = 300;
 const REPUTATION_TTL = 60;
 
-/**
- * GET /api/reputation/:address
- */
 const getReputation = async (req, res) => {
   try {
     const { address } = req.params;
@@ -48,15 +37,9 @@ const getReputation = async (req, res) => {
   }
 };
 
-/**
- * GET /api/reputation/leaderboard
- * Top users by total_score — cached aggressively since it's expensive.
- */
 const getLeaderboard = async (req, res) => {
   try {
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
-    const page = Math.max(1, parseInt(req.query.page) || 1);
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = parsePagination(req.query);
 
     const cacheKey = `reputation:leaderboard:${page}:${limit}`;
     const cached = cache.get(cacheKey);
@@ -78,17 +61,17 @@ const getLeaderboard = async (req, res) => {
       prisma.reputationRecord.count(),
     ]);
 
-    const data = records.map((r, i) => ({
-      rank: skip + i + 1,
-      address: `${r.address.slice(0, 6)}…${r.address.slice(-4)}`,
-      fullAddress: r.address,
-      totalScore: r.totalScore,
-      completedEscrows: r.completedEscrows,
-      disputesWon: r.disputesWon,
-      totalVolume: r.totalVolume,
+    const data = records.map((record, index) => ({
+      rank: skip + index + 1,
+      address: `${record.address.slice(0, 6)}...${record.address.slice(-4)}`,
+      fullAddress: record.address,
+      totalScore: record.totalScore,
+      completedEscrows: record.completedEscrows,
+      disputesWon: record.disputesWon,
+      totalVolume: record.totalVolume,
     }));
 
-    const result = { data, total, page, limit };
+    const result = buildPaginatedResponse(data, { total, page, limit });
     cache.set(cacheKey, result, LEADERBOARD_TTL);
     res.json(result);
   } catch (err) {

@@ -1,16 +1,6 @@
-/**
- * User Controller
- *
- * Handles profile, history, and stats queries for Stellar addresses.
- *
- * Performance optimizations:
- *  - Parallel DB queries via Promise.all
- *  - select projections (no over-fetching)
- *  - TTL cache for profiles (60 s) and stats (120 s)
- */
-
 import prisma from '../../lib/prisma.js';
 import cache from '../../lib/cache.js';
+import { buildPaginatedResponse, parsePagination } from '../../lib/pagination.js';
 
 const STELLAR_ADDRESS_RE = /^G[A-Z2-7]{55}$/;
 
@@ -31,10 +21,6 @@ const ESCROW_SUMMARY_SELECT = {
   createdAt: true,
 };
 
-/**
- * GET /api/users/:address
- * Combined profile: reputation + last 5 escrows.
- */
 const getUserProfile = async (req, res) => {
   try {
     const { address } = req.params;
@@ -44,7 +30,6 @@ const getUserProfile = async (req, res) => {
     const cached = cache.get(cacheKey);
     if (cached) return res.json(cached);
 
-    // Run both queries in parallel
     const [reputation, recentEscrows] = await Promise.all([
       prisma.reputationRecord.findUnique({ where: { address } }),
       prisma.escrow.findMany({
@@ -75,19 +60,13 @@ const getUserProfile = async (req, res) => {
   }
 };
 
-/**
- * GET /api/users/:address/escrows
- * Paginated escrow list for a user, filterable by role and status.
- */
 const getUserEscrows = async (req, res) => {
   try {
     const { address } = req.params;
     if (!validateAddress(address, res)) return;
 
-    const { role = 'all', status, page: rawPage = 1, limit: rawLimit = 20 } = req.query;
-    const page = Math.max(1, parseInt(rawPage));
-    const limit = Math.min(100, Math.max(1, parseInt(rawLimit)));
-    const skip = (page - 1) * limit;
+    const { role = 'all', status } = req.query;
+    const { page, limit, skip } = parsePagination(req.query);
 
     const where = {};
     if (status) where.status = status;
@@ -109,7 +88,7 @@ const getUserEscrows = async (req, res) => {
       prisma.escrow.count({ where }),
     ]);
 
-    const result = { data, total, page, limit };
+    const result = buildPaginatedResponse(data, { total, page, limit });
     cache.set(cacheKey, result, 15);
     res.json(result);
   } catch (err) {
@@ -117,10 +96,6 @@ const getUserEscrows = async (req, res) => {
   }
 };
 
-/**
- * GET /api/users/:address/stats
- * Aggregated metrics — uses Prisma aggregate to avoid loading all rows.
- */
 const getUserStats = async (req, res) => {
   try {
     const { address } = req.params;
@@ -142,9 +117,9 @@ const getUserStats = async (req, res) => {
       }),
     ]);
 
-    const countsByStatus = Object.fromEntries(escrowCounts.map((r) => [r.status, r._count.id]));
-    const totalEscrows = escrowCounts.reduce((sum, r) => sum + r._count.id, 0);
-    const completed = countsByStatus['Completed'] ?? 0;
+    const countsByStatus = Object.fromEntries(escrowCounts.map((record) => [record.status, record._count.id]));
+    const totalEscrows = escrowCounts.reduce((sum, record) => sum + record._count.id, 0);
+    const completed = countsByStatus.Completed ?? 0;
 
     const stats = {
       address,

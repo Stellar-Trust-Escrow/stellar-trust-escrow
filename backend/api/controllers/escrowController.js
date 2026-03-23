@@ -1,30 +1,6 @@
-/**
- * Escrow Controller
- *
- * Handles HTTP requests for escrow-related routes.
- * Reads from PostgreSQL (indexed from chain events).
- * Write operations broadcast pre-signed transactions to Stellar.
- *
- * Performance optimizations applied:
- *  - Prisma singleton to avoid connection pool exhaustion
- *  - select projections to avoid over-fetching columns
- *  - DB indexes on clientAddress, freelancerAddress, status (see schema.prisma)
- *  - In-memory TTL cache for individual escrow reads (30 s)
- *  - Pagination capped at 100 rows per page
- */
-
 import prisma from '../../lib/prisma.js';
 import cache from '../../lib/cache.js';
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-const MAX_LIMIT = 100;
-
-function parsePagination(query) {
-  const page = Math.max(1, parseInt(query.page) || 1);
-  const limit = Math.min(MAX_LIMIT, Math.max(1, parseInt(query.limit) || 20));
-  return { page, limit, skip: (page - 1) * limit };
-}
+import { buildPaginatedResponse, parsePagination } from '../../lib/pagination.js';
 
 const ESCROW_SUMMARY_SELECT = {
   id: true,
@@ -37,12 +13,6 @@ const ESCROW_SUMMARY_SELECT = {
   createdAt: true,
 };
 
-// ── Controllers ───────────────────────────────────────────────────────────────
-
-/**
- * GET /api/escrows
- * Paginated list with optional filters.
- */
 const listEscrows = async (req, res) => {
   try {
     const { page, limit, skip } = parsePagination(req.query);
@@ -62,18 +32,14 @@ const listEscrows = async (req, res) => {
       prisma.escrow.count({ where }),
     ]);
 
-    const result = { data, total, page, limit };
-    cache.set(cacheKey, result, 15); // 15 s TTL — list changes frequently
+    const result = buildPaginatedResponse(data, { total, page, limit });
+    cache.set(cacheKey, result, 15);
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
 
-/**
- * GET /api/escrows/:id
- * Full escrow detail including milestones.
- */
 const getEscrow = async (req, res) => {
   try {
     const id = BigInt(req.params.id);
@@ -112,50 +78,49 @@ const getEscrow = async (req, res) => {
   }
 };
 
-/**
- * POST /api/escrows/broadcast
- * Broadcasts a pre-signed Stellar transaction XDR.
- */
 const broadcastCreateEscrow = async (req, res) => {
   try {
     const { signedXdr } = req.body;
     if (!signedXdr || typeof signedXdr !== 'string') {
       return res.status(400).json({ error: 'signedXdr is required' });
     }
-    // Stellar broadcast is handled by stellarService (Issue #43)
-    res.status(501).json({ error: 'Not implemented — see Issue #20' });
+
+    res.status(501).json({ error: 'Not implemented - see Issue #20' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
 
-/**
- * GET /api/escrows/:id/milestones
- * Milestone list for an escrow — uses projection to avoid loading full escrow.
- */
 const getMilestones = async (req, res) => {
   try {
     const escrowId = BigInt(req.params.id);
-    const cacheKey = `escrows:${escrowId}:milestones`;
+    const { page, limit, skip } = parsePagination(req.query);
+    const cacheKey = `escrows:${escrowId}:milestones:${page}:${limit}`;
     const cached = cache.get(cacheKey);
     if (cached) return res.json(cached);
 
-    const milestones = await prisma.milestone.findMany({
-      where: { escrowId },
-      orderBy: { milestoneIndex: 'asc' },
-      select: {
-        id: true,
-        milestoneIndex: true,
-        title: true,
-        amount: true,
-        status: true,
-        submittedAt: true,
-        resolvedAt: true,
-      },
-    });
+    const [data, total] = await prisma.$transaction([
+      prisma.milestone.findMany({
+        where: { escrowId },
+        skip,
+        take: limit,
+        orderBy: { milestoneIndex: 'asc' },
+        select: {
+          id: true,
+          milestoneIndex: true,
+          title: true,
+          amount: true,
+          status: true,
+          submittedAt: true,
+          resolvedAt: true,
+        },
+      }),
+      prisma.milestone.count({ where: { escrowId } }),
+    ]);
 
-    cache.set(cacheKey, milestones, 30);
-    res.json(milestones);
+    const result = buildPaginatedResponse(data, { total, page, limit });
+    cache.set(cacheKey, result, 30);
+    res.json(result);
   } catch (err) {
     if (err.message?.includes('Cannot convert')) {
       return res.status(400).json({ error: 'Invalid escrow id' });
@@ -164,13 +129,10 @@ const getMilestones = async (req, res) => {
   }
 };
 
-/**
- * GET /api/escrows/:id/milestones/:milestoneId
- */
 const getMilestone = async (req, res) => {
   try {
     const escrowId = BigInt(req.params.id);
-    const milestoneIndex = parseInt(req.params.milestoneId);
+    const milestoneIndex = parseInt(req.params.milestoneId, 10);
 
     const milestone = await prisma.milestone.findUnique({
       where: { escrowId_milestoneIndex: { escrowId, milestoneIndex } },
