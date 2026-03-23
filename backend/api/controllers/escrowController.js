@@ -6,9 +6,9 @@
  * Write operations broadcast pre-signed transactions to Stellar.
  */
 
-// TODO (contributor — easy): import Prisma client once schema is finalized
-// const { PrismaClient } = require('@prisma/client');
-// const prisma = new PrismaClient();
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 /**
  * GET /api/escrows
@@ -116,10 +116,99 @@ const getMilestone = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/escrows/stats/:address
+ *
+ * Returns per-user escrow statistics aggregated from the DB.
+ * Used by the dashboard analytics widgets.
+ *
+ * @returns {{ total, active, completed, cancelled, disputed, successRate, totalValueLocked }}
+ */
+const getUserStats = async (req, res) => {
+  try {
+    const { address } = req.params;
+
+    const [total, active, completed, cancelled, disputed] = await Promise.all([
+      prisma.escrow.count({
+        where: { OR: [{ clientAddress: address }, { freelancerAddress: address }] },
+      }),
+      prisma.escrow.count({
+        where: { OR: [{ clientAddress: address }, { freelancerAddress: address }], status: 'Active' },
+      }),
+      prisma.escrow.count({
+        where: { OR: [{ clientAddress: address }, { freelancerAddress: address }], status: 'Completed' },
+      }),
+      prisma.escrow.count({
+        where: { OR: [{ clientAddress: address }, { freelancerAddress: address }], status: 'Cancelled' },
+      }),
+      prisma.escrow.count({
+        where: { OR: [{ clientAddress: address }, { freelancerAddress: address }], status: 'Disputed' },
+      }),
+    ]);
+
+    // Success rate = completed / (completed + cancelled + disputed) * 100
+    const finished = completed + cancelled + disputed;
+    const successRate = finished > 0 ? Math.round((completed / finished) * 100) : null;
+
+    // Sum of remainingBalance across active escrows as a rough TVL proxy
+    const activeEscrows = await prisma.escrow.findMany({
+      where: {
+        OR: [{ clientAddress: address }, { freelancerAddress: address }],
+        status: 'Active',
+      },
+      select: { remainingBalance: true },
+    });
+    const totalValueLocked = activeEscrows.reduce(
+      (sum, e) => sum + BigInt(e.remainingBalance),
+      BigInt(0),
+    ).toString();
+
+    res.json({ total, active, completed, cancelled, disputed, successRate, totalValueLocked });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+/**
+ * GET /api/escrows/activity/:address
+ *
+ * Returns the 10 most recent escrows (any role) for a given address,
+ * ordered by most recently updated. Used for the activity timeline.
+ *
+ * @returns { escrows: EscrowSummary[] }
+ */
+const getUserActivity = async (req, res) => {
+  try {
+    const { address } = req.params;
+
+    const escrows = await prisma.escrow.findMany({
+      where: { OR: [{ clientAddress: address }, { freelancerAddress: address }] },
+      orderBy: { updatedAt: 'desc' },
+      take: 10,
+      select: {
+        id: true,
+        clientAddress: true,
+        freelancerAddress: true,
+        status: true,
+        totalAmount: true,
+        remainingBalance: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    res.json({ escrows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
 export default {
   listEscrows,
   getEscrow,
   broadcastCreateEscrow,
   getMilestones,
   getMilestone,
+  getUserStats,
+  getUserActivity,
 };
