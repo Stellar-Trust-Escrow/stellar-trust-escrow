@@ -1,0 +1,129 @@
+{
+  "title": "Stellar Trust Escrow — Overview",
+  "uid": "ste-overview",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request Rate (req/s)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total[1m])) by (route)",
+          "legendFormat": "{{route}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "P95 Request Latency (ms)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_ms_bucket[5m])) by (le, route))",
+          "legendFormat": "p95 {{route}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Error Rate (%)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{status_code=~\"5..\"}[1m])) / sum(rate(http_requests_total[1m])) * 100",
+          "legendFormat": "5xx error rate"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "DB Query Duration P95 (ms)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(db_query_duration_ms_bucket[5m])) by (le, model, operation))",
+          "legendFormat": "{{model}}.{{operation}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Cache Hit Rate (%)",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 16, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "expr": "sum(rate(cache_hits_total[5m])) / (sum(rate(cache_hits_total[5m])) + sum(rate(cache_misses_total[5m]))) * 100",
+          "legendFormat": "Hit Rate"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "In-Flight Requests",
+      "type": "stat",
+      "gridPos": { "x": 6, "y": 16, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "expr": "http_requests_in_flight",
+          "legendFormat": "In Flight"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Active Escrows",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 16, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "expr": "active_escrows",
+          "legendFormat": "Active"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Slow Queries",
+      "type": "stat",
+      "gridPos": { "x": 18, "y": 16, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "expr": "sum(increase(db_slow_queries_total[1h]))",
+          "legendFormat": "Slow Queries (1h)"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Node.js Heap Used (MB)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 20, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "nodejs_heap_size_used_bytes / 1024 / 1024",
+          "legendFormat": "Heap Used MB"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Event Loop Lag (ms)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 20, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "nodejs_eventloop_lag_seconds * 1000",
+          "legendFormat": "Event Loop Lag ms"
+        }
+      ]
+    }
+  ]
+}

@@ -7,6 +7,8 @@
 //! Event topics follow the pattern: `(event_name, primary_identifier)`
 //! Event data carries the payload relevant to that event type.
 
+#![allow(dead_code)]
+
 use soroban_sdk::{symbol_short, Address, Env};
 
 /// Emitted when a new escrow is created and funds are locked.
@@ -70,6 +72,37 @@ pub fn emit_milestone_approved(env: &Env, escrow_id: u64, milestone_id: u32, amo
     env.events().publish(
         (symbol_short!("mil_apr"), escrow_id),
         (milestone_id, amount),
+    );
+}
+
+/// Emitted when a client rejects a milestone submission, returning it to Pending.
+///
+/// # Arguments
+/// * `escrow_id`    - The escrow ID
+/// * `milestone_id` - The rejected milestone
+/// * `client`       - Client's address
+pub fn emit_milestone_rejected(env: &Env, escrow_id: u64, milestone_id: u32, client: &Address) {
+    env.events().publish(
+        (symbol_short!("mil_rej"), escrow_id),
+        (milestone_id, client.clone()),
+    );
+}
+
+/// Emitted when a dispute is raised on a specific milestone.
+///
+/// # Arguments
+/// * `escrow_id`    - The escrow ID
+/// * `milestone_id` - The disputed milestone
+/// * `raised_by`    - Address of the party raising the dispute
+pub fn emit_milestone_disputed(
+    env: &Env,
+    escrow_id: u64,
+    milestone_id: u32,
+    raised_by: &Address,
+) {
+    env.events().publish(
+        (symbol_short!("mil_dis"), escrow_id),
+        (milestone_id, raised_by.clone()),
     );
 }
 
