@@ -751,7 +751,7 @@ impl EscrowContract {
         let mut meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
 
         // Caller must be arbiter or admin
-        let is_arbiter = meta.arbiter.as_ref().map_or(false, |a| *a == caller);
+        let is_arbiter = meta.arbiter.as_ref().is_some_and(|a| *a == caller);
         if !is_arbiter {
             ContractStorage::require_admin(&env, &caller)?;
         }

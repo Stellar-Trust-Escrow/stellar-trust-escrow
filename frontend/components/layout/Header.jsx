@@ -16,11 +16,13 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import { useWallet } from '../../hooks/useWallet';
 import WalletStatus from '../ui/WalletStatus';
 
 export default function Header() {
   const wallet = useWallet();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Determine network label & style from wallet state
   const networkLabel = wallet.network === 'mainnet' ? 'Mainnet' : 'Testnet';
