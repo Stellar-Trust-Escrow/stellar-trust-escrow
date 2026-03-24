@@ -1,3 +1,8 @@
+// Sentry must be initialised before any other imports so it can
+// instrument all subsequent modules (HTTP, DB, etc.)
+import './lib/sentry.js';
+import * as Sentry from '@sentry/node';
+
 /* eslint-disable no-undef */
 import 'dotenv/config';
 import compression from 'compression';
@@ -33,6 +38,10 @@ attachPrismaMetrics(prisma);
 const app = express();
 const PORT = process.env.PORT || 4000;
 
+// ── Sentry request handler — must be first middleware ─────────────────────────
+// Attaches trace context and request data to every event captured downstream.
+app.use(Sentry.expressRequestHandler());
+
 app.use(helmet());
 app.use(compression());
 app.use(metricsMiddleware);
@@ -47,6 +56,9 @@ app.use(morgan('combined'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(auditMiddleware);
+
+// ── Sentry tracing handler — after body parsers, before routes ────────────────
+app.use(Sentry.expressTracingHandler());
 
 const defaultLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -95,10 +107,34 @@ app.use('/api/kyc', kycRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/audit', auditRoutes);
 
+// ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
+// ── Sentry error handler — must be before the generic error handler ───────────
+// Captures unhandled Express errors and attaches request context.
+app.use(Sentry.expressErrorHandler({
+  shouldHandleError(err) {
+    // Report all 5xx errors; skip expected 4xx client errors
+    return !err.statusCode || err.statusCode >= 500;
+  },
+}));
+
+// ── Generic error handler ─────────────────────────────────────────────────────
+app.use((err, _req, res, _next) => {
+  const statusCode = err.statusCode || 500;
+
+  // Attach Sentry event ID to response so support can correlate reports
+  const sentryId = res.sentry;
+  const body = { error: err.message || 'Internal server error' };
+  if (sentryId) body.errorId = sentryId;
+
+  if (statusCode >= 500) {
+    console.error(err.stack);
+  }
+
+  res.status(statusCode).json(body);
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err, _req, res, _next) => {
   console.error(err.stack);
@@ -113,6 +149,10 @@ app.listen(PORT, async () => {
   console.log(`Network: ${process.env.STELLAR_NETWORK}`);
   await emailService.start();
   console.log('[EmailService] Queue processor started');
+  startIndexer().catch((err) => {
+    console.error('[Indexer] Failed to start:', err.message);
+    Sentry.captureException(err, { tags: { component: 'indexer' } });
+  });
   startIndexer().catch((err) => console.error('[Indexer] Failed to start:', err.message));
 });
 
