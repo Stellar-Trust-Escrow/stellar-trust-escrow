@@ -120,6 +120,15 @@ pub struct EscrowState {
     /// TODO (contributor): implement auto-cancel on deadline
     pub deadline: Option<u64>,
 
+    /// Optional lock time (ledger timestamp) - funds locked until this time.
+    /// When set, funds cannot be released until this timestamp has passed.
+    /// Useful for vesting schedules, deferred payments, or future-dated agreements.
+    pub lock_time: Option<u64>,
+
+    /// Optional extension deadline for the lock time.
+    /// Can be used to extend the lock_time if needed.
+    pub lock_time_extension: Option<u64>,
+
     /// IPFS hash of the full project brief / agreement document.
     pub brief_hash: BytesN<32>,
 }
