@@ -119,6 +119,17 @@ pub fn emit_funds_released(env: &Env, escrow_id: u64, to: &Address, amount: i128
     );
 }
 
+/// Emitted when all milestones are approved and the escrow is completed.
+///
+/// # Arguments
+/// * `escrow_id` - The completed escrow ID
+///
+/// Added to fix STE-03: indexer needs this event to update escrow status.
+pub fn emit_escrow_completed(env: &Env, escrow_id: u64) {
+    env.events()
+        .publish((symbol_short!("esc_done"), escrow_id), ());
+}
+
 /// Emitted when an escrow is cancelled and remaining funds returned to client.
 ///
 /// # Arguments
