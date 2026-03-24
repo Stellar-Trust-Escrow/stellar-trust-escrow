@@ -14,7 +14,6 @@ import { jest } from '@jest/globals';
 import zlib from 'zlib';
 import { promisify } from 'util';
 
-const gunzip = promisify(zlib.gunzip);
 const brotliDecompress = promisify(zlib.brotliDecompress);
 
 // ── Mock metrics so the middleware can be imported without a real registry ────

@@ -12,8 +12,6 @@
  */
 
 /* eslint-disable no-undef */
-/* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable @typescript-eslint/no-require-imports */
 
 // Using CommonJS for Jest compatibility
 // const { request } = require('supertest'); // Uncomment when app is exported and tests are implemented (Issue #47)
