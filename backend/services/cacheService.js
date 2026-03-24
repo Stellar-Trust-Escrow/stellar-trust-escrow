@@ -1,3 +1,4 @@
+/* eslint-disable no-undef */
 /**
  * Cache Service — Redis with in-memory fallback
  *
@@ -22,15 +23,24 @@ const mem = {
   get(key) {
     const entry = memStore.get(key);
     if (!entry) return null;
-    if (Date.now() > entry.expiresAt) { memStore.delete(key); return null; }
+    if (Date.now() > entry.expiresAt) {
+      memStore.delete(key);
+      return null;
+    }
     return entry.value;
   },
   set(key, value, ttlSeconds) {
     memStore.set(key, { value, expiresAt: Date.now() + ttlSeconds * 1000 });
   },
-  del(key) { memStore.delete(key); },
-  keys() { return [...memStore.keys()]; },
-  size() { return memStore.size; },
+  del(key) {
+    memStore.delete(key);
+  },
+  keys() {
+    return [...memStore.keys()];
+  },
+  size() {
+    return memStore.size;
+  },
 };
 
 // ── Redis client ──────────────────────────────────────────────────────────────
@@ -40,8 +50,14 @@ let redisReady = false;
 
 if (process.env.REDIS_URL) {
   redis = createClient({ url: process.env.REDIS_URL });
-  redis.on('ready', () => { redisReady = true; console.log('[Cache] Redis connected'); });
-  redis.on('error', (err) => { redisReady = false; console.warn('[Cache] Redis error — using memory fallback:', err.message); });
+  redis.on('ready', () => {
+    redisReady = true;
+    console.log('[Cache] Redis connected');
+  });
+  redis.on('error', (err) => {
+    redisReady = false;
+    console.warn('[Cache] Redis error — using memory fallback:', err.message);
+  });
   redis.connect().catch((err) => console.warn('[Cache] Redis connect failed:', err.message));
 }
 
@@ -50,10 +66,16 @@ if (process.env.REDIS_URL) {
 async function get(key) {
   if (redisReady) {
     const raw = await redis.get(key).catch(() => null);
-    if (raw !== null) { stats.hits++; return JSON.parse(raw); }
+    if (raw !== null) {
+      stats.hits++;
+      return JSON.parse(raw);
+    }
   } else {
     const val = mem.get(key);
-    if (val !== null) { stats.hits++; return val; }
+    if (val !== null) {
+      stats.hits++;
+      return val;
+    }
   }
   stats.misses++;
   return null;

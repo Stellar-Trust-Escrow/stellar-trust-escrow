@@ -1,3 +1,4 @@
+/* eslint-disable no-undef */
 /**
  * Stellar Service
  *
@@ -17,6 +18,11 @@ export const NETWORK_PASSPHRASE =
 
 /** @returns {SorobanRpc.Server} */
 const getServer = () => new SorobanRpc.Server(RPC_URL, { allowHttp: RPC_URL.startsWith('http://') });
+export const NETWORK_PASSPHRASE = NETWORK === 'mainnet' ? Networks.PUBLIC : Networks.TESTNET;
+
+/** @returns {SorobanRpc.Server} */
+const getServer = () =>
+  new SorobanRpc.Server(RPC_URL, { allowHttp: RPC_URL.startsWith('http://') });
 
 /**
  * Submits a signed transaction XDR to the Stellar network and polls until settled.

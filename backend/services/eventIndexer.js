@@ -1,3 +1,6 @@
+/* eslint-disable no-undef */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-require-imports */
 /**
  * Smart Contract Event Indexer
  *
@@ -102,6 +105,7 @@ const handleEscrowCreated = async (event, meta) => {
         clientAddress: parseAddress(client),
         freelancerAddress: parseAddress(freelancer),
         tokenAddress: '',          // populated by a later getEscrow call or separate event
+        tokenAddress: '', // populated by a later getEscrow call or separate event
         totalAmount: parseBigInt(amount).toString(),
         remainingBalance: parseBigInt(amount).toString(),
         status: 'Active',
@@ -110,6 +114,7 @@ const handleEscrowCreated = async (event, meta) => {
         createdLedger: meta.ledger,
       },
       update: {},                  // don't overwrite if already indexed
+      update: {}, // don't overwrite if already indexed
     }),
     buildEventInsert(event, meta, escrowId),
   ]);

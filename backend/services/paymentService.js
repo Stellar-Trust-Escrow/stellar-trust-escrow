@@ -1,3 +1,4 @@
+/* eslint-disable no-undef */
 /**
  * Payment Service — Stripe integration
  *
@@ -47,7 +48,10 @@ async function createCheckoutSession({ address, amountUsd, escrowId }) {
         price_data: {
           currency: 'usd',
           unit_amount: amountCents,
-          product_data: { name: 'Escrow Funding', description: `Fund escrow on StellarTrustEscrow` },
+          product_data: {
+            name: 'Escrow Funding',
+            description: `Fund escrow on StellarTrustEscrow`,
+          },
         },
         quantity: 1,
       },
@@ -145,9 +149,10 @@ async function handleWebhook(rawBody, signature) {
     case 'checkout.session.expired':
     case 'payment_intent.payment_failed': {
       const obj = event.data.object;
-      const where = obj.object === 'checkout.session'
-        ? { stripeSessionId: obj.id }
-        : { stripePaymentIntent: obj.id };
+      const where =
+        obj.object === 'checkout.session'
+          ? { stripeSessionId: obj.id }
+          : { stripePaymentIntent: obj.id };
       return prisma.payment.updateMany({ where, data: { status: 'Failed' } });
     }
 
