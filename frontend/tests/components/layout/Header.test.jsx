@@ -13,9 +13,9 @@ describe('Header', () => {
     expect(screen.getByRole('link', { name: 'Explorer' })).toBeInTheDocument();
   });
 
-  it('renders Connect Wallet button when not connected', () => {
+  it('renders install link when Freighter is unavailable', () => {
     render(<Header />);
-    expect(screen.getByRole('button', { name: 'Connect Wallet' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Install Freighter ↗' })).toBeInTheDocument();
   });
 
   it('renders Testnet badge', () => {
