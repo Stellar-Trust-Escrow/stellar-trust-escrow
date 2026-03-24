@@ -13,6 +13,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 
 import disputeRoutes from './api/routes/disputeRoutes.js';
+import searchRoutes from './api/routes/searchRoutes.js';
 import escrowRoutes from './api/routes/escrowRoutes.js';
 import eventRoutes from './api/routes/eventRoutes.js';
 import kycRoutes from './api/routes/kycRoutes.js';
@@ -114,6 +115,7 @@ app.get('/health', async (_req, res) => {
   });
 });
 
+app.use('/api/search', searchRoutes);
 app.use('/api/escrows', escrowRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/reputation', reputationRoutes);
