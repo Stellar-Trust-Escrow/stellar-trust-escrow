@@ -31,13 +31,18 @@ export class TransactionRelayer {
   /**
    * Executes a meta-transaction on behalf of a user
    * @param {Object} metaTx - Meta-transaction data
-   * @param {string} feeDelegation - Fee delegation configuration
+   * @param {Object} feeDelegation - Fee delegation configuration
    * @returns {Promise<Object>} Transaction result
    */
   async executeMetaTransaction(metaTx, feeDelegation = null) {
     try {
       // Validate meta-transaction format
       this.validateMetaTransaction(metaTx);
+
+      // Validate fee delegation if provided
+      if (feeDelegation) {
+        this.validateFeeDelegation(feeDelegation);
+      }
 
       // Build the contract call transaction
       const tx = await this.buildMetaTransaction(metaTx, feeDelegation);
@@ -53,6 +58,7 @@ export class TransactionRelayer {
         transactionHash: result.hash,
         ledger: result.ledger,
         metaTxNonce: metaTx.nonce,
+        feeDelegationUsed: !!feeDelegation,
       };
     } catch (error) {
       console.error('Meta-transaction execution failed:', error);
@@ -63,6 +69,7 @@ export class TransactionRelayer {
         metaTxNonce: metaTx.nonce,
       };
     }
+  }
   }
 
   /**
@@ -92,6 +99,31 @@ export class TransactionRelayer {
   }
 
   /**
+   * Validates fee delegation configuration
+   * @param {Object} feeDelegation - Fee delegation to validate
+   * @throws {Error} If validation fails
+   */
+  validateFeeDelegation(feeDelegation) {
+    const required = ['feePayer', 'maxFee', 'feeToken'];
+
+    for (const field of required) {
+      if (!feeDelegation[field]) {
+        throw new Error(`Missing required fee delegation field: ${field}`);
+      }
+    }
+
+    // Validate maxFee is positive
+    if (feeDelegation.maxFee <= 0) {
+      throw new Error('Fee delegation maxFee must be positive');
+    }
+
+    // Validate feePayer is the relayer
+    if (feeDelegation.feePayer !== this.relayerKeypair.publicKey()) {
+      throw new Error('Fee delegation feePayer must be the relayer');
+    }
+  }
+
+  /**
    * Builds a Stellar transaction for the meta-transaction
    * @param {Object} metaTx - Meta-transaction data
    * @param {Object} feeDelegation - Fee delegation configuration
@@ -104,9 +136,23 @@ export class TransactionRelayer {
 
     // Build transaction
     let transaction = new StellarSdk.TransactionBuilder(account, {
-      fee: StellarSdk.BASE_FEE,
+      fee: await this.estimateFee(metaTx),
       networkPassphrase: this.network,
     });
+
+    // Prepare fee delegation argument
+    let feeDelegationArg = StellarSdk.scVal.option(null); // None by default
+    if (feeDelegation) {
+      const delegationStruct = StellarSdk.scVal.map([
+        StellarSdk.scVal.symbol('fee_payer'),
+        StellarSdk.Address.fromString(feeDelegation.feePayer),
+        StellarSdk.scVal.symbol('max_fee'),
+        StellarSdk.scVal.i128(StellarSdk.xdr.Int128Parts.fromString(feeDelegation.maxFee.toString())),
+        StellarSdk.scVal.symbol('fee_token'),
+        StellarSdk.Address.fromString(feeDelegation.feeToken),
+      ]);
+      feeDelegationArg = StellarSdk.scVal.option(delegationStruct);
+    }
 
     // Add the meta-transaction execution operation
     transaction = transaction.addOperation(
@@ -118,7 +164,8 @@ export class TransactionRelayer {
         StellarSdk.scVal.string(metaTx.functionName),
         StellarSdk.scVal.string(metaTx.functionArgs),
         StellarSdk.scVal.bytes(Buffer.from(metaTx.signature, 'hex')),
-        StellarSdk.Address.fromString(this.relayerKeypair.publicKey())
+        StellarSdk.Address.fromString(this.relayerKeypair.publicKey()),
+        feeDelegationArg
       )
     );
 
