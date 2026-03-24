@@ -1,11 +1,13 @@
 import express from 'express';
-const router = express.Router();
 import disputeController from '../controllers/disputeController.js';
+
+const router = express.Router();
 
 /**
  * @route  GET /api/disputes
- * @desc   List all active disputes.
- * @query  page, limit
+ * @desc   List disputes with the standard pagination envelope.
+ * @query  page (default 1), limit (default 20, max 100)
+ * @returns { data, page, limit, total, totalPages, hasNextPage, hasPreviousPage }
  */
 router.get('/', disputeController.listDisputes);
 

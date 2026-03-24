@@ -43,6 +43,8 @@ model Escrow {
   @@index([clientAddress])
   @@index([freelancerAddress])
   @@index([status])
+  // Composite index for filtered + sorted list queries
+  @@index([status, createdAt(sort: Desc)])
   @@map("escrows")
 }
 
@@ -97,10 +99,45 @@ model Dispute {
   freelancerAmount String?  @map("freelancer_amount")
   /// Address that resolved the dispute (arbiter or admin)
   resolvedBy      String?   @map("resolved_by")
+  /// Outcome description
+  resolution      String?
 
   escrow          Escrow    @relation(fields: [escrowId], references: [id])
 
+  @@index([raisedByAddress])
   @@map("disputes")
+}
+
+// ── Contract Events ───────────────────────────────────────────────────────────
+
+/// Indexed record of every Soroban contract event emitted by the escrow contract.
+/// Enables historical queries and real-time subscriptions without hitting the chain.
+model ContractEvent {
+  id            Int      @id @default(autoincrement())
+  /// Stellar ledger sequence this event was emitted in
+  ledger        BigInt
+  /// Ledger close timestamp
+  ledgerAt      DateTime @map("ledger_at")
+  /// Contract address that emitted the event
+  contractId    String   @map("contract_id")
+  /// Short event name derived from topic[0] (e.g. "esc_crt", "mil_apr")
+  eventType     String   @map("event_type")
+  /// Escrow ID extracted from topic[1] (null for contract-wide events)
+  escrowId      BigInt?  @map("escrow_id")
+  /// Full JSON-serialised topic array
+  topics        Json
+  /// Full JSON-serialised data payload
+  data          Json
+  /// Unique transaction hash + event index to prevent duplicate inserts
+  txHash        String   @map("tx_hash")
+  eventIndex    Int      @map("event_index")
+
+  @@unique([txHash, eventIndex])
+  @@index([eventType])
+  @@index([escrowId])
+  @@index([ledger])
+  @@index([ledgerAt(sort: Desc)])
+  @@map("contract_events")
 }
 
 // ── Indexer State ─────────────────────────────────────────────────────────────
@@ -111,6 +148,65 @@ model IndexerState {
   lastProcessedLedger BigInt @default(0) @map("last_processed_ledger")
 
   @@map("indexer_state")
+}
+
+// ── Payments ─────────────────────────────────────────────────────────────────
+
+model Payment {
+  id                String        @id @default(cuid())
+  address           String                              // Stellar address of payer
+  escrowId          BigInt?       @map("escrow_id")     // linked escrow (nullable until funded)
+  stripeSessionId   String?       @unique @map("stripe_session_id")
+  stripePaymentIntent String?     @unique @map("stripe_payment_intent")
+  amountFiat        Int           @map("amount_fiat")   // in cents (USD)
+  amountCrypto      String?       @map("amount_crypto") // XLM/USDC amount after conversion
+  currency          String        @default("usd")
+  status            PaymentStatus @default(Pending)
+  refundId          String?       @map("refund_id")     // Stripe refund ID
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  @@index([address])
+  @@index([status])
+  @@map("payments")
+}
+
+// ── KYC ──────────────────────────────────────────────────────────────────────
+
+model KycVerification {
+  id              Int       @id @default(autoincrement())
+  address         String    @unique
+  applicantId     String?   @unique @map("applicant_id")  // Sumsub applicant ID
+  status          KycStatus @default(Pending)
+  reviewResult    String?   @map("review_result")         // approved | declined
+  rejectLabels    String[]  @map("reject_labels")         // Sumsub rejection reasons
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@map("kyc_verifications")
+<<<<<<< feature/issue-48-implement-payment-gateway-integration
+=======
+// ── Admin Audit Log ───────────────────────────────────────────────────────────
+
+/// Immutable record of every admin action for accountability and audit trails.
+model AdminAuditLog {
+  id              Int      @id @default(autoincrement())
+  /// Action taken, e.g. SUSPEND_USER, BAN_USER, RESOLVE_DISPUTE
+  action          String
+  /// The address or resource the action was taken against
+  targetAddress   String   @map("target_address")
+  /// Human-readable reason supplied by the admin
+  reason          String   @default("")
+  /// Identifier of the admin who performed the action
+  performedBy     String   @map("performed_by")
+  performedAt     DateTime @map("performed_at")
+
+  @@index([action])
+  @@index([targetAddress])
+  @@index([performedAt(sort: Desc)])
+  @@map("admin_audit_logs")
+>>>>>>> main
 }
 
 // ── Enums ─────────────────────────────────────────────────────────────────────
@@ -127,4 +223,20 @@ enum MilestoneStatus {
   Submitted
   Approved
   Rejected
+}
+
+enum KycStatus {
+  Pending
+  Init
+  Processing
+  Approved
+  Declined
+}
+
+enum PaymentStatus {
+  Pending
+  Processing
+  Completed
+  Failed
+  Refunded
 }
