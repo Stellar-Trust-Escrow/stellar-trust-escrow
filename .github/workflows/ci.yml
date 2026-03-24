@@ -93,8 +93,73 @@ jobs:
 
       - name: Lint
         run: cd frontend && npm run lint
-        cd contracts/escrow_contract
-cargo fmt
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:3001
 
       - name: Build
         run: cd frontend && npm run build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:3001
+
+  bundle-analysis:
+    name: Frontend Bundle Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          fail-on-cache-miss: false
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Build with analyzer enabled — generates HTML reports in frontend/.next/analyze/
+      - name: Build with bundle analyzer
+        run: cd frontend && npm run analyze
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:3001
+
+      # Upload the HTML analyzer reports as a build artifact
+      - name: Upload analyzer reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-analyzer-report-${{ github.sha }}
+          path: frontend/.next/analyze/
+          retention-days: 90
+
+      # Capture a size snapshot and save it; restore previous history first
+      - name: Restore bundle stats history
+        uses: actions/cache@v4
+        with:
+          path: bundle-stats.json
+          key: bundle-stats-${{ github.ref_name }}
+          restore-keys: bundle-stats-
+
+      - name: Record bundle snapshot
+        run: node scripts/bundle-report.js --save --trend
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+
+      # Persist updated history for future runs
+      - name: Save bundle stats history
+        uses: actions/cache/save@v4
+        with:
+          path: bundle-stats.json
+          key: bundle-stats-${{ github.ref_name }}-${{ github.sha }}
+
+      # Upload the JSON history as an artifact too
+      - name: Upload bundle stats
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-stats-${{ github.sha }}
+          path: bundle-stats.json
+          retention-days: 90

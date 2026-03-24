@@ -10,7 +10,7 @@
  * @param {string} [props.trend]   — TODO (contributor): show +/- trend indicator
  */
 
- 
+
 
 export default function StatCard({ label, value, icon, trend: _trend }) {
   return (

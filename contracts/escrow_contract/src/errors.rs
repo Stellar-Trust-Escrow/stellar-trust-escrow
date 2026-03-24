@@ -77,4 +77,14 @@ pub enum EscrowError {
     /// The escrow deadline has passed.
     /// TODO (contributor): implement deadline enforcement
     DeadlineExpired = 25,
+
+    // ── Time Lock ───────────────────────────────────────────────────────────────
+    /// The specified lock time is in the past.
+    InvalidLockTime = 26,
+    /// Funds are still locked until the lock time expires.
+    LockTimeNotExpired = 27,
+    /// The lock time has expired.
+    LockTimeExpired = 28,
+    /// Cannot extend lock time to the past.
+    InvalidLockTimeExtension = 29,
 }

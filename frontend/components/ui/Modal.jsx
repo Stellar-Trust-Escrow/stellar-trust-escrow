@@ -16,7 +16,7 @@
  * - Add optional footer slot for action buttons
  */
 
- 
+
 'use client';
 
 import { useEffect } from 'react';

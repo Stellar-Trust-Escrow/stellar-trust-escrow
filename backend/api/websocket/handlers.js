@@ -59,7 +59,7 @@ class WebSocketPool {
         } else if (message.type === 'unsubscribe' && message.topic) {
           this.unsubscribe(id, message.topic);
         }
-      } catch (_) {
+      } catch {
         console.warn(`[WebSocket] Invalid message from ${id}:`, data.toString());
       }
     });
