@@ -19,6 +19,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import Button from '../ui/Button';
 
 // TODO (contributor — Issue #37): replace with real wallet state
@@ -29,6 +30,7 @@ const PLACEHOLDER_WALLET = {
 };
 
 export default function Header() {
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const wallet = PLACEHOLDER_WALLET;
 
   const handleConnect = async () => {
@@ -107,8 +109,42 @@ export default function Header() {
                 Connect Wallet
               </Button>
             )}
+            {/* Mobile Menu Toggle */}
+            <button
+              className="md:hidden p-2 text-gray-400 hover:text-white focus:outline-none"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              aria-label="Toggle mobile menu"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {isMobileMenuOpen ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                )}
+              </svg>
+            </button>
           </div>
         </div>
+
+        {/* Mobile Nav */}
+        {isMobileMenuOpen && (
+          <nav className="md:hidden py-4 border-t border-gray-800 flex flex-col gap-4">
+            <Link
+              href="/dashboard"
+              className="text-gray-400 hover:text-white transition-colors px-2"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              Dashboard
+            </Link>
+            <Link
+              href="/explorer"
+              className="text-gray-400 hover:text-white transition-colors px-2"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              Explorer
+            </Link>
+          </nav>
+        )}
       </div>
     </header>
   );

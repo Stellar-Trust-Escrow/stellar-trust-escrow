@@ -90,7 +90,7 @@ export default function ExplorerPage() {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
         />
-        <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-lg p-1">
+        <div className="flex flex-wrap gap-1 bg-gray-900 border border-gray-800 rounded-lg p-1">
           {STATUS_FILTERS.map((f) => (
             <button
               key={f}
@@ -111,7 +111,7 @@ export default function ExplorerPage() {
         TODO (contributor — Issue #36):
         Show platform-wide stats: total escrows, total value locked, total users
       */}
-      <div className="grid grid-cols-3 gap-4 text-center text-sm">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center text-sm">
         <div className="card py-3">
           <p className="text-gray-500">Total Escrows</p>
           <p className="text-white font-bold text-lg">—</p>

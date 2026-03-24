@@ -76,7 +76,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8">
       {/* Page Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white">Dashboard</h1>
           <p className="text-gray-400 mt-1">
@@ -110,7 +110,7 @@ export default function DashboardPage() {
 
       {/* ── Active Escrows ── */}
       <section>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-4">
           <h2 className="text-lg font-semibold text-white">Your Active Escrows</h2>
           {escrows.length > 0 && (
             <a href="/escrow" className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors">
