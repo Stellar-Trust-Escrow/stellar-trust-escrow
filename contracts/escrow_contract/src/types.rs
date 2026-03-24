@@ -179,4 +179,6 @@ pub enum DataKey {
     Reputation(Address),
     /// Contract admin address — value: Address
     Admin,
+    /// Contract pause state — value: bool
+    Paused,
 }

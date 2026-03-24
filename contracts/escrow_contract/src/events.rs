@@ -208,3 +208,15 @@ pub fn emit_lock_time_extended(
         (old_lock_time, new_lock_time, extended_by.clone()),
     );
 }
+
+/// Emitted when the contract is paused.
+pub fn emit_contract_paused(env: &Env, admin: &Address) {
+    env.events()
+        .publish((symbol_short!("paused"),), admin.clone());
+}
+
+/// Emitted when the contract is unpaused.
+pub fn emit_contract_unpaused(env: &Env, admin: &Address) {
+    env.events()
+        .publish((symbol_short!("unpaused"),), admin.clone());
+}

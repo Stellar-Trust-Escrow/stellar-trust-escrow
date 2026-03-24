@@ -33,6 +33,8 @@ mod errors;
 mod events;
 mod types;
 mod upgrade_tests;
+mod pause_tests;
+
 
 pub use errors::EscrowError;
 pub use types::{DataKey, EscrowState, EscrowStatus, Milestone, MilestoneStatus, ReputationRecord};
@@ -264,6 +266,24 @@ impl ContractStorage {
         }
         Ok(())
     }
+
+    // ── Pause helpers ──────────────────────────────────────────────────────────
+
+    fn is_paused(env: &Env) -> bool {
+        env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+    }
+
+    fn set_paused(env: &Env, paused: bool) {
+        env.storage().instance().set(&DataKey::Paused, &paused);
+        Self::bump_instance_ttl(env);
+    }
+
+    fn require_not_paused(env: &Env) -> Result<(), EscrowError> {
+        if Self::is_paused(env) {
+            return Err(EscrowError::ContractPaused);
+        }
+        Ok(())
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -303,6 +323,7 @@ impl EscrowContract {
         // Auth + validation before any storage I/O
         client.require_auth();
         ContractStorage::require_initialized(&env)?;
+        ContractStorage::require_not_paused(&env)?;
 
         if total_amount <= 0 {
             return Err(EscrowError::InvalidEscrowAmount);
@@ -371,6 +392,7 @@ impl EscrowContract {
         amount: i128,
     ) -> Result<u32, EscrowError> {
         caller.require_auth();
+        ContractStorage::require_not_paused(&env)?;
 
         if amount <= 0 {
             return Err(EscrowError::InvalidMilestoneAmount);
@@ -556,7 +578,7 @@ impl EscrowContract {
     ///
     /// # Gas notes
     /// - Validates milestone state before loading meta.
-    pub fn release_funds(env: Env, escrow_id: u64, milestone_id: u32) -> Result<(), EscrowError> {
+
     /// Admin-only fallback for edge cases. Normal flow uses `approve_milestone`.
     ///
     /// # Security (STE-01, STE-02)
@@ -587,7 +609,7 @@ impl EscrowContract {
         }
 
         // Load meta to check lock time
-        let meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
+        let mut meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
 
         // Check if lock time has expired
         ContractStorage::check_lock_time_expired(&env, escrow_id, meta.lock_time)?;
@@ -603,7 +625,6 @@ impl EscrowContract {
             &meta.freelancer,
             &amount,
         );
-        meta.remaining_balance -= amount;
         ContractStorage::save_escrow_meta(&env, &meta);
 
         events::emit_funds_released(&env, escrow_id, &meta.freelancer, amount);
@@ -809,6 +830,41 @@ impl EscrowContract {
         Ok(())
     }
 
+    // ── Emergency Pause ──────────────────────────────────────────────────────
+
+    /// Pauses the contract, preventing new escrows and milestone additions.
+    pub fn pause(env: Env, caller: Address) -> Result<(), EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_admin(&env, &caller)?;
+
+        if ContractStorage::is_paused(&env) {
+            return Ok(());
+        }
+
+        ContractStorage::set_paused(&env, true);
+        events::emit_contract_paused(&env, &caller);
+        Ok(())
+    }
+
+    /// Unpauses the contract, resuming normal operation.
+    pub fn unpause(env: Env, caller: Address) -> Result<(), EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_admin(&env, &caller)?;
+
+        if !ContractStorage::is_paused(&env) {
+            return Ok(());
+        }
+
+        ContractStorage::set_paused(&env, false);
+        events::emit_contract_unpaused(&env, &caller);
+        Ok(())
+    }
+
+    /// Returns the current pause state of the contract.
+    pub fn is_paused(env: Env) -> bool {
+        ContractStorage::is_paused(&env)
+    }
+
     // ── View Functions ────────────────────────────────────────────────────────
 
     pub fn get_escrow(env: Env, escrow_id: u64) -> Result<EscrowState, EscrowError> {
@@ -910,6 +966,7 @@ mod tests {
             &BytesN::from_array(&env, &[1; 32]),
             &None,
             &None,
+            &None,
         );
 
         assert_eq!(escrow_id, 0);
@@ -940,6 +997,7 @@ mod tests {
             &token_id,
             &1_000_i128,
             &BytesN::from_array(&env, &[2; 32]),
+            &None,
             &None,
             &None,
         );
@@ -995,6 +1053,7 @@ mod tests {
             &BytesN::from_array(&env, &[4; 32]),
             &None,
             &None,
+            &None,
         );
 
         let mid = client.add_milestone(
@@ -1044,6 +1103,7 @@ mod tests {
             &token_id,
             &200_i128,
             &BytesN::from_array(&env, &[6; 32]),
+            &None,
             &None,
             &None,
         );

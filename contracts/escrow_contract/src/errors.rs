@@ -87,4 +87,6 @@ pub enum EscrowError {
     LockTimeExpired = 28,
     /// Cannot extend lock time to the past.
     InvalidLockTimeExtension = 29,
+    /// The contract is currently paused.
+    ContractPaused = 30,
 }
