@@ -13,22 +13,75 @@ const ESCROW_SUMMARY_SELECT = {
   createdAt: true,
 };
 
+const VALID_SORT_FIELDS = ['createdAt', 'totalAmount', 'status'];
+const VALID_SORT_ORDERS = ['asc', 'desc'];
+
 const listEscrows = async (req, res) => {
   try {
     const { page, limit, skip } = parsePagination(req.query);
-    const { status, client, freelancer } = req.query;
+    const {
+      status,
+      client,
+      freelancer,
+      search,
+      minAmount,
+      maxAmount,
+      dateFrom,
+      dateTo,
+      sortBy = 'createdAt',
+      sortOrder = 'desc',
+    } = req.query;
 
     const where = {};
-    if (status) where.status = status;
+
+    // Status filter — supports comma-separated values e.g. status=Active,Completed
+    if (status) {
+      const statuses = status.split(',').map((s) => s.trim()).filter(Boolean);
+      where.status = statuses.length === 1 ? statuses[0] : { in: statuses };
+    }
+
     if (client) where.clientAddress = client;
     if (freelancer) where.freelancerAddress = freelancer;
 
-    const cacheKey = `escrows:list:${JSON.stringify({ where, page, limit })}`;
+    // Search by escrow ID or address (client/freelancer)
+    if (search) {
+      const term = search.trim();
+      const numericId = /^\d+$/.test(term) ? BigInt(term) : null;
+      where.OR = [
+        ...(numericId ? [{ id: numericId }] : []),
+        { clientAddress: { contains: term, mode: 'insensitive' } },
+        { freelancerAddress: { contains: term, mode: 'insensitive' } },
+      ];
+    }
+
+    // Amount range (stored as string — cast via raw or compare lexicographically)
+    // We store amounts as numeric strings so we use gte/lte on the string field
+    // For proper numeric comparison we rely on the caller sending values in the same unit
+    if (minAmount) where.totalAmount = { ...where.totalAmount, gte: String(minAmount) };
+    if (maxAmount) where.totalAmount = { ...where.totalAmount, lte: String(maxAmount) };
+
+    // Date range on createdAt
+    if (dateFrom || dateTo) {
+      where.createdAt = {};
+      if (dateFrom) where.createdAt.gte = new Date(dateFrom);
+      if (dateTo) {
+        const end = new Date(dateTo);
+        end.setHours(23, 59, 59, 999);
+        where.createdAt.lte = end;
+      }
+    }
+
+    // Sorting — whitelist to prevent injection
+    const resolvedSortBy = VALID_SORT_FIELDS.includes(sortBy) ? sortBy : 'createdAt';
+    const resolvedSortOrder = VALID_SORT_ORDERS.includes(sortOrder) ? sortOrder : 'desc';
+    const orderBy = { [resolvedSortBy]: resolvedSortOrder };
+
+    const cacheKey = `escrows:list:${JSON.stringify({ where, page, limit, orderBy })}`;
     const cached = cache.get(cacheKey);
     if (cached) return res.json(cached);
 
     const [data, total] = await prisma.$transaction([
-      prisma.escrow.findMany({ where, select: ESCROW_SUMMARY_SELECT, skip, take: limit, orderBy: { createdAt: 'desc' } }),
+      prisma.escrow.findMany({ where, select: ESCROW_SUMMARY_SELECT, skip, take: limit, orderBy }),
       prisma.escrow.count({ where }),
     ]);
 
