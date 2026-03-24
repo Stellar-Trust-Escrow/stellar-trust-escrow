@@ -5,7 +5,6 @@
  * requests (> SLOW_THRESHOLD_MS) so they can be identified and optimized.
  */
 
-/* eslint-disable no-undef */
 const SLOW_THRESHOLD_MS = parseInt(process.env.SLOW_REQUEST_THRESHOLD_MS || '500');
 
 export default function responseTimeMiddleware(req, res, next) {

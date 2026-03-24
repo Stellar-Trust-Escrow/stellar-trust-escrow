@@ -68,6 +68,7 @@ describe('emailService', () => {
 
     const updated = await getPreference(preference.email);
     expect(updated.unsubscribedAt).toBeNull();
-    expect(buildUnsubscribeUrl(updated.email, updated.unsubscribeToken)).toContain(updated.email);
+    const url = buildUnsubscribeUrl(updated.email, updated.unsubscribeToken);
+    expect(decodeURIComponent(url)).toContain(updated.email);
   });
 });

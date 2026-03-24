@@ -10,7 +10,6 @@
  * @param {string} [props.trend]   — TODO (contributor): show +/- trend indicator
  */
 
-/* eslint-disable @typescript-eslint/no-unused-vars */
 
 export default function StatCard({ label, value, icon, trend: _trend }) {
   return (
