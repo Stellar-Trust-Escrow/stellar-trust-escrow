@@ -35,7 +35,9 @@ mod types;
 mod upgrade_tests;
 
 pub use errors::EscrowError;
-pub use types::{DataKey, EscrowState, EscrowStatus, Milestone, MilestoneStatus, ReputationRecord};
+pub use types::{
+    DataKey, EscrowState, EscrowStatus, Milestone, MilestoneStatus, MultisigConfig, ReputationRecord,
+};
 
 use soroban_sdk::{contract, contractimpl, contracttype, token, Address, BytesN, Env, String, Vec};
 
@@ -45,6 +47,8 @@ const INSTANCE_TTL_THRESHOLD: u32 = 5_000;
 const INSTANCE_TTL_EXTEND_TO: u32 = 50_000;
 const PERSISTENT_TTL_THRESHOLD: u32 = 5_000;
 const PERSISTENT_TTL_EXTEND_TO: u32 = 50_000;
+/// Maximum multisig signers per escrow (storage / gas bound).
+const MAX_MULTISIG_SIGNERS: u32 = 16;
 
 // ── Granular storage keys ─────────────────────────────────────────────────────
 // Separate keys for meta vs each milestone avoids deserialising the full
@@ -82,6 +86,10 @@ struct EscrowMeta {
     /// Optional extension deadline for the lock time.
     lock_time_extension: Option<u64>,
     brief_hash: BytesN<32>,
+    /// Empty `Vec` = only `client` may approve/reject (legacy).
+    multisig_approvers: Vec<Address>,
+    multisig_weights: Vec<u32>,
+    multisig_threshold: u32,
 }
 
 // ── Storage helpers ───────────────────────────────────────────────────────────
@@ -200,6 +208,9 @@ impl ContractStorage {
             lock_time: meta.lock_time,
             lock_time_extension: meta.lock_time_extension,
             brief_hash: meta.brief_hash,
+            multisig_approvers: meta.multisig_approvers.clone(),
+            multisig_weights: meta.multisig_weights.clone(),
+            multisig_threshold: meta.multisig_threshold,
         })
     }
 
@@ -299,6 +310,7 @@ impl EscrowContract {
         arbiter: Option<Address>,
         deadline: Option<u64>,
         lock_time: Option<u64>,
+        multisig_config: MultisigConfig,
     ) -> Result<u64, EscrowError> {
         // Auth + validation before any storage I/O
         client.require_auth();
@@ -321,6 +333,8 @@ impl EscrowContract {
                 return Err(EscrowError::InvalidLockTime);
             }
         }
+
+        Self::validate_multisig_config(&multisig_config)?;
 
         let escrow_id = ContractStorage::next_escrow_id(&env)?;
 
@@ -350,6 +364,9 @@ impl EscrowContract {
                 lock_time,
                 lock_time_extension: None,
                 brief_hash,
+                multisig_approvers: multisig_config.approvers,
+                multisig_weights: multisig_config.weights,
+                multisig_threshold: multisig_config.threshold,
             },
         );
 
@@ -411,6 +428,8 @@ impl EscrowContract {
                 status: MilestoneStatus::Pending,
                 submitted_at: None,
                 resolved_at: None,
+                approval_weight_accrued: 0,
+                approval_signers: Vec::new(&env),
             },
         );
         ContractStorage::save_escrow_meta(&env, &meta);
@@ -446,6 +465,8 @@ impl EscrowContract {
 
         milestone.status = MilestoneStatus::Submitted;
         milestone.submitted_at = Some(env.ledger().timestamp());
+        milestone.approval_weight_accrued = 0;
+        milestone.approval_signers = Vec::new(&env);
         ContractStorage::save_milestone(&env, escrow_id, &milestone);
 
         events::emit_milestone_submitted(&env, escrow_id, milestone_id, &caller);
@@ -467,14 +488,10 @@ impl EscrowContract {
         caller.require_auth();
 
         let mut meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
-        if caller != meta.client {
-            return Err(EscrowError::ClientOnly);
-        }
         if meta.status != EscrowStatus::Active {
             return Err(EscrowError::EscrowNotActive);
         }
 
-        // Check if lock time has expired
         ContractStorage::check_lock_time_expired(&env, escrow_id, meta.lock_time)?;
 
         let mut milestone = ContractStorage::load_milestone(&env, escrow_id, milestone_id)?;
@@ -482,34 +499,58 @@ impl EscrowContract {
             return Err(EscrowError::InvalidMilestoneState);
         }
 
+        let multisig_on = !meta.multisig_approvers.is_empty();
+
+        if multisig_on {
+            let w = Self::multisig_weight_for(&meta, &caller).ok_or(EscrowError::NotMultisigSigner)?;
+            if Self::vec_has_signer(&milestone.approval_signers, &caller) {
+                return Err(EscrowError::MultisigApprovalAlreadyRecorded);
+            }
+            milestone.approval_signers.push_back(caller.clone());
+            milestone.approval_weight_accrued = milestone
+                .approval_weight_accrued
+                .checked_add(w)
+                .ok_or(EscrowError::MultisigWeightOverflow)?;
+
+            if milestone.approval_weight_accrued < meta.multisig_threshold {
+                ContractStorage::save_milestone(&env, escrow_id, &milestone);
+                events::emit_multisig_approval_recorded(
+                    &env,
+                    escrow_id,
+                    milestone_id,
+                    &caller,
+                    milestone.approval_weight_accrued,
+                    meta.multisig_threshold,
+                );
+                return Ok(());
+            }
+        } else if caller != meta.client {
+            return Err(EscrowError::ClientOnly);
+        }
+
         let amount = milestone.amount;
         let now = env.ledger().timestamp();
 
         milestone.status = MilestoneStatus::Approved;
         milestone.resolved_at = Some(now);
+        milestone.approval_weight_accrued = 0;
+        milestone.approval_signers = Vec::new(&env);
         ContractStorage::save_milestone(&env, escrow_id, &milestone);
 
-        // Release funds — single cross-contract call
         token::Client::new(&env, &meta.token).transfer(
             &env.current_contract_address(),
             &meta.freelancer,
             &amount,
         );
 
-        // O(1) balance update and completion check
-        meta.remaining_balance -= amount;
-
-        // STE-04 fix: checked_sub instead of silent underflow
         meta.remaining_balance = meta
             .remaining_balance
             .checked_sub(amount)
             .ok_or(EscrowError::AmountMismatch)?;
 
-        // O(1) completion check via approved_count (main branch optimization)
         meta.approved_count += 1;
         if meta.approved_count == meta.milestone_count && meta.milestone_count > 0 {
             meta.status = EscrowStatus::Completed;
-            // STE-03 fix: emit completion event so the indexer can update DB
             events::emit_escrow_completed(&env, escrow_id);
         }
         ContractStorage::save_escrow_meta(&env, &meta);
@@ -532,8 +573,12 @@ impl EscrowContract {
         caller.require_auth();
 
         let meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
-        if caller != meta.client {
-            return Err(EscrowError::ClientOnly);
+        if meta.multisig_approvers.is_empty() {
+            if caller != meta.client {
+                return Err(EscrowError::ClientOnly);
+            }
+        } else if Self::multisig_weight_for(&meta, &caller).is_none() {
+            return Err(EscrowError::NotMultisigSigner);
         }
         if meta.status != EscrowStatus::Active {
             return Err(EscrowError::EscrowNotActive);
@@ -546,17 +591,14 @@ impl EscrowContract {
 
         milestone.status = MilestoneStatus::Rejected;
         milestone.resolved_at = Some(env.ledger().timestamp());
+        milestone.approval_weight_accrued = 0;
+        milestone.approval_signers = Vec::new(&env);
         ContractStorage::save_milestone(&env, escrow_id, &milestone);
 
         events::emit_milestone_rejected(&env, escrow_id, milestone_id, &caller);
         Ok(())
     }
 
-    /// Admin-triggered fund release for an already-approved milestone.
-    ///
-    /// # Gas notes
-    /// - Validates milestone state before loading meta.
-    pub fn release_funds(env: Env, escrow_id: u64, milestone_id: u32) -> Result<(), EscrowError> {
     /// Admin-only fallback for edge cases. Normal flow uses `approve_milestone`.
     ///
     /// # Security (STE-01, STE-02)
@@ -593,17 +635,18 @@ impl EscrowContract {
         ContractStorage::check_lock_time_expired(&env, escrow_id, meta.lock_time)?;
 
         let amount = milestone.amount;
-        meta.remaining_balance = meta
-            .remaining_balance
-            .checked_sub(amount)
-            .ok_or(EscrowError::AmountMismatch)?;
 
         token::Client::new(&env, &meta.token).transfer(
             &env.current_contract_address(),
             &meta.freelancer,
             &amount,
         );
-        meta.remaining_balance -= amount;
+
+        let mut meta = meta;
+        meta.remaining_balance = meta
+            .remaining_balance
+            .checked_sub(amount)
+            .ok_or(EscrowError::AmountMismatch)?;
         ContractStorage::save_escrow_meta(&env, &meta);
 
         events::emit_funds_released(&env, escrow_id, &meta.freelancer, amount);
@@ -829,6 +872,69 @@ impl EscrowContract {
 
     // ── Internal helpers ──────────────────────────────────────────────────────
 
+    fn validate_multisig_config(cfg: &MultisigConfig) -> Result<(), EscrowError> {
+        let approvers = &cfg.approvers;
+        let weights = &cfg.weights;
+        let threshold = cfg.threshold;
+        if approvers.is_empty() {
+            if !weights.is_empty() || threshold != 0 {
+                return Err(EscrowError::InvalidMultisigConfig);
+            }
+            return Ok(());
+        }
+        if approvers.len() > MAX_MULTISIG_SIGNERS {
+            return Err(EscrowError::TooManyMultisigSigners);
+        }
+        if approvers.len() != weights.len() {
+            return Err(EscrowError::InvalidMultisigConfig);
+        }
+        if threshold == 0 {
+            return Err(EscrowError::InvalidMultisigConfig);
+        }
+        let mut sum: u32 = 0;
+        for i in 0u32..weights.len() {
+            let w = weights.get(i).ok_or(EscrowError::InvalidMultisigConfig)?;
+            if w == 0 {
+                return Err(EscrowError::InvalidMultisigConfig);
+            }
+            sum = sum.checked_add(w).ok_or(EscrowError::MultisigWeightOverflow)?;
+        }
+        if threshold > sum {
+            return Err(EscrowError::InvalidMultisigConfig);
+        }
+        for i in 0u32..approvers.len() {
+            let ai = approvers.get(i).ok_or(EscrowError::InvalidMultisigConfig)?;
+            for j in (i + 1)..approvers.len() {
+                let aj = approvers.get(j).ok_or(EscrowError::InvalidMultisigConfig)?;
+                if ai == aj {
+                    return Err(EscrowError::InvalidMultisigConfig);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn multisig_weight_for(meta: &EscrowMeta, signer: &Address) -> Option<u32> {
+        for i in 0u32..meta.multisig_approvers.len() {
+            let a = meta.multisig_approvers.get(i)?;
+            if a == *signer {
+                return meta.multisig_weights.get(i);
+            }
+        }
+        None
+    }
+
+    fn vec_has_signer(v: &Vec<Address>, signer: &Address) -> bool {
+        for i in 0u32..v.len() {
+            if let Some(a) = v.get(i) {
+                if a == *signer {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
     fn _update_reputation_internal(
         env: &Env,
         address: &Address,
@@ -865,7 +971,15 @@ impl EscrowContract {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::{testutils::Address as _, token, BytesN, Env, String};
+    use soroban_sdk::{testutils::Address as _, token, BytesN, Env, String, Vec};
+
+    fn no_multisig(env: &Env) -> MultisigConfig {
+        MultisigConfig {
+            approvers: Vec::new(env),
+            weights: Vec::new(env),
+            threshold: 0,
+        }
+    }
 
     fn setup() -> (Env, Address, Address, EscrowContractClient<'static>) {
         let env = Env::default();
@@ -910,6 +1024,8 @@ mod tests {
             &BytesN::from_array(&env, &[1; 32]),
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
 
         assert_eq!(escrow_id, 0);
@@ -942,6 +1058,8 @@ mod tests {
             &BytesN::from_array(&env, &[2; 32]),
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
 
         let milestone_id = client.add_milestone(
@@ -995,6 +1113,8 @@ mod tests {
             &BytesN::from_array(&env, &[4; 32]),
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
 
         let mid = client.add_milestone(
@@ -1046,6 +1166,8 @@ mod tests {
             &BytesN::from_array(&env, &[6; 32]),
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
 
         client.cancel_escrow(&escrow_client, &escrow_id);
@@ -1062,4 +1184,70 @@ mod tests {
     #[test]
     #[ignore = "implement dispute flow — Issues #9–#10"]
     fn test_dispute_resolution() {}
+
+    /// Weighted multisig: threshold 4 with weights 2+3 requires both signers' votes.
+    #[test]
+    fn test_multisig_weighted_threshold_releases_funds() {
+        let (env, admin, _contract_id, client) = setup();
+        client.initialize(&admin);
+
+        let escrow_client = Address::generate(&env);
+        let signer_a = Address::generate(&env);
+        let signer_b = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_id = token_contract.address();
+        let token_admin = token::StellarAssetClient::new(&env, &token_id);
+        let token_client = token::Client::new(&env, &token_id);
+
+        token_admin.mint(&escrow_client, &500_i128);
+
+        let mut approvers = Vec::new(&env);
+        approvers.push_back(signer_a.clone());
+        approvers.push_back(signer_b.clone());
+        let mut weights = Vec::new(&env);
+        weights.push_back(2u32);
+        weights.push_back(3u32);
+        let msig = MultisigConfig {
+            approvers,
+            weights,
+            threshold: 4,
+        };
+
+        let escrow_id = client.create_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &500_i128,
+            &BytesN::from_array(&env, &[8; 32]),
+            &None,
+            &None,
+            &None,
+            &msig,
+        );
+
+        let mid = client.add_milestone(
+            &escrow_client,
+            &escrow_id,
+            &String::from_str(&env, "Work"),
+            &BytesN::from_array(&env, &[7; 32]),
+            &500_i128,
+        );
+
+        client.submit_milestone(&freelancer, &escrow_id, &mid);
+
+        // First vote: weight 2 < threshold 4 — no transfer yet
+        client.approve_milestone(&signer_a, &escrow_id, &mid);
+        let m = client.get_milestone(&escrow_id, &mid);
+        assert_eq!(m.status, MilestoneStatus::Submitted);
+        assert_eq!(token_client.balance(&freelancer), 0_i128);
+
+        // Second vote: 2 + 3 >= 4 — approve and pay
+        client.approve_milestone(&signer_b, &escrow_id, &mid);
+        let m2 = client.get_milestone(&escrow_id, &mid);
+        assert_eq!(m2.status, MilestoneStatus::Approved);
+        assert_eq!(token_client.balance(&freelancer), 500_i128);
+        let state = client.get_escrow(&escrow_id);
+        assert_eq!(state.status, EscrowStatus::Completed);
+    }
 }

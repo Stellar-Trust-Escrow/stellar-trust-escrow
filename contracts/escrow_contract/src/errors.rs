@@ -87,4 +87,16 @@ pub enum EscrowError {
     LockTimeExpired = 28,
     /// Cannot extend lock time to the past.
     InvalidLockTimeExtension = 29,
+
+    // ── Multisig ──────────────────────────────────────────────────────────────
+    /// Multisig approver list, weights, and threshold are inconsistent.
+    InvalidMultisigConfig = 30,
+    /// Caller is not a configured multisig approver for this escrow.
+    NotMultisigSigner = 31,
+    /// This signer already recorded an approval for this milestone submission.
+    MultisigApprovalAlreadyRecorded = 32,
+    /// Too many multisig signers (contract limit).
+    TooManyMultisigSigners = 33,
+    /// Accumulated multisig weights overflowed.
+    MultisigWeightOverflow = 34,
 }

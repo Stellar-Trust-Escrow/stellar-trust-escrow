@@ -42,6 +42,16 @@ pub enum MilestoneStatus {
 // STRUCTS
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Multisig policy for milestone approve/reject. Empty `approvers` disables multisig
+/// (only `client` may approve/reject, legacy behaviour).
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct MultisigConfig {
+    pub approvers: soroban_sdk::Vec<Address>,
+    pub weights: soroban_sdk::Vec<u32>,
+    pub threshold: u32,
+}
+
 /// A single milestone within an escrow agreement.
 ///
 /// Each milestone represents a discrete deliverable with a defined
@@ -73,6 +83,12 @@ pub struct Milestone {
 
     /// Ledger timestamp when the client approved or rejected.
     pub resolved_at: Option<u64>,
+
+    /// Sum of multisig signer weights recorded for the current `Submitted` cycle.
+    pub approval_weight_accrued: u32,
+
+    /// Signers who already cast an approve vote for this submission (multisig).
+    pub approval_signers: soroban_sdk::Vec<Address>,
 }
 
 /// The main escrow agreement.
@@ -131,6 +147,15 @@ pub struct EscrowState {
 
     /// IPFS hash of the full project brief / agreement document.
     pub brief_hash: BytesN<32>,
+
+    /// Multisig approvers (empty = legacy mode: only `client` may approve/reject milestones).
+    pub multisig_approvers: soroban_sdk::Vec<Address>,
+
+    /// Weight per approver (same length as `multisig_approvers` when multisig is used).
+    pub multisig_weights: soroban_sdk::Vec<u32>,
+
+    /// Minimum sum of weights required to approve a submitted milestone.
+    pub multisig_threshold: u32,
 }
 
 /// On-chain reputation record for a user address.

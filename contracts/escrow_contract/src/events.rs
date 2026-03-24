@@ -75,6 +75,29 @@ pub fn emit_milestone_approved(env: &Env, escrow_id: u64, milestone_id: u32, amo
     );
 }
 
+/// Emitted when a multisig approver records a vote; escrow may still be below threshold.
+///
+/// * `accrued_weight` — running sum of weights after this vote
+/// * `threshold`      — configured threshold for final approval
+pub fn emit_multisig_approval_recorded(
+    env: &Env,
+    escrow_id: u64,
+    milestone_id: u32,
+    signer: &Address,
+    accrued_weight: u32,
+    threshold: u32,
+) {
+    env.events().publish(
+        (symbol_short!("msig_apr"), escrow_id),
+        (
+            milestone_id,
+            signer.clone(),
+            accrued_weight,
+            threshold,
+        ),
+    );
+}
+
 /// Emitted when a client rejects a milestone submission, returning it to Pending.
 ///
 /// # Arguments
