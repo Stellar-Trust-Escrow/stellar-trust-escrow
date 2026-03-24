@@ -7,6 +7,8 @@
 //! Event topics follow the pattern: `(event_name, primary_identifier)`
 //! Event data carries the payload relevant to that event type.
 
+#![allow(dead_code)]
+
 use soroban_sdk::{symbol_short, Address, Env};
 
 /// Emitted when a new escrow is created and funds are locked.
@@ -73,6 +75,37 @@ pub fn emit_milestone_approved(env: &Env, escrow_id: u64, milestone_id: u32, amo
     );
 }
 
+/// Emitted when a client rejects a milestone submission, returning it to Pending.
+///
+/// # Arguments
+/// * `escrow_id`    - The escrow ID
+/// * `milestone_id` - The rejected milestone
+/// * `client`       - Client's address
+pub fn emit_milestone_rejected(env: &Env, escrow_id: u64, milestone_id: u32, client: &Address) {
+    env.events().publish(
+        (symbol_short!("mil_rej"), escrow_id),
+        (milestone_id, client.clone()),
+    );
+}
+
+/// Emitted when a dispute is raised on a specific milestone.
+///
+/// # Arguments
+/// * `escrow_id`    - The escrow ID
+/// * `milestone_id` - The disputed milestone
+/// * `raised_by`    - Address of the party raising the dispute
+pub fn emit_milestone_disputed(
+    env: &Env,
+    escrow_id: u64,
+    milestone_id: u32,
+    raised_by: &Address,
+) {
+    env.events().publish(
+        (symbol_short!("mil_dis"), escrow_id),
+        (milestone_id, raised_by.clone()),
+    );
+}
+
 /// Emitted when funds are released to the freelancer for an approved milestone.
 ///
 /// # Arguments
@@ -84,6 +117,17 @@ pub fn emit_funds_released(env: &Env, escrow_id: u64, to: &Address, amount: i128
         (symbol_short!("funds_rel"), escrow_id),
         (to.clone(), amount),
     );
+}
+
+/// Emitted when all milestones are approved and the escrow is completed.
+///
+/// # Arguments
+/// * `escrow_id` - The completed escrow ID
+///
+/// Added to fix STE-03: indexer needs this event to update escrow status.
+pub fn emit_escrow_completed(env: &Env, escrow_id: u64) {
+    env.events()
+        .publish((symbol_short!("esc_done"), escrow_id), ());
 }
 
 /// Emitted when an escrow is cancelled and remaining funds returned to client.
@@ -133,4 +177,34 @@ pub fn emit_dispute_resolved(
 pub fn emit_reputation_updated(env: &Env, address: &Address, new_score: u64) {
     env.events()
         .publish((symbol_short!("rep_upd"),), (address.clone(), new_score));
+}
+
+/// Emitted when a time lock expires on an escrow.
+///
+/// # Arguments
+/// * `escrow_id` - The escrow ID
+/// * `lock_time` - The timestamp when the lock expired
+pub fn emit_lock_time_expired(env: &Env, escrow_id: u64, lock_time: u64) {
+    env.events()
+        .publish((symbol_short!("lock_exp"), escrow_id), lock_time);
+}
+
+/// Emitted when a time lock is extended.
+///
+/// # Arguments
+/// * `escrow_id`       - The escrow ID
+/// * `old_lock_time`  - The previous lock time
+/// * `new_lock_time`  - The new lock time
+/// * `extended_by`     - Address of the party that extended the lock
+pub fn emit_lock_time_extended(
+    env: &Env,
+    escrow_id: u64,
+    old_lock_time: u64,
+    new_lock_time: u64,
+    extended_by: &Address,
+) {
+    env.events().publish(
+        (symbol_short!("lock_ext"), escrow_id),
+        (old_lock_time, new_lock_time, extended_by.clone()),
+    );
 }

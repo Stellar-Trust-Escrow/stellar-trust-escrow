@@ -40,4 +40,7 @@ logs/
 # Test coverage
 coverage/
 
+# Bundle analysis — history managed by CI cache, not committed
+bundle-stats.json
+
 /ISSUES.md

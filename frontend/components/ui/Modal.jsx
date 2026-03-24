@@ -16,7 +16,7 @@
  * - Add optional footer slot for action buttons
  */
 
-/* eslint-disable no-undef */
+
 'use client';
 
 import { useEffect } from 'react';
