@@ -463,9 +463,19 @@ impl EscrowContract {
 
         // O(1) balance update and completion check
         meta.remaining_balance -= amount;
+
+        // STE-04 fix: checked_sub instead of silent underflow
+        meta.remaining_balance = meta
+            .remaining_balance
+            .checked_sub(amount)
+            .ok_or(EscrowError::AmountMismatch)?;
+
+        // O(1) completion check via approved_count (main branch optimization)
         meta.approved_count += 1;
         if meta.approved_count == meta.milestone_count && meta.milestone_count > 0 {
             meta.status = EscrowStatus::Completed;
+            // STE-03 fix: emit completion event so the indexer can update DB
+            events::emit_escrow_completed(&env, escrow_id);
         }
         ContractStorage::save_escrow_meta(&env, &meta);
 
@@ -512,6 +522,29 @@ impl EscrowContract {
     /// # Gas notes
     /// - Validates milestone state before loading meta.
     pub fn release_funds(env: Env, escrow_id: u64, milestone_id: u32) -> Result<(), EscrowError> {
+    /// Admin-only fallback for edge cases. Normal flow uses `approve_milestone`.
+    ///
+    /// # Security (STE-01, STE-02)
+    /// - Requires admin authorization.
+    /// - Milestone must be `Approved` to prevent double-payment.
+    pub fn release_funds(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+        milestone_id: u32,
+    ) -> Result<(), EscrowError> {
+        // STE-01 fix: admin-only auth
+        ContractStorage::require_initialized(&env)?;
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(EscrowError::NotInitialized)?;
+        caller.require_auth();
+        if caller != admin {
+            return Err(EscrowError::AdminOnly);
+        }
+
         // Load milestone first — cheaper than meta if it fails
         let milestone = ContractStorage::load_milestone(&env, escrow_id, milestone_id)?;
         if milestone.status != MilestoneStatus::Approved {
@@ -520,6 +553,12 @@ impl EscrowContract {
 
         let mut meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
         let amount = milestone.amount;
+
+        // STE-04 fix: checked_sub instead of silent underflow
+        meta.remaining_balance = meta
+            .remaining_balance
+            .checked_sub(amount)
+            .ok_or(EscrowError::AmountMismatch)?;
 
         token::Client::new(&env, &meta.token).transfer(
             &env.current_contract_address(),

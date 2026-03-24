@@ -3,6 +3,7 @@
 import './lib/sentry.js';
 import * as Sentry from '@sentry/node';
 
+/* eslint-disable no-undef */
 import 'dotenv/config';
 import compression from 'compression';
 import cors from 'cors';
@@ -14,13 +15,25 @@ import rateLimit from 'express-rate-limit';
 import disputeRoutes from './api/routes/disputeRoutes.js';
 import escrowRoutes from './api/routes/escrowRoutes.js';
 import eventRoutes from './api/routes/eventRoutes.js';
+import kycRoutes from './api/routes/kycRoutes.js';
+import metricsRoutes from './api/routes/metricsRoutes.js';
 import notificationRoutes from './api/routes/notificationRoutes.js';
+import paymentRoutes from './api/routes/paymentRoutes.js';
 import reputationRoutes from './api/routes/reputationRoutes.js';
 import userRoutes from './api/routes/userRoutes.js';
+import auditRoutes from './api/routes/auditRoutes.js';
+import auditMiddleware from './api/middleware/audit.js';
 import cache from './lib/cache.js';
+import { attachPrismaMetrics } from './lib/prismaMetrics.js';
+import prisma from './lib/prisma.js';
+import { errorsTotal } from './lib/metrics.js';
+import metricsMiddleware from './middleware/metricsMiddleware.js';
 import responseTime from './middleware/responseTime.js';
 import emailService from './services/emailService.js';
 import { startIndexer } from './services/eventIndexer.js';
+
+// Attach Prisma query instrumentation
+attachPrismaMetrics(prisma);
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -31,6 +44,7 @@ app.use(Sentry.expressRequestHandler());
 
 app.use(helmet());
 app.use(compression());
+app.use(metricsMiddleware);
 app.use(responseTime);
 app.use(
   cors({
@@ -41,6 +55,7 @@ app.use(
 app.use(morgan('combined'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(auditMiddleware);
 
 // ── Sentry tracing handler — after body parsers, before routes ────────────────
 app.use(Sentry.expressTracingHandler());
@@ -60,8 +75,26 @@ const leaderboardLimiter = rateLimit({
 app.use('/api/', defaultLimiter);
 app.use('/api/reputation/leaderboard', leaderboardLimiter);
 
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString(), cache: { size: cache.size() } });
+app.get('/health', async (_req, res) => {
+  let dbStatus = 'ok';
+  let dbLatencyMs = null;
+
+  try {
+    const t0 = Date.now();
+    await prisma.$queryRaw`SELECT 1`;
+    dbLatencyMs = Date.now() - t0;
+  } catch {
+    dbStatus = 'error';
+  }
+
+  const status = dbStatus === 'ok' ? 'ok' : 'degraded';
+  res.status(dbStatus === 'ok' ? 200 : 503).json({
+    status,
+    timestamp: new Date().toISOString(),
+    uptime: Math.floor(process.uptime()),
+    cache: cache.analytics(),
+    db: { status: dbStatus, latencyMs: dbLatencyMs },
+  });
 });
 
 app.use('/api/escrows', escrowRoutes);
@@ -70,6 +103,9 @@ app.use('/api/reputation', reputationRoutes);
 app.use('/api/disputes', disputeRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/events', eventRoutes);
+app.use('/api/kyc', kycRoutes);
+app.use('/api/payments', paymentRoutes);
+app.use('/api/audit', auditRoutes);
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((req, res) => {
@@ -99,6 +135,13 @@ app.use((err, _req, res, _next) => {
   }
 
   res.status(statusCode).json(body);
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use((err, _req, res, _next) => {
+  console.error(err.stack);
+  errorsTotal.inc({ type: err.name || 'Error', route: _req?.path || 'unknown' });
+  res.status(err.statusCode || 500).json({
+    error: err.message || 'Internal server error',
+  });
 });
 
 app.listen(PORT, async () => {
@@ -110,6 +153,7 @@ app.listen(PORT, async () => {
     console.error('[Indexer] Failed to start:', err.message);
     Sentry.captureException(err, { tags: { component: 'indexer' } });
   });
+  startIndexer().catch((err) => console.error('[Indexer] Failed to start:', err.message));
 });
 
 export default app;

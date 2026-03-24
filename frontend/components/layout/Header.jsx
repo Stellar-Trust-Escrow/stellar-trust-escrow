@@ -4,13 +4,10 @@
  * Persistent top navigation bar. Includes:
  * - Logo / brand name
  * - Nav links (Dashboard, Explorer)
- * - Wallet connect / disconnect button
- * - Network indicator pill
+ * - WalletStatus indicator (connected/connecting/disconnected)
+ * - Network indicator pill (Testnet / Mainnet)
  *
  * TODO (contributor — medium, Issue #37):
- * - Implement useWallet() hook (Freighter integration)
- * - Show truncated address when connected
- * - Show network badge (Testnet / Mainnet)
  * - Add mobile hamburger menu
  * - Highlight active nav link
  */
@@ -19,31 +16,20 @@
 'use client';
 
 import Link from 'next/link';
-import Button from '../ui/Button';
-
-// TODO (contributor — Issue #37): replace with real wallet state
-const PLACEHOLDER_WALLET = {
-  isConnected: false,
-  address: null,
-  network: 'testnet',
-};
+import { useWallet } from '../../hooks/useWallet';
+import WalletStatus from '../ui/WalletStatus';
 
 export default function Header() {
-  const wallet = PLACEHOLDER_WALLET;
+  const wallet = useWallet();
 
-  const handleConnect = async () => {
-    // TODO (contributor — Issue #37):
-    // 1. Check if Freighter is installed (window.freighter)
-    // 2. Call freighter.requestAccess()
-    // 3. Get public key: freighter.getPublicKey()
-    // 4. Store in wallet context
-    console.log('TODO: connect Freighter — see Issue #37');
-  };
-
-  const handleDisconnect = () => {
-    // TODO (contributor — Issue #37)
-    console.log('TODO: disconnect wallet');
-  };
+  // Determine network label & style from wallet state
+  const networkLabel = wallet.network === 'mainnet' ? 'Mainnet' : 'Testnet';
+  const networkStyles =
+    wallet.network === 'mainnet'
+      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+      : 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+  const networkDotStyles =
+    wallet.network === 'mainnet' ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse';
 
   return (
     <header className="border-b border-gray-800 bg-gray-950/80 backdrop-blur-sm sticky top-0 z-50">
@@ -78,35 +64,17 @@ export default function Header() {
 
           {/* Right Side */}
           <div className="flex items-center gap-3">
-            {/* Network Badge */}
-            {/*
-              TODO (contributor — Issue #37):
-              Show real network from wallet context.
-              Style differently for mainnet (green) vs testnet (amber).
-            */}
-            <span className="hidden sm:flex items-center gap-1.5 text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2.5 py-1 rounded-full">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-              Testnet
+            {/* Network Badge — shows real network when wallet is connected */}
+            <span
+              id="network-badge"
+              className={`hidden sm:flex items-center gap-1.5 text-xs border px-2.5 py-1 rounded-full transition-colors duration-300 ${networkStyles}`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${networkDotStyles}`} />
+              {networkLabel}
             </span>
 
-            {/* Wallet Button */}
-            {wallet.isConnected ? (
-              <div className="flex items-center gap-2">
-                <Link
-                  href={`/profile/${wallet.address}`}
-                  className="text-sm font-mono text-indigo-400 hover:text-indigo-300 hidden sm:block"
-                >
-                  {wallet.address?.slice(0, 6)}...{wallet.address?.slice(-4)}
-                </Link>
-                <Button variant="secondary" size="sm" onClick={handleDisconnect}>
-                  Disconnect
-                </Button>
-              </div>
-            ) : (
-              <Button variant="primary" size="sm" onClick={handleConnect}>
-                Connect Wallet
-              </Button>
-            )}
+            {/* Wallet Status */}
+            <WalletStatus wallet={wallet} />
           </div>
         </div>
       </div>
