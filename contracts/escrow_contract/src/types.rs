@@ -20,6 +20,8 @@ pub enum EscrowStatus {
     Disputed,
     /// Escrow was cancelled before completion. Funds returned to client.
     Cancelled,
+    /// Cancellation requested - pending dispute resolution or deadline.
+    CancellationPending,
 }
 
 /// The lifecycle state of an individual milestone.
@@ -160,6 +162,12 @@ pub struct ReputationRecord {
 
     /// Ledger timestamp of the last reputation update.
     pub last_updated: u64,
+
+    /// Number of times this user has been slashed for cancellations.
+    pub slash_count: u32,
+
+    /// Total amount slashed from this user (in base token units).
+    pub total_slashed: i128,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -179,4 +187,46 @@ pub enum DataKey {
     Reputation(Address),
     /// Contract admin address — value: Address
     Admin,
+    /// Cancellation request by escrow ID — key: u64, value: CancellationRequest
+    CancellationRequest(u64),
+    /// Slash record by escrow ID — key: u64, value: SlashRecord
+    SlashRecord(u64),
+}
+
+/// A cancellation request with potential slashing.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct CancellationRequest {
+    /// The escrow being cancelled.
+    pub escrow_id: u64,
+    /// Who requested the cancellation.
+    pub requester: Address,
+    /// Reason for cancellation.
+    pub reason: String,
+    /// When the request was made.
+    pub requested_at: u64,
+    /// Deadline for disputes (timestamp).
+    pub dispute_deadline: u64,
+    /// Whether a dispute has been raised against this cancellation.
+    pub disputed: bool,
+}
+
+/// Record of a slash applied to a user.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct SlashRecord {
+    /// The escrow where the slash occurred.
+    pub escrow_id: u64,
+    /// The user who was slashed.
+    pub slashed_user: Address,
+    /// The user who received the slash.
+    pub recipient: Address,
+    /// Amount slashed.
+    pub amount: i128,
+    /// Reason for the slash.
+    pub reason: String,
+    /// When the slash was applied.
+    pub slashed_at: u64,
+    /// Whether the slash is disputed.
+    pub disputed: bool,
 }

@@ -87,4 +87,28 @@ pub enum EscrowError {
     LockTimeExpired = 28,
     /// Cannot extend lock time to the past.
     InvalidLockTimeExtension = 29,
+
+    // ── Cancellation & Slashing ───────────────────────────────────────────────────
+    /// A cancellation request already exists for this escrow.
+    CancellationAlreadyExists = 30,
+    /// No cancellation request found for this escrow.
+    CancellationNotFound = 31,
+    /// Cannot cancel escrow - no valid reason provided.
+    InvalidCancellationReason = 32,
+    /// Cancellation dispute deadline has not expired yet.
+    CancellationDisputeActive = 33,
+    /// Cannot cancel - escrow is not in appropriate state.
+    CannotCancelInCurrentState = 34,
+    /// Slash amount must be greater than zero.
+    InvalidSlashAmount = 35,
+    /// Slash amount exceeds available funds.
+    SlashAmountExceedsFunds = 36,
+    /// A slash record already exists for this escrow.
+    SlashAlreadyExists = 37,
+    /// No slash record found for this escrow.
+    SlashNotFound = 38,
+    /// Slash is already under dispute.
+    SlashAlreadyDisputed = 39,
+    /// Cannot dispute slash - deadline expired.
+    SlashDisputeDeadlineExpired = 40,
 }
