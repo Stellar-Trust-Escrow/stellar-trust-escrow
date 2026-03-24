@@ -3,6 +3,11 @@ import cache from '../../lib/cache.js';
 import { logControllerError } from '../../config/logger.js';
 import { buildPaginatedResponse, parsePagination } from '../../lib/pagination.js';
 
+/**
+ * List and get handlers assume query/params are already validated by
+ * `validate(disputeListQueryRules)` and `validate(disputeEscrowIdParamRules)`.
+ */
+
 const listDisputes = async (req, res) => {
   try {
     const { page, limit, skip } = parsePagination(req.query);
@@ -72,9 +77,6 @@ const getDispute = async (req, res) => {
     cache.set(cacheKey, dispute, 60);
     res.json(dispute);
   } catch (err) {
-    if (err.message?.includes('Cannot convert')) {
-      return res.status(400).json({ error: 'Invalid escrow id' });
-    }
     logControllerError('dispute.getDispute', err, req);
     res.status(500).json({ error: err.message });
   }
