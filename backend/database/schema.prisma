@@ -87,25 +87,116 @@ model ReputationRecord {
 
 // ── Disputes ─────────────────────────────────────────────────────────────────
 
+enum DisputeStatus {
+  Pending
+  UnderReview
+  AutoResolved
+  Resolved
+  Appealed
+  Escalated
+}
+
 model Dispute {
-  id              Int       @id @default(autoincrement())
-  escrowId        BigInt    @unique @map("escrow_id")
-  raisedByAddress String    @map("raised_by_address")
-  raisedAt        DateTime  @map("raised_at")
-  resolvedAt      DateTime? @map("resolved_at")
+  id              Int          @id @default(autoincrement())
+  escrowId        BigInt       @unique @map("escrow_id")
+  raisedByAddress String       @map("raised_by_address")
+  raisedAt        DateTime     @map("raised_at")
+  status          DisputeStatus @default(Pending)
+  resolvedAt      DateTime?    @map("resolved_at")
   /// Amount returned to client on resolution
-  clientAmount    String?   @map("client_amount")
+  clientAmount    String?      @map("client_amount")
   /// Amount sent to freelancer on resolution
-  freelancerAmount String?  @map("freelancer_amount")
-  /// Address that resolved the dispute (arbiter or admin)
-  resolvedBy      String?   @map("resolved_by")
+  freelancerAmount String?     @map("freelancer_amount")
+  /// Address that resolved the dispute (arbiter, admin, or system)
+  resolvedBy      String?      @map("resolved_by")
+  /// Resolution type: manual, auto, or appeal
+  resolutionType  String?      @map("resolution_type")
   /// Outcome description
   resolution      String?
+  /// Reason for escalation (if escalated)
+  escalationReason String?    @map("escalation_reason")
+  /// Whether resolution was appealed
+  appealed        Boolean      @default(false)
 
-  escrow          Escrow    @relation(fields: [escrowId], references: [id])
+  escrow          Escrow       @relation(fields: [escrowId], references: [id])
+  evidence        DisputeEvidence[]
+  resolutions     DisputeResolution[]
+  appeals         DisputeAppeal[]
 
   @@index([raisedByAddress])
+  @@index([status])
   @@map("disputes")
+}
+
+// ── Dispute Evidence ───────────────────────────────────────────────────────────
+
+model DisputeEvidence {
+  id              Int       @id @default(autoincrement())
+  disputeId       Int       @map("dispute_id")
+  submittedBy    String    @map("submitted_by")
+  /// Type of evidence: document, message, screenshot, timeline, other
+  evidenceType    String    @map("evidence_type")
+  /// Description of the evidence
+  description     String
+  /// URL or file path to the evidence (IPFS hash or file path)
+  evidenceUrl     String?   @map("evidence_url")
+  /// Additional metadata (JSON) for complex evidence
+  metadata        Json?
+  submittedAt     DateTime  @map("submitted_at")
+
+  dispute         Dispute   @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+
+  @@index([disputeId])
+  @@map("dispute_evidence")
+}
+
+// ── Dispute Resolution History ─────────────────────────────────────────────────
+
+model DisputeResolution {
+  id              Int       @id @default(autoincrement())
+  disputeId       Int       @map("dispute_id")
+  /// Resolution type: auto, manual, appeal
+  resolutionType  String    @map("resolution_type")
+  /// The actual resolution outcome
+  outcome         String
+  /// Recommendation from the automated system (if any)
+  recommendation  String?
+  /// Rules that were evaluated for auto-resolution
+  rulesEvaluated  Json?     @map("rules_evaluated")
+  /// Reason for the resolution
+  reason          String?
+  resolvedBy      String    @map("resolved_by")
+  createdAt       DateTime  @map("created_at")
+
+  dispute         Dispute   @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+
+  @@index([disputeId])
+  @@map("dispute_resolutions")
+}
+
+// ── Dispute Appeals ─────────────────────────────────────────────────────────────
+
+model DisputeAppeal {
+  id              Int       @id @default(autoincrement())
+  disputeId       Int       @unique @map("dispute_id")
+  /// Address that filed the appeal
+  filedBy         String    @map("filed_by")
+  /// Reason for the appeal
+  reason          String
+  /// Additional context for the appeal
+  context         String?
+  status          String    @default("pending") // pending, reviewing, approved, rejected
+  /// Resolution of the appeal (if resolved)
+  appealResult    String?   @map("appeal_result")
+  reviewedBy      String?   @map("reviewed_by")
+  reviewedAt      DateTime? @map("reviewed_at")
+  createdAt       DateTime  @map("created_at")
+
+  dispute         Dispute   @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+
+  @@index([disputeId])
+  @@index([status])
+  @@map("dispute_appeals")
 }
 
 // ── Contract Events ───────────────────────────────────────────────────────────
