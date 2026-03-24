@@ -1,4 +1,5 @@
 import express from 'express';
+import adminAuth from '../middleware/adminAuth.js';
 import kycController from '../controllers/kycController.js';
 
 const router = express.Router();
@@ -38,9 +39,7 @@ router.post('/webhook', captureRawBody, express.json(), kycController.webhook);
  * @route  GET /api/kyc/admin
  * @desc   Admin: list all KYC records with optional status filter.
  * @query  status (Pending|Init|Processing|Approved|Declined), page, limit
- *
- * TODO (contributor): protect with admin auth middleware
  */
-router.get('/admin', kycController.adminList);
+router.get('/admin', adminAuth, kycController.adminList);
 
 export default router;
