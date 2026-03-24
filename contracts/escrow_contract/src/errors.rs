@@ -87,4 +87,28 @@ pub enum EscrowError {
     LockTimeExpired = 28,
     /// Cannot extend lock time to the past.
     InvalidLockTimeExtension = 29,
+
+    // ── Cancellation ───────────────────────────────────────────────────────────
+    /// Cancellation request not found.
+    CancellationNotFound = 30,
+    /// Cancellation request already exists.
+    CancellationAlreadyExists = 31,
+    /// Cancellation has already been disputed.
+    CancellationAlreadyDisputed = 32,
+    /// Cancellation dispute period is still active.
+    CancellationDisputePeriodActive = 33,
+    /// Cancellation dispute deadline has expired.
+    CancellationDisputeDeadlineExpired = 34,
+    /// Cancellation has been disputed and cannot be executed.
+    CancellationDisputed = 35,
+
+    // ── Slashing ─────────────────────────────────────────────────────────────
+    /// Slash record not found.
+    SlashNotFound = 36,
+    /// Slash has already been disputed.
+    SlashAlreadyDisputed = 37,
+    /// Slash dispute deadline has expired.
+    SlashDisputeDeadlineExpired = 38,
+    /// Invalid slash amount.
+    InvalidSlashAmount = 39,
 }

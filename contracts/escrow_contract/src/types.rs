@@ -20,6 +20,8 @@ pub enum EscrowStatus {
     Disputed,
     /// Escrow was cancelled before completion. Funds returned to client.
     Cancelled,
+    /// Cancellation requested - pending dispute resolution or deadline.
+    CancellationPending,
 }
 
 /// The lifecycle state of an individual milestone.
@@ -158,8 +160,63 @@ pub struct ReputationRecord {
     /// Total value transacted through escrows (in base token units).
     pub total_volume: i128,
 
+    /// Number of times this user has been slashed.
+    pub slash_count: u32,
+
+    /// Total amount slashed from this user (in base token units).
+    pub total_slashed: i128,
+
     /// Ledger timestamp of the last reputation update.
     pub last_updated: u64,
+}
+
+/// A cancellation request for an escrow.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct CancellationRequest {
+    /// The escrow ID this request belongs to.
+    pub escrow_id: u64,
+
+    /// Address of the party requesting cancellation.
+    pub requester: Address,
+
+    /// Reason for cancellation.
+    pub reason: String,
+
+    /// When the cancellation was requested (ledger timestamp).
+    pub requested_at: u64,
+
+    /// Deadline for disputes (ledger timestamp).
+    pub dispute_deadline: u64,
+
+    /// Whether this cancellation has been disputed.
+    pub disputed: bool,
+}
+
+/// A slash record for tracking penalties.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct SlashRecord {
+    /// The escrow ID this slash belongs to.
+    pub escrow_id: u64,
+
+    /// Address of the user being slashed.
+    pub slashed_user: Address,
+
+    /// Address of the user receiving the slash.
+    pub recipient: Address,
+
+    /// Amount being slashed.
+    pub amount: i128,
+
+    /// Reason for the slash.
+    pub reason: String,
+
+    /// When the slash was applied (ledger timestamp).
+    pub slashed_at: u64,
+
+    /// Whether this slash has been disputed.
+    pub disputed: bool,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -179,4 +236,8 @@ pub enum DataKey {
     Reputation(Address),
     /// Contract admin address — value: Address
     Admin,
+    /// Cancellation request by escrow ID — key: u64, value: CancellationRequest
+    CancellationRequest(u64),
+    /// Slash record by escrow ID — key: u64, value: SlashRecord
+    SlashRecord(u64),
 }
