@@ -21,6 +21,8 @@ import paymentRoutes from './api/routes/paymentRoutes.js';
 import reputationRoutes from './api/routes/reputationRoutes.js';
 import userRoutes from './api/routes/userRoutes.js';
 import auditRoutes from './api/routes/auditRoutes.js';
+import authRoutes from './api/routes/authRoutes.js';
+import authMiddleware from './api/middleware/auth.js';
 import auditMiddleware from './api/middleware/audit.js';
 import { createWebSocketServer, pool } from './api/websocket/handlers.js';
 import cache from './lib/cache.js';
@@ -114,8 +116,9 @@ app.get('/health', async (_req, res) => {
   });
 });
 
-app.use('/api/escrows', escrowRoutes);
-app.use('/api/users', userRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/escrows', authMiddleware, escrowRoutes);
+app.use('/api/users', authMiddleware, userRoutes);
 app.use('/api/reputation', reputationRoutes);
 app.use('/api/disputes', disputeRoutes);
 app.use('/api/notifications', notificationRoutes);

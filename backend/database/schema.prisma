@@ -18,6 +18,19 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ── Users ─────────────────────────────────────────────────────────────────────
+
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  password     String
+  refreshToken String?  @map("refresh_token")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
 // ── Escrows ───────────────────────────────────────────────────────────────────
 
 model Escrow {
