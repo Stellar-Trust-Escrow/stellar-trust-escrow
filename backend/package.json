@@ -6,9 +6,9 @@
   "main": "server.js",
   "scripts": {
     "dev": "nodemon server.js",
-    "build": "next build",
+    "build": "echo 'No build step required for backend'",
     "start": "node server.js",
-    "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand",
+    "test": "node --experimental-vm-modules ../node_modules/jest/bin/jest.js --runInBand",
     "lint": "eslint .",
     "format": "prettier --write .",
     "db:migrate": "npx prisma migrate dev",
@@ -26,12 +26,13 @@
     "express-validator": "^7.0.0",
     "helmet": "^7.0.0",
     "morgan": "^1.10.0",
-    "winston": "^3.11.0"
+    "winston": "^3.11.0",
+    "ws": "^8.20.0"
   },
   "devDependencies": {
-    "jest": "^29.0.0",
+    "jest": "^29.7.0",
     "nodemon": "^3.0.0",
-    "supertest": "^6.0.0",
-    "prisma": "^5.0.0"
+    "prisma": "^5.0.0",
+    "supertest": "^6.0.0"
   }
 }

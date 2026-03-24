@@ -24,9 +24,6 @@
  * @module escrowIndexer
  */
 
-/* eslint-disable no-undef */
-/* eslint-disable @typescript-eslint/no-unused-vars */
-
 // TODO (contributor): uncomment when dependencies are installed
 // const { SorobanRpc, xdr, StrKey } = require('@stellar/stellar-sdk');
 // const { PrismaClient } = require('@prisma/client');

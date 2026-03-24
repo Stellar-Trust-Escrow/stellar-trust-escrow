@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import http from 'http';
 import compression from 'compression';
 import cors from 'cors';
 import express from 'express';
@@ -11,6 +12,7 @@ import escrowRoutes from './api/routes/escrowRoutes.js';
 import notificationRoutes from './api/routes/notificationRoutes.js';
 import reputationRoutes from './api/routes/reputationRoutes.js';
 import userRoutes from './api/routes/userRoutes.js';
+import { createWebSocketServer, pool } from './api/websocket/handlers.js';
 import cache from './lib/cache.js';
 import responseTime from './middleware/responseTime.js';
 import emailService from './services/emailService.js';
@@ -47,7 +49,12 @@ app.use('/api/', defaultLimiter);
 app.use('/api/reputation/leaderboard', leaderboardLimiter);
 
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString(), cache: { size: cache.size() } });
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    cache: { size: cache.size() },
+    websocket: pool.getMetrics(),
+  });
 });
 
 app.use('/api/escrows', escrowRoutes);
@@ -60,18 +67,23 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-app.use((err, _req, res, _next) => {
+/* eslint-disable-next-line @typescript-eslint/no-unused-vars */
+app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(err.statusCode || 500).json({
     error: err.message || 'Internal server error',
   });
 });
 
-app.listen(PORT, async () => {
+const server = http.createServer(app);
+createWebSocketServer(server);
+
+server.listen(PORT, async () => {
   console.log(`API running on port ${PORT}`);
   console.log(`Network: ${process.env.STELLAR_NETWORK}`);
   await emailService.start();
   console.log('[EmailService] Queue processor started');
+  console.log('[WebSocket] Server attached');
 });
 
 export default app;

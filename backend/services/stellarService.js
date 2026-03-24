@@ -7,9 +7,6 @@
  * @module stellarService
  */
 
-/* eslint-disable no-undef */
-/* eslint-disable @typescript-eslint/no-unused-vars */
-
 // TODO (contributor): uncomment when @stellar/stellar-sdk is installed
 // const { SorobanRpc, Transaction, Networks } = require('@stellar/stellar-sdk');
 
