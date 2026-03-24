@@ -16,6 +16,7 @@ import paymentRoutes from './api/routes/paymentRoutes.js';
 import reputationRoutes from './api/routes/reputationRoutes.js';
 import userRoutes from './api/routes/userRoutes.js';
 import auditRoutes from './api/routes/auditRoutes.js';
+import auditMiddleware from './api/middleware/audit.js';
 import cache from './lib/cache.js';
 import { attachPrismaMetrics } from './lib/prismaMetrics.js';
 import prisma from './lib/prisma.js';
