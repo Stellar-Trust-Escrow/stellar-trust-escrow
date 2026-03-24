@@ -3,7 +3,7 @@
 import './lib/sentry.js';
 import * as Sentry from '@sentry/node';
 
-/* eslint-disable no-undef */
+ 
 import 'dotenv/config';
 import http from 'http';
 import compressionMiddleware from './middleware/compression.js';
@@ -22,6 +22,8 @@ import reputationRoutes from './api/routes/reputationRoutes.js';
 import userRoutes from './api/routes/userRoutes.js';
 import auditRoutes from './api/routes/auditRoutes.js';
 import auditMiddleware from './api/middleware/audit.js';
+import apiV1Routes from './api/v1/index.js';
+import { deprecatedRoute } from './api/middleware/version.js';
 import { createWebSocketServer, pool } from './api/websocket/handlers.js';
 import cache from './lib/cache.js';
 import { attachPrismaMetrics } from './lib/prismaMetrics.js';
@@ -38,6 +40,8 @@ attachPrismaMetrics(prisma);
 startConnectionMonitoring(prisma);
 
 const PORT = process.env.PORT || 4000;
+
+const app = express();
 
 // ── Sentry request handler — must be first middleware ─────────────────────────
 // Attaches trace context and request data to every event captured downstream.
@@ -113,6 +117,12 @@ app.get('/health', async (_req, res) => {
     },
   });
 });
+
+// Mount v1 API routes
+app.use('/api/v1', apiV1Routes);
+
+// Apply deprecation warnings to old, unversioned endpoints
+app.use('/api', deprecatedRoute);
 
 app.use('/api/escrows', escrowRoutes);
 app.use('/api/users', userRoutes);
