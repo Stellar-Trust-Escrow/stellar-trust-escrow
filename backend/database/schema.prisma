@@ -150,6 +150,43 @@ model IndexerState {
   @@map("indexer_state")
 }
 
+// ── Payments ─────────────────────────────────────────────────────────────────
+
+model Payment {
+  id                String        @id @default(cuid())
+  address           String                              // Stellar address of payer
+  escrowId          BigInt?       @map("escrow_id")     // linked escrow (nullable until funded)
+  stripeSessionId   String?       @unique @map("stripe_session_id")
+  stripePaymentIntent String?     @unique @map("stripe_payment_intent")
+  amountFiat        Int           @map("amount_fiat")   // in cents (USD)
+  amountCrypto      String?       @map("amount_crypto") // XLM/USDC amount after conversion
+  currency          String        @default("usd")
+  status            PaymentStatus @default(Pending)
+  refundId          String?       @map("refund_id")     // Stripe refund ID
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  @@index([address])
+  @@index([status])
+  @@map("payments")
+}
+
+// ── KYC ──────────────────────────────────────────────────────────────────────
+
+model KycVerification {
+  id              Int       @id @default(autoincrement())
+  address         String    @unique
+  applicantId     String?   @unique @map("applicant_id")  // Sumsub applicant ID
+  status          KycStatus @default(Pending)
+  reviewResult    String?   @map("review_result")         // approved | declined
+  rejectLabels    String[]  @map("reject_labels")         // Sumsub rejection reasons
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@map("kyc_verifications")
+<<<<<<< feature/issue-48-implement-payment-gateway-integration
+=======
 // ── Admin Audit Log ───────────────────────────────────────────────────────────
 
 /// Immutable record of every admin action for accountability and audit trails.
@@ -169,6 +206,7 @@ model AdminAuditLog {
   @@index([targetAddress])
   @@index([performedAt(sort: Desc)])
   @@map("admin_audit_logs")
+>>>>>>> main
 }
 
 // ── Enums ─────────────────────────────────────────────────────────────────────
@@ -185,4 +223,20 @@ enum MilestoneStatus {
   Submitted
   Approved
   Rejected
+}
+
+enum KycStatus {
+  Pending
+  Init
+  Processing
+  Approved
+  Declined
+}
+
+enum PaymentStatus {
+  Pending
+  Processing
+  Completed
+  Failed
+  Refunded
 }
