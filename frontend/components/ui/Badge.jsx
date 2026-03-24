@@ -33,6 +33,12 @@ const STATUS_STYLES = {
   VERIFIED: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
   EXPERT: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
   ELITE: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+
+  // KYC statuses
+  Init: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  Processing: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+  Approved: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+  Declined: 'bg-red-500/20 text-red-400 border-red-500/30',
 };
 
 const ICONS = {
@@ -48,6 +54,11 @@ const ICONS = {
   VERIFIED: '💜',
   EXPERT: '⭐',
   ELITE: '🏆',
+  // KYC
+  Init: '🔄',
+  Processing: '⏳',
+  Approved: '✅',
+  Declined: '❌',
 };
 
 export default function Badge({ status, size = 'md' }) {

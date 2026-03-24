@@ -9,7 +9,9 @@ import rateLimit from 'express-rate-limit';
 import disputeRoutes from './api/routes/disputeRoutes.js';
 import escrowRoutes from './api/routes/escrowRoutes.js';
 import eventRoutes from './api/routes/eventRoutes.js';
+import kycRoutes from './api/routes/kycRoutes.js';
 import notificationRoutes from './api/routes/notificationRoutes.js';
+import paymentRoutes from './api/routes/paymentRoutes.js';
 import reputationRoutes from './api/routes/reputationRoutes.js';
 import userRoutes from './api/routes/userRoutes.js';
 import cache from './lib/cache.js';
@@ -49,7 +51,7 @@ app.use('/api/', defaultLimiter);
 app.use('/api/reputation/leaderboard', leaderboardLimiter);
 
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString(), cache: { size: cache.size() } });
+  res.json({ status: 'ok', timestamp: new Date().toISOString(), cache: cache.analytics() });
 });
 
 app.use('/api/escrows', escrowRoutes);
@@ -58,6 +60,8 @@ app.use('/api/reputation', reputationRoutes);
 app.use('/api/disputes', disputeRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/events', eventRoutes);
+app.use('/api/kyc', kycRoutes);
+app.use('/api/payments', paymentRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
