@@ -1,37 +1,39 @@
-/**
- * StellarTrustEscrow — Backend Server
- *
- * Express.js REST API server. Serves escrow data indexed from the Stellar
- * blockchain and provides endpoints for the Next.js frontend.
- *
- * @module server
- */
-
 /* eslint-disable no-undef */
-/* eslint-disable @typescript-eslint/no-unused-vars */
-
 import 'dotenv/config';
-import express from 'express';
+import compression from 'compression';
 import cors from 'cors';
+import express from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 
-import escrowRoutes from './api/routes/escrowRoutes.js';
-import userRoutes from './api/routes/userRoutes.js';
-import reputationRoutes from './api/routes/reputationRoutes.js';
 import disputeRoutes from './api/routes/disputeRoutes.js';
-import adminRoutes from './api/routes/adminRoutes.js';
+import escrowRoutes from './api/routes/escrowRoutes.js';
+import eventRoutes from './api/routes/eventRoutes.js';
+import kycRoutes from './api/routes/kycRoutes.js';
+import notificationRoutes from './api/routes/notificationRoutes.js';
+import paymentRoutes from './api/routes/paymentRoutes.js';
+import reputationRoutes from './api/routes/reputationRoutes.js';
+import userRoutes from './api/routes/userRoutes.js';
+import cache from './lib/cache.js';
+import { attachPrismaMetrics } from './lib/prismaMetrics.js';
+import prisma from './lib/prisma.js';
+import { errorsTotal } from './lib/metrics.js';
+import metricsMiddleware from './middleware/metricsMiddleware.js';
+import responseTime from './middleware/responseTime.js';
+import emailService from './services/emailService.js';
+import { startIndexer } from './services/eventIndexer.js';
 
-// TODO (contributor — easy, Issue #17): Import and start the escrow indexer
-// const { startIndexer } = require('./services/escrowIndexer');
+// Attach Prisma query instrumentation
+attachPrismaMetrics(prisma);
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-// ── Middleware ────────────────────────────────────────────────────────────────
-
 app.use(helmet());
+app.use(compression());
+app.use(metricsMiddleware);
+app.use(responseTime);
 app.use(
   cors({
     origin: process.env.ALLOWED_ORIGINS?.split(',') || 'http://localhost:3000',
@@ -42,67 +44,53 @@ app.use(morgan('combined'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Rate limiting — TODO (contributor — easy): tune limits per route
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,
+const defaultLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
   message: 'Too many requests from this IP, please try again later.',
 });
-app.use('/api/', limiter);
 
-// ── Health Check ──────────────────────────────────────────────────────────────
-
-/**
- * @route GET /health
- * @desc  Basic health check — useful for deployment monitoring
- * @returns {{ status: string, timestamp: string }}
- */
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+const leaderboardLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: 'Too many leaderboard requests, please slow down.',
 });
 
-// ── Routes ────────────────────────────────────────────────────────────────────
+app.use('/api/', defaultLimiter);
+app.use('/api/reputation/leaderboard', leaderboardLimiter);
+
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString(), cache: cache.analytics() });
+});
 
 app.use('/api/escrows', escrowRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/reputation', reputationRoutes);
 app.use('/api/disputes', disputeRoutes);
-app.use('/api/admin', adminRoutes);
-
-// ── 404 Handler ───────────────────────────────────────────────────────────────
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/events', eventRoutes);
+app.use('/api/kyc', kycRoutes);
+app.use('/api/payments', paymentRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-// ── Error Handler ─────────────────────────────────────────────────────────────
-
-/**
- * Global error handler.
- * TODO (contributor — easy, Issue #18): Improve error responses with
- * structured error codes matching the Soroban contract's EscrowError enum.
- */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err, _req, res, _next) => {
   console.error(err.stack);
+  errorsTotal.inc({ type: err.name || 'Error', route: _req?.path || 'unknown' });
   res.status(err.statusCode || 500).json({
     error: err.message || 'Internal server error',
-    // TODO: add error code field
   });
 });
 
-// ── Start ─────────────────────────────────────────────────────────────────────
-
 app.listen(PORT, async () => {
-  console.log(`🚀 StellarTrustEscrow API running on port ${PORT}`);
-  console.log(`🌐 Network: ${process.env.STELLAR_NETWORK}`);
-
-  // TODO (contributor — Issue #17): Start the indexer
-  // try {
-  //   await startIndexer();
-  //   console.log('📡 Escrow indexer started');
-  // } catch (err) {
-  //   console.error('Failed to start indexer:', err);
-  // }
+  console.log(`API running on port ${PORT}`);
+  console.log(`Network: ${process.env.STELLAR_NETWORK}`);
+  await emailService.start();
+  console.log('[EmailService] Queue processor started');
+  startIndexer().catch((err) => console.error('[Indexer] Failed to start:', err.message));
 });
 
-export default app; // for testing
+export default app;

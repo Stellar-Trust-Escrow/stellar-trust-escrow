@@ -1,42 +1,78 @@
-/**
- * Dispute Controller
- * Handles dispute listing and detail queries.
- */
+import prisma from '../../lib/prisma.js';
+import cache from '../../lib/cache.js';
+import { buildPaginatedResponse, parsePagination } from '../../lib/pagination.js';
 
-/**
- * GET /api/disputes
- *
- * Returns all escrows currently in Disputed status.
- *
- * TODO (contributor — easy, Issue #26):
- * 1. Query escrows where status = 'Disputed'
- * 2. Include escrow summary + raised_at timestamp + raised_by address
- * 3. Paginate results
- */
 const listDisputes = async (req, res) => {
   try {
-    const { page = 1, limit = 20 } = req.query;
-    // TODO: implement
-    res.status(501).json({ error: 'Not implemented — see Issue #26', page, limit });
+    const { page, limit, skip } = parsePagination(req.query);
+
+    const cacheKey = `disputes:list:${page}:${limit}`;
+    const cached = cache.get(cacheKey);
+    if (cached) return res.json(cached);
+
+    const [data, total] = await prisma.$transaction([
+      prisma.dispute.findMany({
+        skip,
+        take: limit,
+        orderBy: { raisedAt: 'desc' },
+        select: {
+          escrowId: true,
+          raisedByAddress: true,
+          raisedAt: true,
+          resolvedAt: true,
+          resolution: true,
+          escrow: {
+            select: {
+              clientAddress: true,
+              freelancerAddress: true,
+              arbiterAddress: true,
+              totalAmount: true,
+              status: true,
+            },
+          },
+        },
+      }),
+      prisma.dispute.count(),
+    ]);
+
+    const result = buildPaginatedResponse(data, { total, page, limit });
+    cache.set(cacheKey, result, 30);
+    res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
 
-/**
- * GET /api/disputes/:escrowId
- *
- * Returns dispute details for a specific escrow.
- * Includes: raised_by, raised_at, arbiter (if any), resolution (if resolved).
- *
- * TODO (contributor — easy, Issue #26)
- */
 const getDispute = async (req, res) => {
   try {
-    const { escrowId } = req.params;
-    // TODO: implement
-    res.status(501).json({ error: 'Not implemented — see Issue #26', escrowId });
+    const escrowId = BigInt(req.params.escrowId);
+    const cacheKey = `disputes:${escrowId}`;
+    const cached = cache.get(cacheKey);
+    if (cached) return res.json(cached);
+
+    const dispute = await prisma.dispute.findUnique({
+      where: { escrowId },
+      include: {
+        escrow: {
+          select: {
+            clientAddress: true,
+            freelancerAddress: true,
+            arbiterAddress: true,
+            totalAmount: true,
+            status: true,
+          },
+        },
+      },
+    });
+
+    if (!dispute) return res.status(404).json({ error: 'Dispute not found' });
+
+    cache.set(cacheKey, dispute, 60);
+    res.json(dispute);
   } catch (err) {
+    if (err.message?.includes('Cannot convert')) {
+      return res.status(400).json({ error: 'Invalid escrow id' });
+    }
     res.status(500).json({ error: err.message });
   }
 };
