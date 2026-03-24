@@ -30,7 +30,7 @@
  * - Handle loading state while tx is pending
  */
 
-/* eslint-disable no-undef */
+ 
 'use client';
 
 import { useState } from 'react';

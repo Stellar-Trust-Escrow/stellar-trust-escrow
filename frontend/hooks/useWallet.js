@@ -49,8 +49,6 @@
 
 'use client';
 
-/* eslint-disable @typescript-eslint/no-unused-vars */
-
 import { useState, useCallback, useEffect } from 'react';
 
 export function useWallet() {

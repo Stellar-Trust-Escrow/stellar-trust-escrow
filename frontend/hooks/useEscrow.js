@@ -22,9 +22,6 @@
  * }
  */
 
-/* eslint-disable no-undef */
-/* eslint-disable @typescript-eslint/no-unused-vars */
-
 'use client';
 
 const _API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';

@@ -16,7 +16,7 @@
  * - Handle loading and error states
  */
 
-/* eslint-disable no-undef */
+ 
 'use client';
 
 import { useState } from 'react';
