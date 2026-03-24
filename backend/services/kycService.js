@@ -8,6 +8,7 @@
 
 import crypto from 'crypto';
 import prisma from '../lib/prisma.js';
+import { withSpan } from '../lib/tracing.js';
 
 const {
   SUMSUB_APP_TOKEN,
@@ -48,31 +49,43 @@ async function sumsubFetch(method, path, body) {
 
 /** Create or retrieve a Sumsub applicant for the given Stellar address. */
 async function getOrCreateApplicant(address) {
-  let record = await prisma.kycVerification.findUnique({ where: { address } });
+  return withSpan('kycService.getOrCreateApplicant', { 'kyc.address': address }, async (span) => {
+    let record = await prisma.kycVerification.findUnique({ where: { address } });
 
-  if (record?.applicantId) return record;
+    if (record?.applicantId) {
+      span.setAttribute('kyc.applicant_id', record.applicantId);
+      span.setAttribute('kyc.cache_hit', true);
+      return record;
+    }
 
-  const applicant = await sumsubFetch('POST', '/resources/applicants?levelName=' + LEVEL_NAME, {
-    externalUserId: address,
+    const applicant = await sumsubFetch('POST', '/resources/applicants?levelName=' + LEVEL_NAME, {
+      externalUserId: address,
+    });
+
+    span.setAttribute('kyc.applicant_id', applicant.id);
+    span.setAttribute('kyc.cache_hit', false);
+
+    record = await prisma.kycVerification.upsert({
+      where: { address },
+      update: { applicantId: applicant.id, status: 'Init' },
+      create: { address, applicantId: applicant.id, status: 'Init' },
+    });
+
+    return record;
   });
-
-  record = await prisma.kycVerification.upsert({
-    where: { address },
-    update: { applicantId: applicant.id, status: 'Init' },
-    create: { address, applicantId: applicant.id, status: 'Init' },
-  });
-
-  return record;
 }
 
 /** Generate a short-lived SDK access token for the frontend widget. */
 async function generateSdkToken(address) {
-  const record = await getOrCreateApplicant(address);
-  const data = await sumsubFetch(
-    'POST',
-    `/resources/accessTokens?userId=${record.applicantId}&levelName=${LEVEL_NAME}`,
-  );
-  return { token: data.token, applicantId: record.applicantId };
+  return withSpan('kycService.generateSdkToken', { 'kyc.address': address }, async (span) => {
+    const record = await getOrCreateApplicant(address);
+    const data = await sumsubFetch(
+      'POST',
+      `/resources/accessTokens?userId=${record.applicantId}&levelName=${LEVEL_NAME}`,
+    );
+    span.setAttribute('kyc.applicant_id', record.applicantId);
+    return { token: data.token, applicantId: record.applicantId };
+  });
 }
 
 /** Get current KYC status for an address (from DB, not Sumsub). */
@@ -95,32 +108,37 @@ async function listAll({ skip = 0, take = 20, status } = {}) {
  * Returns the updated record.
  */
 async function handleWebhook(payload) {
-  const { externalUserId, applicantId, type, reviewResult } = payload;
+  return withSpan('kycService.handleWebhook', { 'kyc.event_type': payload.type }, async (span) => {
+    const { externalUserId, applicantId, type, reviewResult } = payload;
 
-  const statusMap = {
-    applicantCreated: 'Init',
-    applicantPending: 'Processing',
-    applicantReviewed: reviewResult?.reviewAnswer === 'GREEN' ? 'Approved' : 'Declined',
-  };
+    const statusMap = {
+      applicantCreated: 'Init',
+      applicantPending: 'Processing',
+      applicantReviewed: reviewResult?.reviewAnswer === 'GREEN' ? 'Approved' : 'Declined',
+    };
 
-  const newStatus = statusMap[type];
-  if (!newStatus) return null; // unhandled event type
+    const newStatus = statusMap[type];
+    if (!newStatus) return null;
 
-  return prisma.kycVerification.upsert({
-    where: { address: externalUserId },
-    update: {
-      applicantId,
-      status: newStatus,
-      reviewResult: reviewResult?.reviewAnswer ?? null,
-      rejectLabels: reviewResult?.rejectLabels ?? [],
-    },
-    create: {
-      address: externalUserId,
-      applicantId,
-      status: newStatus,
-      reviewResult: reviewResult?.reviewAnswer ?? null,
-      rejectLabels: reviewResult?.rejectLabels ?? [],
-    },
+    span.setAttribute('kyc.new_status', newStatus);
+    span.setAttribute('kyc.applicant_id', applicantId);
+
+    return prisma.kycVerification.upsert({
+      where: { address: externalUserId },
+      update: {
+        applicantId,
+        status: newStatus,
+        reviewResult: reviewResult?.reviewAnswer ?? null,
+        rejectLabels: reviewResult?.rejectLabels ?? [],
+      },
+      create: {
+        address: externalUserId,
+        applicantId,
+        status: newStatus,
+        reviewResult: reviewResult?.reviewAnswer ?? null,
+        rejectLabels: reviewResult?.rejectLabels ?? [],
+      },
+    });
   });
 }
 

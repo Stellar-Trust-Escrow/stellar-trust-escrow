@@ -9,6 +9,7 @@
  */
 
 import { SorobanRpc, Transaction, Networks } from '@stellar/stellar-sdk';
+import { withSpan } from '../lib/tracing.js';
 
 const RPC_URL = process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org';
 const NETWORK = process.env.STELLAR_NETWORK || 'testnet';
@@ -26,29 +27,33 @@ const getServer = () =>
  * @returns {Promise<{ hash: string, status: string, errorResultXdr?: string }>}
  */
 const submitTransaction = async (signedXdr) => {
-  const server = getServer();
-  const tx = new Transaction(signedXdr, NETWORK_PASSPHRASE);
-  const sendResult = await server.sendTransaction(tx);
+  return withSpan('stellarService.submitTransaction', { 'stellar.network': NETWORK }, async (span) => {
+    const server = getServer();
+    const tx = new Transaction(signedXdr, NETWORK_PASSPHRASE);
+    const sendResult = await server.sendTransaction(tx);
 
-  if (sendResult.status === 'ERROR') {
-    return { hash: sendResult.hash, status: 'FAILED', errorResultXdr: sendResult.errorResultXdr };
-  }
+    span.setAttribute('stellar.tx.hash', sendResult.hash);
 
-  // Poll until the transaction is no longer pending
-  const hash = sendResult.hash;
-  for (let i = 0; i < 30; i++) {
-    await new Promise((r) => setTimeout(r, 2000));
-    const result = await server.getTransaction(hash);
-    if (result.status !== 'NOT_FOUND') {
-      return {
-        hash,
-        status: result.status === 'SUCCESS' ? 'SUCCESS' : 'FAILED',
-        errorResultXdr: result.resultXdr,
-      };
+    if (sendResult.status === 'ERROR') {
+      span.setAttribute('stellar.tx.status', 'FAILED');
+      return { hash: sendResult.hash, status: 'FAILED', errorResultXdr: sendResult.errorResultXdr };
     }
-  }
 
-  return { hash, status: 'TIMEOUT' };
+    const hash = sendResult.hash;
+    for (let i = 0; i < 30; i++) {
+      await new Promise((r) => setTimeout(r, 2000));
+      const result = await server.getTransaction(hash);
+      if (result.status !== 'NOT_FOUND') {
+        const status = result.status === 'SUCCESS' ? 'SUCCESS' : 'FAILED';
+        span.setAttribute('stellar.tx.status', status);
+        span.setAttribute('stellar.tx.poll_attempts', i + 1);
+        return { hash, status, errorResultXdr: result.resultXdr };
+      }
+    }
+
+    span.setAttribute('stellar.tx.status', 'TIMEOUT');
+    return { hash, status: 'TIMEOUT' };
+  });
 };
 
 /**
@@ -59,12 +64,19 @@ const submitTransaction = async (signedXdr) => {
  * @returns {Promise<Array>} array of raw Soroban event objects
  */
 const getContractEvents = async (startLedger, contractId) => {
-  const server = getServer();
-  const response = await server.getEvents({
-    startLedger,
-    filters: [{ type: 'contract', contractIds: [contractId] }],
+  return withSpan('stellarService.getContractEvents', {
+    'stellar.start_ledger': startLedger,
+    'stellar.contract_id': contractId,
+  }, async (span) => {
+    const server = getServer();
+    const response = await server.getEvents({
+      startLedger,
+      filters: [{ type: 'contract', contractIds: [contractId] }],
+    });
+    const events = response.events ?? [];
+    span.setAttribute('stellar.events.count', events.length);
+    return events;
   });
-  return response.events ?? [];
 };
 
 /**
@@ -73,9 +85,12 @@ const getContractEvents = async (startLedger, contractId) => {
  * @returns {Promise<number>}
  */
 const getLatestLedger = async () => {
-  const server = getServer();
-  const health = await server.getLatestLedger();
-  return health.sequence;
+  return withSpan('stellarService.getLatestLedger', {}, async (span) => {
+    const server = getServer();
+    const health = await server.getLatestLedger();
+    span.setAttribute('stellar.latest_ledger', health.sequence);
+    return health.sequence;
+  });
 };
 
 export { submitTransaction, getContractEvents, getLatestLedger };

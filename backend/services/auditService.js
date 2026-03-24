@@ -9,6 +9,7 @@
 
 import { stringify } from 'csv-stringify/sync';
 import prisma from '../lib/prisma.js';
+import { withSpan } from '../lib/tracing.js';
 
 // ── Categories & Actions ──────────────────────────────────────────────────────
 
@@ -71,16 +72,21 @@ export const AuditAction = {
  */
 export async function log(entry) {
   try {
-    await prisma.auditLog.create({
-      data: {
-        category: entry.category,
-        action: entry.action,
-        actor: entry.actor,
-        resourceId: entry.resourceId ?? null,
-        metadata: entry.metadata ?? undefined,
-        statusCode: entry.statusCode ?? null,
-        ipAddress: entry.ipAddress ?? null,
-      },
+    await withSpan('auditService.log', {
+      'audit.category': entry.category,
+      'audit.action': entry.action,
+    }, async () => {
+      await prisma.auditLog.create({
+        data: {
+          category: entry.category,
+          action: entry.action,
+          actor: entry.actor,
+          resourceId: entry.resourceId ?? null,
+          metadata: entry.metadata ?? undefined,
+          statusCode: entry.statusCode ?? null,
+          ipAddress: entry.ipAddress ?? null,
+        },
+      });
     });
   } catch (err) {
     console.error('[AuditService] Failed to write audit log:', err.message);

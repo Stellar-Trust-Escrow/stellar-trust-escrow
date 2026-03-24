@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import disputeRaisedTemplate from '../templates/emails/disputeRaised.js';
 import escrowStatusChangedTemplate from '../templates/emails/escrowStatusChanged.js';
 import milestoneCompletedTemplate from '../templates/emails/milestoneCompleted.js';
+import { withSpan } from '../lib/tracing.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -157,58 +158,61 @@ function pruneSentTimestamps() {
 }
 
 async function sendWithProvider(message) {
-  if (config.provider === 'console' || !config.sendgridApiKey) {
-    console.log('[EmailService] Console delivery', {
-      to: message.to.email,
-      subject: message.subject,
-      eventType: message.eventType,
-    });
-    return {
-      provider: 'console',
-      messageId: `console-${crypto.randomUUID()}`,
-    };
-  }
-
-  if (config.provider !== 'sendgrid') {
-    throw new Error(`Unsupported email provider: ${config.provider}`);
-  }
-
-  const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${config.sendgridApiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      personalizations: [
-        {
-          to: [{ email: message.to.email, name: message.to.name }],
-          subject: message.subject,
-        },
-      ],
-      from: {
-        email: config.fromEmail,
-        name: config.fromName,
-      },
-      content: [
-        { type: 'text/plain', value: message.text },
-        { type: 'text/html', value: message.html },
-      ],
-      custom_args: {
+  return withSpan('emailService.sendWithProvider', {
+    'email.event_type': message.eventType,
+    'email.provider': config.provider,
+  }, async (span) => {
+    if (config.provider === 'console' || !config.sendgridApiKey) {
+      console.log('[EmailService] Console delivery', {
+        to: message.to.email,
+        subject: message.subject,
         eventType: message.eventType,
+      });
+      const messageId = `console-${crypto.randomUUID()}`;
+      span.setAttribute('email.message_id', messageId);
+      return { provider: 'console', messageId };
+    }
+
+    if (config.provider !== 'sendgrid') {
+      throw new Error(`Unsupported email provider: ${config.provider}`);
+    }
+
+    const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${config.sendgridApiKey}`,
+        'Content-Type': 'application/json',
       },
-    }),
+      body: JSON.stringify({
+        personalizations: [
+          {
+            to: [{ email: message.to.email, name: message.to.name }],
+            subject: message.subject,
+          },
+        ],
+        from: {
+          email: config.fromEmail,
+          name: config.fromName,
+        },
+        content: [
+          { type: 'text/plain', value: message.text },
+          { type: 'text/html', value: message.html },
+        ],
+        custom_args: {
+          eventType: message.eventType,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`SendGrid request failed: ${response.status} ${errorText}`);
+    }
+
+    const messageId = response.headers.get('x-message-id') || `sendgrid-${crypto.randomUUID()}`;
+    span.setAttribute('email.message_id', messageId);
+    return { provider: 'sendgrid', messageId };
   });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`SendGrid request failed: ${response.status} ${errorText}`);
-  }
-
-  return {
-    provider: 'sendgrid',
-    messageId: response.headers.get('x-message-id') || `sendgrid-${crypto.randomUUID()}`,
-  };
 }
 
 async function processQueue() {
@@ -267,43 +271,44 @@ async function processQueue() {
 }
 
 async function enqueueEvent(eventType, payload) {
-  await loadState();
+  return withSpan('emailService.enqueueEvent', { 'email.event_type': eventType }, async (span) => {
+    await loadState();
 
-  const accepted = [];
-  const skipped = [];
+    const accepted = [];
+    const skipped = [];
 
-  for (const rawRecipient of payload.recipients || []) {
-    const email = assertEmail(rawRecipient.email);
-    const preference = await ensurePreference(email);
+    for (const rawRecipient of payload.recipients || []) {
+      const email = assertEmail(rawRecipient.email);
+      const preference = await ensurePreference(email);
 
-    if (preference.unsubscribedAt) {
-      skipped.push({ email, reason: 'unsubscribed' });
-      continue;
+      if (preference.unsubscribedAt) {
+        skipped.push({ email, reason: 'unsubscribed' });
+        continue;
+      }
+
+      const recipient = { ...rawRecipient, email };
+      const job = {
+        id: crypto.randomUUID(),
+        status: 'queued',
+        attempts: 0,
+        createdAt: nowIso(),
+        updatedAt: nowIso(),
+        availableAt: nowIso(),
+        message: buildMessage(eventType, payload, recipient, preference),
+      };
+
+      state.queue.push(job);
+      accepted.push({ id: job.id, email, eventType });
     }
 
-    const recipient = { ...rawRecipient, email };
-    const job = {
-      id: crypto.randomUUID(),
-      status: 'queued',
-      attempts: 0,
-      createdAt: nowIso(),
-      updatedAt: nowIso(),
-      availableAt: nowIso(),
-      message: buildMessage(eventType, payload, recipient, preference),
-    };
+    await persistState();
+    await processQueue();
 
-    state.queue.push(job);
-    accepted.push({ id: job.id, email, eventType });
-  }
+    span.setAttribute('email.queued_count', accepted.length);
+    span.setAttribute('email.skipped_count', skipped.length);
 
-  await persistState();
-  await processQueue();
-
-  return {
-    queued: accepted.length,
-    accepted,
-    skipped,
-  };
+    return { queued: accepted.length, accepted, skipped };
+  });
 }
 
 async function unsubscribe(email, token, reason = 'user_request') {

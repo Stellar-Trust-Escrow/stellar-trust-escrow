@@ -29,6 +29,7 @@
 
 import prisma from '../lib/prisma.js';
 import { getContractEvents, getLatestLedger } from './stellarService.js';
+import { withSpan, getTracer } from '../lib/tracing.js';
 
 const CONTRACT_ID = process.env.ESCROW_CONTRACT_ID || '';
 const POLL_INTERVAL_MS = parseInt(process.env.INDEXER_POLL_INTERVAL_MS || '5000', 10);
@@ -377,14 +378,19 @@ const dispatchEvent = async (rawEvent) => {
     contractId: rawEvent.contractId,
   };
 
-  try {
-    await handler(rawEvent, meta);
-  } catch (err) {
-    // Unique constraint violation = already indexed, safe to skip
-    if (err.code === 'P2002') return;
-    console.error(`[Indexer] Failed to handle ${eventType}:`, err.message);
-    throw err;
-  }
+  await withSpan(`eventIndexer.dispatch.${eventType}`, {
+    'indexer.event_type': eventType,
+    'indexer.ledger': rawEvent.ledger,
+    'indexer.tx_hash': rawEvent.txHash ?? '',
+  }, async () => {
+    try {
+      await handler(rawEvent, meta);
+    } catch (err) {
+      if (err.code === 'P2002') return;
+      console.error(`[Indexer] Failed to handle ${eventType}:`, err.message);
+      throw err;
+    }
+  });
 };
 
 // ─── Core loop ────────────────────────────────────────────────────────────────
@@ -396,23 +402,28 @@ const dispatchEvent = async (rawEvent) => {
  * @returns {Promise<number>} the latest ledger sequence processed
  */
 const fetchAndProcessEvents = async (fromLedger) => {
-  if (!CONTRACT_ID) {
-    console.warn('[Indexer] ESCROW_CONTRACT_ID not set — skipping fetch');
-    return fromLedger;
-  }
+  return withSpan('eventIndexer.fetchAndProcessEvents', { 'indexer.from_ledger': fromLedger }, async (span) => {
+    if (!CONTRACT_ID) {
+      console.warn('[Indexer] ESCROW_CONTRACT_ID not set — skipping fetch');
+      return fromLedger;
+    }
 
-  const events = await getContractEvents(fromLedger, CONTRACT_ID);
-  const latestLedger = await getLatestLedger();
+    const events = await getContractEvents(fromLedger, CONTRACT_ID);
+    const latestLedger = await getLatestLedger();
 
-  for (const event of events) {
-    await dispatchEvent(event);
-  }
+    span.setAttribute('indexer.events_count', events.length);
+    span.setAttribute('indexer.latest_ledger', latestLedger);
 
-  if (events.length > 0) {
-    console.log(`[Indexer] Processed ${events.length} events up to ledger ${latestLedger}`);
-  }
+    for (const event of events) {
+      await dispatchEvent(event);
+    }
 
-  return latestLedger;
+    if (events.length > 0) {
+      console.log(`[Indexer] Processed ${events.length} events up to ledger ${latestLedger}`);
+    }
+
+    return latestLedger;
+  });
 };
 
 /**

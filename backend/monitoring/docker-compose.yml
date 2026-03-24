@@ -1,6 +1,6 @@
 version: '3.8'
 
-# Local observability stack: Prometheus + Grafana
+# Local observability stack: Prometheus + Grafana + Jaeger
 # Run: docker compose -f backend/monitoring/docker-compose.yml up -d
 
 services:
@@ -28,6 +28,20 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
     depends_on:
       - prometheus
+    restart: unless-stopped
+
+  # Jaeger all-in-one: trace storage + UI + OTLP collector
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: ste_jaeger
+    ports:
+      - '16686:16686'   # Jaeger UI
+      - '4317:4317'     # OTLP gRPC receiver
+      - '4318:4318'     # OTLP HTTP receiver (used by the backend)
+      - '14269:14269'   # Admin/health
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - SPAN_STORAGE_TYPE=memory
     restart: unless-stopped
 
 volumes:

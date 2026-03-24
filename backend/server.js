@@ -1,4 +1,8 @@
 /* eslint-disable no-undef */
+import { initTracing } from './lib/tracing.js';
+// Tracing MUST be initialised before any other imports so auto-instrumentation patches apply
+initTracing();
+
 import 'dotenv/config';
 import compression from 'compression';
 import cors from 'cors';
@@ -19,15 +23,18 @@ import userRoutes from './api/routes/userRoutes.js';
 import auditRoutes from './api/routes/auditRoutes.js';
 import cache from './lib/cache.js';
 import { attachPrismaMetrics } from './lib/prismaMetrics.js';
+import { attachPrismaTracing } from './lib/prismaTracing.js';
 import prisma from './lib/prisma.js';
 import { errorsTotal } from './lib/metrics.js';
 import metricsMiddleware from './middleware/metricsMiddleware.js';
 import responseTime from './middleware/responseTime.js';
+import tracingMiddleware from './middleware/tracingMiddleware.js';
 import emailService from './services/emailService.js';
 import { startIndexer } from './services/eventIndexer.js';
 
-// Attach Prisma query instrumentation
+// Attach Prisma query instrumentation (metrics + traces)
 attachPrismaMetrics(prisma);
+attachPrismaTracing(prisma);
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -36,6 +43,7 @@ app.use(helmet());
 app.use(compression());
 app.use(metricsMiddleware);
 app.use(responseTime);
+app.use(tracingMiddleware);
 app.use(
   cors({
     origin: process.env.ALLOWED_ORIGINS?.split(',') || 'http://localhost:3000',
