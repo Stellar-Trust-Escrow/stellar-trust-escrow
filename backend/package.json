@@ -33,6 +33,7 @@
     "ws": "^8.20.0"
   },
   "devDependencies": {
+    "fast-check": "^4.6.0",
     "jest": "^29.7.0",
     "nodemon": "^3.0.0",
     "prisma": "^5.0.0",

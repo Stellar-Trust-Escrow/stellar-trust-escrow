@@ -26,18 +26,21 @@ import { createWebSocketServer, pool } from './api/websocket/handlers.js';
 import cache from './lib/cache.js';
 import { attachPrismaMetrics } from './lib/prismaMetrics.js';
 import prisma, { startConnectionMonitoring } from './lib/prisma.js';
-import { errorsTotal } from './lib/metrics.js';
 import { apiRateLimit, leaderboardRateLimit } from './middleware/rateLimit.js';
 import metricsMiddleware from './middleware/metricsMiddleware.js';
 import responseTime from './middleware/responseTime.js';
 import emailService from './services/emailService.js';
 import { startIndexer } from './services/eventIndexer.js';
+import errorHandler from './middleware/errorHandler.js';
+import errorLogger from './lib/errorLogger.js';
+import { NotFoundError } from './lib/errors.js';
 
 // Attach Prisma query instrumentation and monitoring
 attachPrismaMetrics(prisma);
 startConnectionMonitoring(prisma);
 
 const PORT = process.env.PORT || 4000;
+const app = express();
 
 // ── Sentry request handler — must be first middleware ─────────────────────────
 // Attaches trace context and request data to every event captured downstream.
@@ -125,8 +128,8 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/audit', auditRoutes);
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
-app.use((req, res) => {
-  res.status(404).json({ error: 'Route not found' });
+app.use((req, _res, next) => {
+  next(new NotFoundError('Route not found'));
 });
 
 // ── Sentry error handler — must be before the generic error handler ───────────
@@ -140,23 +143,8 @@ app.use(
   }),
 );
 
-// ── Generic error handler ─────────────────────────────────────────────────────
-
-app.use((err, _req, res, _next) => {
-  const statusCode = err.statusCode || 500;
-
-  // Attach Sentry event ID to response so support can correlate reports
-  const sentryId = res.sentry;
-  const body = { error: err.message || 'Internal server error' };
-  if (sentryId) body.errorId = sentryId;
-
-  if (statusCode >= 500) {
-    console.error(err.stack);
-  }
-
-  errorsTotal.inc({ type: err.name || 'Error', route: _req?.path || 'unknown' });
-  res.status(statusCode).json(body);
-});
+// ── Global error handler ──────────────────────────────────────────────────────
+app.use(errorHandler);
 
 const server = http.createServer(app);
 createWebSocketServer(server);
@@ -171,6 +159,16 @@ server.listen(PORT, async () => {
     console.error('[Indexer] Failed to start:', err.message);
     Sentry.captureException(err, { tags: { component: 'indexer' } });
   });
+});
+
+process.on('unhandledRejection', (reason) => {
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  errorLogger.log(err, null);
+});
+
+process.on('uncaughtException', (err) => {
+  errorLogger.log(err, null);
+  process.exit(1);
 });
 
 export default app;
