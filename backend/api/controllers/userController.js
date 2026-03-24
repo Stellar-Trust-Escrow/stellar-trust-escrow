@@ -1,5 +1,6 @@
 import prisma from '../../lib/prisma.js';
 import cache from '../../lib/cache.js';
+import { logControllerError } from '../../config/logger.js';
 import { buildPaginatedResponse, parsePagination } from '../../lib/pagination.js';
 
 const STELLAR_ADDRESS_RE = /^G[A-Z2-7]{55}$/;
@@ -56,6 +57,7 @@ const getUserProfile = async (req, res) => {
     cache.set(cacheKey, profile, 60);
     res.json(profile);
   } catch (err) {
+    logControllerError('users.getUserProfile', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -84,7 +86,13 @@ const getUserEscrows = async (req, res) => {
     if (cached) return res.json(cached);
 
     const [data, total] = await prisma.$transaction([
-      prisma.escrow.findMany({ where, select: ESCROW_SUMMARY_SELECT, skip, take: limit, orderBy: { createdAt: 'desc' } }),
+      prisma.escrow.findMany({
+        where,
+        select: ESCROW_SUMMARY_SELECT,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
       prisma.escrow.count({ where }),
     ]);
 
@@ -92,6 +100,7 @@ const getUserEscrows = async (req, res) => {
     cache.set(cacheKey, result, 15);
     res.json(result);
   } catch (err) {
+    logControllerError('users.getUserEscrows', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -108,7 +117,12 @@ const getUserStats = async (req, res) => {
     const [reputation, escrowCounts] = await Promise.all([
       prisma.reputationRecord.findUnique({
         where: { address },
-        select: { totalScore: true, completedEscrows: true, disputedEscrows: true, totalVolume: true },
+        select: {
+          totalScore: true,
+          completedEscrows: true,
+          disputedEscrows: true,
+          totalVolume: true,
+        },
       }),
       prisma.escrow.groupBy({
         by: ['status'],
@@ -117,7 +131,9 @@ const getUserStats = async (req, res) => {
       }),
     ]);
 
-    const countsByStatus = Object.fromEntries(escrowCounts.map((record) => [record.status, record._count.id]));
+    const countsByStatus = Object.fromEntries(
+      escrowCounts.map((record) => [record.status, record._count.id]),
+    );
     const totalEscrows = escrowCounts.reduce((sum, record) => sum + record._count.id, 0);
     const completed = countsByStatus.Completed ?? 0;
 
@@ -132,6 +148,7 @@ const getUserStats = async (req, res) => {
     cache.set(cacheKey, stats, 120);
     res.json(stats);
   } catch (err) {
+    logControllerError('users.getUserStats', err, req);
     res.status(500).json({ error: err.message });
   }
 };

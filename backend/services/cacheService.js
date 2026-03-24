@@ -9,6 +9,9 @@
  */
 
 import { createClient } from 'redis';
+import { createModuleLogger } from '../config/logger.js';
+
+const log = createModuleLogger('cache');
 
 // ── Analytics counters ────────────────────────────────────────────────────────
 
@@ -51,13 +54,13 @@ if (process.env.REDIS_URL) {
   redis = createClient({ url: process.env.REDIS_URL });
   redis.on('ready', () => {
     redisReady = true;
-    console.log('[Cache] Redis connected');
+    log.info({ message: 'redis_connected' });
   });
   redis.on('error', (err) => {
     redisReady = false;
-    console.warn('[Cache] Redis error — using memory fallback:', err.message);
+    log.warn({ message: 'redis_error_fallback_memory', error: err.message });
   });
-  redis.connect().catch((err) => console.warn('[Cache] Redis connect failed:', err.message));
+  redis.connect().catch((err) => log.warn({ message: 'redis_connect_failed', error: err.message }));
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────

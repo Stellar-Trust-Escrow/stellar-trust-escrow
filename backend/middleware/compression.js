@@ -20,11 +20,14 @@
 
 import zlib from 'zlib';
 import compression from 'compression';
+import { createModuleLogger } from '../config/logger.js';
 import {
   compressionRatio,
   compressedResponsesTotal,
   compressionBytesTotal,
 } from '../lib/metrics.js';
+
+const compressionLog = createModuleLogger('middleware.compression');
 
 const GZIP_LEVEL = parseInt(process.env.COMPRESSION_LEVEL || '6');
 const BROTLI_QUALITY = parseInt(process.env.BROTLI_QUALITY || '4');
@@ -128,7 +131,11 @@ function brotliMiddleware(req, res, next) {
     brotli.on('data', (compressed) => origWrite(compressed));
     brotli.on('end', () => origEnd(null, null, callback));
     brotli.on('error', (err) => {
-      console.error('[Compression] Brotli error:', err.message);
+      compressionLog.error({
+        message: 'compression_brotli_error',
+        error: err.message,
+        stack: err.stack,
+      });
       origEnd(chunk, encoding, callback);
     });
   };

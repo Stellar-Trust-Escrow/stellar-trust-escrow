@@ -9,8 +9,8 @@ import compressionMiddleware from './middleware/compression.js';
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
-import morgan from 'morgan';
 
+import { assignRequestContext, httpRequestLogger } from './api/middleware/requestLogger.js';
 import disputeRoutes from './api/routes/disputeRoutes.js';
 import escrowRoutes from './api/routes/escrowRoutes.js';
 import eventRoutes from './api/routes/eventRoutes.js';
@@ -29,6 +29,7 @@ import { errorsTotal } from './lib/metrics.js';
 import { apiRateLimit, leaderboardRateLimit } from './middleware/rateLimit.js';
 import metricsMiddleware from './middleware/metricsMiddleware.js';
 import responseTime from './middleware/responseTime.js';
+import logger, { getLogger } from './config/logger.js';
 import emailService from './services/emailService.js';
 import { startIndexer } from './services/eventIndexer.js';
 
@@ -43,6 +44,9 @@ const app = express();
 // Attaches trace context and request data to every event captured downstream.
 app.use(Sentry.expressRequestHandler());
 
+app.use(assignRequestContext);
+app.use(httpRequestLogger);
+
 app.use(helmet());
 app.use(compressionMiddleware);
 app.use(metricsMiddleware);
@@ -53,7 +57,6 @@ app.use(
     credentials: true,
   }),
 );
-app.use(morgan('combined'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(auditMiddleware);
@@ -91,12 +94,18 @@ app.get('/health', async (_req, res) => {
         timestamp: poolCheck[0].current_time,
       };
     } catch (poolError) {
-      // Pool info not available, that's ok
-      console.warn('[HEALTH] Could not get pool info:', poolError.message);
+      getLogger().warn({
+        message: 'health_db_pool_info_unavailable',
+        error: poolError.message,
+      });
     }
   } catch (error) {
     dbStatus = 'error';
-    console.error('[HEALTH] Database check failed:', error.message);
+    getLogger().error({
+      message: 'health_database_check_failed',
+      error: error.message,
+      stack: error.stack,
+    });
   }
 
   const status = dbStatus === 'ok' ? 'ok' : 'degraded';
@@ -126,6 +135,11 @@ app.use('/api/audit', auditRoutes);
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((req, res) => {
+  getLogger().warn({
+    message: 'http_not_found',
+    method: req.method,
+    path: req.originalUrl?.split('?')[0],
+  });
   res.status(404).json({ error: 'Route not found' });
 });
 
@@ -151,7 +165,14 @@ app.use((err, _req, res, _next) => {
   if (sentryId) body.errorId = sentryId;
 
   if (statusCode >= 500) {
-    console.error(err.stack);
+    getLogger().error({
+      message: 'express_error_handler',
+      error: err.message,
+      stack: err.stack,
+      statusCode,
+      path: _req?.originalUrl?.split('?')[0],
+      method: _req?.method,
+    });
   }
 
   errorsTotal.inc({ type: err.name || 'Error', route: _req?.path || 'unknown' });
@@ -162,13 +183,20 @@ const server = http.createServer(app);
 createWebSocketServer(server);
 
 server.listen(PORT, async () => {
-  console.log(`API running on port ${PORT}`);
-  console.log(`Network: ${process.env.STELLAR_NETWORK}`);
+  logger.info({
+    message: 'api_started',
+    port: PORT,
+    stellarNetwork: process.env.STELLAR_NETWORK,
+  });
   await emailService.start();
-  console.log('[EmailService] Queue processor started');
-  console.log('[WebSocket] Server attached');
+  logger.info({ message: 'email_service_started' });
+  logger.info({ message: 'websocket_server_attached' });
   startIndexer().catch((err) => {
-    console.error('[Indexer] Failed to start:', err.message);
+    logger.error({
+      message: 'indexer_start_failed',
+      error: err.message,
+      stack: err.stack,
+    });
     Sentry.captureException(err, { tags: { component: 'indexer' } });
   });
 });

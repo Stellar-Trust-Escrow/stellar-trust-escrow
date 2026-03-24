@@ -1,6 +1,9 @@
 import { randomUUID } from 'crypto';
 import { WebSocketServer } from 'ws';
+import { createModuleLogger } from '../../config/logger.js';
 import prisma from '../../lib/prisma.js';
+
+const log = createModuleLogger('websocket');
 
 const HEARTBEAT_INTERVAL_MS = parseInt(process.env.WS_HEARTBEAT_INTERVAL_MS || '30000', 10);
 const MAX_CONNECTIONS = parseInt(process.env.WS_MAX_CONNECTIONS || '100', 10);
@@ -89,7 +92,7 @@ class WebSocketPool {
 
   addConnection(ws, req) {
     if (this.connections.size >= MAX_CONNECTIONS) {
-      console.warn(`[WebSocket] Connection rejected: Max capacity reached (${MAX_CONNECTIONS})`);
+      log.warn({ message: 'ws_max_connections', max: MAX_CONNECTIONS });
       ws.close(1013, 'Try again later. Max capacity reached.');
       return null;
     }
@@ -119,7 +122,12 @@ class WebSocketPool {
     });
 
     ws.on('error', (err) => {
-      console.error(`[WebSocket] ID ${id} error:`, err.message);
+      log.error({
+        message: 'ws_socket_error',
+        connectionId: id,
+        error: err.message,
+        stack: err.stack,
+      });
     });
 
     ws.on('message', (data) => {
@@ -138,7 +146,7 @@ class WebSocketPool {
     try {
       message = JSON.parse(data.toString());
     } catch {
-      console.warn(`[WebSocket] Invalid JSON from ${connectionId}`);
+      log.warn({ message: 'ws_invalid_json', connectionId });
       return;
     }
 
@@ -156,7 +164,12 @@ class WebSocketPool {
         this.subscribe(connectionId, message.topic);
         sendJson(ws, { type: 'subscribed', topic: message.topic });
       } catch (err) {
-        console.error(`[WebSocket] subscribe failed for ${connectionId}:`, err.message);
+        log.error({
+          message: 'ws_subscribe_failed',
+          connectionId,
+          error: err.message,
+          stack: err.stack,
+        });
         sendJson(ws, { type: 'error', code: 'subscription_failed', topic: message.topic });
       }
       return;
@@ -227,7 +240,7 @@ class WebSocketPool {
       for (const id of toTerminate) {
         const conn = this.connections.get(id);
         if (conn) {
-          console.log(`[WebSocket] Terminating unresponsive connection ${id}`);
+          log.info({ message: 'ws_terminate_unresponsive', connectionId: id });
           conn.ws.terminate();
           this.removeConnection(id);
         }
@@ -291,7 +304,7 @@ export function createWebSocketServer(httpServer) {
   wss.on('connection', (ws, request) => {
     const id = pool.addConnection(ws, request);
     if (id) {
-      console.log(`[WebSocket] New connection established: ${id}`);
+      log.info({ message: 'ws_connection_open', connectionId: id });
 
       sendJson(ws, {
         type: 'welcome',

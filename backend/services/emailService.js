@@ -3,9 +3,12 @@ import { mkdir, readFile, writeFile } from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+import { createModuleLogger } from '../config/logger.js';
 import disputeRaisedTemplate from '../templates/emails/disputeRaised.js';
 import escrowStatusChangedTemplate from '../templates/emails/escrowStatusChanged.js';
 import milestoneCompletedTemplate from '../templates/emails/milestoneCompleted.js';
+
+const log = createModuleLogger('emailService');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -42,7 +45,9 @@ function nowIso() {
 }
 
 function sanitizeEmail(email) {
-  return String(email || '').trim().toLowerCase();
+  return String(email || '')
+    .trim()
+    .toLowerCase();
 }
 
 function assertEmail(email) {
@@ -55,7 +60,10 @@ function assertEmail(email) {
 
 function createUnsubscribeToken(email) {
   return crypto
-    .createHmac('sha256', process.env.EMAIL_UNSUBSCRIBE_SECRET || 'stellar-trust-escrow-email-secret')
+    .createHmac(
+      'sha256',
+      process.env.EMAIL_UNSUBSCRIBE_SECRET || 'stellar-trust-escrow-email-secret',
+    )
     .update(email)
     .digest('hex');
 }
@@ -158,7 +166,8 @@ function pruneSentTimestamps() {
 
 async function sendWithProvider(message) {
   if (config.provider === 'console' || !config.sendgridApiKey) {
-    console.log('[EmailService] Console delivery', {
+    log.info({
+      message: 'email_console_delivery',
       to: message.to.email,
       subject: message.subject,
       eventType: message.eventType,
@@ -221,7 +230,10 @@ async function processQueue() {
 
     const readyJobs = state.queue
       .filter((job) => job.status === 'queued' && new Date(job.availableAt).getTime() <= Date.now())
-      .sort((left, right) => new Date(left.availableAt).getTime() - new Date(right.availableAt).getTime());
+      .sort(
+        (left, right) =>
+          new Date(left.availableAt).getTime() - new Date(right.availableAt).getTime(),
+      );
 
     for (const job of readyJobs) {
       pruneSentTimestamps();
@@ -357,7 +369,11 @@ async function start() {
   if (!queueTimer) {
     queueTimer = setInterval(() => {
       processQueue().catch((error) => {
-        console.error('[EmailService] Queue processing failed:', error.message);
+        log.error({
+          message: 'email_queue_processing_failed',
+          error: error.message,
+          stack: error.stack,
+        });
       });
     }, config.processIntervalMs);
   }

@@ -1,3 +1,4 @@
+import { getLogger, logControllerError } from '../../config/logger.js';
 import paymentService from '../../services/paymentService.js';
 import kycService from '../../services/kycService.js';
 
@@ -24,6 +25,7 @@ const createCheckout = async (req, res) => {
     const result = await paymentService.createCheckoutSession({ address, amountUsd, escrowId });
     res.json(result);
   } catch (err) {
+    logControllerError('payment.createCheckout', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -35,6 +37,7 @@ const getStatus = async (req, res) => {
     if (!payment) return res.status(404).json({ error: 'Payment not found' });
     res.json(payment);
   } catch (err) {
+    logControllerError('payment.getStatus', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -49,6 +52,7 @@ const listByAddress = async (req, res) => {
     const payments = await paymentService.getByAddress(address);
     res.json(payments);
   } catch (err) {
+    logControllerError('payment.listByAddress', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -60,6 +64,7 @@ const refund = async (req, res) => {
     res.json(payment);
   } catch (err) {
     const status = err.message.startsWith('Cannot refund') ? 400 : 500;
+    if (status >= 500) logControllerError('payment.refund', err, req);
     res.status(status).json({ error: err.message });
   }
 };
@@ -72,7 +77,10 @@ const webhook = async (req, res) => {
     await paymentService.handleWebhook(req.rawBody, signature);
     res.json({ ok: true });
   } catch (err) {
-    // Stripe throws on invalid signature
+    getLogger().warn({
+      message: 'payment.webhook_rejected',
+      error: err.message,
+    });
     res.status(400).json({ error: err.message });
   }
 };

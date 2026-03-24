@@ -1,5 +1,6 @@
 import prisma from '../../lib/prisma.js';
 import cache from '../../lib/cache.js';
+import { logControllerError } from '../../config/logger.js';
 import { buildPaginatedResponse, parsePagination } from '../../lib/pagination.js';
 
 const listDisputes = async (req, res) => {
@@ -39,6 +40,7 @@ const listDisputes = async (req, res) => {
     cache.set(cacheKey, result, 30);
     res.json(result);
   } catch (err) {
+    logControllerError('dispute.listDisputes', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -73,6 +75,7 @@ const getDispute = async (req, res) => {
     if (err.message?.includes('Cannot convert')) {
       return res.status(400).json({ error: 'Invalid escrow id' });
     }
+    logControllerError('dispute.getDispute', err, req);
     res.status(500).json({ error: err.message });
   }
 };

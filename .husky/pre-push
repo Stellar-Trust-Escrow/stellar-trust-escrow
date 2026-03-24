@@ -2,22 +2,14 @@
 . "$(dirname "$0")/_/husky.sh"
 
 # 1️⃣ Validate branch name
-branch_name=$(git symbolic-ref --short HEAD)
-
 echo "🔖 Validating branch name..."
 npx validate-branch-name || {
   echo "❌ Invalid branch name. Push aborted."
   exit 1
 }
 
-# 2️⃣ Run tests before push (lint-staged already ran in pre-commit)
-echo "🧪 Running all tests before push..."
-npm run test || {
-  echo "❌ Tests failed! Push aborted."
-  exit 1
-}
-
-# 3️⃣ Protected branch checks for main
+# 2️⃣ Protected branch checks for main
+# Tests are not run on push (run `npm run test` locally or rely on CI).
 protected_branch='refs/heads/main'
 current_user=$(git config user.email)
 allowed_user='ilorahdavid126@gmail.com'

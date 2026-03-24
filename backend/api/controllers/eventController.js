@@ -9,6 +9,7 @@
 
 import prisma from '../../lib/prisma.js';
 import cache from '../../lib/cache.js';
+import { logControllerError } from '../../config/logger.js';
 import { buildPaginatedResponse, parsePagination } from '../../lib/pagination.js';
 
 const EVENT_TTL = 15; // seconds — events are append-only so short TTL is fine
@@ -74,6 +75,7 @@ const listEvents = async (req, res) => {
     cache.set(cacheKey, result, EVENT_TTL);
     res.json(result);
   } catch (err) {
+    logControllerError('events.listEvents', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -98,6 +100,7 @@ const getEvent = async (req, res) => {
     cache.set(cacheKey, result, 300);
     res.json(result);
   } catch (err) {
+    logControllerError('events.getEvent', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -139,6 +142,7 @@ const listEscrowEvents = async (req, res) => {
     cache.set(cacheKey, result, EVENT_TTL);
     res.json(result);
   } catch (err) {
+    logControllerError('events.listEscrowEvents', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -148,7 +152,7 @@ const listEscrowEvents = async (req, res) => {
  * Returns the list of distinct event types present in the index.
  * Useful for building filter UIs.
  */
-const listEventTypes = async (_req, res) => {
+const listEventTypes = async (req, res) => {
   try {
     const cacheKey = 'events:types';
     const cached = cache.get(cacheKey);
@@ -164,6 +168,7 @@ const listEventTypes = async (_req, res) => {
     cache.set(cacheKey, result, 60);
     res.json(result);
   } catch (err) {
+    logControllerError('events.listEventTypes', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -172,7 +177,7 @@ const listEventTypes = async (_req, res) => {
  * GET /api/events/stats
  * Returns aggregate counts per event type — useful for dashboards.
  */
-const getEventStats = async (_req, res) => {
+const getEventStats = async (req, res) => {
   try {
     const cacheKey = 'events:stats';
     const cached = cache.get(cacheKey);
@@ -188,6 +193,7 @@ const getEventStats = async (_req, res) => {
     cache.set(cacheKey, result, 30);
     res.json(result);
   } catch (err) {
+    logControllerError('events.getEventStats', err, req);
     res.status(500).json({ error: err.message });
   }
 };

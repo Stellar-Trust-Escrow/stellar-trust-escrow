@@ -8,6 +8,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import { logControllerError } from '../../config/logger.js';
 
 const prisma = new PrismaClient();
 
@@ -44,6 +45,7 @@ const listUsers = async (req, res) => {
       },
     });
   } catch (err) {
+    logControllerError('admin.listUsers', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -72,6 +74,7 @@ const getUserDetail = async (req, res) => {
       stats: { escrowsAsClient, escrowsAsFreelancer },
     });
   } catch (err) {
+    logControllerError('admin.getUserDetail', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -110,6 +113,7 @@ const suspendUser = async (req, res) => {
       auditEntry,
     });
   } catch (err) {
+    logControllerError('admin.suspendUser', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -143,6 +147,7 @@ const banUser = async (req, res) => {
       auditEntry,
     });
   } catch (err) {
+    logControllerError('admin.banUser', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -195,6 +200,7 @@ const listDisputes = async (req, res) => {
       },
     });
   } catch (err) {
+    logControllerError('admin.listDisputes', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -249,6 +255,7 @@ const resolveDispute = async (req, res) => {
 
     res.json({ message: 'Dispute resolved.', dispute: updated });
   } catch (err) {
+    logControllerError('admin.resolveDispute', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -288,6 +295,7 @@ const getStats = async (req, res) => {
       disputes: { open: openDisputes, resolved: disputedEscrows - openDisputes },
     });
   } catch (err) {
+    logControllerError('admin.getStats', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -322,6 +330,7 @@ const getAuditLogs = async (req, res) => {
       },
     });
   } catch (err) {
+    logControllerError('admin.getAuditLogs', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -342,6 +351,7 @@ const getSettings = async (req, res) => {
       allowedOrigins: process.env.ALLOWED_ORIGINS || 'http://localhost:3000',
     });
   } catch (err) {
+    logControllerError('admin.getSettings', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -371,6 +381,7 @@ const updateSettings = async (req, res) => {
       received: req.body,
     });
   } catch (err) {
+    logControllerError('admin.updateSettings', err, req);
     res.status(500).json({ error: err.message });
   }
 };

@@ -1,5 +1,6 @@
 import prisma from '../../lib/prisma.js';
 import cache from '../../lib/cache.js';
+import { logControllerError } from '../../config/logger.js';
 import { buildPaginatedResponse, parsePagination } from '../../lib/pagination.js';
 
 const STELLAR_ADDRESS_RE = /^G[A-Z2-7]{55}$/;
@@ -33,6 +34,7 @@ const getReputation = async (req, res) => {
     cache.set(cacheKey, result, REPUTATION_TTL);
     res.json(result);
   } catch (err) {
+    logControllerError('reputation.getReputation', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -75,6 +77,7 @@ const getLeaderboard = async (req, res) => {
     cache.set(cacheKey, result, LEADERBOARD_TTL);
     res.json(result);
   } catch (err) {
+    logControllerError('reputation.getLeaderboard', err, req);
     res.status(500).json({ error: err.message });
   }
 };
