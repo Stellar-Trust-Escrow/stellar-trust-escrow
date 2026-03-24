@@ -26,6 +26,7 @@
     "express-validator": "^7.0.0",
     "helmet": "^7.0.0",
     "morgan": "^1.10.0",
+    "prom-client": "^15.1.0",
     "winston": "^3.11.0"
   },
   "devDependencies": {
