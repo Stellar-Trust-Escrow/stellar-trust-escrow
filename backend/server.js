@@ -1,12 +1,18 @@
+// Sentry must be initialised before any other imports so it can
+// instrument all subsequent modules (HTTP, DB, etc.)
+import './lib/sentry.js';
+import * as Sentry from '@sentry/node';
+
 /* eslint-disable no-undef */
 import 'dotenv/config';
-import compression from 'compression';
+import compressionMiddleware from './middleware/compression.js';
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import rateLimit from 'express-rate-limit';
 
+import adminRoutes from './api/routes/adminRoutes.js';
+import auditMiddleware from './api/middleware/audit.js';
 import disputeRoutes from './api/routes/disputeRoutes.js';
 import escrowRoutes from './api/routes/escrowRoutes.js';
 import eventRoutes from './api/routes/eventRoutes.js';
@@ -17,23 +23,29 @@ import paymentRoutes from './api/routes/paymentRoutes.js';
 import reputationRoutes from './api/routes/reputationRoutes.js';
 import userRoutes from './api/routes/userRoutes.js';
 import auditRoutes from './api/routes/auditRoutes.js';
+import auditMiddleware from './api/middleware/audit.js';
 import cache from './lib/cache.js';
 import { attachPrismaMetrics } from './lib/prismaMetrics.js';
-import prisma from './lib/prisma.js';
+import prisma, { startConnectionMonitoring } from './lib/prisma.js';
 import { errorsTotal } from './lib/metrics.js';
+import { apiRateLimit, leaderboardRateLimit } from './middleware/rateLimit.js';
 import metricsMiddleware from './middleware/metricsMiddleware.js';
 import responseTime from './middleware/responseTime.js';
 import emailService from './services/emailService.js';
 import { startIndexer } from './services/eventIndexer.js';
 
-// Attach Prisma query instrumentation
+// Attach Prisma query instrumentation and monitoring
 attachPrismaMetrics(prisma);
+startConnectionMonitoring(prisma);
 
-const app = express();
 const PORT = process.env.PORT || 4000;
 
+// ── Sentry request handler — must be first middleware ─────────────────────────
+// Attaches trace context and request data to every event captured downstream.
+app.use(Sentry.expressRequestHandler());
+
 app.use(helmet());
-app.use(compression());
+app.use(compressionMiddleware);
 app.use(metricsMiddleware);
 app.use(responseTime);
 app.use(
@@ -46,6 +58,9 @@ app.use(morgan('combined'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(auditMiddleware);
+
+// ── Sentry tracing handler — after body parsers, before routes ────────────────
+app.use(Sentry.expressTracingHandler());
 
 const defaultLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -65,13 +80,36 @@ app.use('/api/reputation/leaderboard', leaderboardLimiter);
 app.get('/health', async (_req, res) => {
   let dbStatus = 'ok';
   let dbLatencyMs = null;
+  let dbPoolInfo = null;
 
   try {
     const t0 = Date.now();
+    // Test basic connectivity
     await prisma.$queryRaw`SELECT 1`;
     dbLatencyMs = Date.now() - t0;
-  } catch {
+
+    // Get basic pool info if available
+    try {
+      // This is a simplified check - in production with direct pg access,
+      // you could get detailed pool stats
+      const poolCheck = await prisma.$queryRaw`
+        SELECT
+          count(*) as connection_count,
+          now() as current_time
+        FROM pg_stat_activity
+        WHERE datname = current_database()
+      `;
+      dbPoolInfo = {
+        activeConnections: parseInt(poolCheck[0].connection_count),
+        timestamp: poolCheck[0].current_time,
+      };
+    } catch (poolError) {
+      // Pool info not available, that's ok
+      console.warn('[HEALTH] Could not get pool info:', poolError.message);
+    }
+  } catch (error) {
     dbStatus = 'error';
+    console.error('[HEALTH] Database check failed:', error.message);
   }
 
   const status = dbStatus === 'ok' ? 'ok' : 'degraded';
@@ -80,7 +118,11 @@ app.get('/health', async (_req, res) => {
     timestamp: new Date().toISOString(),
     uptime: Math.floor(process.uptime()),
     cache: cache.analytics(),
-    db: { status: dbStatus, latencyMs: dbLatencyMs },
+    db: {
+      status: dbStatus,
+      latencyMs: dbLatencyMs,
+      pool: dbPoolInfo,
+    },
   });
 });
 
@@ -94,10 +136,34 @@ app.use('/api/kyc', kycRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/audit', auditRoutes);
 
+// ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
+// ── Sentry error handler — must be before the generic error handler ───────────
+// Captures unhandled Express errors and attaches request context.
+app.use(Sentry.expressErrorHandler({
+  shouldHandleError(err) {
+    // Report all 5xx errors; skip expected 4xx client errors
+    return !err.statusCode || err.statusCode >= 500;
+  },
+}));
+
+// ── Generic error handler ─────────────────────────────────────────────────────
+app.use((err, _req, res, _next) => {
+  const statusCode = err.statusCode || 500;
+
+  // Attach Sentry event ID to response so support can correlate reports
+  const sentryId = res.sentry;
+  const body = { error: err.message || 'Internal server error' };
+  if (sentryId) body.errorId = sentryId;
+
+  if (statusCode >= 500) {
+    console.error(err.stack);
+  }
+
+  res.status(statusCode).json(body);
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err, _req, res, _next) => {
   console.error(err.stack);
@@ -112,6 +178,10 @@ app.listen(PORT, async () => {
   console.log(`Network: ${process.env.STELLAR_NETWORK}`);
   await emailService.start();
   console.log('[EmailService] Queue processor started');
+  startIndexer().catch((err) => {
+    console.error('[Indexer] Failed to start:', err.message);
+    Sentry.captureException(err, { tags: { component: 'indexer' } });
+  });
   startIndexer().catch((err) => console.error('[Indexer] Failed to start:', err.message));
 });
 

@@ -6,6 +6,40 @@ Base URL: `http://localhost:4000` (development)
 
 ---
 
+## Rate Limiting
+
+All `/api/*` endpoints are protected by rate limiting middleware.
+
+Default behavior:
+
+| Scope | Window | Limit |
+| ----- | ------ | ----- |
+| All API endpoints | 1 minute | 60 requests |
+| `GET /api/reputation/leaderboard` | 1 minute | 30 requests |
+
+How identities are tracked:
+
+- Authenticated users are limited by `req.user.id`, `req.user.address`, `X-User-Id`, or `X-User-Address` when available.
+- Anonymous traffic falls back to IP-based limiting.
+
+Environment variables:
+
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `RATE_LIMIT_MAX_REQUESTS_PER_MINUTE` | `60` | Global per-user/IP request cap for API routes |
+| `LEADERBOARD_RATE_LIMIT_MAX_REQUESTS_PER_MINUTE` | `30` | Stricter cap for leaderboard reads |
+
+When a client exceeds the limit, the API returns `429 Too Many Requests`:
+
+```json
+{
+  "error": "Too many API requests, please slow down and try again in a minute.",
+  "code": "RATE_LIMIT_EXCEEDED"
+}
+```
+
+---
+
 ## Escrows
 
 ### `GET /api/escrows`

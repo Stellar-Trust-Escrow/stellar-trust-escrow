@@ -1,17 +1,13 @@
 /** @type {import('next').NextConfig} */
 import bundleAnalyzer from '@next/bundle-analyzer';
 
+import { withSentryConfig } from '@sentry/nextjs';
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 if (!API_URL) throw new Error('NEXT_PUBLIC_API_URL is not defined');
 
-const withBundleAnalyzer = bundleAnalyzer({
-  enabled: process.env.ANALYZE === 'true',
-  // Outputs HTML reports to .next/analyze/
-  openAnalyzer: false,
-});
-
+/** @type {import('next').NextConfig} */
 const nextConfig = {
-  // TODO (contributor): add image domains if using next/image with external URLs
   images: {
     domains: [],
   },
@@ -26,4 +22,34 @@ const nextConfig = {
   },
 };
 
-export default withBundleAnalyzer(nextConfig);
+export default withSentryConfig(nextConfig, {
+  // Sentry organisation + project (set via env or hardcode for your project)
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+
+  // Auth token for uploading source maps (keep server-side only)
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+
+  // Upload source maps in CI/production builds only
+  silent: true,
+  hideSourceMaps: true,
+
+  // Automatically tree-shake Sentry logger statements in production
+  disableLogger: true,
+
+  // Tunnel Sentry requests through Next.js to avoid ad-blockers
+  tunnelRoute: '/monitoring',
+
+  // Automatically wrap API routes and pages with Sentry
+  autoInstrumentServerFunctions: true,
+  autoInstrumentMiddleware: true,
+  autoInstrumentAppDirectory: true,
+
+  // Release tracking — inject git SHA automatically
+  release: {
+    name: process.env.SENTRY_RELEASE || process.env.VERCEL_GIT_COMMIT_SHA,
+    deploy: {
+      env: process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV,
+    },
+  },
+});

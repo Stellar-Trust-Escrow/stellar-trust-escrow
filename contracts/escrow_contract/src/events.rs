@@ -178,3 +178,33 @@ pub fn emit_reputation_updated(env: &Env, address: &Address, new_score: u64) {
     env.events()
         .publish((symbol_short!("rep_upd"),), (address.clone(), new_score));
 }
+
+/// Emitted when a time lock expires on an escrow.
+///
+/// # Arguments
+/// * `escrow_id` - The escrow ID
+/// * `lock_time` - The timestamp when the lock expired
+pub fn emit_lock_time_expired(env: &Env, escrow_id: u64, lock_time: u64) {
+    env.events()
+        .publish((symbol_short!("lock_exp"), escrow_id), lock_time);
+}
+
+/// Emitted when a time lock is extended.
+///
+/// # Arguments
+/// * `escrow_id`       - The escrow ID
+/// * `old_lock_time`  - The previous lock time
+/// * `new_lock_time`  - The new lock time
+/// * `extended_by`     - Address of the party that extended the lock
+pub fn emit_lock_time_extended(
+    env: &Env,
+    escrow_id: u64,
+    old_lock_time: u64,
+    new_lock_time: u64,
+    extended_by: &Address,
+) {
+    env.events().publish(
+        (symbol_short!("lock_ext"), escrow_id),
+        (old_lock_time, new_lock_time, extended_by.clone()),
+    );
+}

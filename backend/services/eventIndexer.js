@@ -104,6 +104,7 @@ const handleEscrowCreated = async (event, meta) => {
         id: escrowId,
         clientAddress: parseAddress(client),
         freelancerAddress: parseAddress(freelancer),
+        tokenAddress: '',          // populated by a later getEscrow call or separate event
         tokenAddress: '', // populated by a later getEscrow call or separate event
         totalAmount: parseBigInt(amount).toString(),
         remainingBalance: parseBigInt(amount).toString(),
@@ -112,6 +113,7 @@ const handleEscrowCreated = async (event, meta) => {
         createdAt: meta.ledgerAt,
         createdLedger: meta.ledger,
       },
+      update: {},                  // don't overwrite if already indexed
       update: {}, // don't overwrite if already indexed
     }),
     buildEventInsert(event, meta, escrowId),

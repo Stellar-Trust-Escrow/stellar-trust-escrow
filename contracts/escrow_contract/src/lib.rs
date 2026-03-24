@@ -77,6 +77,10 @@ struct EscrowMeta {
     arbiter: Option<Address>,
     created_at: u64,
     deadline: Option<u64>,
+    /// Optional lock time (ledger timestamp) - funds locked until this time.
+    lock_time: Option<u64>,
+    /// Optional extension deadline for the lock time.
+    lock_time_extension: Option<u64>,
     brief_hash: BytesN<32>,
 }
 
@@ -193,6 +197,8 @@ impl ContractStorage {
             arbiter: meta.arbiter,
             created_at: meta.created_at,
             deadline: meta.deadline,
+            lock_time: meta.lock_time,
+            lock_time_extension: meta.lock_time_extension,
             brief_hash: meta.brief_hash,
         })
     }
@@ -242,6 +248,22 @@ impl ContractStorage {
             .persistent()
             .extend_ttl(key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
     }
+
+    // ── Time lock helpers ─────────────────────────────────────────────────────────
+
+    /// Checks if the lock time has expired for an escrow.
+    /// Returns Ok(()) if funds can be released, Err if still locked.
+    fn check_lock_time_expired(env: &Env, escrow_id: u64, lock_time: Option<u64>) -> Result<(), EscrowError> {
+        if let Some(lt) = lock_time {
+            let now = env.ledger().timestamp();
+            if now < lt {
+                return Err(EscrowError::LockTimeNotExpired);
+            }
+            // Lock has expired - emit event
+            events::emit_lock_time_expired(env, escrow_id, lt);
+        }
+        Ok(())
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -276,6 +298,7 @@ impl EscrowContract {
         brief_hash: BytesN<32>,
         arbiter: Option<Address>,
         deadline: Option<u64>,
+        lock_time: Option<u64>,
     ) -> Result<u64, EscrowError> {
         // Auth + validation before any storage I/O
         client.require_auth();
@@ -289,6 +312,13 @@ impl EscrowContract {
         if let Some(dl) = deadline {
             if dl <= now {
                 return Err(EscrowError::InvalidDeadline);
+            }
+        }
+
+        // Validate lock_time if provided
+        if let Some(lt) = lock_time {
+            if lt <= now {
+                return Err(EscrowError::InvalidLockTime);
             }
         }
 
@@ -317,6 +347,8 @@ impl EscrowContract {
                 arbiter,
                 created_at: now,
                 deadline,
+                lock_time,
+                lock_time_extension: None,
                 brief_hash,
             },
         );
@@ -442,6 +474,9 @@ impl EscrowContract {
             return Err(EscrowError::EscrowNotActive);
         }
 
+        // Check if lock time has expired
+        ContractStorage::check_lock_time_expired(&env, escrow_id, meta.lock_time)?;
+
         let mut milestone = ContractStorage::load_milestone(&env, escrow_id, milestone_id)?;
         if milestone.status != MilestoneStatus::Submitted {
             return Err(EscrowError::InvalidMilestoneState);
@@ -461,6 +496,9 @@ impl EscrowContract {
             &amount,
         );
 
+        // O(1) balance update and completion check
+        meta.remaining_balance -= amount;
+
         // STE-04 fix: checked_sub instead of silent underflow
         meta.remaining_balance = meta
             .remaining_balance
@@ -474,7 +512,6 @@ impl EscrowContract {
             // STE-03 fix: emit completion event so the indexer can update DB
             events::emit_escrow_completed(&env, escrow_id);
         }
-
         ContractStorage::save_escrow_meta(&env, &meta);
 
         events::emit_milestone_approved(&env, escrow_id, milestone_id, amount);
@@ -517,6 +554,9 @@ impl EscrowContract {
 
     /// Admin-triggered fund release for an already-approved milestone.
     ///
+    /// # Gas notes
+    /// - Validates milestone state before loading meta.
+    pub fn release_funds(env: Env, escrow_id: u64, milestone_id: u32) -> Result<(), EscrowError> {
     /// Admin-only fallback for edge cases. Normal flow uses `approve_milestone`.
     ///
     /// # Security (STE-01, STE-02)
@@ -546,10 +586,13 @@ impl EscrowContract {
             return Err(EscrowError::InvalidMilestoneState);
         }
 
-        let mut meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
-        let amount = milestone.amount;
+        // Load meta to check lock time
+        let meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
 
-        // STE-04 fix: checked_sub instead of silent underflow
+        // Check if lock time has expired
+        ContractStorage::check_lock_time_expired(&env, escrow_id, meta.lock_time)?;
+
+        let amount = milestone.amount;
         meta.remaining_balance = meta
             .remaining_balance
             .checked_sub(amount)
@@ -560,6 +603,7 @@ impl EscrowContract {
             &meta.freelancer,
             &amount,
         );
+        meta.remaining_balance -= amount;
         ContractStorage::save_escrow_meta(&env, &meta);
 
         events::emit_funds_released(&env, escrow_id, &meta.freelancer, amount);
@@ -598,6 +642,50 @@ impl EscrowContract {
         ContractStorage::save_escrow_meta(&env, &meta);
 
         events::emit_escrow_cancelled(&env, escrow_id, returned);
+        Ok(())
+    }
+
+    // ── Time Lock Extension ─────────────────────────────────────────────────────
+
+    /// Extends the lock time for an escrow.
+    ///
+    /// Only the client can extend the lock time, and the new lock time
+    /// must be in the future.
+    pub fn extend_lock_time(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+        new_lock_time: u64,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+
+        let mut meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
+
+        if caller != meta.client {
+            return Err(EscrowError::ClientOnly);
+        }
+        if meta.status != EscrowStatus::Active {
+            return Err(EscrowError::EscrowNotActive);
+        }
+
+        let now = env.ledger().timestamp();
+        if new_lock_time <= now {
+            return Err(EscrowError::InvalidLockTimeExtension);
+        }
+
+        let old_lock_time = meta.lock_time.unwrap_or(0);
+
+        // If there's an existing lock_time_extension, use that as the maximum
+        if let Some(ext) = meta.lock_time_extension {
+            if new_lock_time > ext {
+                return Err(EscrowError::InvalidLockTimeExtension);
+            }
+        }
+
+        meta.lock_time = Some(new_lock_time);
+        ContractStorage::save_escrow_meta(&env, &meta);
+
+        events::emit_lock_time_extended(&env, escrow_id, old_lock_time, new_lock_time, &caller);
         Ok(())
     }
 
