@@ -124,6 +124,54 @@
           "legendFormat": "Event Loop Lag ms"
         }
       ]
+    },
+    {
+      "id": 11,
+      "title": "DB Connection Errors",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 28, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "expr": "sum(increase(db_connection_errors_total[5m]))",
+          "legendFormat": "Connection Errors"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "DB Pool Exhaustion Events",
+      "type": "stat",
+      "gridPos": { "x": 6, "y": 28, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "expr": "sum(increase(db_connection_pool_exhaustion_total[5m]))",
+          "legendFormat": "Pool Exhaustion"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "DB Active Connections",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 28, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "expr": "db_connections_active",
+          "legendFormat": "Active Connections"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "DB Query Rate by Model",
+      "type": "timeseries",
+      "gridPos": { "x": 18, "y": 28, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "expr": "sum(rate(db_queries_total[5m])) by (model)",
+          "legendFormat": "{{model}}"
+        }
+      ]
     }
   ]
 }

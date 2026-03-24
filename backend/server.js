@@ -19,15 +19,16 @@ import userRoutes from './api/routes/userRoutes.js';
 import auditRoutes from './api/routes/auditRoutes.js';
 import cache from './lib/cache.js';
 import { attachPrismaMetrics } from './lib/prismaMetrics.js';
-import prisma from './lib/prisma.js';
+import prisma, { startConnectionMonitoring } from './lib/prisma.js';
 import { errorsTotal } from './lib/metrics.js';
 import metricsMiddleware from './middleware/metricsMiddleware.js';
 import responseTime from './middleware/responseTime.js';
 import emailService from './services/emailService.js';
 import { startIndexer } from './services/eventIndexer.js';
 
-// Attach Prisma query instrumentation
+// Attach Prisma query instrumentation and monitoring
 attachPrismaMetrics(prisma);
+startConnectionMonitoring(prisma);
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -65,13 +66,36 @@ app.use('/api/reputation/leaderboard', leaderboardLimiter);
 app.get('/health', async (_req, res) => {
   let dbStatus = 'ok';
   let dbLatencyMs = null;
+  let dbPoolInfo = null;
 
   try {
     const t0 = Date.now();
+    // Test basic connectivity
     await prisma.$queryRaw`SELECT 1`;
     dbLatencyMs = Date.now() - t0;
-  } catch {
+
+    // Get basic pool info if available
+    try {
+      // This is a simplified check - in production with direct pg access,
+      // you could get detailed pool stats
+      const poolCheck = await prisma.$queryRaw`
+        SELECT
+          count(*) as connection_count,
+          now() as current_time
+        FROM pg_stat_activity
+        WHERE datname = current_database()
+      `;
+      dbPoolInfo = {
+        activeConnections: parseInt(poolCheck[0].connection_count),
+        timestamp: poolCheck[0].current_time,
+      };
+    } catch (poolError) {
+      // Pool info not available, that's ok
+      console.warn('[HEALTH] Could not get pool info:', poolError.message);
+    }
+  } catch (error) {
     dbStatus = 'error';
+    console.error('[HEALTH] Database check failed:', error.message);
   }
 
   const status = dbStatus === 'ok' ? 'ok' : 'degraded';
@@ -80,7 +104,11 @@ app.get('/health', async (_req, res) => {
     timestamp: new Date().toISOString(),
     uptime: Math.floor(process.uptime()),
     cache: cache.analytics(),
-    db: { status: dbStatus, latencyMs: dbLatencyMs },
+    db: {
+      status: dbStatus,
+      latencyMs: dbLatencyMs,
+      pool: dbPoolInfo,
+    },
   });
 });
 

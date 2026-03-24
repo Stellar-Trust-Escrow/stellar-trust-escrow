@@ -73,6 +73,39 @@ export const dbSlowQueryTotal = new client.Counter({
   registers: [register],
 });
 
+// ── Connection Pool Metrics ──────────────────────────────────────────────────
+
+export const dbConnectionsTotal = new client.Counter({
+  name: 'db_connections_total',
+  help: 'Total number of database connections created',
+  registers: [register],
+});
+
+export const dbConnectionsActive = new client.Gauge({
+  name: 'db_connections_active',
+  help: 'Current number of active database connections',
+  registers: [register],
+});
+
+export const dbConnectionsIdle = new client.Gauge({
+  name: 'db_connections_idle',
+  help: 'Current number of idle database connections in the pool',
+  registers: [register],
+});
+
+export const dbConnectionErrorsTotal = new client.Counter({
+  name: 'db_connection_errors_total',
+  help: 'Total number of database connection errors',
+  labelNames: ['error_type'],
+  registers: [register],
+});
+
+export const dbConnectionPoolExhaustionTotal = new client.Counter({
+  name: 'db_connection_pool_exhaustion_total',
+  help: 'Total number of times the connection pool was exhausted',
+  registers: [register],
+});
+
 // ── Cache Metrics ─────────────────────────────────────────────────────────────
 
 export const cacheHitsTotal = new client.Counter({
