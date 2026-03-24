@@ -39,7 +39,8 @@ jest.unstable_mockModule('../lib/prisma.js', () => ({ default: prismaMock }));
 const { default: escrowController } = await import('../api/controllers/escrowController.js');
 const { default: userController } = await import('../api/controllers/userController.js');
 const { default: disputeController } = await import('../api/controllers/disputeController.js');
-const { default: reputationController } = await import('../api/controllers/reputationController.js');
+const { default: reputationController } =
+  await import('../api/controllers/reputationController.js');
 
 function createResponse() {
   return {

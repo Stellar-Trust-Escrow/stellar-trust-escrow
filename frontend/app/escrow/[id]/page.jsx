@@ -16,7 +16,6 @@
  * - Handle loading and error states
  */
 
-
 'use client';
 
 import { useState } from 'react';

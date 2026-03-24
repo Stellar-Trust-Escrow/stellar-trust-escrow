@@ -14,7 +14,7 @@ import { jest } from '@jest/globals';
 import zlib from 'zlib';
 import { promisify } from 'util';
 
-const gunzip = promisify(zlib.gunzip);
+const _gunzip = promisify(zlib.gunzip);
 const brotliDecompress = promisify(zlib.brotliDecompress);
 
 // ── Mock metrics so the middleware can be imported without a real registry ────
@@ -70,10 +70,8 @@ describe('Compression middleware', () => {
     expect(res.headers['content-encoding']).toBe('gzip');
     expect(res.headers['vary']).toMatch(/Accept-Encoding/i);
 
-    // Verify the body is valid gzip and decompresses to JSON
-    const decompressed = await gunzip(res.body);
-    const parsed = JSON.parse(decompressed.toString());
-    expect(parsed).toHaveProperty('items');
+    // supertest auto-decompresses gzip, so res.body is already parsed JSON
+    expect(res.body).toHaveProperty('items');
   });
 
   it('compresses with brotli when Accept-Encoding: br', async () => {
@@ -129,14 +127,31 @@ describe('Compression middleware', () => {
   });
 
   it('compressed response is smaller than uncompressed', async () => {
-    const [compressed, plain] = await Promise.all([
-      supertest(app).get('/data').set('Accept-Encoding', 'gzip').buffer(true),
-      supertest(app).get('/data').set('Accept-Encoding', '').buffer(true),
-    ]);
+    const customParse = (res, callback) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => callback(null, Buffer.concat(chunks)));
+    };
+
+    // Use brotli for compressed request since supertest does NOT auto-decompress brotli,
+    // giving us the real compressed bytes on the wire.
+    const compressed = await supertest(app)
+      .get('/data')
+      .set('Accept-Encoding', 'br')
+      .buffer(true)
+      .parse(customParse);
+
+    const plain = await supertest(app)
+      .get('/data')
+      .set('Accept-Encoding', '')
+      .buffer(true)
+      .parse(customParse);
 
     const compressedSize = compressed.body.length;
-    const plainSize = plain.body.length || Buffer.byteLength(plain.text || '');
+    const plainSize = plain.body.length;
 
+    expect(compressed.headers['content-encoding']).toBe('br');
+    expect(plain.headers['content-encoding']).toBeUndefined();
     expect(compressedSize).toBeLessThan(plainSize);
   });
 });

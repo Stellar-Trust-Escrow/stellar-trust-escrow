@@ -65,7 +65,9 @@ export default function DashboardPage() {
   useEffect(() => {
     fetch(`${API_BASE}/api/reputation/${PLACEHOLDER_ADDRESS}`)
       .then((r) => r.json())
-      .then((data) => { if (!data.error) setReputation(data); })
+      .then((data) => {
+        if (!data.error) setReputation(data);
+      })
       .catch(() => {});
   }, []);
 
@@ -81,15 +83,11 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-bold text-white">Dashboard</h1>
           <p className="text-gray-400 mt-1">
             Welcome back,{' '}
-            <span className="text-indigo-400 font-mono">
-              {PLACEHOLDER_ADDRESS.slice(0, 8)}…
-            </span>
+            <span className="text-indigo-400 font-mono">{PLACEHOLDER_ADDRESS.slice(0, 8)}…</span>
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {reputationScore !== null && (
-            <ReputationBadge score={reputationScore} />
-          )}
+          {reputationScore !== null && <ReputationBadge score={reputationScore} />}
           <Button href="/escrow/create" variant="primary">
             + New Escrow
           </Button>
@@ -113,7 +111,10 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-white">Your Active Escrows</h2>
           {escrows.length > 0 && (
-            <a href="/escrow" className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors">
+            <a
+              href="/escrow"
+              className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors"
+            >
               View all →
             </a>
           )}
@@ -128,9 +129,7 @@ export default function DashboardPage() {
           <div className="card text-center py-10">
             <p className="text-3xl mb-2">📭</p>
             <p className="text-gray-400 font-medium">No active escrows</p>
-            <p className="text-gray-600 text-sm mt-1">
-              Create your first escrow to get started.
-            </p>
+            <p className="text-gray-600 text-sm mt-1">Create your first escrow to get started.</p>
             <div className="mt-4">
               <Button href="/escrow/create" variant="primary">
                 + New Escrow
