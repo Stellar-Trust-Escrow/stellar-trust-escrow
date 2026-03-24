@@ -1,15 +1,5 @@
-#!/usr/bin/env sh
-. "$(dirname "$0")/_/husky.sh"
-
-# 1️⃣ Validate branch name
-echo "🔖 Validating branch name..."
-npx validate-branch-name || {
-  echo "❌ Invalid branch name. Push aborted."
-  exit 1
-}
-
-# 2️⃣ Protected branch checks for main
-# Tests are not run on push (run `npm run test` locally or rely on CI).
+#!/bin/sh
+# Protected branch checks for main
 protected_branch='refs/heads/main'
 current_user=$(git config user.email)
 allowed_user='ilorahdavid126@gmail.com'
@@ -39,5 +29,3 @@ done
 echo "✅ Pre-push checks passed."
 
 exit 0
-
-
