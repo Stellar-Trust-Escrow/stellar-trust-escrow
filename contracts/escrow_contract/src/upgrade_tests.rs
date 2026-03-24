@@ -283,7 +283,7 @@ mod upgrade_tests {
             &1_000_000, &hash32(&env, 7), &Some(arbiter.clone()), &None,
         );
 
-        contract.raise_dispute(&client_addr, &escrow_id);
+        contract.raise_dispute(&client_addr, &escrow_id, &None);
 
         let pre = contract.get_escrow(&escrow_id);
         assert_eq!(pre.status, EscrowStatus::Disputed);

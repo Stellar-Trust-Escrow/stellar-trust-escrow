@@ -75,6 +75,37 @@ pub fn emit_milestone_approved(env: &Env, escrow_id: u64, milestone_id: u32, amo
     );
 }
 
+/// Emitted when a client rejects a milestone submission, returning it to Pending.
+///
+/// # Arguments
+/// * `escrow_id`    - The escrow ID
+/// * `milestone_id` - The rejected milestone
+/// * `client`       - Client's address
+pub fn emit_milestone_rejected(env: &Env, escrow_id: u64, milestone_id: u32, client: &Address) {
+    env.events().publish(
+        (symbol_short!("mil_rej"), escrow_id),
+        (milestone_id, client.clone()),
+    );
+}
+
+/// Emitted when a dispute is raised on a specific milestone.
+///
+/// # Arguments
+/// * `escrow_id`    - The escrow ID
+/// * `milestone_id` - The disputed milestone
+/// * `raised_by`    - Address of the party raising the dispute
+pub fn emit_milestone_disputed(
+    env: &Env,
+    escrow_id: u64,
+    milestone_id: u32,
+    raised_by: &Address,
+) {
+    env.events().publish(
+        (symbol_short!("mil_dis"), escrow_id),
+        (milestone_id, raised_by.clone()),
+    );
+}
+
 /// Emitted when funds are released to the freelancer for an approved milestone.
 ///
 /// # Arguments

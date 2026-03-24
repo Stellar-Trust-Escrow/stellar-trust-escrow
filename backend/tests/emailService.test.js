@@ -1,3 +1,4 @@
+/* eslint-disable no-undef */
 import { jest } from '@jest/globals';
 
 const mkdirMock = jest.fn();
@@ -68,7 +69,8 @@ describe('emailService', () => {
 
     const updated = await getPreference(preference.email);
     expect(updated.unsubscribedAt).toBeNull();
-    const url = buildUnsubscribeUrl(updated.email, updated.unsubscribeToken);
-    expect(decodeURIComponent(url)).toContain(updated.email);
+    expect(buildUnsubscribeUrl(updated.email, updated.unsubscribeToken)).toContain(
+      encodeURIComponent(updated.email),
+    );
   });
 });
