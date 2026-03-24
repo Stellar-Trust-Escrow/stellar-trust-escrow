@@ -49,7 +49,7 @@ app.use('/api/', defaultLimiter);
 app.use('/api/reputation/leaderboard', leaderboardLimiter);
 
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString(), cache: { size: cache.size() } });
+  res.json({ status: 'ok', timestamp: new Date().toISOString(), cache: cache.analytics() });
 });
 
 app.use('/api/escrows', escrowRoutes);
