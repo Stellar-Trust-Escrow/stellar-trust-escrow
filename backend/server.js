@@ -3,7 +3,6 @@
 import './lib/sentry.js';
 import * as Sentry from '@sentry/node';
 
-/* eslint-disable no-undef */
 import 'dotenv/config';
 import http from 'http';
 import compressionMiddleware from './middleware/compression.js';
@@ -38,6 +37,7 @@ attachPrismaMetrics(prisma);
 startConnectionMonitoring(prisma);
 
 const PORT = process.env.PORT || 4000;
+const app = express();
 
 // ── Sentry request handler — must be first middleware ─────────────────────────
 // Attaches trace context and request data to every event captured downstream.

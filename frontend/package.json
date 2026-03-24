@@ -49,6 +49,7 @@
     "postcss": "^8",
     "storybook": "^8.6.18",
     "tailwindcss": "^3.3.0",
+    "tough-cookie": "^6.0.1",
     "typescript": "^5"
   }
 }

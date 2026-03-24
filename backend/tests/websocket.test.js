@@ -1,8 +1,65 @@
+import { jest } from '@jest/globals';
+
 // Set up env vars for tests
 process.env.WS_MAX_CONNECTIONS = '2';
 process.env.WS_HEARTBEAT_INTERVAL_MS = '1000';
 
-const { pool } = await import('../api/websocket/handlers.js');
+const prismaMock = {
+  escrow: {
+    findUnique: jest.fn().mockResolvedValue({
+      clientAddress: 'GCLIENT',
+      freelancerAddress: 'GFREE',
+    }),
+  },
+};
+
+jest.unstable_mockModule('../lib/prisma.js', () => ({ default: prismaMock }));
+
+const { pool, assertWebSocketUpgradeAllowed } = await import('../api/websocket/handlers.js');
+
+describe('assertWebSocketUpgradeAllowed', () => {
+  const origToken = process.env.WS_AUTH_TOKEN;
+  const origOrigins = process.env.ALLOWED_ORIGINS;
+
+  afterEach(() => {
+    if (origToken !== undefined) process.env.WS_AUTH_TOKEN = origToken;
+    else delete process.env.WS_AUTH_TOKEN;
+    if (origOrigins !== undefined) process.env.ALLOWED_ORIGINS = origOrigins;
+    else delete process.env.ALLOWED_ORIGINS;
+  });
+
+  it('allows upgrade when WS_AUTH_TOKEN is not set', () => {
+    delete process.env.WS_AUTH_TOKEN;
+    const socket = { write: jest.fn(), destroy: jest.fn() };
+    const req = { url: '/api/ws', headers: {} };
+    expect(assertWebSocketUpgradeAllowed(req, socket)).toBe(true);
+    expect(socket.destroy).not.toHaveBeenCalled();
+  });
+
+  it('rejects upgrade when token query does not match WS_AUTH_TOKEN', () => {
+    process.env.WS_AUTH_TOKEN = 'expected';
+    const socket = { write: jest.fn(), destroy: jest.fn() };
+    const req = { url: '/api/ws?token=wrong', headers: { host: 'localhost:4000' } };
+    expect(assertWebSocketUpgradeAllowed(req, socket)).toBe(false);
+    expect(socket.destroy).toHaveBeenCalled();
+  });
+
+  it('allows upgrade when token matches WS_AUTH_TOKEN', () => {
+    process.env.WS_AUTH_TOKEN = 'expected';
+    const socket = { write: jest.fn(), destroy: jest.fn() };
+    const req = { url: '/api/ws?token=expected', headers: { host: 'localhost:4000' } };
+    expect(assertWebSocketUpgradeAllowed(req, socket)).toBe(true);
+  });
+
+  it('rejects disallowed Origin when header is present', () => {
+    delete process.env.WS_AUTH_TOKEN;
+    process.env.ALLOWED_ORIGINS = 'http://localhost:3000';
+    const socket = { write: jest.fn(), destroy: jest.fn() };
+    const req = { url: '/api/ws', headers: { origin: 'http://malicious.example' } };
+    expect(assertWebSocketUpgradeAllowed(req, socket)).toBe(false);
+    expect(socket.destroy).toHaveBeenCalled();
+  });
+});
 
 describe('WebSocket Pool', () => {
   beforeEach(() => {

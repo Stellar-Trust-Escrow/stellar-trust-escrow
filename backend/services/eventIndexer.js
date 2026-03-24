@@ -25,6 +25,7 @@
  */
 
 import prisma from '../lib/prisma.js';
+import { broadcastEscrowUpdate } from './escrowRealtime.js';
 import { getContractEvents, getLatestLedger } from './stellarService.js';
 
 const CONTRACT_ID = process.env.ESCROW_CONTRACT_ID || '';
@@ -376,6 +377,19 @@ const dispatchEvent = async (rawEvent) => {
 
   try {
     await handler(rawEvent, meta);
+
+    if (eventType !== 'rep_upd' && rawEvent.topic[1] != null) {
+      try {
+        const escrowId = parseBigInt(rawEvent.topic[1]);
+        broadcastEscrowUpdate(escrowId, {
+          eventType,
+          ledger: String(meta.ledger),
+          txHash: meta.txHash,
+        });
+      } catch {
+        /* ignore topics without a numeric escrow id */
+      }
+    }
   } catch (err) {
     // Unique constraint violation = already indexed, safe to skip
     if (err.code === 'P2002') return;

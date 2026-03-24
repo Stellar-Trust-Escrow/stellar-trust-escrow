@@ -1,8 +1,82 @@
 import { randomUUID } from 'crypto';
 import { WebSocketServer } from 'ws';
+import prisma from '../../lib/prisma.js';
 
 const HEARTBEAT_INTERVAL_MS = parseInt(process.env.WS_HEARTBEAT_INTERVAL_MS || '30000', 10);
 const MAX_CONNECTIONS = parseInt(process.env.WS_MAX_CONNECTIONS || '100', 10);
+const REQUIRE_PARTY =
+  String(process.env.WS_ESCROW_SUBSCRIBE_REQUIRE_PARTY || '').toLowerCase() === 'true';
+
+const ESCROW_TOPIC_RE = /^escrow:(\d+)$/;
+
+function parseAllowedOrigins() {
+  const raw = process.env.ALLOWED_ORIGINS || 'http://localhost:3000';
+  return raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Reject upgrade if WS_AUTH_TOKEN is set and query ?token= does not match.
+ * Reject if Origin is present and not in ALLOWED_ORIGINS.
+ * @returns {boolean} true if the upgrade may proceed
+ */
+export function assertWebSocketUpgradeAllowed(request, socket) {
+  const wsAuth = process.env.WS_AUTH_TOKEN;
+  if (wsAuth) {
+    const url = new URL(request.url, `http://${request.headers.host}`);
+    const token = url.searchParams.get('token');
+    if (token !== wsAuth) {
+      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+      socket.destroy();
+      return false;
+    }
+  }
+
+  const allowed = parseAllowedOrigins();
+  const origin = request.headers.origin;
+  if (origin && allowed.length > 0 && !allowed.includes(origin)) {
+    socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+    socket.destroy();
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * When REQUIRE_PARTY is true, only client/freelancer on the escrow may join escrow:<id>.
+ * @param {string} topic
+ * @param {string | undefined} address — Stellar public key
+ */
+export async function assertEscrowSubscriptionAllowed(topic, address) {
+  const m = topic.match(ESCROW_TOPIC_RE);
+  if (!m) return true;
+
+  if (!REQUIRE_PARTY) return true;
+
+  if (!address || typeof address !== 'string') {
+    return false;
+  }
+
+  const escrowId = BigInt(m[1]);
+  const escrow = await prisma.escrow.findUnique({
+    where: { id: escrowId },
+    select: { clientAddress: true, freelancerAddress: true },
+  });
+
+  if (!escrow) return false;
+
+  const a = address.trim();
+  return escrow.clientAddress === a || escrow.freelancerAddress === a;
+}
+
+function sendJson(ws, obj) {
+  if (ws.readyState === 1 /* OPEN */) {
+    ws.send(JSON.stringify(obj));
+  }
+}
 
 class WebSocketPool {
   constructor() {
@@ -35,7 +109,6 @@ class WebSocketPool {
       this.peakConnections = this.connections.size;
     }
 
-    // Ping/pong health checks
     ws.on('pong', () => {
       const conn = this.connections.get(id);
       if (conn) conn.isAlive = true;
@@ -47,24 +120,12 @@ class WebSocketPool {
 
     ws.on('error', (err) => {
       console.error(`[WebSocket] ID ${id} error:`, err.message);
-      // 'close' event will usually follow and clean up
     });
 
-    // Handle incoming messages (e.g., subscribing to topics)
     ws.on('message', (data) => {
-      try {
-        const message = JSON.parse(data.toString());
-        if (message.type === 'subscribe' && message.topic) {
-          this.subscribe(id, message.topic);
-        } else if (message.type === 'unsubscribe' && message.topic) {
-          this.unsubscribe(id, message.topic);
-        }
-      } catch {
-        console.warn(`[WebSocket] Invalid message from ${id}:`, data.toString());
-      }
+      void this.handleIncomingMessage(id, ws, data);
     });
 
-    // Start heartbeat if it isn't running
     if (!this.heartbeatInterval) {
       this.startHeartbeat();
     }
@@ -72,12 +133,53 @@ class WebSocketPool {
     return id;
   }
 
+  async handleIncomingMessage(connectionId, ws, data) {
+    let message;
+    try {
+      message = JSON.parse(data.toString());
+    } catch {
+      console.warn(`[WebSocket] Invalid JSON from ${connectionId}`);
+      return;
+    }
+
+    if (message.type === 'subscribe' && message.topic) {
+      try {
+        const allowed = await assertEscrowSubscriptionAllowed(message.topic, message.address);
+        if (!allowed) {
+          sendJson(ws, {
+            type: 'error',
+            code: 'subscription_denied',
+            topic: message.topic,
+          });
+          return;
+        }
+        this.subscribe(connectionId, message.topic);
+        sendJson(ws, { type: 'subscribed', topic: message.topic });
+      } catch (err) {
+        console.error(`[WebSocket] subscribe failed for ${connectionId}:`, err.message);
+        sendJson(ws, { type: 'error', code: 'subscription_failed', topic: message.topic });
+      }
+      return;
+    }
+
+    if (message.type === 'unsubscribe' && message.topic) {
+      this.unsubscribe(connectionId, message.topic);
+      sendJson(ws, { type: 'unsubscribed', topic: message.topic });
+      return;
+    }
+
+    if (message.type === 'ping') {
+      sendJson(ws, { type: 'pong', t: message.t });
+    }
+  }
+
   removeConnection(id) {
     if (this.connections.has(id)) {
+      const meta = this.connections.get(id);
+      meta.topics.clear();
       this.connections.delete(id);
       this.totalDisconnected++;
 
-      // Stop heartbeat if no connections left
       if (this.connections.size === 0) {
         this.stopHeartbeat();
       }
@@ -113,16 +215,22 @@ class WebSocketPool {
 
   startHeartbeat() {
     this.heartbeatInterval = setInterval(() => {
+      const toTerminate = [];
       for (const [id, conn] of this.connections.entries()) {
         if (!conn.isAlive) {
+          toTerminate.push(id);
+          continue;
+        }
+        conn.isAlive = false;
+        conn.ws.ping();
+      }
+      for (const id of toTerminate) {
+        const conn = this.connections.get(id);
+        if (conn) {
           console.log(`[WebSocket] Terminating unresponsive connection ${id}`);
           conn.ws.terminate();
           this.removeConnection(id);
-          continue;
         }
-
-        conn.isAlive = false;
-        conn.ws.ping();
       }
     }, HEARTBEAT_INTERVAL_MS);
   }
@@ -135,7 +243,6 @@ class WebSocketPool {
   }
 
   getMetrics() {
-    // Topic distribution counts
     const topicCounts = {};
     for (const conn of this.connections.values()) {
       for (const topic of conn.topics) {
@@ -153,7 +260,6 @@ class WebSocketPool {
   }
 }
 
-// Global pool instance
 export const pool = new WebSocketPool();
 
 /**
@@ -165,36 +271,33 @@ export const pool = new WebSocketPool();
 export function createWebSocketServer(httpServer) {
   const wss = new WebSocketServer({ noServer: true });
 
-  // Handle HTTTP upgrade request integration
   httpServer.on('upgrade', (request, socket, head) => {
-    // Check path
     const { pathname } = new URL(request.url, `http://${request.headers.host}`);
 
-    if (pathname === '/api/ws') {
-      // Future: add Authentication check here
-
-      wss.handleUpgrade(request, socket, head, (ws) => {
-        wss.emit('connection', ws, request);
-      });
-    } else {
+    if (pathname !== '/api/ws') {
       socket.destroy();
+      return;
     }
+
+    if (!assertWebSocketUpgradeAllowed(request, socket)) {
+      return;
+    }
+
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.emit('connection', ws, request);
+    });
   });
 
-  // Handle actual connection
   wss.on('connection', (ws, request) => {
     const id = pool.addConnection(ws, request);
     if (id) {
       console.log(`[WebSocket] New connection established: ${id}`);
 
-      // Welcome message
-      ws.send(
-        JSON.stringify({
-          type: 'welcome',
-          id,
-          message: 'Connected to Stellar Trust Escrow WebSocket Server',
-        }),
-      );
+      sendJson(ws, {
+        type: 'welcome',
+        id,
+        message: 'Connected to Stellar Trust Escrow WebSocket Server',
+      });
     }
   });
 
