@@ -7,7 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "analyze": "ANALYZE=true next build",
     "test": "jest --config jest.config.cjs --passWithNoTests",
     "test:coverage": "jest --config jest.config.cjs --coverage --passWithNoTests",
