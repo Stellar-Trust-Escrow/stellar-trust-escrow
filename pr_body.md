@@ -21,4 +21,4 @@ Implements Issue #316: Conduct a comprehensive mobile responsiveness audit and f
 3. Configure `.env` from `.env.example`
 4. `npm run dev` and test on mobile viewports (e.g., using Chrome DevTools Device Mode)
 
-Closes #316
+Closes #205
