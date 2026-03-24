@@ -153,6 +153,8 @@ model KycVerification {
 
   @@index([status])
   @@map("kyc_verifications")
+}
+
 // ── Admin Audit Log ───────────────────────────────────────────────────────────
 
 /// Immutable record of every admin action for accountability and audit trails.
@@ -172,6 +174,37 @@ model AdminAuditLog {
   @@index([targetAddress])
   @@index([performedAt(sort: Desc)])
   @@map("admin_audit_logs")
+}
+
+// ── Audit Log ─────────────────────────────────────────────────────────────────
+
+/// Comprehensive, append-only audit trail for all system events.
+/// Records are never updated or deleted — retention is handled by archiving.
+model AuditLog {
+  id          BigInt   @id @default(autoincrement())
+  /// Category: AUTH | ESCROW | MILESTONE | DISPUTE | ADMIN | PAYMENT | KYC
+  category    String
+  /// Specific action, e.g. LOGIN, CREATE_ESCROW, APPROVE_MILESTONE
+  action      String
+  /// Actor performing the action (Stellar address or "system" / "admin")
+  actor       String
+  /// Primary resource identifier (escrow id, address, dispute id, etc.)
+  resourceId  String?  @map("resource_id")
+  /// Snapshot of relevant state at the time of the event (JSON)
+  metadata    Json?
+  /// HTTP status code or outcome code
+  statusCode  Int?     @map("status_code")
+  /// Client IP address
+  ipAddress   String?  @map("ip_address")
+  /// Immutable timestamp — set once on insert, never changed
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([category])
+  @@index([action])
+  @@index([actor])
+  @@index([resourceId])
+  @@index([createdAt(sort: Desc)])
+  @@map("audit_logs")
 }
 
 // ── Enums ─────────────────────────────────────────────────────────────────────
