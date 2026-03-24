@@ -108,6 +108,38 @@ model Dispute {
   @@map("disputes")
 }
 
+// ── Contract Events ───────────────────────────────────────────────────────────
+
+/// Indexed record of every Soroban contract event emitted by the escrow contract.
+/// Enables historical queries and real-time subscriptions without hitting the chain.
+model ContractEvent {
+  id            Int      @id @default(autoincrement())
+  /// Stellar ledger sequence this event was emitted in
+  ledger        BigInt
+  /// Ledger close timestamp
+  ledgerAt      DateTime @map("ledger_at")
+  /// Contract address that emitted the event
+  contractId    String   @map("contract_id")
+  /// Short event name derived from topic[0] (e.g. "esc_crt", "mil_apr")
+  eventType     String   @map("event_type")
+  /// Escrow ID extracted from topic[1] (null for contract-wide events)
+  escrowId      BigInt?  @map("escrow_id")
+  /// Full JSON-serialised topic array
+  topics        Json
+  /// Full JSON-serialised data payload
+  data          Json
+  /// Unique transaction hash + event index to prevent duplicate inserts
+  txHash        String   @map("tx_hash")
+  eventIndex    Int      @map("event_index")
+
+  @@unique([txHash, eventIndex])
+  @@index([eventType])
+  @@index([escrowId])
+  @@index([ledger])
+  @@index([ledgerAt(sort: Desc)])
+  @@map("contract_events")
+}
+
 // ── Indexer State ─────────────────────────────────────────────────────────────
 
 /// Tracks the last ledger processed so the indexer can resume after restart.
