@@ -43,28 +43,25 @@ export default function AdminDashboard() {
     setInputKey(stored);
   }, []);
 
-  const fetchStats = useCallback(
-    async (key) => {
-      setLoading(true);
-      setError('');
-      try {
-        const res = await fetch(`${API_BASE}/api/admin/stats`, {
-          headers: { 'x-admin-api-key': key },
-        });
-        if (!res.ok) {
-          const data = await res.json();
-          throw new Error(data.error || 'Failed to fetch stats');
-        }
-        setStats(await res.json());
-      } catch (err) {
-        setError(err.message);
-        setStats(null);
-      } finally {
-        setLoading(false);
+  const fetchStats = useCallback(async (key) => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/stats`, {
+        headers: { 'x-admin-api-key': key },
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to fetch stats');
       }
-    },
-    [],
-  );
+      setStats(await res.json());
+    } catch (err) {
+      setError(err.message);
+      setStats(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   const handleLogin = (e) => {
     e.preventDefault();
@@ -78,10 +75,30 @@ export default function AdminDashboard() {
   }, [apiKey, fetchStats]);
 
   const navItems = [
-    { href: '/admin/users', label: 'User Management', icon: '👥', desc: 'View, suspend, or ban users' },
-    { href: '/admin/disputes', label: 'Dispute Resolution', icon: '⚖️', desc: 'Review and resolve open disputes' },
-    { href: '/admin/audit-logs', label: 'Audit Logs', icon: '📋', desc: 'Full log of all admin actions' },
-    { href: '/admin/settings', label: 'Platform Settings', icon: '⚙️', desc: 'Manage fees and configuration' },
+    {
+      href: '/admin/users',
+      label: 'User Management',
+      icon: '👥',
+      desc: 'View, suspend, or ban users',
+    },
+    {
+      href: '/admin/disputes',
+      label: 'Dispute Resolution',
+      icon: '⚖️',
+      desc: 'Review and resolve open disputes',
+    },
+    {
+      href: '/admin/audit-logs',
+      label: 'Audit Logs',
+      icon: '📋',
+      desc: 'Full log of all admin actions',
+    },
+    {
+      href: '/admin/settings',
+      label: 'Platform Settings',
+      icon: '⚙️',
+      desc: 'Manage fees and configuration',
+    },
   ];
 
   return (
@@ -129,7 +146,12 @@ export default function AdminDashboard() {
               Authenticated as <span className="text-green-400 font-medium">Administrator</span>
             </span>
             <button
-              onClick={() => { localStorage.removeItem('adminApiKey'); setApiKey(''); setInputKey(''); setStats(null); }}
+              onClick={() => {
+                localStorage.removeItem('adminApiKey');
+                setApiKey('');
+                setInputKey('');
+                setStats(null);
+              }}
               className="text-xs text-red-400 hover:text-red-300 transition-colors"
             >
               Sign out
@@ -145,14 +167,31 @@ export default function AdminDashboard() {
           {/* Stats grid */}
           {loading ? (
             <div className="text-gray-400 text-center py-12">Loading statistics…</div>
-          ) : stats && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-              <StatCard label="Total Escrows" value={stats.escrows?.total} icon="📦" color="text-indigo-400"
-                sub={`${stats.escrows?.active} active · ${stats.escrows?.completed} completed`} />
-              <StatCard label="Registered Users" value={stats.users?.total} icon="👤" color="text-emerald-400" />
-              <StatCard label="Disputed Escrows" value={stats.escrows?.disputed} icon="⚠️" color="text-amber-400"
-                sub={`${stats.disputes?.open} open · ${stats.disputes?.resolved} resolved`} />
-            </div>
+          ) : (
+            stats && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+                <StatCard
+                  label="Total Escrows"
+                  value={stats.escrows?.total}
+                  icon="📦"
+                  color="text-indigo-400"
+                  sub={`${stats.escrows?.active} active · ${stats.escrows?.completed} completed`}
+                />
+                <StatCard
+                  label="Registered Users"
+                  value={stats.users?.total}
+                  icon="👤"
+                  color="text-emerald-400"
+                />
+                <StatCard
+                  label="Disputed Escrows"
+                  value={stats.escrows?.disputed}
+                  icon="⚠️"
+                  color="text-amber-400"
+                  sub={`${stats.disputes?.open} open · ${stats.disputes?.resolved} resolved`}
+                />
+              </div>
+            )
           )}
 
           {/* Nav cards */}
@@ -170,7 +209,9 @@ export default function AdminDashboard() {
                   </p>
                   <p className="text-sm text-gray-500">{item.desc}</p>
                 </div>
-                <span className="ml-auto text-gray-600 group-hover:text-indigo-400 transition-colors">→</span>
+                <span className="ml-auto text-gray-600 group-hover:text-indigo-400 transition-colors">
+                  →
+                </span>
               </Link>
             ))}
           </div>

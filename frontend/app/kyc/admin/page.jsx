@@ -47,7 +47,10 @@ export default function KycAdminPage() {
         {STATUSES.map((s) => (
           <button
             key={s || 'all'}
-            onClick={() => { setStatusFilter(s); setPage(1); }}
+            onClick={() => {
+              setStatusFilter(s);
+              setPage(1);
+            }}
             className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
               statusFilter === s
                 ? 'bg-indigo-500 border-indigo-500 text-white'
@@ -60,7 +63,9 @@ export default function KycAdminPage() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-12"><Spinner /></div>
+        <div className="flex justify-center py-12">
+          <Spinner />
+        </div>
       ) : records.length === 0 ? (
         <p className="text-gray-500 text-center py-12">No records found.</p>
       ) : (

@@ -3,7 +3,6 @@
 import './lib/sentry.js';
 import * as Sentry from '@sentry/node';
 
-/* eslint-disable no-undef */
 import 'dotenv/config';
 import http from 'http';
 import compressionMiddleware from './middleware/compression.js';
@@ -21,7 +20,11 @@ import paymentRoutes from './api/routes/paymentRoutes.js';
 import reputationRoutes from './api/routes/reputationRoutes.js';
 import userRoutes from './api/routes/userRoutes.js';
 import auditRoutes from './api/routes/auditRoutes.js';
+import authRoutes from './api/routes/authRoutes.js';
+import authMiddleware from './api/middleware/auth.js';
 import auditMiddleware from './api/middleware/audit.js';
+import apiV1Routes from './api/v1/index.js';
+import { deprecatedRoute } from './api/middleware/version.js';
 import { createWebSocketServer, pool } from './api/websocket/handlers.js';
 import cache from './lib/cache.js';
 import { attachPrismaMetrics } from './lib/prismaMetrics.js';
@@ -38,6 +41,9 @@ attachPrismaMetrics(prisma);
 startConnectionMonitoring(prisma);
 
 const PORT = process.env.PORT || 4000;
+const app = express();
+
+const app = express();
 
 // ── Sentry request handler — must be first middleware ─────────────────────────
 // Attaches trace context and request data to every event captured downstream.
@@ -114,8 +120,9 @@ app.get('/health', async (_req, res) => {
   });
 });
 
-app.use('/api/escrows', escrowRoutes);
-app.use('/api/users', userRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/escrows', authMiddleware, escrowRoutes);
+app.use('/api/users', authMiddleware, userRoutes);
 app.use('/api/reputation', reputationRoutes);
 app.use('/api/disputes', disputeRoutes);
 app.use('/api/notifications', notificationRoutes);

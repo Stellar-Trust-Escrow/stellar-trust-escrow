@@ -5,9 +5,15 @@ const localStorageMock = (() => {
   let store = {};
   return {
     getItem: (key) => store[key] || null,
-    setItem: (key, value) => { store[key] = value; },
-    removeItem: (key) => { delete store[key]; },
-    clear: () => { store = {}; },
+    setItem: (key, value) => {
+      store[key] = value;
+    },
+    removeItem: (key) => {
+      delete store[key];
+    },
+    clear: () => {
+      store = {};
+    },
   };
 })();
 Object.defineProperty(window, 'localStorage', { value: localStorageMock });
@@ -54,7 +60,13 @@ describe('AdminAuditLogsPage', () => {
       ok: true,
       json: async () => ({
         logs: [
-          { id: 1, action: 'BAN_USER', targetAddress: 'GABC123', reason: 'Spam', performedAt: '2025-03-01T10:00:00Z' },
+          {
+            id: 1,
+            action: 'BAN_USER',
+            targetAddress: 'GABC123',
+            reason: 'Spam',
+            performedAt: '2025-03-01T10:00:00Z',
+          },
         ],
         pagination: { page: 1, total: 1, pages: 1 },
       }),

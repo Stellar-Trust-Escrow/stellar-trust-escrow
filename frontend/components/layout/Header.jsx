@@ -12,15 +12,16 @@
  * - Highlight active nav link
  */
 
-
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import { useWallet } from '../../hooks/useWallet';
 import WalletStatus from '../ui/WalletStatus';
 
 export default function Header() {
   const wallet = useWallet();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Determine network label & style from wallet state
   const networkLabel = wallet.network === 'mainnet' ? 'Mainnet' : 'Testnet';
@@ -77,6 +78,26 @@ export default function Header() {
             <WalletStatus wallet={wallet} />
           </div>
         </div>
+
+        {/* Mobile Nav */}
+        {isMobileMenuOpen && (
+          <nav className="md:hidden py-4 border-t border-gray-800 flex flex-col gap-4">
+            <Link
+              href="/dashboard"
+              className="text-gray-400 hover:text-white transition-colors px-2"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              Dashboard
+            </Link>
+            <Link
+              href="/explorer"
+              className="text-gray-400 hover:text-white transition-colors px-2"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              Explorer
+            </Link>
+          </nav>
+        )}
       </div>
     </header>
   );

@@ -17,10 +17,14 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "test": "npm run test -w frontend && npm run test -w backend",
+    "loadtest:generate": "node load-tests/data/generate.js",
+    "loadtest": "node load-tests/run.js",
+    "loadtest:ci": "node load-tests/run.js --ci",
     "prepare": "husky install",
     "fix": "npm run lint:fix && npm run format"
   },
   "devDependencies": {
+    "autocannon": "^8.0.0",
     "@typescript-eslint/eslint-plugin": "^8.57.1",
     "@typescript-eslint/parser": "^8.57.1",
     "eslint": "^9.39.4",
@@ -51,6 +55,7 @@
     "errorMsg": "Branch name structure: feature/NV-1234-new-feature\nAllowed prefixes: feature, fix, refactor, hotfix, release, conflict"
   },
   "dependencies": {
+    "safer-buffer": "^2.1.2",
     "tough-cookie": "^6.0.1"
   }
 }

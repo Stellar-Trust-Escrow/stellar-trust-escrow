@@ -25,7 +25,14 @@ const getPercentileRank = async (_address) => {
   throw new Error('getPercentileRank not implemented - see Issue #28');
 };
 
-export { BADGE_THRESHOLDS, computeCompletionRate, getBadge, getLeaderboard, getPercentileRank, getReputationByAddress };
+export {
+  BADGE_THRESHOLDS,
+  computeCompletionRate,
+  getBadge,
+  getLeaderboard,
+  getPercentileRank,
+  getReputationByAddress,
+};
 
 export default {
   getReputationByAddress,
