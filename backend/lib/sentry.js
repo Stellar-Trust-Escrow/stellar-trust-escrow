@@ -34,10 +34,7 @@ if (DSN) {
     tracesSampleRate: traceSampleRate,
 
     // Attach request data (URL, method, headers) to every event
-    integrations: [
-      Sentry.httpIntegration({ tracing: true }),
-      Sentry.expressIntegration(),
-    ],
+    integrations: [Sentry.httpIntegration({ tracing: true }), Sentry.expressIntegration()],
 
     // Strip sensitive headers before sending
     beforeSend(event) {

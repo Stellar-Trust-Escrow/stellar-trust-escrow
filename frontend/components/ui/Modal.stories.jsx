@@ -84,8 +84,8 @@ export const Large = {
   render: () => (
     <ModalDemo title="Project Brief" size="lg" triggerLabel="Open Large Modal">
       <p className="text-gray-400 text-sm">
-        Large modals are suited for displaying detailed content such as project briefs,
-        milestone descriptions, or dispute evidence.
+        Large modals are suited for displaying detailed content such as project briefs, milestone
+        descriptions, or dispute evidence.
       </p>
       <div className="mt-4 space-y-2">
         {Array.from({ length: 4 }).map((_, i) => (
@@ -110,8 +110,8 @@ export const DisputeModal = {
   render: () => (
     <ModalDemo title="Raise Dispute" size="md" triggerLabel="Raise Dispute">
       <p className="text-gray-400 text-sm mb-4">
-        Raising a dispute will freeze all funds until the arbiter resolves the issue.
-        Please provide a reason below.
+        Raising a dispute will freeze all funds until the arbiter resolves the issue. Please provide
+        a reason below.
       </p>
       <textarea
         className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-sm

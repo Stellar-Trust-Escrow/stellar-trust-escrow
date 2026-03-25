@@ -9,7 +9,7 @@
 
 #![allow(dead_code)]
 
-use soroban_sdk::{symbol_short, Address, Env};
+use soroban_sdk::{symbol_short, Address, Env, String};
 
 /// Emitted when a new escrow is created and funds are locked.
 ///
@@ -94,12 +94,7 @@ pub fn emit_milestone_rejected(env: &Env, escrow_id: u64, milestone_id: u32, cli
 /// * `escrow_id`    - The escrow ID
 /// * `milestone_id` - The disputed milestone
 /// * `raised_by`    - Address of the party raising the dispute
-pub fn emit_milestone_disputed(
-    env: &Env,
-    escrow_id: u64,
-    milestone_id: u32,
-    raised_by: &Address,
-) {
+pub fn emit_milestone_disputed(env: &Env, escrow_id: u64, milestone_id: u32, raised_by: &Address) {
     env.events().publish(
         (symbol_short!("mil_dis"), escrow_id),
         (milestone_id, raised_by.clone()),
@@ -219,4 +214,67 @@ pub fn emit_contract_paused(env: &Env, admin: &Address) {
 pub fn emit_contract_unpaused(env: &Env, admin: &Address) {
     env.events()
         .publish((symbol_short!("unpaused"),), admin.clone());
+}
+
+/// Emitted when a cancellation is executed after the dispute period.
+///
+/// # Arguments
+/// * `escrow_id`      - The escrow ID
+/// * `client_amount`  - Amount returned to the requester
+/// * `slash_amount`   - Amount slashed as penalty
+pub fn emit_cancellation_executed(
+    env: &Env,
+    escrow_id: u64,
+    client_amount: i128,
+    slash_amount: i128,
+) {
+    env.events().publish(
+        (symbol_short!("can_exe"), escrow_id),
+        (client_amount, slash_amount),
+    );
+}
+
+/// Emitted when a cancellation is requested.
+pub fn emit_cancellation_requested(
+    env: &Env,
+    escrow_id: u64,
+    requester: &Address,
+    reason: &soroban_sdk::String,
+    dispute_deadline: u64,
+) {
+    env.events().publish(
+        (symbol_short!("can_req"), escrow_id),
+        (requester.clone(), reason.clone(), dispute_deadline),
+    );
+}
+
+/// Emitted when a slash is applied to a user.
+pub fn emit_slash_applied(
+    env: &Env,
+    escrow_id: u64,
+    slashed_user: &Address,
+    recipient: &Address,
+    amount: i128,
+    reason: &soroban_sdk::String,
+) {
+    env.events().publish(
+        (symbol_short!("slsh_app"), escrow_id),
+        (slashed_user.clone(), recipient.clone(), amount, reason.clone()),
+    );
+}
+
+/// Emitted when a slash is disputed.
+pub fn emit_slash_disputed(env: &Env, escrow_id: u64, disputer: &Address, amount: i128) {
+    env.events().publish(
+        (symbol_short!("slsh_dis"), escrow_id),
+        (disputer.clone(), amount),
+    );
+}
+
+/// Emitted when a slash dispute is resolved.
+pub fn emit_slash_dispute_resolved(env: &Env, escrow_id: u64, upheld: bool, amount: i128) {
+    env.events().publish(
+        (symbol_short!("slsh_res"), escrow_id),
+        (upheld, amount),
+    );
 }

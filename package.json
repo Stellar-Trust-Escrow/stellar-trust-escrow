@@ -13,14 +13,18 @@
     "install": "npm run -w backend && npm run  -w frontend",
     "lint": "eslint .",
     "lint:sol": "solhint \"contracts/**/*.sol\"",
-    "lint-staged": "npm run lint-staged",
+    "lint-staged": "npx lint-staged",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "test": "npm run test -w frontend && npm run test -w backend",
+    "loadtest:generate": "node load-tests/data/generate.js",
+    "loadtest": "node load-tests/run.js",
+    "loadtest:ci": "node load-tests/run.js --ci",
     "prepare": "husky install",
     "fix": "npm run lint:fix && npm run format"
   },
   "devDependencies": {
+    "autocannon": "^8.0.0",
     "@typescript-eslint/eslint-plugin": "^8.57.1",
     "@typescript-eslint/parser": "^8.57.1",
     "eslint": "^9.39.4",
@@ -29,6 +33,7 @@
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
+    "globals": "^17.4.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",
     "prettier": "^3.8.1",
@@ -48,5 +53,9 @@
   "validate-branch-name": {
     "pattern": "^(main|develop|live){1}$|^(feature|fix|refactor|hotfix|release|conflict)/NV-[0-9]{1,5}.*$",
     "errorMsg": "Branch name structure: feature/NV-1234-new-feature\nAllowed prefixes: feature, fix, refactor, hotfix, release, conflict"
+  },
+  "dependencies": {
+    "safer-buffer": "^2.1.2",
+    "tough-cookie": "^6.0.1"
   }
 }

@@ -1,10 +1,8 @@
 /** @type {import('next').NextConfig} */
-import bundleAnalyzer from '@next/bundle-analyzer';
 
 import { withSentryConfig } from '@sentry/nextjs';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
-if (!API_URL) throw new Error('NEXT_PUBLIC_API_URL is not defined');
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -13,10 +11,16 @@ const nextConfig = {
   },
   // Proxy API calls to backend in development
   async rewrites() {
+    return [{ source: '/api/:path*', destination: `${API_URL}/api/:path*` }];
+  },
+  async headers() {
     return [
       {
-        source: '/api/:path*',
-        destination: `${API_URL}/api/:path*`,
+        source: '/sw.js',
+        headers: [
+          { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+          { key: 'Content-Type', value: 'application/javascript' },
+        ],
       },
     ];
   },

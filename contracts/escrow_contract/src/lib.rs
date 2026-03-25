@@ -38,8 +38,11 @@ mod pause_tests;
 
 pub use errors::EscrowError;
 pub use types::{DataKey, EscrowState, EscrowStatus, Milestone, MilestoneStatus, ReputationRecord};
+use types::{CancellationRequest, SlashRecord};
 
-use soroban_sdk::{contract, contractimpl, contracttype, token, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{
+    contract, contractimpl, contracttype, crypto, token, Address, BytesN, Env, String, Vec,
+};
 
 // ── TTL constants ─────────────────────────────────────────────────────────────
 // Bump only when remaining TTL falls below threshold, extending to target.
@@ -47,6 +50,10 @@ const INSTANCE_TTL_THRESHOLD: u32 = 5_000;
 const INSTANCE_TTL_EXTEND_TO: u32 = 50_000;
 const PERSISTENT_TTL_THRESHOLD: u32 = 5_000;
 const PERSISTENT_TTL_EXTEND_TO: u32 = 50_000;
+
+const CANCELLATION_DISPUTE_PERIOD: u64 = 120_960;
+const SLASH_DISPUTE_PERIOD: u64 = 51_840;
+const SLASH_PERCENTAGE: u64 = 10;
 
 // ── Granular storage keys ─────────────────────────────────────────────────────
 // Separate keys for meta vs each milestone avoids deserialising the full
@@ -56,6 +63,42 @@ const PERSISTENT_TTL_EXTEND_TO: u32 = 50_000;
 enum PackedDataKey {
     EscrowMeta(u64),
     Milestone(u64, u32),
+}
+
+// ── Meta-transaction argument structs ────────────────────────────────────────
+#[derive(Clone)]
+struct CreateEscrowArgs {
+    client: Address,
+    freelancer: Address,
+    token: Address,
+    total_amount: i128,
+    brief_hash: BytesN<32>,
+    arbiter: Option<Address>,
+    deadline: Option<u64>,
+    lock_time: Option<u64>,
+}
+
+#[derive(Clone)]
+struct AddMilestoneArgs {
+    caller: Address,
+    escrow_id: u64,
+    title: String,
+    description_hash: BytesN<32>,
+    amount: i128,
+}
+
+#[derive(Clone)]
+struct SubmitMilestoneArgs {
+    caller: Address,
+    escrow_id: u64,
+    milestone_id: u32,
+}
+
+#[derive(Clone)]
+struct ApproveMilestoneArgs {
+    caller: Address,
+    escrow_id: u64,
+    milestone_id: u32,
 }
 
 // ── EscrowMeta ────────────────────────────────────────────────────────────────
@@ -163,7 +206,11 @@ impl ContractStorage {
 
     // ── Milestones ────────────────────────────────────────────────────────────
 
-    fn load_milestone(env: &Env, escrow_id: u64, milestone_id: u32) -> Result<Milestone, EscrowError> {
+    fn load_milestone(
+        env: &Env,
+        escrow_id: u64,
+        milestone_id: u32,
+    ) -> Result<Milestone, EscrowError> {
         let key = PackedDataKey::Milestone(escrow_id, milestone_id);
         let m = env
             .storage()
@@ -221,6 +268,8 @@ impl ContractStorage {
                 disputed_escrows: 0,
                 disputes_won: 0,
                 total_volume: 0,
+                slash_count: 0,
+                total_slashed: 0,
                 last_updated: env.ledger().timestamp(),
             },
         }
@@ -230,6 +279,40 @@ impl ContractStorage {
         let key = DataKey::Reputation(record.address.clone());
         env.storage().persistent().set(&key, record);
         Self::bump_persistent_ttl(env, &key);
+    }
+
+    fn load_cancellation_request(env: &Env, escrow_id: u64) -> Result<CancellationRequest, EscrowError> {
+        let key = DataKey::CancellationRequest(escrow_id);
+        let req = env.storage().persistent().get(&key).ok_or(EscrowError::CancellationNotFound)?;
+        Self::bump_persistent_ttl(env, &key);
+        Ok(req)
+    }
+
+    fn save_cancellation_request(env: &Env, request: &CancellationRequest) {
+        let key = DataKey::CancellationRequest(request.escrow_id);
+        env.storage().persistent().set(&key, request);
+        Self::bump_persistent_ttl(env, &key);
+    }
+
+    fn remove_cancellation_request(env: &Env, escrow_id: u64) {
+        env.storage().persistent().remove(&DataKey::CancellationRequest(escrow_id));
+    }
+
+    fn load_slash_record(env: &Env, escrow_id: u64) -> Result<SlashRecord, EscrowError> {
+        let key = DataKey::SlashRecord(escrow_id);
+        let record = env.storage().persistent().get(&key).ok_or(EscrowError::SlashNotFound)?;
+        Self::bump_persistent_ttl(env, &key);
+        Ok(record)
+    }
+
+    fn save_slash_record(env: &Env, record: &SlashRecord) {
+        let key = DataKey::SlashRecord(record.escrow_id);
+        env.storage().persistent().set(&key, record);
+        Self::bump_persistent_ttl(env, &key);
+    }
+
+    fn remove_slash_record(env: &Env, escrow_id: u64) {
+        env.storage().persistent().remove(&DataKey::SlashRecord(escrow_id));
     }
 
     // ── TTL helpers ───────────────────────────────────────────────────────────
@@ -246,16 +329,22 @@ impl ContractStorage {
     where
         K: soroban_sdk::IntoVal<Env, soroban_sdk::Val>,
     {
-        env.storage()
-            .persistent()
-            .extend_ttl(key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        env.storage().persistent().extend_ttl(
+            key,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
     }
 
     // ── Time lock helpers ─────────────────────────────────────────────────────────
 
     /// Checks if the lock time has expired for an escrow.
     /// Returns Ok(()) if funds can be released, Err if still locked.
-    fn check_lock_time_expired(env: &Env, escrow_id: u64, lock_time: Option<u64>) -> Result<(), EscrowError> {
+    fn check_lock_time_expired(
+        env: &Env,
+        escrow_id: u64,
+        lock_time: Option<u64>,
+    ) -> Result<(), EscrowError> {
         if let Some(lt) = lock_time {
             let now = env.ledger().timestamp();
             if now < lt {
@@ -518,9 +607,6 @@ impl EscrowContract {
             &amount,
         );
 
-        // O(1) balance update and completion check
-        meta.remaining_balance -= amount;
-
         // STE-04 fix: checked_sub instead of silent underflow
         meta.remaining_balance = meta
             .remaining_balance
@@ -573,11 +659,6 @@ impl EscrowContract {
         events::emit_milestone_rejected(&env, escrow_id, milestone_id, &caller);
         Ok(())
     }
-
-    /// Admin-triggered fund release for an already-approved milestone.
-    ///
-    /// # Gas notes
-    /// - Validates milestone state before loading meta.
 
     /// Admin-only fallback for edge cases. Normal flow uses `approve_milestone`.
     ///
@@ -768,7 +849,7 @@ impl EscrowContract {
         let mut meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
 
         // Caller must be arbiter or admin
-        let is_arbiter = meta.arbiter.as_ref().map_or(false, |a| *a == caller);
+        let is_arbiter = meta.arbiter.as_ref().is_some_and(|a| *a == caller);
         if !is_arbiter {
             ContractStorage::require_admin(&env, &caller)?;
         }
@@ -823,7 +904,11 @@ impl EscrowContract {
 
     // ── Upgrade ───────────────────────────────────────────────────────────────
 
-    pub fn upgrade(env: Env, caller: Address, new_wasm_hash: BytesN<32>) -> Result<(), EscrowError> {
+    pub fn upgrade(
+        env: Env,
+        caller: Address,
+        new_wasm_hash: BytesN<32>,
+    ) -> Result<(), EscrowError> {
         caller.require_auth();
         ContractStorage::require_admin(&env, &caller)?;
         env.deployer().update_current_contract_wasm(new_wasm_hash);
@@ -879,8 +964,281 @@ impl EscrowContract {
         ContractStorage::escrow_count(&env)
     }
 
-    pub fn get_milestone(env: Env, escrow_id: u64, milestone_id: u32) -> Result<Milestone, EscrowError> {
+    pub fn get_milestone(
+        env: Env,
+        escrow_id: u64,
+        milestone_id: u32,
+    ) -> Result<Milestone, EscrowError> {
         ContractStorage::load_milestone(&env, escrow_id, milestone_id)
+    }
+
+    pub fn get_cancellation_request(
+        env: Env,
+        escrow_id: u64,
+    ) -> Result<CancellationRequest, EscrowError> {
+        ContractStorage::load_cancellation_request(&env, escrow_id)
+    }
+
+    pub fn get_slash_record(env: Env, escrow_id: u64) -> Result<SlashRecord, EscrowError> {
+        ContractStorage::load_slash_record(&env, escrow_id)
+    }
+
+    // ── Cancellation Functions ─────────────────────────────────────────────────
+
+    /// Requests cancellation of an escrow.
+    ///
+    /// Can be called by client or freelancer. Starts a dispute period.
+    pub fn request_cancellation(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+        reason: String,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_initialized(&env)?;
+
+        let mut meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
+
+        // Only client or freelancer can request cancellation
+        if caller != meta.client && caller != meta.freelancer {
+            return Err(EscrowError::Unauthorized);
+        }
+
+        // Check if escrow is in a cancellable state
+        if !matches!(meta.status, EscrowStatus::Active) {
+            return Err(EscrowError::InvalidEscrowState);
+        }
+
+        // Check if cancellation already exists
+        if ContractStorage::load_cancellation_request(&env, escrow_id).is_ok() {
+            return Err(EscrowError::CancellationAlreadyExists);
+        }
+
+        let now = env.ledger().timestamp();
+        let dispute_deadline = now + CANCELLATION_DISPUTE_PERIOD;
+
+        // Create cancellation request
+        let request = CancellationRequest {
+            escrow_id,
+            requester: caller.clone(),
+            reason: reason.clone(),
+            requested_at: now,
+            dispute_deadline,
+            disputed: false,
+        };
+        ContractStorage::save_cancellation_request(&env, &request);
+
+        // Update escrow status
+        meta.status = EscrowStatus::CancellationPending;
+        ContractStorage::save_escrow_meta(&env, &meta);
+
+        // Emit event
+        events::emit_cancellation_requested(&env, escrow_id, &caller, &reason, dispute_deadline);
+
+        Ok(())
+    }
+
+    /// Executes a cancellation after the dispute period.
+    ///
+    /// Can be called by anyone after dispute period expires.
+    pub fn execute_cancellation(env: Env, escrow_id: u64) -> Result<(), EscrowError> {
+        ContractStorage::require_initialized(&env)?;
+
+        let mut meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
+        let request = ContractStorage::load_cancellation_request(&env, escrow_id)?;
+
+        // Check if dispute period has passed
+        let now = env.ledger().timestamp();
+        if now < request.dispute_deadline {
+            return Err(EscrowError::CancellationDisputePeriodActive);
+        }
+
+        // Check if disputed
+        if request.disputed {
+            return Err(EscrowError::CancellationDisputed);
+        }
+
+        // Calculate slash amount
+        let slash_amount = Self::calculate_slash_amount(meta.remaining_balance);
+        let client_amount = meta.remaining_balance - slash_amount;
+
+        // Determine who gets the slash (the non-requesting party)
+        let slash_recipient = if request.requester == meta.client {
+            meta.freelancer.clone()
+        } else {
+            meta.client.clone()
+        };
+
+        // Apply slash
+        let reason = String::from_str(&env, "Escrow cancellation");
+        Self::apply_slash(
+            &env,
+            &request.requester,
+            &slash_recipient,
+            slash_amount,
+            &reason,
+            escrow_id,
+        );
+
+        // Transfer funds
+        let token = token::Client::new(&env, &meta.token);
+        let contract_addr = env.current_contract_address();
+
+        // Return remaining funds to requester
+        token.transfer(&contract_addr, &request.requester, &client_amount);
+
+        // Update escrow status
+        meta.status = EscrowStatus::Cancelled;
+        meta.remaining_balance = 0;
+        ContractStorage::save_escrow_meta(&env, &meta);
+
+        // Clean up cancellation request
+        ContractStorage::remove_cancellation_request(&env, escrow_id);
+
+        // Emit event
+        events::emit_cancellation_executed(
+            &env,
+            escrow_id,
+            client_amount,
+            slash_amount,
+        );
+
+        Ok(())
+    }
+
+    /// Disputes a cancellation request.
+    ///
+    /// Can only be called by the other party (non-requester).
+    pub fn dispute_cancellation(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_initialized(&env)?;
+
+        let mut meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
+        let mut request = ContractStorage::load_cancellation_request(&env, escrow_id)?;
+
+        // Only non-requester can dispute
+        if caller == request.requester {
+            return Err(EscrowError::Unauthorized);
+        }
+
+        // Check if already disputed
+        if request.disputed {
+            return Err(EscrowError::CancellationAlreadyDisputed);
+        }
+
+        // Check if dispute deadline has passed
+        let now = env.ledger().timestamp();
+        if now >= request.dispute_deadline {
+            return Err(EscrowError::CancellationDisputeDeadlineExpired);
+        }
+
+        // Mark as disputed
+        request.disputed = true;
+        ContractStorage::save_cancellation_request(&env, &request);
+
+        // Raise dispute on escrow
+        meta.status = EscrowStatus::Disputed;
+        ContractStorage::save_escrow_meta(&env, &meta);
+
+        events::emit_dispute_raised(&env, escrow_id, &caller);
+
+        Ok(())
+    }
+
+    // ── Slash Dispute Functions ───────────────────────────────────────────────────
+
+    /// Disputes a slash applied to a user.
+    ///
+    /// Can only be called by the slashed user within the dispute period.
+    pub fn dispute_slash(env: Env, caller: Address, escrow_id: u64) -> Result<(), EscrowError> {
+        caller.require_auth();
+
+        let mut slash_record = ContractStorage::load_slash_record(&env, escrow_id)?;
+
+        // Only the slashed user can dispute
+        if caller != slash_record.slashed_user {
+            return Err(EscrowError::Unauthorized);
+        }
+
+        if slash_record.disputed {
+            return Err(EscrowError::SlashAlreadyDisputed);
+        }
+
+        let now = env.ledger().timestamp();
+        let dispute_deadline = slash_record.slashed_at + SLASH_DISPUTE_PERIOD;
+
+        // Check if dispute deadline has passed
+        if now >= dispute_deadline {
+            return Err(EscrowError::SlashDisputeDeadlineExpired);
+        }
+
+        // Mark as disputed
+        slash_record.disputed = true;
+        ContractStorage::save_slash_record(&env, &slash_record);
+
+        // Emit dispute event
+        events::emit_slash_disputed(&env, escrow_id, &caller, slash_record.amount);
+
+        Ok(())
+    }
+
+    /// Resolves a slash dispute.
+    ///
+    /// Can only be called by arbiter or admin.
+    /// If upheld, the slash remains. If reversed, funds are returned.
+    pub fn resolve_slash_dispute(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+        upheld: bool,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+
+        let mut slash_record = ContractStorage::load_slash_record(&env, escrow_id)?;
+        let meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
+
+        // Caller must be arbiter or admin
+        let is_arbiter = meta.arbiter.as_ref().map_or(false, |a| *a == caller);
+        if !is_arbiter {
+            ContractStorage::require_admin(&env, &caller)?;
+        }
+
+        if !slash_record.disputed {
+            return Err(EscrowError::SlashNotFound);
+        }
+
+        let token = token::Client::new(&env, &meta.token);
+        let contract_addr = env.current_contract_address();
+
+        if upheld {
+            // Slash is upheld - no changes needed
+            events::emit_slash_dispute_resolved(&env, escrow_id, true, slash_record.amount);
+        } else {
+            // Reverse the slash - return funds to slashed user
+            token.transfer(
+                &contract_addr,
+                &slash_record.slashed_user,
+                &slash_record.amount,
+            );
+
+            // Update reputation - restore points
+            let mut reputation = ContractStorage::load_reputation(&env, &slash_record.slashed_user);
+            reputation.slash_count = reputation.slash_count.saturating_sub(1);
+            reputation.total_slashed -= slash_record.amount;
+            reputation.total_score += 10; // Restore 10 points
+            ContractStorage::save_reputation(&env, &reputation);
+
+            events::emit_slash_dispute_resolved(&env, escrow_id, false, 0);
+        }
+
+        // Clean up slash record
+        ContractStorage::remove_slash_record(&env, escrow_id);
+
+        Ok(())
     }
 
     // ── Internal helpers ──────────────────────────────────────────────────────
@@ -911,6 +1269,46 @@ impl EscrowContract {
         record.last_updated = now;
         ContractStorage::save_reputation(env, &record);
         events::emit_reputation_updated(env, address, record.total_score);
+    }
+
+    // ── Slashing helpers ─────────────────────────────────────────────────────
+
+    /// Calculates the slash amount based on remaining balance.
+    fn calculate_slash_amount(remaining_balance: i128) -> i128 {
+        remaining_balance * SLASH_PERCENTAGE as i128 / 100
+    }
+
+    /// Applies a slash to a user and updates reputation.
+    fn apply_slash(
+        env: &Env,
+        slashed_user: &Address,
+        recipient: &Address,
+        amount: i128,
+        reason: &String,
+        escrow_id: u64,
+    ) {
+        // Update reputation
+        let mut reputation = ContractStorage::load_reputation(env, slashed_user);
+        reputation.total_score = reputation.total_score.saturating_sub(10);
+        reputation.slash_count += 1;
+        reputation.total_slashed += amount;
+        reputation.last_updated = env.ledger().timestamp();
+        ContractStorage::save_reputation(env, &reputation);
+
+        // Create slash record
+        let slash_record = SlashRecord {
+            escrow_id,
+            slashed_user: slashed_user.clone(),
+            recipient: recipient.clone(),
+            amount,
+            reason: reason.clone(),
+            slashed_at: env.ledger().timestamp(),
+            disputed: false,
+        };
+        ContractStorage::save_slash_record(env, &slash_record);
+
+        // Emit slash event
+        events::emit_slash_applied(env, escrow_id, slashed_user, recipient, amount, reason);
     }
 }
 
@@ -973,7 +1371,10 @@ mod tests {
         assert_eq!(token_client.balance(&contract_id), 1_000_i128);
 
         env.as_contract(&contract_id, || {
-            assert!(env.storage().persistent().has(&PackedDataKey::EscrowMeta(escrow_id)));
+            assert!(env
+                .storage()
+                .persistent()
+                .has(&PackedDataKey::EscrowMeta(escrow_id)));
             assert!(!env.storage().persistent().has(&DataKey::Escrow(escrow_id)));
         });
     }

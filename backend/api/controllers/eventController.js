@@ -70,10 +70,6 @@ const listEvents = async (req, res) => {
       prisma.contractEvent.count({ where }),
     ]);
 
-    const result = buildPaginatedResponse(
-      data.map(serializeEvent),
-      { total, page, limit },
-    );
     const result = buildPaginatedResponse(data.map(serializeEvent), { total, page, limit });
     cache.set(cacheKey, result, EVENT_TTL);
     res.json(result);

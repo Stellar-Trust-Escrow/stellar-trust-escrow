@@ -9,7 +9,6 @@
  *   attachPrismaMetrics(prisma);
  */
 
-/* eslint-disable no-undef */
 import { dbQueryDuration, dbQueryTotal, dbSlowQueryTotal } from './metrics.js';
 
 const SLOW_QUERY_THRESHOLD_MS = parseInt(process.env.SLOW_QUERY_THRESHOLD_MS || '200');

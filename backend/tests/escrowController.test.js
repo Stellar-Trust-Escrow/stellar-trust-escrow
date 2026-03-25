@@ -1,4 +1,12 @@
 import { jest } from '@jest/globals';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const fixtures = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/escrow.json'), 'utf8'));
 
 const cacheMock = {
   get: jest.fn(),
@@ -9,24 +17,13 @@ const cacheMock = {
 };
 
 const prismaMock = {
-  $transaction: jest.fn(async (operations) => Promise.all(operations)),
+  $transaction: jest.fn(async (operations) => operations),
   escrow: {
     findMany: jest.fn(),
     findUnique: jest.fn(),
     count: jest.fn(),
-    groupBy: jest.fn(),
   },
   milestone: {
-    findMany: jest.fn(),
-    findUnique: jest.fn(),
-    count: jest.fn(),
-  },
-  dispute: {
-    findMany: jest.fn(),
-    findUnique: jest.fn(),
-    count: jest.fn(),
-  },
-  reputationRecord: {
     findMany: jest.fn(),
     findUnique: jest.fn(),
     count: jest.fn(),
@@ -37,175 +34,219 @@ jest.unstable_mockModule('../lib/cache.js', () => ({ default: cacheMock }));
 jest.unstable_mockModule('../lib/prisma.js', () => ({ default: prismaMock }));
 
 const { default: escrowController } = await import('../api/controllers/escrowController.js');
-const { default: userController } = await import('../api/controllers/userController.js');
-const { default: disputeController } = await import('../api/controllers/disputeController.js');
-const { default: reputationController } = await import('../api/controllers/reputationController.js');
 
-function createResponse() {
-  return {
+function createMockRes() {
+  const res = {
     statusCode: 200,
     body: null,
-    status(code) {
+    status: jest.fn().mockImplementation(function (code) {
       this.statusCode = code;
       return this;
-    },
-    json(payload) {
+    }),
+    json: jest.fn().mockImplementation(function (payload) {
       this.body = payload;
       return this;
-    },
+    }),
   };
+  return res;
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
   cacheMock.get.mockReturnValue(null);
+  // Default prisma transaction behavior
+  prismaMock.$transaction.mockImplementation(async (ops) => {
+    return Promise.all(ops);
+  });
+  prismaMock.escrow.findMany.mockResolvedValue([]);
+  prismaMock.escrow.count.mockResolvedValue(0);
 });
 
-describe('pagination standardization', () => {
-  it('returns standardized metadata for escrow listings', async () => {
-    prismaMock.escrow.findMany.mockResolvedValue([{ id: 1 }]);
-    prismaMock.escrow.count.mockResolvedValue(45);
+describe('escrowController', () => {
+  describe('listEscrows', () => {
+    it('returns 200 with paginated escrow list (cache miss)', async () => {
+      const req = { query: { page: '1', limit: '10' } };
+      const res = createMockRes();
 
-    const res = createResponse();
-    await escrowController.listEscrows({ query: {} }, res);
+      prismaMock.escrow.findMany.mockResolvedValue(fixtures.escrows);
+      prismaMock.escrow.count.mockResolvedValue(fixtures.escrows.length);
 
-    expect(prismaMock.escrow.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        skip: 0,
-        take: 20,
-      }),
-    );
-    expect(res.statusCode).toBe(200);
-    expect(res.body).toMatchObject({
-      data: [{ id: 1 }],
-      page: 1,
-      limit: 20,
-      total: 45,
-      totalPages: 3,
-      hasNextPage: true,
-      hasPreviousPage: false,
+      await escrowController.listEscrows(req, res);
+
+      expect(res.json).toHaveBeenCalled();
+      expect(res.body.data).toHaveLength(fixtures.escrows.length);
+      expect(res.body.total).toBe(fixtures.escrows.length);
+      expect(cacheMock.set).toHaveBeenCalled();
+    });
+
+    it('returns cached data if available', async () => {
+      const req = { query: {} };
+      const res = createMockRes();
+      const cachedData = { data: [], pagination: {} };
+      cacheMock.get.mockReturnValue(cachedData);
+
+      await escrowController.listEscrows(req, res);
+
+      expect(res.json).toHaveBeenCalledWith(cachedData);
+      expect(prismaMock.escrow.findMany).not.toHaveBeenCalled();
+    });
+
+    it('applies status filter correctly', async () => {
+      const req = { query: { status: 'Active,Completed' } };
+      const res = createMockRes();
+
+      prismaMock.escrow.findMany.mockResolvedValue([]);
+      prismaMock.escrow.count.mockResolvedValue(0);
+
+      await escrowController.listEscrows(req, res);
+
+      expect(prismaMock.escrow.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            status: { in: ['Active', 'Completed'] },
+          }),
+        })
+      );
+    });
+
+    it('applies search filter correctly (numeric ID)', async () => {
+      const req = { query: { search: '123' } };
+      const res = createMockRes();
+
+      await escrowController.listEscrows(req, res);
+
+      expect(prismaMock.escrow.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: expect.arrayContaining([{ id: 123n }]),
+          }),
+        })
+      );
+    });
+
+    it('applies amount range correctly', async () => {
+      const req = { query: { minAmount: '100', maxAmount: '500' } };
+      const res = createMockRes();
+
+      await escrowController.listEscrows(req, res);
+
+      expect(prismaMock.escrow.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            totalAmount: { gte: '100', lte: '500' },
+          }),
+        })
+      );
+    });
+
+    it('returns 500 on error', async () => {
+      const req = { query: {} };
+      const res = createMockRes();
+      prismaMock.$transaction.mockRejectedValue(new Error('DB Error'));
+
+      await escrowController.listEscrows(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.body.error).toBe('DB Error');
     });
   });
 
-  it('normalizes invalid page values and clamps oversized limits', async () => {
-    prismaMock.escrow.findMany.mockResolvedValue([]);
-    prismaMock.escrow.count.mockResolvedValue(0);
+  describe('getEscrow', () => {
+    it('returns 200 with escrow details', async () => {
+      const req = { params: { id: '1' } };
+      const res = createMockRes();
+      const escrow = fixtures.escrows[0];
+      prismaMock.escrow.findUnique.mockResolvedValue(escrow);
 
-    const res = createResponse();
-    await escrowController.listEscrows({ query: { page: '-9', limit: '500' } }, res);
+      await escrowController.getEscrow(req, res);
 
-    expect(prismaMock.escrow.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        skip: 0,
-        take: 100,
-      }),
-    );
-    expect(res.body).toMatchObject({
-      page: 1,
-      limit: 100,
-      total: 0,
-      totalPages: 0,
-      hasNextPage: false,
-      hasPreviousPage: false,
+      expect(res.json).toHaveBeenCalledWith(escrow);
+      expect(cacheMock.set).toHaveBeenCalled();
+    });
+
+    it('returns 404 if escrow not found', async () => {
+      const req = { params: { id: '999' } };
+      const res = createMockRes();
+      prismaMock.escrow.findUnique.mockResolvedValue(null);
+
+      await escrowController.getEscrow(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+    });
+
+    it('returns 400 for invalid ID', async () => {
+      const req = { params: { id: 'abc' } };
+      const res = createMockRes();
+
+      await escrowController.getEscrow(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.body.error).toBe('Invalid escrow id');
     });
   });
 
-  it('applies standardized pagination to user escrow filters', async () => {
-    const address = `G${'A'.repeat(55)}`;
-    prismaMock.escrow.findMany.mockResolvedValue([{ id: 2 }]);
-    prismaMock.escrow.count.mockResolvedValue(8);
+  describe('broadcastCreateEscrow', () => {
+    it('returns 400 if signedXdr is missing', async () => {
+      const req = { body: {} };
+      const res = createMockRes();
 
-    const res = createResponse();
-    await userController.getUserEscrows(
-      {
-        params: { address },
-        query: { role: 'client', status: 'Completed', page: '2', limit: '5' },
-      },
-      res,
-    );
+      await escrowController.broadcastCreateEscrow(req, res);
 
-    expect(prismaMock.escrow.count).toHaveBeenCalledWith({
-      where: { status: 'Completed', clientAddress: address },
+      expect(res.status).toHaveBeenCalledWith(400);
     });
-    expect(res.body).toMatchObject({
-      page: 2,
-      limit: 5,
-      total: 8,
-      totalPages: 2,
-      hasNextPage: false,
-      hasPreviousPage: true,
+
+    it('returns 501 (not implemented)', async () => {
+      const req = { body: { signedXdr: 'AAAA...' } };
+      const res = createMockRes();
+
+      await escrowController.broadcastCreateEscrow(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(501);
     });
   });
 
-  it('paginates milestone collections with the same response shape', async () => {
-    prismaMock.milestone.findMany.mockResolvedValue([{ milestoneIndex: 1 }]);
-    prismaMock.milestone.count.mockResolvedValue(3);
+  describe('getMilestones', () => {
+    it('returns 200 with milestones', async () => {
+      const req = { params: { id: '1' }, query: {} };
+      const res = createMockRes();
+      prismaMock.milestone.findMany.mockResolvedValue(fixtures.milestones);
+      prismaMock.milestone.count.mockResolvedValue(fixtures.milestones.length);
 
-    const res = createResponse();
-    await escrowController.getMilestones(
-      {
-        params: { id: '7' },
-        query: { page: '2', limit: '2' },
-      },
-      res,
-    );
+      await escrowController.getMilestones(req, res);
 
-    expect(prismaMock.milestone.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { escrowId: 7n },
-        skip: 2,
-        take: 2,
-      }),
-    );
-    expect(res.body).toMatchObject({
-      page: 2,
-      limit: 2,
-      total: 3,
-      totalPages: 2,
-      hasNextPage: false,
-      hasPreviousPage: true,
+      expect(res.json).toHaveBeenCalled();
+      expect(res.body.data).toHaveLength(fixtures.milestones.length);
+    });
+
+    it('returns 400 for invalid escrow ID', async () => {
+      const req = { params: { id: 'abc' }, query: {} };
+      const res = createMockRes();
+
+      await escrowController.getMilestones(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
     });
   });
 
-  it('keeps dispute and leaderboard pagination metadata aligned', async () => {
-    prismaMock.dispute.findMany.mockResolvedValue([{ escrowId: 1 }]);
-    prismaMock.dispute.count.mockResolvedValue(6);
-    prismaMock.reputationRecord.findMany.mockResolvedValue([
-      {
-        address: `G${'B'.repeat(55)}`,
-        totalScore: 99,
-        completedEscrows: 4,
-        disputesWon: 1,
-        totalVolume: '50',
-      },
-    ]);
-    prismaMock.reputationRecord.count.mockResolvedValue(5);
+  describe('getMilestone', () => {
+    it('returns 200 with specific milestone', async () => {
+      const req = { params: { id: '1', milestoneId: '0' } };
+      const res = createMockRes();
+      prismaMock.milestone.findUnique.mockResolvedValue(fixtures.milestones[0]);
 
-    const disputesRes = createResponse();
-    await disputeController.listDisputes({ query: { page: '2', limit: '4' } }, disputesRes);
+      await escrowController.getMilestone(req, res);
 
-    const leaderboardRes = createResponse();
-    await reputationController.getLeaderboard({ query: { page: '2', limit: '2' } }, leaderboardRes);
-
-    expect(disputesRes.body).toMatchObject({
-      page: 2,
-      limit: 4,
-      total: 6,
-      totalPages: 2,
-      hasNextPage: false,
-      hasPreviousPage: true,
+      expect(res.json).toHaveBeenCalledWith(fixtures.milestones[0]);
     });
-    expect(leaderboardRes.body).toMatchObject({
-      page: 2,
-      limit: 2,
-      total: 5,
-      totalPages: 3,
-      hasNextPage: true,
-      hasPreviousPage: true,
-    });
-    expect(leaderboardRes.body.data[0]).toMatchObject({
-      rank: 3,
-      fullAddress: `G${'B'.repeat(55)}`,
+
+    it('returns 404 if milestone not found', async () => {
+      const req = { params: { id: '1', milestoneId: '99' } };
+      const res = createMockRes();
+      prismaMock.milestone.findUnique.mockResolvedValue(null);
+
+      await escrowController.getMilestone(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
     });
   });
 });

@@ -12,7 +12,6 @@
  *  - Node.js default metrics (event loop lag, heap, GC, etc.)
  */
 
-/* eslint-disable no-undef */
 import client from 'prom-client';
 
 // ── Registry ──────────────────────────────────────────────────────────────────
