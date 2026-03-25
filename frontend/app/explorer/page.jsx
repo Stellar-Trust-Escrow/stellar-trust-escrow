@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Search, SlidersHorizontal, X, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import EscrowCard from '../../components/escrow/EscrowCard';
@@ -79,7 +79,7 @@ function filtersFromUrl(sp) {
 
 const PAGE_SIZE = 12;
 
-export default function ExplorerPage() {
+function ExplorerContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -416,5 +416,18 @@ export default function ExplorerPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ExplorerPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center py-20 text-gray-500">
+        <Loader2 size={24} className="animate-spin mr-2" />
+        Loading explorer...
+      </div>
+    }>
+      <ExplorerContent />
+    </Suspense>
   );
 }
