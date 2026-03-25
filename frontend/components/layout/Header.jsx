@@ -19,7 +19,7 @@ import { useState } from 'react';
 import { useWallet } from '../../hooks/useWallet';
 import { useI18n } from '../../i18n/index.jsx';
 import WalletStatus from '../ui/WalletStatus';
-import LanguageSwitcher from '../ui/LanguageSwitcher';
+import ThemeToggle from './ThemeToggle';
 
 export default function Header() {
   const wallet = useWallet();
@@ -35,7 +35,7 @@ export default function Header() {
     wallet.network === 'mainnet' ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse';
 
   return (
-    <header className="border-b border-gray-800 bg-gray-950/80 backdrop-blur-sm sticky top-0 z-50">
+    <header className="border-b border-gray-200 bg-white/80 dark:border-gray-800 dark:bg-gray-950/80 backdrop-blur-sm sticky top-0 z-50">
       <div className="container mx-auto px-4 max-w-7xl">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
@@ -50,11 +50,17 @@ export default function Header() {
 
           {/* Nav Links */}
           <nav className="hidden md:flex items-center gap-6">
-            <Link href="/dashboard" className="text-gray-400 hover:text-white text-sm transition-colors">
-              {t('nav.dashboard')}
+            <Link
+              href="/dashboard"
+              className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white text-sm transition-colors"
+            >
+              Dashboard
             </Link>
-            <Link href="/explorer" className="text-gray-400 hover:text-white text-sm transition-colors">
-              {t('nav.explorer')}
+            <Link
+              href="/explorer"
+              className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white text-sm transition-colors"
+            >
+              Explorer
             </Link>
             {/* TODO (contributor): add Leaderboard link */}
           </nav>
@@ -72,18 +78,28 @@ export default function Header() {
 
             {/* Wallet Status */}
             <WalletStatus wallet={wallet} />
-            <LanguageSwitcher />
+
+            {/* Theme Toggle */}
+            <ThemeToggle />
           </div>
         </div>
 
         {/* Mobile Nav */}
         {isMobileMenuOpen && (
-          <nav className="md:hidden py-4 border-t border-gray-800 flex flex-col gap-4">
-            <Link href="/dashboard" className="text-gray-400 hover:text-white transition-colors px-2" onClick={() => setIsMobileMenuOpen(false)}>
-              {t('nav.dashboard')}
+          <nav className="md:hidden py-4 border-t border-gray-200 dark:border-gray-800 flex flex-col gap-4">
+            <Link
+              href="/dashboard"
+              className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors px-2"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              Dashboard
             </Link>
-            <Link href="/explorer" className="text-gray-400 hover:text-white transition-colors px-2" onClick={() => setIsMobileMenuOpen(false)}>
-              {t('nav.explorer')}
+            <Link
+              href="/explorer"
+              className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors px-2"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              Explorer
             </Link>
           </nav>
         )}

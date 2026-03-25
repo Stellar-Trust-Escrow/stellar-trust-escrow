@@ -20,6 +20,7 @@ import './globals.css';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
+import { ThemeProvider } from '../contexts/ThemeContext';
 import ServiceWorkerRegistrar from '../components/ServiceWorkerRegistrar';
 
 export const metadata = {
