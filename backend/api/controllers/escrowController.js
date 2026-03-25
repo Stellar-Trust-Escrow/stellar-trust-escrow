@@ -118,7 +118,19 @@ const getEscrow = async (req, res) => {
             resolvedAt: true,
           },
         },
-        dispute: true,
+        dispute: {
+          select: {
+            id: true,
+            escrowId: true,
+            raisedByAddress: true,
+            raisedAt: true,
+            resolvedAt: true,
+            clientAmount: true,
+            freelancerAmount: true,
+            resolvedBy: true,
+            resolution: true,
+          },
+        },
       },
     });
 
@@ -192,6 +204,16 @@ const getMilestone = async (req, res) => {
 
     const milestone = await prisma.milestone.findUnique({
       where: { escrowId_milestoneIndex: { escrowId, milestoneIndex } },
+      select: {
+        id: true,
+        milestoneIndex: true,
+        escrowId: true,
+        title: true,
+        amount: true,
+        status: true,
+        submittedAt: true,
+        resolvedAt: true,
+      },
     });
 
     if (!milestone) return res.status(404).json({ error: 'Milestone not found' });

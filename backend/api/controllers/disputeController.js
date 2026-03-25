@@ -5,17 +5,24 @@ import { buildPaginatedResponse, parsePagination } from '../../lib/pagination.js
 const listDisputes = async (req, res) => {
   try {
     const { page, limit, skip } = parsePagination(req.query);
+    const { resolved } = req.query;
 
-    const cacheKey = `disputes:list:${page}:${limit}`;
+    const where = {};
+    if (resolved === 'true') where.resolvedAt = { not: null };
+    else if (resolved === 'false') where.resolvedAt = null;
+
+    const cacheKey = `disputes:list:${resolved ?? 'all'}:${page}:${limit}`;
     const cached = cache.get(cacheKey);
     if (cached) return res.json(cached);
 
     const [data, total] = await prisma.$transaction([
       prisma.dispute.findMany({
+        where,
         skip,
         take: limit,
         orderBy: { raisedAt: 'desc' },
         select: {
+          id: true,
           escrowId: true,
           raisedByAddress: true,
           raisedAt: true,
@@ -32,7 +39,7 @@ const listDisputes = async (req, res) => {
           },
         },
       }),
-      prisma.dispute.count(),
+      prisma.dispute.count({ where }),
     ]);
 
     const result = buildPaginatedResponse(data, { total, page, limit });
@@ -52,7 +59,16 @@ const getDispute = async (req, res) => {
 
     const dispute = await prisma.dispute.findUnique({
       where: { escrowId },
-      include: {
+      select: {
+        id: true,
+        escrowId: true,
+        raisedByAddress: true,
+        raisedAt: true,
+        resolvedAt: true,
+        clientAmount: true,
+        freelancerAmount: true,
+        resolvedBy: true,
+        resolution: true,
         escrow: {
           select: {
             clientAddress: true,

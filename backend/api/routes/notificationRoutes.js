@@ -55,7 +55,9 @@ router.get('/unsubscribe', async (req, res) => {
     }
 
     await emailService.unsubscribe(email, token, reason);
-    return res.status(200).send('<h1>You have been unsubscribed from escrow notification emails.</h1>');
+    return res
+      .status(200)
+      .send('<h1>You have been unsubscribed from escrow notification emails.</h1>');
   } catch (error) {
     return res.status(400).send(`<h1>${error.message}</h1>`);
   }
