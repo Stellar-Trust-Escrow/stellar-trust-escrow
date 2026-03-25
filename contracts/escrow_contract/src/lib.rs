@@ -31,14 +31,15 @@
 
 mod errors;
 mod events;
+mod pause_tests;
+mod storage;
 mod types;
 mod upgrade_tests;
-mod pause_tests;
-
 
 pub use errors::EscrowError;
-pub use types::{DataKey, EscrowState, EscrowStatus, Milestone, MilestoneStatus, ReputationRecord};
+pub use storage::{StorageKey, StorageManager, STORAGE_VERSION};
 use types::{CancellationRequest, SlashRecord};
+pub use types::{DataKey, EscrowState, EscrowStatus, Milestone, MilestoneStatus, ReputationRecord};
 
 use soroban_sdk::{
     contract, contractimpl, contracttype, crypto, token, Address, BytesN, Env, String, Vec,
@@ -60,7 +61,7 @@ const SLASH_PERCENTAGE: u64 = 10;
 // milestone list on every escrow-level operation.
 #[contracttype]
 #[derive(Clone)]
-enum PackedDataKey {
+pub enum PackedDataKey {
     EscrowMeta(u64),
     Milestone(u64, u32),
 }
@@ -140,6 +141,8 @@ impl ContractStorage {
         }
         instance.set(&DataKey::Admin, admin);
         instance.set(&DataKey::EscrowCounter, &0_u64);
+        // Initialize storage version for upgradeable storage
+        StorageManager::init_version(env);
         Self::bump_instance_ttl(env);
         Ok(())
     }
@@ -281,9 +284,16 @@ impl ContractStorage {
         Self::bump_persistent_ttl(env, &key);
     }
 
-    fn load_cancellation_request(env: &Env, escrow_id: u64) -> Result<CancellationRequest, EscrowError> {
+    fn load_cancellation_request(
+        env: &Env,
+        escrow_id: u64,
+    ) -> Result<CancellationRequest, EscrowError> {
         let key = DataKey::CancellationRequest(escrow_id);
-        let req = env.storage().persistent().get(&key).ok_or(EscrowError::CancellationNotFound)?;
+        let req = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(EscrowError::CancellationNotFound)?;
         Self::bump_persistent_ttl(env, &key);
         Ok(req)
     }
@@ -295,12 +305,18 @@ impl ContractStorage {
     }
 
     fn remove_cancellation_request(env: &Env, escrow_id: u64) {
-        env.storage().persistent().remove(&DataKey::CancellationRequest(escrow_id));
+        env.storage()
+            .persistent()
+            .remove(&DataKey::CancellationRequest(escrow_id));
     }
 
     fn load_slash_record(env: &Env, escrow_id: u64) -> Result<SlashRecord, EscrowError> {
         let key = DataKey::SlashRecord(escrow_id);
-        let record = env.storage().persistent().get(&key).ok_or(EscrowError::SlashNotFound)?;
+        let record = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(EscrowError::SlashNotFound)?;
         Self::bump_persistent_ttl(env, &key);
         Ok(record)
     }
@@ -312,7 +328,9 @@ impl ContractStorage {
     }
 
     fn remove_slash_record(env: &Env, escrow_id: u64) {
-        env.storage().persistent().remove(&DataKey::SlashRecord(escrow_id));
+        env.storage()
+            .persistent()
+            .remove(&DataKey::SlashRecord(escrow_id));
     }
 
     // ── TTL helpers ───────────────────────────────────────────────────────────
@@ -359,7 +377,10 @@ impl ContractStorage {
     // ── Pause helpers ──────────────────────────────────────────────────────────
 
     fn is_paused(env: &Env) -> bool {
-        env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+        env.storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false)
     }
 
     fn set_paused(env: &Env, paused: bool) {
@@ -911,6 +932,11 @@ impl EscrowContract {
     ) -> Result<(), EscrowError> {
         caller.require_auth();
         ContractStorage::require_admin(&env, &caller)?;
+
+        // Run storage migration before upgrading contract code
+        // This ensures data is in the correct format for the new version
+        StorageManager::migrate(&env)?;
+
         env.deployer().update_current_contract_wasm(new_wasm_hash);
         Ok(())
     }
@@ -1096,12 +1122,7 @@ impl EscrowContract {
         ContractStorage::remove_cancellation_request(&env, escrow_id);
 
         // Emit event
-        events::emit_cancellation_executed(
-            &env,
-            escrow_id,
-            client_amount,
-            slash_amount,
-        );
+        events::emit_cancellation_executed(&env, escrow_id, client_amount, slash_amount);
 
         Ok(())
     }

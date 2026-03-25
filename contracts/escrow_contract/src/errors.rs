@@ -77,4 +77,8 @@ pub enum EscrowError {
     SlashAlreadyDisputed = 39,
     SlashDisputeDeadlineExpired = 40,
     InvalidSlashAmount = 41,
+
+    // ── Storage Migration ───────────────────────────────────────────────────────
+    /// Storage migration failed - possibly due to incompatible data format.
+    StorageMigrationFailed = 42,
 }

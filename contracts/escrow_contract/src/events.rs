@@ -259,7 +259,12 @@ pub fn emit_slash_applied(
 ) {
     env.events().publish(
         (symbol_short!("slsh_app"), escrow_id),
-        (slashed_user.clone(), recipient.clone(), amount, reason.clone()),
+        (
+            slashed_user.clone(),
+            recipient.clone(),
+            amount,
+            reason.clone(),
+        ),
     );
 }
 
@@ -273,8 +278,6 @@ pub fn emit_slash_disputed(env: &Env, escrow_id: u64, disputer: &Address, amount
 
 /// Emitted when a slash dispute is resolved.
 pub fn emit_slash_dispute_resolved(env: &Env, escrow_id: u64, upheld: bool, amount: i128) {
-    env.events().publish(
-        (symbol_short!("slsh_res"), escrow_id),
-        (upheld, amount),
-    );
+    env.events()
+        .publish((symbol_short!("slsh_res"), escrow_id), (upheld, amount));
 }
