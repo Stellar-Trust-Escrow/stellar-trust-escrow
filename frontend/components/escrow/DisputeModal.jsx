@@ -95,10 +95,10 @@ export default function DisputeModal({ isOpen, onClose, escrowId }) {
           )}
 
           {/* Actions */}
-          <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row gap-3">
             <Button
               variant="secondary"
-              className="flex-1"
+              className="flex-1 w-full"
               onClick={onClose}
               disabled={isSubmitting}
             >
@@ -106,7 +106,7 @@ export default function DisputeModal({ isOpen, onClose, escrowId }) {
             </Button>
             <Button
               variant="danger"
-              className="flex-1"
+              className="flex-1 w-full"
               onClick={handleRaise}
               disabled={isSubmitting}
               isLoading={isSubmitting}

@@ -1,6 +1,7 @@
 import express from 'express';
 import multer from 'multer';
 import userController from '../controllers/userController.js';
+import exportController from '../controllers/exportController.js';
 
 const upload = multer({ dest: 'uploads/' });
 
@@ -28,15 +29,25 @@ router.get('/:address/escrows', userController.getUserEscrows);
 router.get('/:address/stats', userController.getUserStats);
 
 /**
- * @route  PUT /api/users/:address
- * @desc   Update a user's profile details.
+ * @route  GET /api/users/:address/export
+ * @desc   Export all user data in JSON format
+ * @returns { version, exportedAt, userAddress, data: { escrows, payments, kyc, reputation } }
  */
-router.put('/:address', userController.updateUserProfile);
+router.get('/:address/export', exportController.exportUserData);
 
 /**
- * @route  POST /api/users/:address/avatar
- * @desc   Upload a user's profile picture.
+ * @route  POST /api/users/:address/import
+ * @desc   Import user data from JSON
+ * @body   { data: {...}, mode: 'merge' | 'replace' }
+ * @returns { success, results }
  */
-router.post('/:address/avatar', upload.single('avatar'), userController.uploadAvatar);
+router.post('/:address/import', exportController.importUserData);
+
+/**
+ * @route  GET /api/users/:address/export/file
+ * @desc   Download user data as a file
+ * @returns { file: 'data.json', content: {...} }
+ */
+router.get('/:address/export/file', exportController.downloadExportFile);
 
 export default router;

@@ -77,6 +77,7 @@
                   "bytes": "0202020202020202020202020202020202020202020202020202020202020202"
                 },
                 "void",
+                "void",
                 "void"
               ]
             }
@@ -300,6 +301,14 @@
                     },
                     {
                       "key": {
+                        "symbol": "approved_count"
+                      },
+                      "val": {
+                        "u32": 0
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "arbiter"
                       },
                       "val": "void"
@@ -349,6 +358,18 @@
                       "val": {
                         "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                       }
+                    },
+                    {
+                      "key": {
+                        "symbol": "lock_time"
+                      },
+                      "val": "void"
+                    },
+                    {
+                      "key": {
+                        "symbol": "lock_time_extension"
+                      },
+                      "val": "void"
                     },
                     {
                       "key": {
@@ -1219,6 +1240,7 @@
                 {
                   "bytes": "0202020202020202020202020202020202020202020202020202020202020202"
                 },
+                "void",
                 "void",
                 "void"
               ]

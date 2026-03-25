@@ -70,7 +70,7 @@ describe('EscrowCard', () => {
 
   it('renders 0% progress when milestoneProgress is 0 / 4', () => {
     const { container } = render(
-      <EscrowCard escrow={{ ...baseEscrow, milestoneProgress: '0 / 4' }} />
+      <EscrowCard escrow={{ ...baseEscrow, milestoneProgress: '0 / 4' }} />,
     );
     const bar = container.querySelector('[style*="width"]');
     expect(bar).toHaveStyle({ width: '0%' });

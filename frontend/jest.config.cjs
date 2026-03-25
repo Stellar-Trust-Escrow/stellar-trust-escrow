@@ -9,7 +9,7 @@ module.exports = {
     '^next/image$': '<rootDir>/tests/__mocks__/next/image.jsx',
   },
   transform: {
-    '^.+\\.[jt]sx?$': ['babel-jest', { configFile: './babel.config.cjs' }],
+    '^.+\\.[jt]sx?$': ['babel-jest'],
   },
   testMatch: ['<rootDir>/tests/**/*.test.[jt]s?(x)'],
   collectCoverageFrom: [

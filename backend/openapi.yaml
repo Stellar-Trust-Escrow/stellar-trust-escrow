@@ -4,7 +4,7 @@ info:
   version: 0.1.0
   description: Shared pagination contract for collection endpoints.
 paths:
-  /api/escrows:
+  /api/v1/escrows:
     get:
       summary: List escrows
       parameters:
@@ -17,7 +17,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedResponse'
-  /api/escrows/{id}/milestones:
+  /api/v1/escrows/{id}/milestones:
     get:
       summary: List milestones for an escrow
       parameters:
@@ -30,7 +30,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedResponse'
-  /api/users/{address}/escrows:
+  /api/v1/users/{address}/escrows:
     get:
       summary: List escrows for a user
       parameters:
@@ -43,7 +43,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedResponse'
-  /api/disputes:
+  /api/v1/disputes:
     get:
       summary: List disputes
       parameters:
@@ -56,7 +56,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedResponse'
-  /api/reputation/leaderboard:
+  /api/v1/reputation/leaderboard:
     get:
       summary: List reputation leaderboard entries
       parameters:
