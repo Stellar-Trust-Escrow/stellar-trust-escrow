@@ -10,7 +10,10 @@ module.exports = {
     '^next/image$': '<rootDir>/tests/__mocks__/next/image.jsx',
   },
   transform: {
-    '^.+\\.[jt]sx?$': ['babel-jest'],
+    '^.+\\.[jt]sx?$': [
+      'babel-jest',
+      { presets: [['next/babel', { 'preset-react': { runtime: 'automatic' } }]] },
+    ],
   },
   testMatch: ['<rootDir>/tests/**/*.test.[jt]s?(x)'],
   collectCoverageFrom: [

@@ -22,6 +22,13 @@ import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
 import ServiceWorkerRegistrar from '../components/ServiceWorkerRegistrar';
 
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
+const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' });
+
+const API_ORIGIN = process.env.NEXT_PUBLIC_API_URL
+  ? new URL(process.env.NEXT_PUBLIC_API_URL).origin
+  : '';
+
 export const metadata = {
   title: 'StellarTrustEscrow — Decentralized Milestone Escrow',
   description:
