@@ -34,12 +34,7 @@ export function isRetryableError(error) {
   ];
 
   // PostgreSQL error codes that are transient
-  const retryablePgCodes = [
-    'ECONNRESET',
-    'ECONNREFUSED',
-    'ETIMEDOUT',
-    'ENOTFOUND',
-  ];
+  const retryablePgCodes = ['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND'];
 
   return (
     retryableCodes.includes(error.code) ||
@@ -66,7 +61,7 @@ export async function retryDatabaseOperation(operation, config = retryConfig) {
 
       // Track connection errors
       dbConnectionErrorsTotal.inc({
-        error_type: error.code || 'unknown'
+        error_type: error.code || 'unknown',
       });
 
       // If this is the last attempt or error is not retryable, throw
@@ -78,10 +73,10 @@ export async function retryDatabaseOperation(operation, config = retryConfig) {
       const delay = config.delay * Math.pow(config.backoff, attempt - 1);
 
       console.warn(
-        `[DB RETRY] Attempt ${attempt}/${config.attempts} failed: ${error.message}. Retrying in ${delay}ms...`
+        `[DB RETRY] Attempt ${attempt}/${config.attempts} failed: ${error.message}. Retrying in ${delay}ms...`,
       );
 
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
 

@@ -15,14 +15,6 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const STATS_FILE = path.join(__dirname, '..', 'bundle-stats.json');
-const BUILD_MANIFEST = path.join(__dirname, '..', 'frontend', '.next', 'build-manifest.json');
-const APP_BUILD_MANIFEST = path.join(
-  __dirname,
-  '..',
-  'frontend',
-  '.next',
-  'app-build-manifest.json'
-);
 const NEXT_DIR = path.join(__dirname, '..', 'frontend', '.next');
 
 const args = process.argv.slice(2);
@@ -130,7 +122,9 @@ function printTrendReport(history) {
   }
 
   console.log('\n=== Bundle Size Trend Report ===\n');
-  console.log(`${'Date'.padEnd(26)} ${'Branch'.padEnd(20)} ${'Total JS'.padEnd(12)} ${'Delta'.padEnd(12)}`);
+  console.log(
+    `${'Date'.padEnd(26)} ${'Branch'.padEnd(20)} ${'Total JS'.padEnd(12)} ${'Delta'.padEnd(12)}`,
+  );
   console.log('-'.repeat(72));
 
   for (let i = 0; i < history.length; i++) {
@@ -140,7 +134,7 @@ function printTrendReport(history) {
     const deltaStr = prev ? formatDelta(delta) : '(baseline)';
     const flag = delta > 50 * 1024 ? ' ⚠️  >50kB growth' : '';
     console.log(
-      `${snap.timestamp.slice(0, 19).replace('T', ' ').padEnd(26)} ${(snap.branch || '').padEnd(20)} ${formatBytes(snap.totalJs).padEnd(12)} ${deltaStr}${flag}`
+      `${snap.timestamp.slice(0, 19).replace('T', ' ').padEnd(26)} ${(snap.branch || '').padEnd(20)} ${formatBytes(snap.totalJs).padEnd(12)} ${deltaStr}${flag}`,
     );
   }
 

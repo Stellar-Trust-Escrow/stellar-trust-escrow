@@ -10,7 +10,6 @@
  *   /api/escrows/12345  →  /api/escrows/:id
  */
 
-/* eslint-disable no-undef */
 import { httpRequestDuration, httpRequestTotal, httpRequestsInFlight } from '../lib/metrics.js';
 
 /**

@@ -1,4 +1,3 @@
-/* eslint-disable no-undef */
 /**
  * KYC Service — Sumsub integration
  *
@@ -125,7 +124,8 @@ async function handleWebhook(payload) {
   });
 
   const actionMap = {
-    applicantReviewed: reviewResult?.reviewAnswer === 'GREEN' ? AuditAction.KYC_APPROVED : AuditAction.KYC_DECLINED,
+    applicantReviewed:
+      reviewResult?.reviewAnswer === 'GREEN' ? AuditAction.KYC_APPROVED : AuditAction.KYC_DECLINED,
   };
   const auditAction = actionMap[type] ?? AuditAction.KYC_SUBMITTED;
 

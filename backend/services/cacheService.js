@@ -1,4 +1,3 @@
-/* eslint-disable no-undef */
 /**
  * Cache Service — Redis with in-memory fallback
  *

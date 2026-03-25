@@ -1,4 +1,3 @@
-/* eslint-disable no-undef */
 /**
  * Stellar Service
  *
@@ -13,11 +12,6 @@ import { SorobanRpc, Transaction, Networks } from '@stellar/stellar-sdk';
 const RPC_URL = process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org';
 const NETWORK = process.env.STELLAR_NETWORK || 'testnet';
 
-export const NETWORK_PASSPHRASE =
-  NETWORK === 'mainnet' ? Networks.PUBLIC : Networks.TESTNET;
-
-/** @returns {SorobanRpc.Server} */
-const getServer = () => new SorobanRpc.Server(RPC_URL, { allowHttp: RPC_URL.startsWith('http://') });
 export const NETWORK_PASSPHRASE = NETWORK === 'mainnet' ? Networks.PUBLIC : Networks.TESTNET;
 
 /** @returns {SorobanRpc.Server} */

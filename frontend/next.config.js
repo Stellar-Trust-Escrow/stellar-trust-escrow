@@ -1,10 +1,8 @@
 /** @type {import('next').NextConfig} */
-import bundleAnalyzer from '@next/bundle-analyzer';
 
 import { withSentryConfig } from '@sentry/nextjs';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
-if (!API_URL) throw new Error('NEXT_PUBLIC_API_URL is not defined');
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {

@@ -7,7 +7,6 @@
 
 import {
   dbConnectionsActive,
-  dbConnectionsIdle,
   dbConnectionErrorsTotal,
   dbConnectionPoolExhaustionTotal,
 } from './metrics.js';
@@ -46,7 +45,6 @@ export function startConnectionMonitoring(prisma) {
       // Update active connections gauge (approximated)
       // This is a simplified approach - in production, integrate with pg pool events
       dbConnectionsActive.set(1); // At minimum, we have 1 active during health check
-
     } catch (error) {
       console.error('[DB MONITOR] Connection check failed:', error.message);
       dbConnectionErrorsTotal.inc({ error_type: error.code || 'unknown' });
@@ -89,7 +87,11 @@ export function attachConnectionMonitoring(prisma) {
       return result;
     } catch (error) {
       // Track connection-related errors
-      if (error.code === 'P1001' || error.code === 'P1017' || error.message.includes('connection')) {
+      if (
+        error.code === 'P1001' ||
+        error.code === 'P1017' ||
+        error.message.includes('connection')
+      ) {
         dbConnectionErrorsTotal.inc({ error_type: error.code || 'connection_error' });
       }
       throw error;

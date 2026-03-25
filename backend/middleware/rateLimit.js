@@ -1,4 +1,3 @@
-/* eslint-disable no-undef */
 import rateLimit from 'express-rate-limit';
 
 export const RATE_LIMIT_WINDOW_MS = 60 * 1000;

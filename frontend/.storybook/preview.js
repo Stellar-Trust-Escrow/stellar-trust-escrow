@@ -7,7 +7,7 @@ const preview = {
     backgrounds: {
       default: 'dark',
       values: [
-        { name: 'dark', value: '#111827' },   // gray-900
+        { name: 'dark', value: '#111827' }, // gray-900
         { name: 'darker', value: '#030712' }, // gray-950
         { name: 'light', value: '#ffffff' },
       ],

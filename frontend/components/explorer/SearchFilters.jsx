@@ -8,7 +8,6 @@
  */
 
 import { X } from 'lucide-react';
-import Button from '../ui/Button';
 
 const STATUSES = ['Active', 'Completed', 'Disputed', 'Cancelled'];
 

@@ -1,0 +1,41 @@
+name: Load Tests
+
+on:
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+jobs:
+  load-tests:
+    name: Backend Load Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          fail-on-cache-miss: false
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate load-test data
+        run: npm run loadtest:generate
+
+      - name: Run load tests
+        run: npm run loadtest:ci
+
+      - name: Upload load-test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-report-${{ github.sha }}
+          path: load-tests/results/
+          retention-days: 30

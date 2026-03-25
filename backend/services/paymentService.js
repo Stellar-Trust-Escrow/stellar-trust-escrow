@@ -1,4 +1,3 @@
-/* eslint-disable no-undef */
 /**
  * Payment Service — Stripe integration
  *
@@ -78,16 +77,41 @@ async function createCheckoutSession({ address, amountUsd, escrowId }) {
  * Get payment record by Stripe session ID.
  */
 async function getBySessionId(sessionId) {
-  return prisma.payment.findUnique({ where: { stripeSessionId: sessionId } });
+  return prisma.payment.findUnique({
+    where: { stripeSessionId: sessionId },
+    select: {
+      id: true,
+      address: true,
+      escrowId: true,
+      amountFiat: true,
+      amountCrypto: true,
+      currency: true,
+      status: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
 }
 
 /**
- * Get all payments for a Stellar address.
+ * Get payments for a Stellar address — paginated with a safe default limit.
+ * Uses the @@index([address, createdAt(sort: Desc)]) composite index.
  */
-async function getByAddress(address) {
+async function getByAddress(address, { take = 50, skip = 0 } = {}) {
   return prisma.payment.findMany({
     where: { address },
     orderBy: { createdAt: 'desc' },
+    take,
+    skip,
+    select: {
+      id: true,
+      escrowId: true,
+      amountFiat: true,
+      amountCrypto: true,
+      currency: true,
+      status: true,
+      createdAt: true,
+    },
   });
 }
 
@@ -96,7 +120,10 @@ async function getByAddress(address) {
  * @param {string} paymentId - internal Payment.id
  */
 async function refund(paymentId) {
-  const payment = await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } });
+  const payment = await prisma.payment.findUniqueOrThrow({
+    where: { id: paymentId },
+    select: { id: true, status: true, stripePaymentIntent: true },
+  });
 
   if (payment.status !== 'Completed') {
     throw new Error(`Cannot refund payment in status: ${payment.status}`);
