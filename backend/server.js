@@ -56,6 +56,7 @@ app.use(
 app.use(morgan('combined'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use('/uploads', express.static('uploads'));
 app.use(auditMiddleware);
 
 // ── Sentry tracing handler — after body parsers, before routes ────────────────

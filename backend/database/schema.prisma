@@ -110,6 +110,18 @@ model Dispute {
 
 // ── Contract Events ───────────────────────────────────────────────────────────
 
+model UserProfile {
+  address     String   @id
+  displayName String?  @map("display_name")
+  bio         String?
+  avatarUrl   String?  @map("avatar_url")
+  preferences Json?    
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("user_profiles")
+}
+
 /// Indexed record of every Soroban contract event emitted by the escrow contract.
 /// Enables historical queries and real-time subscriptions without hitting the chain.
 model ContractEvent {

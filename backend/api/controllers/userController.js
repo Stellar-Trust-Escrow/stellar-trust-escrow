@@ -30,7 +30,7 @@ const getUserProfile = async (req, res) => {
     const cached = cache.get(cacheKey);
     if (cached) return res.json(cached);
 
-    const [reputation, recentEscrows] = await Promise.all([
+    const [reputation, recentEscrows, userProfile] = await Promise.all([
       prisma.reputationRecord.findUnique({ where: { address } }),
       prisma.escrow.findMany({
         where: { OR: [{ clientAddress: address }, { freelancerAddress: address }] },
@@ -38,10 +38,12 @@ const getUserProfile = async (req, res) => {
         orderBy: { createdAt: 'desc' },
         take: 5,
       }),
+      prisma.userProfile.findUnique({ where: { address } }),
     ]);
 
     const profile = {
       address,
+      ...userProfile,
       reputation: reputation ?? {
         address,
         totalScore: 0,
@@ -136,4 +138,60 @@ const getUserStats = async (req, res) => {
   }
 };
 
-export default { getUserProfile, getUserEscrows, getUserStats };
+const updateUserProfile = async (req, res) => {
+  try {
+    const { address } = req.params;
+    if (!validateAddress(address, res)) return;
+    
+    const { displayName, bio, preferences } = req.body;
+
+    const updatedProfile = await prisma.userProfile.upsert({
+      where: { address },
+      update: {
+        ...(displayName !== undefined && { displayName }),
+        ...(bio !== undefined && { bio }),
+        ...(preferences !== undefined && { preferences }),
+      },
+      create: {
+        address,
+        displayName,
+        bio,
+        preferences: preferences || {},
+      },
+    });
+
+    cache.del(`users:profile:${address}`);
+    res.json(updatedProfile);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+const uploadAvatar = async (req, res) => {
+  try {
+    const { address } = req.params;
+    if (!validateAddress(address, res)) return;
+    
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const avatarUrl = `/uploads/${req.file.filename}`;
+
+    const updatedProfile = await prisma.userProfile.upsert({
+      where: { address },
+      update: { avatarUrl },
+      create: {
+        address,
+        avatarUrl,
+      },
+    });
+
+    cache.del(`users:profile:${address}`);
+    res.json(updatedProfile);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export default { getUserProfile, getUserEscrows, getUserStats, updateUserProfile, uploadAvatar };

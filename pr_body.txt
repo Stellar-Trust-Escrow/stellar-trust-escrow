@@ -1,0 +1,12 @@
+Implement a complete user profile management page where users can view and edit their profile information.
+
+Features added:
+- Created `UserProfile` Prisma model to store display name, bio, and avatar URLs.
+- Added `multer` for handling profile picture uploads in the backend.
+- Created PUT `/api/users/:address` and POST `/api/users/:address/avatar` endpoints.
+- Developed `ProfileForm.jsx` to handle profile edits.
+- Created the `/profile/edit` page.
+- Updated the main `/profile/[address]/page.jsx` layout to fetch actual user profile data.
+
+Resolves #184
+issue #184

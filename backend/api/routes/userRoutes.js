@@ -1,5 +1,8 @@
 import express from 'express';
+import multer from 'multer';
 import userController from '../controllers/userController.js';
+
+const upload = multer({ dest: 'uploads/' });
 
 const router = express.Router();
 
@@ -23,5 +26,17 @@ router.get('/:address/escrows', userController.getUserEscrows);
  * @desc   Aggregated stats: total volume, completion rate, avg milestone time.
  */
 router.get('/:address/stats', userController.getUserStats);
+
+/**
+ * @route  PUT /api/users/:address
+ * @desc   Update a user's profile details.
+ */
+router.put('/:address', userController.updateUserProfile);
+
+/**
+ * @route  POST /api/users/:address/avatar
+ * @desc   Upload a user's profile picture.
+ */
+router.post('/:address/avatar', upload.single('avatar'), userController.uploadAvatar);
 
 export default router;
