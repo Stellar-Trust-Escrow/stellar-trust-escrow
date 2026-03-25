@@ -79,8 +79,11 @@ const listEscrows = async (req, res) => {
     const resolvedSortOrder = VALID_SORT_ORDERS.includes(sortOrder) ? sortOrder : 'desc';
     const orderBy = { [resolvedSortBy]: resolvedSortOrder };
 
-    const cacheKey = `escrows:list:${JSON.stringify({ where, page, limit, orderBy })}`;
-    const cached = await cache.get(cacheKey);
+    const cacheKey = `escrows:list:${JSON.stringify(
+      { where, page, limit, orderBy },
+      (key, value) => (typeof value === 'bigint' ? value.toString() : value),
+    )}`;
+    const cached = cache.get(cacheKey);
     if (cached) return res.json(cached);
 
     const [data, total] = await prisma.$transaction([

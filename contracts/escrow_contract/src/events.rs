@@ -204,11 +204,42 @@ pub fn emit_lock_time_extended(
     );
 }
 
+/// Emitted when the contract is paused.
+pub fn emit_contract_paused(env: &Env, admin: &Address) {
+    env.events()
+        .publish((symbol_short!("paused"),), admin.clone());
+}
+
+/// Emitted when the contract is unpaused.
+pub fn emit_contract_unpaused(env: &Env, admin: &Address) {
+    env.events()
+        .publish((symbol_short!("unpaused"),), admin.clone());
+}
+
+/// Emitted when a cancellation is executed after the dispute period.
+///
+/// # Arguments
+/// * `escrow_id`      - The escrow ID
+/// * `client_amount`  - Amount returned to the requester
+/// * `slash_amount`   - Amount slashed as penalty
+pub fn emit_cancellation_executed(
+    env: &Env,
+    escrow_id: u64,
+    client_amount: i128,
+    slash_amount: i128,
+) {
+    env.events().publish(
+        (symbol_short!("can_exe"), escrow_id),
+        (client_amount, slash_amount),
+    );
+}
+
+/// Emitted when a cancellation is requested.
 pub fn emit_cancellation_requested(
     env: &Env,
     escrow_id: u64,
     requester: &Address,
-    reason: &String,
+    reason: &soroban_sdk::String,
     dispute_deadline: u64,
 ) {
     env.events().publish(
@@ -217,36 +248,33 @@ pub fn emit_cancellation_requested(
     );
 }
 
-pub fn emit_cancellation_executed(
-    env: &Env,
-    escrow_id: u64,
-    returned_amount: i128,
-    slash_amount: i128,
-    _slash_to_recipient: i128,
-) {
-    env.events().publish(
-        (symbol_short!("can_exe"), escrow_id),
-        (returned_amount, slash_amount),
-    );
-}
-
-pub fn emit_slash_disputed(env: &Env, escrow_id: u64, caller: &Address, amount: i128) {
-    env.events().publish(
-        (symbol_short!("slsh_dis"), escrow_id),
-        (caller.clone(), amount),
-    );
-}
-
+/// Emitted when a slash is applied to a user.
 pub fn emit_slash_applied(
     env: &Env,
     escrow_id: u64,
     slashed_user: &Address,
     recipient: &Address,
     amount: i128,
-    reason: &String,
+    reason: &soroban_sdk::String,
 ) {
     env.events().publish(
         (symbol_short!("slsh_app"), escrow_id),
         (slashed_user.clone(), recipient.clone(), amount, reason.clone()),
+    );
+}
+
+/// Emitted when a slash is disputed.
+pub fn emit_slash_disputed(env: &Env, escrow_id: u64, disputer: &Address, amount: i128) {
+    env.events().publish(
+        (symbol_short!("slsh_dis"), escrow_id),
+        (disputer.clone(), amount),
+    );
+}
+
+/// Emitted when a slash dispute is resolved.
+pub fn emit_slash_dispute_resolved(env: &Env, escrow_id: u64, upheld: bool, amount: i128) {
+    env.events().publish(
+        (symbol_short!("slsh_res"), escrow_id),
+        (upheld, amount),
     );
 }

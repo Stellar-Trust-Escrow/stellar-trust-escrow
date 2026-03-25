@@ -216,7 +216,7 @@ export class TransactionRelayer {
    * @param {Object} metaTx - Meta-transaction to estimate
    * @returns {Promise<number>} Estimated fee in stroops
    */
-  async estimateFee(_metaTx) {
+  async estimateFee() {
     try {
       const server = new StellarSdk.Server(this.getHorizonUrl());
       const feeStats = await server.feeStats();
