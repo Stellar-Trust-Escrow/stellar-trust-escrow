@@ -27,7 +27,7 @@ const getUserProfile = async (req, res) => {
     if (!validateAddress(address, res)) return;
 
     const cacheKey = `users:profile:${address}`;
-    const cached = cache.get(cacheKey);
+    const cached = await cache.get(cacheKey);
     if (cached) return res.json(cached);
 
     const [reputation, clientEscrows, freelancerEscrows] = await Promise.all([
@@ -44,6 +44,7 @@ const getUserProfile = async (req, res) => {
         orderBy: { createdAt: 'desc' },
         take: 5,
       }),
+      prisma.userProfile.findUnique({ where: { address } }),
     ]);
 
     const recentEscrows = [...clientEscrows, ...freelancerEscrows]
@@ -52,6 +53,7 @@ const getUserProfile = async (req, res) => {
 
     const profile = {
       address,
+      ...userProfile,
       reputation: reputation ?? {
         address,
         totalScore: 0,
@@ -63,7 +65,7 @@ const getUserProfile = async (req, res) => {
       recentEscrows,
     };
 
-    cache.set(cacheKey, profile, 60);
+    await cache.set(cacheKey, profile, 60);
     res.json(profile);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -79,7 +81,7 @@ const getUserEscrows = async (req, res) => {
     const { page, limit, skip } = parsePagination(req.query);
 
     const cacheKey = `users:escrows:${address}:${role}:${status}:${page}:${limit}`;
-    const cached = cache.get(cacheKey);
+    const cached = await cache.get(cacheKey);
     if (cached) return res.json(cached);
 
     if (role === 'client' || role === 'freelancer') {
@@ -98,7 +100,7 @@ const getUserEscrows = async (req, res) => {
       ]);
 
       const result = buildPaginatedResponse(data, { total, page, limit });
-      cache.set(cacheKey, result, 15);
+      await cache.set(cacheKey, result, 15);
       return res.json(result);
     }
 
@@ -136,7 +138,7 @@ const getUserEscrows = async (req, res) => {
       .slice(skip, skip + limit);
 
     const result = buildPaginatedResponse(merged, { total, page, limit });
-    cache.set(cacheKey, result, 15);
+    await cache.set(cacheKey, result, 15);
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -149,7 +151,7 @@ const getUserStats = async (req, res) => {
     if (!validateAddress(address, res)) return;
 
     const cacheKey = `users:stats:${address}`;
-    const cached = cache.get(cacheKey);
+    const cached = await cache.get(cacheKey);
     if (cached) return res.json(cached);
 
     const [reputation, clientCounts, freelancerCounts] = await Promise.all([
@@ -190,11 +192,67 @@ const getUserStats = async (req, res) => {
       reputation: reputation ?? null,
     };
 
-    cache.set(cacheKey, stats, 120);
+    await cache.set(cacheKey, stats, 120);
     res.json(stats);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
 
-export default { getUserProfile, getUserEscrows, getUserStats };
+const updateUserProfile = async (req, res) => {
+  try {
+    const { address } = req.params;
+    if (!validateAddress(address, res)) return;
+    
+    const { displayName, bio, preferences } = req.body;
+
+    const updatedProfile = await prisma.userProfile.upsert({
+      where: { address },
+      update: {
+        ...(displayName !== undefined && { displayName }),
+        ...(bio !== undefined && { bio }),
+        ...(preferences !== undefined && { preferences }),
+      },
+      create: {
+        address,
+        displayName,
+        bio,
+        preferences: preferences || {},
+      },
+    });
+
+    cache.del(`users:profile:${address}`);
+    res.json(updatedProfile);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+const uploadAvatar = async (req, res) => {
+  try {
+    const { address } = req.params;
+    if (!validateAddress(address, res)) return;
+    
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const avatarUrl = `/uploads/${req.file.filename}`;
+
+    const updatedProfile = await prisma.userProfile.upsert({
+      where: { address },
+      update: { avatarUrl },
+      create: {
+        address,
+        avatarUrl,
+      },
+    });
+
+    cache.del(`users:profile:${address}`);
+    res.json(updatedProfile);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export default { getUserProfile, getUserEscrows, getUserStats, updateUserProfile, uploadAvatar };

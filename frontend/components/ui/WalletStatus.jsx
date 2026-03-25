@@ -18,6 +18,7 @@
 import { useState } from 'react';
 import Button from './Button';
 import Spinner from './Spinner';
+import { useI18n } from '../../i18n/index.jsx';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -113,6 +114,7 @@ function FreighterNotInstalled() {
 export default function WalletStatus({ wallet }) {
   const { isConnected, isConnecting, isFreighterInstalled, address, connect, disconnect, error } =
     wallet;
+  const { t } = useI18n();
 
   // Not installed — prompt installation
   if (!isFreighterInstalled) {
@@ -136,7 +138,7 @@ export default function WalletStatus({ wallet }) {
                      text-gray-400 px-3 py-1.5 rounded-lg opacity-80 cursor-not-allowed"
         >
           <Spinner className="w-3.5 h-3.5" />
-          Connecting…
+          {t('wallet.connecting')}
         </button>
       </div>
     );
@@ -149,7 +151,7 @@ export default function WalletStatus({ wallet }) {
         <StatusDot status="connected" />
         <AddressWithTooltip address={address} />
         <Button id="wallet-disconnect-btn" variant="secondary" size="sm" onClick={disconnect}>
-          Disconnect
+          {t('wallet.disconnect')}
         </Button>
       </div>
     );
@@ -161,7 +163,7 @@ export default function WalletStatus({ wallet }) {
       <div className="flex items-center gap-2">
         <StatusDot status="disconnected" />
         <Button id="wallet-connect-btn" variant="primary" size="sm" onClick={connect}>
-          Connect Wallet
+          {t('wallet.connect')}
         </Button>
       </div>
       {error && (

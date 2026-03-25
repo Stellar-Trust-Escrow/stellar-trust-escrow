@@ -1,6 +1,9 @@
 import express from 'express';
+import multer from 'multer';
 import userController from '../controllers/userController.js';
 import exportController from '../controllers/exportController.js';
+
+const upload = multer({ dest: 'uploads/' });
 
 const router = express.Router();
 

@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod pause_tests {
     use crate::{EscrowContract, EscrowContractClient, EscrowError, EscrowStatus, MilestoneStatus};
-    use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env, String};
+    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String};
 
     fn setup() -> (Env, Address, Address, EscrowContractClient<'static>) {
         let env = Env::default();
@@ -49,7 +49,7 @@ mod pause_tests {
         let (env, admin, _, client) = setup();
         let client_addr = Address::generate(&env);
         let freelancer = Address::generate(&env);
-        let token = register_token(&env, &admin, &client_addr, 1000);
+        let token = register_token(&env, &admin, &client_addr, 1030);
 
         client.pause(&admin);
 
@@ -78,7 +78,7 @@ mod pause_tests {
         let (env, admin, _, client) = setup();
         let client_addr = Address::generate(&env);
         let freelancer = Address::generate(&env);
-        let token = register_token(&env, &admin, &client_addr, 1000);
+        let token = register_token(&env, &admin, &client_addr, 1030);
 
         let escrow_id = client.create_escrow(
             &client_addr,
@@ -115,7 +115,7 @@ mod pause_tests {
         let (env, admin, _, client) = setup();
         let client_addr = Address::generate(&env);
         let freelancer = Address::generate(&env);
-        let token_addr = register_token(&env, &admin, &client_addr, 1000);
+        let token_addr = register_token(&env, &admin, &client_addr, 1060);
 
         let escrow_id = client.create_escrow(
             &client_addr,
