@@ -81,7 +81,7 @@ const listEscrows = async (req, res) => {
 
     const cacheKey = `escrows:list:${JSON.stringify(
       { where, page, limit, orderBy },
-      (key, value) => (typeof value === 'bigint' ? value.toString() : value)
+      (key, value) => (typeof value === 'bigint' ? value.toString() : value),
     )}`;
     const cached = cache.get(cacheKey);
     if (cached) return res.json(cached);

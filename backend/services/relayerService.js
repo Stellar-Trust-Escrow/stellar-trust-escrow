@@ -70,7 +70,6 @@ export class TransactionRelayer {
       };
     }
   }
-  }
 
   /**
    * Validates meta-transaction data structure
@@ -93,7 +92,8 @@ export class TransactionRelayer {
     }
 
     // Validate signature format (64 bytes for Ed25519)
-    if (metaTx.signature.length !== 128) { // Hex encoded
+    if (metaTx.signature.length !== 128) {
+      // Hex encoded
       throw new Error('Invalid signature format');
     }
   }
@@ -147,7 +147,9 @@ export class TransactionRelayer {
         StellarSdk.scVal.symbol('fee_payer'),
         StellarSdk.Address.fromString(feeDelegation.feePayer),
         StellarSdk.scVal.symbol('max_fee'),
-        StellarSdk.scVal.i128(StellarSdk.xdr.Int128Parts.fromString(feeDelegation.maxFee.toString())),
+        StellarSdk.scVal.i128(
+          StellarSdk.xdr.Int128Parts.fromString(feeDelegation.maxFee.toString()),
+        ),
         StellarSdk.scVal.symbol('fee_token'),
         StellarSdk.Address.fromString(feeDelegation.feeToken),
       ]);
@@ -165,8 +167,8 @@ export class TransactionRelayer {
         StellarSdk.scVal.string(metaTx.functionArgs),
         StellarSdk.scVal.bytes(Buffer.from(metaTx.signature, 'hex')),
         StellarSdk.Address.fromString(this.relayerKeypair.publicKey()),
-        feeDelegationArg
-      )
+        feeDelegationArg,
+      ),
     );
 
     // Set timeout and build
@@ -214,7 +216,7 @@ export class TransactionRelayer {
    * @param {Object} metaTx - Meta-transaction to estimate
    * @returns {Promise<number>} Estimated fee in stroops
    */
-  async estimateFee(metaTx) {
+  async estimateFee() {
     try {
       const server = new StellarSdk.Server(this.getHorizonUrl());
       const feeStats = await server.feeStats();

@@ -54,7 +54,9 @@ async function seed() {
   // Milestones
   for (const m of MILESTONES) {
     await prisma.milestone.upsert({
-      where: { escrowId_milestoneIndex: { escrowId: m.escrowId, milestoneIndex: m.milestoneIndex } },
+      where: {
+        escrowId_milestoneIndex: { escrowId: m.escrowId, milestoneIndex: m.milestoneIndex },
+      },
       update: { status: m.status, submittedAt: m.submittedAt, resolvedAt: m.resolvedAt },
       create: m,
     });

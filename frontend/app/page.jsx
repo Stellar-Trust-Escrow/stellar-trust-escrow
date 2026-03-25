@@ -3,6 +3,11 @@
  *
  * Public landing page shown before wallet connection.
  *
+ * Performance optimisations:
+ * - Hero section renders immediately (above-the-fold)
+ * - How It Works, Features, and CTA sections are lazy-loaded via
+ *   IntersectionObserver so they don't block initial paint
+ *
  * TODO (contributor — easy, Issue #42):
  * - If wallet is already connected, redirect to /dashboard
  * - Add animated stats counters (total escrows, total value locked)
@@ -11,6 +16,7 @@
  */
 
 import Button from '../components/ui/Button';
+import LazySection from './LazySection';
 
 const FEATURES = [
   {
@@ -60,7 +66,7 @@ const HOW_IT_WORKS = [
 export default function HomePage() {
   return (
     <div className="space-y-24">
-      {/* Hero */}
+      {/* Hero — renders immediately, above the fold */}
       <section className="text-center pt-16 pb-8 space-y-6">
         <div className="inline-flex items-center gap-2 bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 text-xs px-3 py-1.5 rounded-full mb-4">
           <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
@@ -97,48 +103,54 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* How It Works */}
-      <section className="space-y-8">
-        <h2 className="text-3xl font-bold text-white text-center">How It Works</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {HOW_IT_WORKS.map((step) => (
-            <div key={step.step} className="card text-center space-y-3">
-              <span className="text-4xl font-black text-indigo-500/30">{step.step}</span>
-              <h3 className="text-white font-semibold text-lg">{step.title}</h3>
-              <p className="text-gray-400 text-sm leading-relaxed">{step.desc}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Features */}
-      <section className="space-y-8">
-        <h2 className="text-3xl font-bold text-white text-center">
-          Built for Freelancers & Clients
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-          {FEATURES.map((f) => (
-            <div key={f.title} className="card flex gap-4">
-              <span className="text-3xl flex-shrink-0">{f.icon}</span>
-              <div>
-                <h3 className="text-white font-semibold mb-1">{f.title}</h3>
-                <p className="text-gray-400 text-sm leading-relaxed">{f.description}</p>
+      {/* How It Works — lazy-loaded when user scrolls near */}
+      <LazySection minHeight="220px" aria-label="How It Works">
+        <section className="space-y-8">
+          <h2 className="text-3xl font-bold text-white text-center">How It Works</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {HOW_IT_WORKS.map((step) => (
+              <div key={step.step} className="card text-center space-y-3">
+                <span className="text-4xl font-black text-indigo-500/30">{step.step}</span>
+                <h3 className="text-white font-semibold text-lg">{step.title}</h3>
+                <p className="text-gray-400 text-sm leading-relaxed">{step.desc}</p>
               </div>
-            </div>
-          ))}
-        </div>
-      </section>
+            ))}
+          </div>
+        </section>
+      </LazySection>
 
-      {/* CTA */}
-      <section className="text-center card bg-indigo-600/10 border-indigo-500/20 py-12 space-y-4">
-        <h2 className="text-2xl font-bold text-white">Ready to Build Trust On-Chain?</h2>
-        <p className="text-gray-400">
-          Connect your Freighter wallet and create your first escrow in minutes.
-        </p>
-        <Button href="/escrow/create" variant="primary" size="lg">
-          Get Started →
-        </Button>
-      </section>
+      {/* Features — lazy-loaded */}
+      <LazySection minHeight="280px" aria-label="Features">
+        <section className="space-y-8">
+          <h2 className="text-3xl font-bold text-white text-center">
+            Built for Freelancers & Clients
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            {FEATURES.map((f) => (
+              <div key={f.title} className="card flex gap-4">
+                <span className="text-3xl flex-shrink-0">{f.icon}</span>
+                <div>
+                  <h3 className="text-white font-semibold mb-1">{f.title}</h3>
+                  <p className="text-gray-400 text-sm leading-relaxed">{f.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      </LazySection>
+
+      {/* CTA — lazy-loaded */}
+      <LazySection minHeight="180px" aria-label="Call to action">
+        <section className="text-center card bg-indigo-600/10 border-indigo-500/20 py-12 space-y-4">
+          <h2 className="text-2xl font-bold text-white">Ready to Build Trust On-Chain?</h2>
+          <p className="text-gray-400">
+            Connect your Freighter wallet and create your first escrow in minutes.
+          </p>
+          <Button href="/escrow/create" variant="primary" size="lg">
+            Get Started →
+          </Button>
+        </section>
+      </LazySection>
     </div>
   );
 }
