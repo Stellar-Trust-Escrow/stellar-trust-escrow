@@ -63,7 +63,9 @@ mod event_tests {
         let events = contract_events(&env, &contract_id);
         let (_, topics, data) = events
             .iter()
-            .find(|(_, t, _)| t.get(0) == Some(soroban_sdk::symbol_short!("esc_crt").into_val(&env)))
+            .find(|(_, t, _)| {
+                t.get(0) == Some(soroban_sdk::symbol_short!("esc_crt").into_val(&env))
+            })
             .expect("esc_crt event not emitted");
 
         // topic[1] == escrow_id
@@ -107,7 +109,9 @@ mod event_tests {
         let events = contract_events(&env, &contract_id);
         let (_, topics, data) = events
             .iter()
-            .find(|(_, t, _)| t.get(0) == Some(soroban_sdk::symbol_short!("mil_add").into_val(&env)))
+            .find(|(_, t, _)| {
+                t.get(0) == Some(soroban_sdk::symbol_short!("mil_add").into_val(&env))
+            })
             .expect("mil_add event not emitted");
 
         assert_eq!(topics.get(1).unwrap(), escrow_id.into_val(&env));
@@ -149,7 +153,9 @@ mod event_tests {
         let events = contract_events(&env, &contract_id);
         let (_, topics, data) = events
             .iter()
-            .find(|(_, t, _)| t.get(0) == Some(soroban_sdk::symbol_short!("mil_sub").into_val(&env)))
+            .find(|(_, t, _)| {
+                t.get(0) == Some(soroban_sdk::symbol_short!("mil_sub").into_val(&env))
+            })
             .expect("mil_sub event not emitted");
 
         assert_eq!(topics.get(1).unwrap(), escrow_id.into_val(&env));
@@ -194,7 +200,9 @@ mod event_tests {
         // mil_apr
         let (_, topics, data) = events
             .iter()
-            .find(|(_, t, _)| t.get(0) == Some(soroban_sdk::symbol_short!("mil_apr").into_val(&env)))
+            .find(|(_, t, _)| {
+                t.get(0) == Some(soroban_sdk::symbol_short!("mil_apr").into_val(&env))
+            })
             .expect("mil_apr event not emitted");
         assert_eq!(topics.get(1).unwrap(), escrow_id.into_val(&env));
         let (emitted_mid, amt): (u32, i128) = soroban_sdk::FromVal::from_val(&env, &data);
@@ -204,7 +212,9 @@ mod event_tests {
         // funds_rel
         let (_, topics, data) = events
             .iter()
-            .find(|(_, t, _)| t.get(0) == Some(soroban_sdk::symbol_short!("funds_rel").into_val(&env)))
+            .find(|(_, t, _)| {
+                t.get(0) == Some(soroban_sdk::symbol_short!("funds_rel").into_val(&env))
+            })
             .expect("funds_rel event not emitted");
         assert_eq!(topics.get(1).unwrap(), escrow_id.into_val(&env));
         let (to, released): (Address, i128) = soroban_sdk::FromVal::from_val(&env, &data);
@@ -214,7 +224,9 @@ mod event_tests {
         // esc_done (single milestone → escrow completed)
         let (_, topics, _) = events
             .iter()
-            .find(|(_, t, _)| t.get(0) == Some(soroban_sdk::symbol_short!("esc_done").into_val(&env)))
+            .find(|(_, t, _)| {
+                t.get(0) == Some(soroban_sdk::symbol_short!("esc_done").into_val(&env))
+            })
             .expect("esc_done event not emitted");
         assert_eq!(topics.get(1).unwrap(), escrow_id.into_val(&env));
     }
@@ -251,7 +263,9 @@ mod event_tests {
         let events = contract_events(&env, &contract_id);
         let (_, topics, data) = events
             .iter()
-            .find(|(_, t, _)| t.get(0) == Some(soroban_sdk::symbol_short!("mil_rej").into_val(&env)))
+            .find(|(_, t, _)| {
+                t.get(0) == Some(soroban_sdk::symbol_short!("mil_rej").into_val(&env))
+            })
             .expect("mil_rej event not emitted");
 
         assert_eq!(topics.get(1).unwrap(), escrow_id.into_val(&env));
@@ -285,7 +299,9 @@ mod event_tests {
         let events = contract_events(&env, &contract_id);
         let (_, topics, data) = events
             .iter()
-            .find(|(_, t, _)| t.get(0) == Some(soroban_sdk::symbol_short!("esc_can").into_val(&env)))
+            .find(|(_, t, _)| {
+                t.get(0) == Some(soroban_sdk::symbol_short!("esc_can").into_val(&env))
+            })
             .expect("esc_can event not emitted");
 
         assert_eq!(topics.get(1).unwrap(), escrow_id.into_val(&env));
@@ -325,7 +341,9 @@ mod event_tests {
         let events = contract_events(&env, &contract_id);
         let (_, topics, data) = events
             .iter()
-            .find(|(_, t, _)| t.get(0) == Some(soroban_sdk::symbol_short!("dis_rai").into_val(&env)))
+            .find(|(_, t, _)| {
+                t.get(0) == Some(soroban_sdk::symbol_short!("dis_rai").into_val(&env))
+            })
             .expect("dis_rai event not emitted");
 
         assert_eq!(topics.get(1).unwrap(), escrow_id.into_val(&env));
@@ -367,7 +385,9 @@ mod event_tests {
         let events = contract_events(&env, &contract_id);
         let (_, topics, data) = events
             .iter()
-            .find(|(_, t, _)| t.get(0) == Some(soroban_sdk::symbol_short!("dis_res").into_val(&env)))
+            .find(|(_, t, _)| {
+                t.get(0) == Some(soroban_sdk::symbol_short!("dis_res").into_val(&env))
+            })
             .expect("dis_res event not emitted");
 
         assert_eq!(topics.get(1).unwrap(), escrow_id.into_val(&env));
@@ -421,7 +441,10 @@ mod event_tests {
         for (_, _, data) in rep_events.iter() {
             let (addr, score): (Address, u64) = soroban_sdk::FromVal::from_val(&env, data);
             // Score should be > 0 after a completed escrow
-            assert!(score > 0, "Reputation score should increase after completion for {addr:?}");
+            assert!(
+                score > 0,
+                "Reputation score should increase after completion for {addr:?}"
+            );
         }
     }
 
@@ -444,7 +467,9 @@ mod event_tests {
         let events = contract_events(&env, &contract_id);
         let (_, _, data) = events
             .iter()
-            .find(|(_, t, _)| t.get(0) == Some(soroban_sdk::symbol_short!("unpaused").into_val(&env)))
+            .find(|(_, t, _)| {
+                t.get(0) == Some(soroban_sdk::symbol_short!("unpaused").into_val(&env))
+            })
             .expect("unpaused event not emitted");
         let emitted_admin: Address = soroban_sdk::FromVal::from_val(&env, &data);
         assert_eq!(emitted_admin, admin);
@@ -486,7 +511,9 @@ mod event_tests {
         let events = contract_events(&env, &contract_id);
         let (_, topics, data) = events
             .iter()
-            .find(|(_, t, _)| t.get(0) == Some(soroban_sdk::symbol_short!("lock_exp").into_val(&env)))
+            .find(|(_, t, _)| {
+                t.get(0) == Some(soroban_sdk::symbol_short!("lock_exp").into_val(&env))
+            })
             .expect("lock_exp event not emitted");
 
         assert_eq!(topics.get(1).unwrap(), escrow_id.into_val(&env));
@@ -519,7 +546,9 @@ mod event_tests {
         let events = contract_events(&env, &contract_id);
         let (_, topics, data) = events
             .iter()
-            .find(|(_, t, _)| t.get(0) == Some(soroban_sdk::symbol_short!("can_req").into_val(&env)))
+            .find(|(_, t, _)| {
+                t.get(0) == Some(soroban_sdk::symbol_short!("can_req").into_val(&env))
+            })
             .expect("can_req event not emitted");
 
         assert_eq!(topics.get(1).unwrap(), escrow_id.into_val(&env));
@@ -548,11 +577,7 @@ mod event_tests {
             &None,
             &None,
         );
-        client.request_cancellation(
-            &client_addr,
-            &escrow_id,
-            &String::from_str(&env, "Done"),
-        );
+        client.request_cancellation(&client_addr, &escrow_id, &String::from_str(&env, "Done"));
 
         // Advance ledger past the dispute period
         let ts = env.ledger().timestamp();
@@ -563,7 +588,9 @@ mod event_tests {
         let events = contract_events(&env, &contract_id);
         let (_, topics, data) = events
             .iter()
-            .find(|(_, t, _)| t.get(0) == Some(soroban_sdk::symbol_short!("can_exe").into_val(&env)))
+            .find(|(_, t, _)| {
+                t.get(0) == Some(soroban_sdk::symbol_short!("can_exe").into_val(&env))
+            })
             .expect("can_exe event not emitted");
 
         assert_eq!(topics.get(1).unwrap(), escrow_id.into_val(&env));
@@ -604,12 +631,13 @@ mod event_tests {
         let events = contract_events(&env, &contract_id);
         let (_, topics, data) = events
             .iter()
-            .find(|(_, t, _)| t.get(0) == Some(soroban_sdk::symbol_short!("mil_dis").into_val(&env)))
+            .find(|(_, t, _)| {
+                t.get(0) == Some(soroban_sdk::symbol_short!("mil_dis").into_val(&env))
+            })
             .expect("mil_dis event not emitted");
 
         assert_eq!(topics.get(1).unwrap(), escrow_id.into_val(&env));
-        let (emitted_mid, raised_by): (u32, Address) =
-            soroban_sdk::FromVal::from_val(&env, &data);
+        let (emitted_mid, raised_by): (u32, Address) = soroban_sdk::FromVal::from_val(&env, &data);
         assert_eq!(emitted_mid, mid);
         assert_eq!(raised_by, client_addr);
     }

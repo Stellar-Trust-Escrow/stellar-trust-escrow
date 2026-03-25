@@ -69,16 +69,7 @@ describe('Compression middleware', () => {
     const res = await supertest(app).get('/data').set('Accept-Encoding', 'gzip');
 
     // supertest auto-decompresses gzip; verify the header was set and body is valid
-    if (res.headers['content-encoding'] === 'gzip') {
-      expect(res.headers['vary']).toMatch(/Accept-Encoding/i);
-      // Verify the body is valid gzip and decompresses to JSON
-      const decompressed = await _gunzip(res.body);
-      const parsed = JSON.parse(decompressed.toString());
-      expect(parsed).toHaveProperty('items');
-    } else {
-      // If not compressed, just verify response is valid JSON
-      expect(res.body).toHaveProperty('items');
-    }
+    expect(res.headers['vary']).toMatch(/Accept-Encoding/i);
     expect(res.body).toHaveProperty('items');
   });
 

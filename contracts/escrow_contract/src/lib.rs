@@ -30,20 +30,18 @@
 #![allow(clippy::too_many_arguments)]
 
 mod errors;
+mod event_tests;
 mod events;
+mod pause_tests;
 mod pause_tests;
 mod types;
 mod upgrade_tests;
-mod pause_tests;
-mod event_tests;
-
 
 pub use errors::EscrowError;
 use types::{CancellationRequest, SlashRecord};
 pub use types::{DataKey, EscrowState, EscrowStatus, Milestone, MilestoneStatus, ReputationRecord};
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype, token, Address, BytesN, Env, String, Vec,
     contract, contractimpl, contracttype, symbol_short, token, Address, BytesN, Env, String, Vec,
 };
 

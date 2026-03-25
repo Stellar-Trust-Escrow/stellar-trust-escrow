@@ -7,7 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint .",
+    "lint": "../node_modules/.bin/eslint --flag v10_config_lookup_from_file .",
     "analyze": "ANALYZE=true next build",
     "test": "jest --config jest.config.cjs --passWithNoTests",
     "test:a11y": "jest --config jest.config.cjs --testPathPattern=tests/a11y --passWithNoTests",

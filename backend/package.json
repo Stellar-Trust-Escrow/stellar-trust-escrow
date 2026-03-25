@@ -9,7 +9,7 @@
     "build": "echo 'No build step required for backend'",
     "start": "node server.js",
     "test": "NODE_OPTIONS=--experimental-vm-modules npx jest --runInBand",
-    "lint": "eslint .",
+    "lint": "../node_modules/.bin/eslint --flag v10_config_lookup_from_file .",
     "format": "prettier --write .",
     "db:migrate": "npx prisma migrate dev",
     "db:migrate:up": "node database/migrations/migrate.js up",
@@ -44,7 +44,6 @@
     "swagger-ui-express": "^5.0.1",
     "winston": "^3.11.0",
     "yaml": "^2.4.2"
-    "winston": "^3.11.0"
   },
   "devDependencies": {
     "jest": "^29.7.0",

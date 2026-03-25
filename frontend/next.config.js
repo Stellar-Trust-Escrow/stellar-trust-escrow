@@ -40,6 +40,7 @@ const nextConfig = {
   async rewrites() {
     return [{ source: '/api/:path*', destination: `${API_URL}/api/:path*` }];
   },
+  // ── Security & Caching Headers ──────────────────────────────────────────────
   async headers() {
     return [
       {
@@ -49,12 +50,6 @@ const nextConfig = {
           { key: 'Content-Type', value: 'application/javascript' },
         ],
       },
-    ];
-  },
-
-  // ── Security & Caching Headers ──────────────────────────────────────────────
-  async headers() {
-    return [
       {
         // Cache static assets aggressively
         source: '/_next/static/:path*',

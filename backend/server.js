@@ -138,6 +138,7 @@ app.use('/api/kyc', kycRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/relayer', relayerRoutes);
 app.use('/api/audit', auditRoutes);
+app.use('/api/search', searchRoutes);
 app.use('/docs', docsRouter);
 app.use('/api/admin', adminRoutes);
 
