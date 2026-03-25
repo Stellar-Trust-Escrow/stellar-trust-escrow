@@ -12,8 +12,15 @@
     --color-danger: #ef4444; /* red-500 */
   }
 
+  /* Smooth theme transitions */
+  *, *::before, *::after {
+    transition-property: background-color, border-color, color;
+    transition-duration: 200ms;
+    transition-timing-function: ease;
+  }
+
   body {
-    @apply antialiased;
+    @apply antialiased bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100;
   }
 
   /* Scrollbar styling */
@@ -31,7 +38,7 @@
 @layer components {
   /* Reusable card style */
   .card {
-    @apply bg-gray-900 border border-gray-800 rounded-xl p-6;
+    @apply bg-gray-100 border border-gray-200 rounded-xl p-6 dark:bg-gray-900 dark:border-gray-800;
   }
 
   /* Status badge styles — TODO (contributor): ensure these match EscrowStatus enum */
