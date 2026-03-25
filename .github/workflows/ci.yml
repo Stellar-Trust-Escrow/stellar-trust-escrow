@@ -101,6 +101,42 @@ jobs:
         env:
           NEXT_PUBLIC_API_URL: http://localhost:3001
 
+  accessibility:
+    name: Frontend Accessibility (a11y)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          fail-on-cache-miss: false
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install frontend dependencies
+        run: cd frontend && npm ci
+
+      - name: Run Accessibility Tests
+        run: cd frontend && npm run test:a11y
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:3001
+
+      - name: Upload accessibility report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: accessibility-report-${{ github.sha }}
+          path: frontend/accessibility-report.html
+          retention-days: 30
+
   bundle-analysis:
     name: Frontend Bundle Analysis
     runs-on: ubuntu-latest
