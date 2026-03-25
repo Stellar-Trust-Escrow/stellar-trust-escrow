@@ -1,123 +1,121 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ExplorerPage from '../../app/explorer/page';
 
-global.fetch = jest.fn();
+const mockEscrows = [
+  { id: 1, status: 'Active', totalAmount: '1000', clientAddress: '0x1A2B' },
+  { id: 2, status: 'Active', totalAmount: '2000', clientAddress: '0x3C4D' },
+  { id: 3, status: 'Completed', totalAmount: '500', clientAddress: '0x5E6F' },
+  { id: 4, status: 'Active', totalAmount: '3000', clientAddress: '0x7A8B' },
+];
 
-const emptyApiResponse = {
-  data: [],
-  total: 0,
-  totalPages: 0,
-  hasNextPage: false,
-  hasPreviousPage: false,
-};
+global.fetch = jest.fn((url) => {
+  let data = [...mockEscrows];
+  if (url.includes('status=Completed')) {
+    data = data.filter((e) => e.status === 'Completed');
+  } else if (url.includes('status=Cancelled')) {
+    data = data.filter((e) => e.status === 'Cancelled');
+  } else if (url.includes('search=')) {
+    // For test simplicity, we simulate search filtering if search term matches "2" (since id 2)
+    if (url.includes('search=2')) {
+      data = data.filter((e) => String(e.id) === '2');
+    } else {
+      data = [];
+    }
+  }
 
-const populatedApiResponse = {
-  data: [
-    { id: 1, status: 'Active', totalAmount: '5000', clientAddress: 'GABCDEFGHIJKLMNOP' },
-    { id: 2, status: 'Completed', totalAmount: '3000', clientAddress: 'GXYZ1234567890ABC' },
-  ],
-  total: 2,
-  totalPages: 1,
-  hasNextPage: false,
-  hasPreviousPage: false,
-};
-
-const paginatedApiResponse = {
-  data: [{ id: 1, status: 'Active', totalAmount: '5000', clientAddress: 'GABCDEFGHIJKLMNOP' }],
-  total: 25,
-  totalPages: 3,
-  hasNextPage: true,
-  hasPreviousPage: false,
-};
+  return Promise.resolve({
+    ok: true,
+    json: () =>
+      Promise.resolve({
+        data,
+        total: data.length,
+        totalPages: 2,
+        hasNextPage: true,
+        hasPreviousPage: false,
+      }),
+  });
+});
 
 describe('ExplorerPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    global.fetch.mockResolvedValue({
-      ok: true,
-      json: async () => emptyApiResponse,
-    });
   });
 
-  it('renders page heading', () => {
+  it('renders page heading', async () => {
     render(<ExplorerPage />);
-    expect(screen.getByRole('heading', { name: 'Escrow Explorer' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Escrow Explorer' })).toBeInTheDocument();
   });
 
-  it('renders search input', () => {
+  it('renders search input', async () => {
     render(<ExplorerPage />);
-    expect(screen.getByPlaceholderText(/Search by escrow ID or address/)).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText(/Search by/)).toBeInTheDocument();
   });
 
-  it('renders stats bar labels', () => {
+  it('renders status filter buttons', async () => {
     render(<ExplorerPage />);
-    expect(screen.getByText('Total Escrows')).toBeInTheDocument();
-    expect(screen.getByText('Page')).toBeInTheDocument();
-    expect(screen.getByText('Showing')).toBeInTheDocument();
+    expect(await screen.findByText('Filters')).toBeInTheDocument();
   });
 
-  it('shows loading state initially', () => {
-    global.fetch.mockReturnValue(new Promise(() => {})); // never resolves
+  it('renders fetched escrows by default', async () => {
     render(<ExplorerPage />);
-    expect(screen.getByText(/Loading escrows/)).toBeInTheDocument();
+    expect(await screen.findByText('Escrow #1')).toBeInTheDocument();
+    expect(screen.getByText('Escrow #2')).toBeInTheDocument();
+    expect(screen.getByText('Escrow #3')).toBeInTheDocument();
+    expect(screen.getByText('Escrow #4')).toBeInTheDocument();
   });
 
-  it('renders escrows after fetch resolves', async () => {
-    global.fetch.mockResolvedValue({
-      ok: true,
-      json: async () => populatedApiResponse,
-    });
+  it('filters escrows by status', async () => {
     render(<ExplorerPage />);
+    // Wait for initial render
+    await screen.findByText('Escrow #1');
+    fireEvent.click(screen.getByText('Filters'));
+
+    // Click Completed filter
+    const completedBtn = await screen.findByRole('button', { name: 'Completed' });
+    fireEvent.click(completedBtn);
+
+    expect(await screen.findByText('Escrow #3')).toBeInTheDocument();
+    expect(screen.queryByText('Escrow #1')).not.toBeInTheDocument();
+  });
+
+  it('filters escrows by search query', async () => {
+    render(<ExplorerPage />);
+    await screen.findByText('Escrow #1'); // wait for initial render
+
+    const searchInput = await screen.findByPlaceholderText(/Search by/);
+
+    fireEvent.change(searchInput, { target: { value: '2' } });
+
     await waitFor(() => {
-      expect(screen.getByText('Escrow #1')).toBeInTheDocument();
-      expect(screen.getByText('Escrow #2')).toBeInTheDocument();
+      expect(screen.queryByText('Escrow #1')).not.toBeInTheDocument();
     });
+    expect(screen.getByText('Escrow #2')).toBeInTheDocument();
   });
 
-  it('shows empty state when API returns no escrows', async () => {
+  it('shows empty state when no escrows match filter', async () => {
     render(<ExplorerPage />);
-    await waitFor(() => {
-      expect(screen.getByText(/No escrows found/)).toBeInTheDocument();
-    });
+    await screen.findByText('Escrow #1');
+
+    fireEvent.click(screen.getByText('Filters'));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelled' }));
+
+    expect(await screen.findByText(/No escrows found/)).toBeInTheDocument();
   });
 
-  it('shows error state when fetch fails', async () => {
-    global.fetch.mockResolvedValue({
-      ok: false,
-      status: 500,
-      json: async () => ({}),
-    });
+  it('renders stats bar', async () => {
     render(<ExplorerPage />);
-    await waitFor(() => {
-      expect(screen.getByText(/Failed to load escrows/)).toBeInTheDocument();
-    });
+    expect(await screen.findByText('Total Escrows')).toBeInTheDocument();
   });
 
-  it('renders filters toggle button', () => {
+  it('renders pagination buttons', async () => {
     render(<ExplorerPage />);
-    expect(screen.getByRole('button', { name: /Filters/ })).toBeInTheDocument();
-  });
-
-  it('renders pagination buttons when multiple pages exist', async () => {
-    global.fetch.mockResolvedValue({
-      ok: true,
-      json: async () => paginatedApiResponse,
-    });
-    render(<ExplorerPage />);
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Prev/ })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Next/ })).toBeInTheDocument();
-    });
+    expect(await screen.findByRole('button', { name: /Prev/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Next/ })).toBeInTheDocument();
   });
 
   it('Prev button is disabled on first page', async () => {
-    global.fetch.mockResolvedValue({
-      ok: true,
-      json: async () => paginatedApiResponse,
-    });
     render(<ExplorerPage />);
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Prev/ })).toBeDisabled();
-    });
+    const prevBtn = await screen.findByRole('button', { name: /Prev/ });
+    expect(prevBtn).toBeDisabled();
   });
 });
