@@ -3,6 +3,7 @@ module.exports = {
   testEnvironment: 'jsdom',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.cjs'],
   moduleNameMapper: {
+    '^@/(.*)$': '<rootDir>/$1',
     '^.+\\.css$': 'identity-obj-proxy',
     '^next/link$': '<rootDir>/tests/__mocks__/next/link.jsx',
     '^next/navigation$': '<rootDir>/tests/__mocks__/next/navigation.js',
