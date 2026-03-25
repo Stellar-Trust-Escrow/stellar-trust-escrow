@@ -92,7 +92,7 @@ const listEscrows = async (req, res) => {
     ]);
 
     const result = buildPaginatedResponse(data, { total, page, limit });
-    cache.set(cacheKey, result, 15);
+    await cache.set(cacheKey, result, 15);
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -103,7 +103,7 @@ const getEscrow = async (req, res) => {
   try {
     const id = BigInt(req.params.id);
     const cacheKey = `escrows:${id}`;
-    const cached = cache.get(cacheKey);
+    const cached = await cache.get(cacheKey);
     if (cached) return res.json(cached);
 
     const escrow = await prisma.escrow.findUnique({
@@ -167,7 +167,7 @@ const getMilestones = async (req, res) => {
     const escrowId = BigInt(req.params.id);
     const { page, limit, skip } = parsePagination(req.query);
     const cacheKey = `escrows:${escrowId}:milestones:${page}:${limit}`;
-    const cached = cache.get(cacheKey);
+    const cached = await cache.get(cacheKey);
     if (cached) return res.json(cached);
 
     const [data, total] = await prisma.$transaction([
@@ -190,7 +190,7 @@ const getMilestones = async (req, res) => {
     ]);
 
     const result = buildPaginatedResponse(data, { total, page, limit });
-    cache.set(cacheKey, result, 30);
+    await cache.set(cacheKey, result, 30);
     res.json(result);
   } catch (err) {
     if (err.message?.includes('Cannot convert')) {

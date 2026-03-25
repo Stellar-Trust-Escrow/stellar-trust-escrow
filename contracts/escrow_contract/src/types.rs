@@ -50,7 +50,7 @@ pub enum MilestoneStatus {
 /// payment amount. Funds for a milestone are released only after
 /// the client approves the submission.
 #[contracttype]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Milestone {
     /// Sequential ID within this escrow (starts at 0).
     pub id: u32,

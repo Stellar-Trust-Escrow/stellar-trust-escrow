@@ -17,6 +17,7 @@ import searchRoutes from './api/routes/searchRoutes.js';
 import escrowRoutes from './api/routes/escrowRoutes.js';
 import eventRoutes from './api/routes/eventRoutes.js';
 import kycRoutes from './api/routes/kycRoutes.js';
+import adminRoutes from './api/routes/adminRoutes.js';
 import notificationRoutes from './api/routes/notificationRoutes.js';
 import paymentRoutes from './api/routes/paymentRoutes.js';
 import relayerRoutes from './api/routes/relayerRoutes.js';
@@ -38,6 +39,7 @@ import metricsMiddleware from './middleware/metricsMiddleware.js';
 import responseTime from './middleware/responseTime.js';
 import emailService from './services/emailService.js';
 import { startIndexer } from './services/eventIndexer.js';
+import { setupSwagger } from './api/docs/swagger.js';
 
 // Attach Prisma query instrumentation and monitoring
 attachPrismaMetrics(prisma);
@@ -63,6 +65,7 @@ app.use(
 app.use(morgan('combined'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use('/uploads', express.static('uploads'));
 app.use(auditMiddleware);
 
 // ── Sentry tracing handler — after body parsers, before routes ────────────────
@@ -123,6 +126,9 @@ app.get('/health', async (_req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/escrows', authMiddleware, escrowRoutes);
+
+// ── API Documentation ─────────────────────────────────────────────────────────
+setupSwagger(app);
 app.use('/api/users', authMiddleware, userRoutes);
 app.use('/api/reputation', reputationRoutes);
 app.use('/api/disputes', disputeRoutes);
@@ -133,6 +139,7 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/relayer', relayerRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/docs', docsRouter);
+app.use('/api/admin', adminRoutes);
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((req, res) => {
