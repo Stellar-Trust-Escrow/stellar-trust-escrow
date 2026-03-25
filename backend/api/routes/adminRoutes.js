@@ -86,4 +86,24 @@ router.patch('/settings', adminController.updateSettings);
  */
 router.get('/audit-logs', adminController.getAuditLogs);
 
+// ── Rate Limits ────────────────────────────────────────────────────────────────
+/**
+ * @route  GET /api/admin/rate-limits
+ * @desc   List all tier rate limit configurations
+ */
+router.get('/rate-limits', adminController.getRateLimits);
+
+/**
+ * @route  PATCH /api/admin/rate-limits/:tier
+ * @desc   Update rate limit max for a specific tier
+ * @body   { max: number }
+ */
+router.patch('/rate-limits/:tier', adminController.updateRateLimit);
+
+/**
+ * @route  GET /api/admin/rate-limits/usage/:userId
+ * @desc   Get current usage analytics for a specific user
+ */
+router.get('/rate-limits/usage/:userId', adminController.getUserRateLimitUsage);
+
 export default router;
