@@ -49,5 +49,8 @@
   "validate-branch-name": {
     "pattern": "^(main|develop|live){1}$|^(feature|fix|refactor|hotfix|release|conflict)/NV-[0-9]{1,5}.*$",
     "errorMsg": "Branch name structure: feature/NV-1234-new-feature\nAllowed prefixes: feature, fix, refactor, hotfix, release, conflict"
+  },
+  "dependencies": {
+    "tough-cookie": "^6.0.1"
   }
 }
