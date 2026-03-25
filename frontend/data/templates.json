@@ -139,6 +139,60 @@
           "amount": "1200"
         }
       ]
+    },
+    {
+      "id": "audit-security-review",
+      "name": "Security Audit",
+      "description": "Smart contract or application security review with findings report.",
+      "category": "Audit",
+      "tokenAddress": "usdc",
+      "totalAmount": "6000",
+      "briefDescription": "Conduct a thorough security audit and deliver a findings report with remediation guidance.",
+      "deadline": "",
+      "milestones": [
+        {
+          "title": "Scope & Kickoff",
+          "description": "Define audit scope, access credentials, and threat model.",
+          "amount": "1000"
+        },
+        {
+          "title": "Audit Execution",
+          "description": "Manual review, automated scanning, and vulnerability analysis.",
+          "amount": "3500"
+        },
+        {
+          "title": "Report & Remediation Review",
+          "description": "Deliver findings report and verify fixes for critical issues.",
+          "amount": "1500"
+        }
+      ]
+    },
+    {
+      "id": "consulting-strategy-sprint",
+      "name": "Strategy Consulting Sprint",
+      "description": "Short-term consulting engagement with defined deliverables.",
+      "category": "Consulting",
+      "tokenAddress": "usdc",
+      "totalAmount": "3000",
+      "briefDescription": "Deliver strategic recommendations through research, workshops, and a final roadmap.",
+      "deadline": "",
+      "milestones": [
+        {
+          "title": "Discovery & Research",
+          "description": "Stakeholder interviews, market research, and current-state analysis.",
+          "amount": "1000"
+        },
+        {
+          "title": "Workshop & Synthesis",
+          "description": "Facilitated workshop and synthesis of key insights.",
+          "amount": "1000"
+        },
+        {
+          "title": "Roadmap Delivery",
+          "description": "Final strategic roadmap presentation and handoff.",
+          "amount": "1000"
+        }
+      ]
     }
   ]
 }
