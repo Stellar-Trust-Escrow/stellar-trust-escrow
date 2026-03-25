@@ -13,11 +13,13 @@ import morgan from 'morgan';
 
 import docsRouter from './docs/index.js';
 import disputeRoutes from './api/routes/disputeRoutes.js';
+import searchRoutes from './api/routes/searchRoutes.js';
 import escrowRoutes from './api/routes/escrowRoutes.js';
 import eventRoutes from './api/routes/eventRoutes.js';
 import kycRoutes from './api/routes/kycRoutes.js';
 import notificationRoutes from './api/routes/notificationRoutes.js';
 import paymentRoutes from './api/routes/paymentRoutes.js';
+import relayerRoutes from './api/routes/relayerRoutes.js';
 import reputationRoutes from './api/routes/reputationRoutes.js';
 import userRoutes from './api/routes/userRoutes.js';
 import auditRoutes from './api/routes/auditRoutes.js';
@@ -128,6 +130,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/kyc', kycRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/relayer', relayerRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/docs', docsRouter);
 
