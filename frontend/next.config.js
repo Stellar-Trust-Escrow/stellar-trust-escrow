@@ -38,10 +38,16 @@ const nextConfig = {
 
   // ── Proxy API calls to backend in development ──────────────────────────────
   async rewrites() {
+    return [{ source: '/api/:path*', destination: `${API_URL}/api/:path*` }];
+  },
+  async headers() {
     return [
       {
-        source: '/api/:path*',
-        destination: `${API_URL}/api/:path*`,
+        source: '/sw.js',
+        headers: [
+          { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+          { key: 'Content-Type', value: 'application/javascript' },
+        ],
       },
     ];
   },
