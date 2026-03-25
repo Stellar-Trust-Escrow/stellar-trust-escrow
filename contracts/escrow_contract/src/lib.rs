@@ -34,6 +34,9 @@ mod events;
 mod pause_tests;
 mod types;
 mod upgrade_tests;
+mod pause_tests;
+mod event_tests;
+
 
 pub use errors::EscrowError;
 use types::{CancellationRequest, SlashRecord};
