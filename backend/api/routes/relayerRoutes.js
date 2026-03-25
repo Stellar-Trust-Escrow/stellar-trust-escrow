@@ -12,9 +12,10 @@ const router = express.Router();
 
 // Initialize relayer service
 const relayer = createRelayer({
-  network: process.env.STELLAR_NETWORK === 'mainnet'
-    ? 'Public Global Stellar Network ; September 2015'
-    : 'Test SDF Network ; September 2015',
+  network:
+    process.env.STELLAR_NETWORK === 'mainnet'
+      ? 'Public Global Stellar Network ; September 2015'
+      : 'Test SDF Network ; September 2015',
   contractId: process.env.ESCROW_CONTRACT_ID,
   relayerSecret: process.env.RELAYER_SECRET_KEY,
 });
