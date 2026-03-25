@@ -1,0 +1,63 @@
+{
+  "expo": {
+    "name": "StellarTrustEscrow",
+    "slug": "stellar-trust-escrow",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0f0f0f"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.stellartrustescrow.app",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Use Face ID to securely authenticate to your account.",
+        "NSCameraUsageDescription": "Camera access is required for KYC identity verification."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0f0f0f"
+      },
+      "package": "com.stellartrustescrow.app",
+      "permissions": [
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT",
+        "CAMERA",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Use Face ID to securely authenticate."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#6366f1",
+          "sounds": []
+        }
+      ]
+    ],
+    "scheme": "stellartrustescrow",
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

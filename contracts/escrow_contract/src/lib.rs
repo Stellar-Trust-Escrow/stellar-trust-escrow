@@ -65,7 +65,7 @@ const RENT_PER_ENTRY_PER_PERIOD: i128 = 1;
 // milestone list on every escrow-level operation.
 #[contracttype]
 #[derive(Clone)]
-enum PackedDataKey {
+pub enum PackedDataKey {
     EscrowMeta(u64),
     Milestone(u64, u32),
 }
@@ -153,6 +153,8 @@ impl ContractStorage {
         }
         instance.set(&DataKey::Admin, admin);
         instance.set(&DataKey::EscrowCounter, &0_u64);
+        // Initialize storage version for upgradeable storage
+        StorageManager::init_version(env);
         Self::bump_instance_ttl(env);
         Ok(())
     }
@@ -1149,6 +1151,11 @@ impl EscrowContract {
     ) -> Result<(), EscrowError> {
         caller.require_auth();
         ContractStorage::require_admin(&env, &caller)?;
+
+        // Run storage migration before upgrading contract code
+        // This ensures data is in the correct format for the new version
+        StorageManager::migrate(&env)?;
+
         env.deployer().update_current_contract_wasm(new_wasm_hash);
         Ok(())
     }

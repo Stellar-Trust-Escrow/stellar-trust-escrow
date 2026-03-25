@@ -8,6 +8,35 @@
  */
 
 import prisma from '../../lib/prisma.js';
+import { TIER_LIMITS } from '../../config/rateLimits.js';
+import { getUserUsage } from '../middleware/rateLimiter.js';
+
+// Mutable runtime overrides (resets on server restart)
+const runtimeTierLimits = { ...TIER_LIMITS };
+
+const getRateLimits = (_req, res) => {
+  res.json({ tiers: runtimeTierLimits });
+};
+
+const updateRateLimit = (req, res) => {
+  const { tier } = req.params;
+  const { max } = req.body;
+  if (!(tier in runtimeTierLimits)) {
+    return res.status(404).json({ error: `Unknown tier: ${tier}` });
+  }
+  const parsed = parseInt(max, 10);
+  if (isNaN(parsed) || parsed < 1) {
+    return res.status(400).json({ error: 'max must be a positive integer' });
+  }
+  runtimeTierLimits[tier] = parsed;
+  res.json({ tier, max: parsed });
+};
+
+const getUserRateLimitUsage = (req, res) => {
+  const { userId } = req.params;
+  const usage = getUserUsage(userId);
+  res.json({ userId, ...usage });
+};
 import cache from '../../lib/cache.js';
 import { buildPaginatedResponse, parsePagination } from '../../lib/pagination.js';
 
@@ -427,4 +456,7 @@ export default {
   getAuditLogs,
   getSettings,
   updateSettings,
+  getRateLimits,
+  updateRateLimit,
+  getUserRateLimitUsage,
 };
