@@ -33,6 +33,8 @@ mod errors;
 mod events;
 mod types;
 mod upgrade_tests;
+mod pause_tests;
+
 
 pub use errors::EscrowError;
 pub use types::{DataKey, EscrowState, EscrowStatus, Milestone, MilestoneStatus, ReputationRecord};
@@ -353,6 +355,24 @@ impl ContractStorage {
         }
         Ok(())
     }
+
+    // ── Pause helpers ──────────────────────────────────────────────────────────
+
+    fn is_paused(env: &Env) -> bool {
+        env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+    }
+
+    fn set_paused(env: &Env, paused: bool) {
+        env.storage().instance().set(&DataKey::Paused, &paused);
+        Self::bump_instance_ttl(env);
+    }
+
+    fn require_not_paused(env: &Env) -> Result<(), EscrowError> {
+        if Self::is_paused(env) {
+            return Err(EscrowError::ContractPaused);
+        }
+        Ok(())
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -392,6 +412,7 @@ impl EscrowContract {
         // Auth + validation before any storage I/O
         client.require_auth();
         ContractStorage::require_initialized(&env)?;
+        ContractStorage::require_not_paused(&env)?;
 
         if total_amount <= 0 {
             return Err(EscrowError::InvalidEscrowAmount);
@@ -460,6 +481,7 @@ impl EscrowContract {
         amount: i128,
     ) -> Result<u32, EscrowError> {
         caller.require_auth();
+        ContractStorage::require_not_paused(&env)?;
 
         if amount <= 0 {
             return Err(EscrowError::InvalidMilestoneAmount);
@@ -891,6 +913,41 @@ impl EscrowContract {
         ContractStorage::require_admin(&env, &caller)?;
         env.deployer().update_current_contract_wasm(new_wasm_hash);
         Ok(())
+    }
+
+    // ── Emergency Pause ──────────────────────────────────────────────────────
+
+    /// Pauses the contract, preventing new escrows and milestone additions.
+    pub fn pause(env: Env, caller: Address) -> Result<(), EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_admin(&env, &caller)?;
+
+        if ContractStorage::is_paused(&env) {
+            return Ok(());
+        }
+
+        ContractStorage::set_paused(&env, true);
+        events::emit_contract_paused(&env, &caller);
+        Ok(())
+    }
+
+    /// Unpauses the contract, resuming normal operation.
+    pub fn unpause(env: Env, caller: Address) -> Result<(), EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_admin(&env, &caller)?;
+
+        if !ContractStorage::is_paused(&env) {
+            return Ok(());
+        }
+
+        ContractStorage::set_paused(&env, false);
+        events::emit_contract_unpaused(&env, &caller);
+        Ok(())
+    }
+
+    /// Returns the current pause state of the contract.
+    pub fn is_paused(env: Env) -> bool {
+        ContractStorage::is_paused(&env)
     }
 
     // ── View Functions ────────────────────────────────────────────────────────

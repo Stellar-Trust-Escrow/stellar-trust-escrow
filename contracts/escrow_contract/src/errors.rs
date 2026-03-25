@@ -53,22 +53,28 @@ pub enum EscrowError {
     DeadlineExpired = 26,
 
     // ── Time Lock ─────────────────────────────────────────────────────────────
+    /// The specified lock time is in the past.
     InvalidLockTime = 27,
+    /// Funds are still locked until the lock time expires.
     LockTimeNotExpired = 28,
+    /// The lock time has expired.
     LockTimeExpired = 29,
+    /// Cannot extend lock time to the past.
     InvalidLockTimeExtension = 30,
+    /// The contract is currently paused.
+    ContractPaused = 31,
 
     // ── Cancellation ──────────────────────────────────────────────────────────
-    CancellationNotFound = 31,
-    CancellationAlreadyExists = 32,
-    CancellationAlreadyDisputed = 33,
-    CancellationDisputePeriodActive = 34,
-    CancellationDisputeDeadlineExpired = 35,
-    CancellationDisputed = 36,
+    CancellationNotFound = 32,
+    CancellationAlreadyExists = 33,
+    CancellationAlreadyDisputed = 34,
+    CancellationDisputePeriodActive = 35,
+    CancellationDisputeDeadlineExpired = 36,
+    CancellationDisputed = 37,
 
     // ── Slashing ─────────────────────────────────────────────────────────────
-    SlashNotFound = 37,
-    SlashAlreadyDisputed = 38,
-    SlashDisputeDeadlineExpired = 39,
-    InvalidSlashAmount = 40,
+    SlashNotFound = 38,
+    SlashAlreadyDisputed = 39,
+    SlashDisputeDeadlineExpired = 40,
+    InvalidSlashAmount = 41,
 }

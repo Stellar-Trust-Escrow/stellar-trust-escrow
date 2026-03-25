@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import prisma from '../../lib/prisma.js';
@@ -7,13 +8,13 @@ const generateTokens = (userId) => {
   const accessToken = jwt.sign(
     { userId },
     process.env.JWT_ACCESS_SECRET || 'fallback_access_secret',
-    { expiresIn: process.env.JWT_ACCESS_EXPIRATION || '15m' }
+    { expiresIn: process.env.JWT_ACCESS_EXPIRATION || '15m' },
   );
 
   const refreshToken = jwt.sign(
     { userId },
     process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret',
-    { expiresIn: process.env.JWT_REFRESH_EXPIRATION || '7d' }
+    { expiresIn: process.env.JWT_REFRESH_EXPIRATION || '7d' },
   );
 
   return { accessToken, refreshToken };
@@ -29,7 +30,7 @@ export const register = async (req, res) => {
 
     // Check if user exists
     const existingUser = await prisma.user.findUnique({
-      where: { email }
+      where: { email },
     });
 
     if (existingUser) {
@@ -65,7 +66,7 @@ export const login = async (req, res) => {
 
     // Find user
     const user = await prisma.user.findUnique({
-      where: { email }
+      where: { email },
     });
 
     if (!user) {
@@ -84,7 +85,7 @@ export const login = async (req, res) => {
     // Save refresh token to user in DB
     await prisma.user.update({
       where: { id: user.id },
-      data: { refreshToken }
+      data: { refreshToken },
     });
 
     res.json({ accessToken, refreshToken, userId: user.id });
@@ -107,7 +108,7 @@ export const refresh = async (req, res) => {
     try {
       decoded = jwt.verify(
         refreshToken,
-        process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret'
+        process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret',
       );
     } catch (err) {
       return res.status(403).json({ error: 'Invalid or expired refresh token' });
@@ -115,7 +116,7 @@ export const refresh = async (req, res) => {
 
     // Verify against database
     const user = await prisma.user.findUnique({
-      where: { id: decoded.userId }
+      where: { id: decoded.userId },
     });
 
     if (!user || user.refreshToken !== refreshToken) {
@@ -128,7 +129,7 @@ export const refresh = async (req, res) => {
     // Update refresh token in DB
     await prisma.user.update({
       where: { id: user.id },
-      data: { refreshToken: tokens.refreshToken }
+      data: { refreshToken: tokens.refreshToken },
     });
 
     res.json(tokens);
@@ -141,11 +142,11 @@ export const refresh = async (req, res) => {
 export const logout = async (req, res) => {
   try {
     const { refreshToken } = req.body;
-    
+
     // We could extract userId from auth middleware here if this route was protected.
     // However, logout is often called just with the token to revoke.
     // If the route is protected, we can just use req.user.userId
-    
+
     // Attempt to decode the token to find the user
     let decoded;
     try {
@@ -153,7 +154,7 @@ export const logout = async (req, res) => {
         decoded = jwt.verify(
           refreshToken,
           process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret',
-          { ignoreExpiration: true } // allow logout even if expired
+          { ignoreExpiration: true }, // allow logout even if expired
         );
       }
     } catch (err) {
@@ -163,7 +164,7 @@ export const logout = async (req, res) => {
     if (decoded && decoded.userId) {
       await prisma.user.update({
         where: { id: decoded.userId },
-        data: { refreshToken: null }
+        data: { refreshToken: null },
       });
     }
 

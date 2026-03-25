@@ -9,16 +9,56 @@
  * - Active escrow cards
  * - Quick action buttons
  *
+ * Performance optimisations:
+ * - StatWidgets (contains recharts) is dynamically imported to avoid loading
+ *   the large charting bundle on initial page load
+ * - ActivityTimeline is dynamically imported (below-the-fold)
+ * - Component-level performance tracking via usePerformance hook
+ *
  * TODO (contributor — Issue #30): Replace PLACEHOLDER_ADDRESS with the real
  * connected wallet address from FreighterAPI / WalletProvider context.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import dynamic from 'next/dynamic';
 import EscrowCard from '../../components/escrow/EscrowCard';
 import ReputationBadge from '../../components/ui/ReputationBadge';
 import Button from '../../components/ui/Button';
-import StatWidgets from '../../components/dashboard/StatWidgets';
-import ActivityTimeline from '../../components/dashboard/ActivityTimeline';
+import { usePerformance } from '../../hooks/usePerformance';
+
+// ── Dynamic imports for heavy components ──────────────────────────────────────
+// StatWidgets imports recharts (~200 KB) — only load when dashboard renders
+
+const StatWidgets = dynamic(() => import('../../components/dashboard/StatWidgets'), {
+  loading: () => (
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="card animate-pulse">
+          <div className="h-3 w-20 bg-gray-700 rounded mb-3" />
+          <div className="h-8 w-16 bg-gray-700 rounded" />
+        </div>
+      ))}
+    </div>
+  ),
+  ssr: false, // recharts uses browser APIs
+});
+
+const ActivityTimeline = dynamic(() => import('../../components/dashboard/ActivityTimeline'), {
+  loading: () => (
+    <div className="card animate-pulse space-y-4">
+      <div className="h-5 w-36 bg-gray-700 rounded" />
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div key={i} className="flex gap-3">
+          <div className="w-8 h-8 bg-gray-700 rounded-full" />
+          <div className="flex-1 space-y-2">
+            <div className="h-3 w-48 bg-gray-800 rounded" />
+            <div className="h-3 w-32 bg-gray-800 rounded" />
+          </div>
+        </div>
+      ))}
+    </div>
+  ),
+});
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -43,23 +83,24 @@ export default function DashboardPage() {
   const [escrows, setEscrows] = useState([]);
   const [escrowsLoading, setEscrowsLoading] = useState(true);
   const [reputation, setReputation] = useState(null);
+  const { measureAsync } = usePerformance('DashboardPage');
 
   // Fetch active escrows for this address
   useEffect(() => {
     setEscrowsLoading(true);
-    fetch(`${API_BASE}/api/users/${PLACEHOLDER_ADDRESS}/escrows?status=Active&limit=6`)
-      .then((r) => r.json())
-      .then((data) => {
-        // API returns 501 until Issue #24 is implemented — fall back to empty
-        if (data.error) {
-          setEscrows([]);
-        } else {
-          setEscrows(Array.isArray(data.escrows) ? data.escrows : []);
-        }
-      })
-      .catch(() => setEscrows([]))
-      .finally(() => setEscrowsLoading(false));
-  }, []);
+    measureAsync('fetch-escrows', () =>
+      fetch(`${API_BASE}/api/users/${PLACEHOLDER_ADDRESS}/escrows?status=Active&limit=6`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.error) {
+            setEscrows([]);
+          } else {
+            setEscrows(Array.isArray(data.escrows) ? data.escrows : []);
+          }
+        })
+        .catch(() => setEscrows([])),
+    ).finally(() => setEscrowsLoading(false));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch reputation score
   useEffect(() => {
@@ -94,17 +135,40 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── Analytics Widgets ── */}
+      {/* ── Analytics Widgets (dynamically imported — loads recharts on demand) ── */}
       <section>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-white">Overview</h2>
           <span className="text-xs text-gray-500">Refreshes on page load</span>
         </div>
-        <StatWidgets address={PLACEHOLDER_ADDRESS} />
+        <Suspense
+          fallback={
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="card animate-pulse">
+                  <div className="h-3 w-20 bg-gray-700 rounded mb-3" />
+                  <div className="h-8 w-16 bg-gray-700 rounded" />
+                </div>
+              ))}
+            </div>
+          }
+        >
+          <StatWidgets address={PLACEHOLDER_ADDRESS} />
+        </Suspense>
       </section>
 
-      {/* ── Activity Timeline ── */}
-      <ActivityTimeline address={PLACEHOLDER_ADDRESS} />
+      {/* ── Activity Timeline (dynamically imported) ── */}
+      <Suspense
+        fallback={
+          <div className="card animate-pulse space-y-4">
+            <div className="h-5 w-36 bg-gray-700 rounded" />
+            <div className="h-3 w-48 bg-gray-800 rounded" />
+            <div className="h-3 w-32 bg-gray-800 rounded" />
+          </div>
+        }
+      >
+        <ActivityTimeline address={PLACEHOLDER_ADDRESS} />
+      </Suspense>
 
       {/* ── Active Escrows ── */}
       <section>
