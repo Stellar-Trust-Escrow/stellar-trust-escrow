@@ -91,7 +91,12 @@ function ExplorerContent() {
   const [showFilters, setShowFilters] = useState(false);
 
   const [escrows, setEscrows] = useState([]);
-  const [meta, setMeta] = useState({ total: 0, totalPages: 0, hasNextPage: false, hasPreviousPage: false });
+  const [meta, setMeta] = useState({
+    total: 0,
+    totalPages: 0,
+    hasNextPage: false,
+    hasPreviousPage: false,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -148,7 +153,9 @@ function ExplorerContent() {
         if (!cancelled) setLoading(false);
       });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [debouncedSearch, filters, page]);
 
   // ── Handlers ───────────────────────────────────────────────────────────────
@@ -262,7 +269,12 @@ function ExplorerContent() {
             >
               <Badge status={s} size="sm" />
               <button
-                onClick={() => handleFilterChange('statuses', filters.statuses.filter((x) => x !== s))}
+                onClick={() =>
+                  handleFilterChange(
+                    'statuses',
+                    filters.statuses.filter((x) => x !== s),
+                  )
+                }
                 className="text-gray-500 hover:text-white ml-0.5"
               >
                 <X size={11} />
@@ -275,7 +287,10 @@ function ExplorerContent() {
               {filters.minAmount && filters.maxAmount && ' – '}
               {filters.maxAmount && `≤ ${filters.maxAmount}`} USDC
               <button
-                onClick={() => { handleFilterChange('minAmount', ''); handleFilterChange('maxAmount', ''); }}
+                onClick={() => {
+                  handleFilterChange('minAmount', '');
+                  handleFilterChange('maxAmount', '');
+                }}
                 className="text-gray-500 hover:text-white ml-0.5"
               >
                 <X size={11} />
@@ -286,7 +301,10 @@ function ExplorerContent() {
             <span className="flex items-center gap-1.5 bg-gray-800 border border-gray-700 rounded-full px-3 py-1 text-xs text-gray-300">
               {filters.dateFrom || '…'} → {filters.dateTo || '…'}
               <button
-                onClick={() => { handleFilterChange('dateFrom', ''); handleFilterChange('dateTo', ''); }}
+                onClick={() => {
+                  handleFilterChange('dateFrom', '');
+                  handleFilterChange('dateTo', '');
+                }}
                 className="text-gray-500 hover:text-white ml-0.5"
               >
                 <X size={11} />
@@ -337,7 +355,9 @@ function ExplorerContent() {
               )}
             </div>
           ) : (
-            <div className={`grid gap-4 ${showFilters ? 'md:grid-cols-2' : 'md:grid-cols-2 lg:grid-cols-3'}`}>
+            <div
+              className={`grid gap-4 ${showFilters ? 'md:grid-cols-2' : 'md:grid-cols-2 lg:grid-cols-3'}`}
+            >
               {escrows.map((escrow) => (
                 <EscrowCard key={escrow.id} escrow={escrow} />
               ))}
@@ -376,8 +396,7 @@ function ExplorerContent() {
                 pageNum = offsets[i];
               }
               const isEllipsis =
-                total > 7 &&
-                ((i === 1 && pageNum > 2) || (i === 5 && pageNum < total - 1));
+                total > 7 && ((i === 1 && pageNum > 2) || (i === 5 && pageNum < total - 1));
 
               if (isEllipsis) {
                 return (
@@ -421,12 +440,14 @@ function ExplorerContent() {
 
 export default function ExplorerPage() {
   return (
-    <Suspense fallback={
-      <div className="flex items-center justify-center py-20 text-gray-500">
-        <Loader2 size={24} className="animate-spin mr-2" />
-        Loading explorer...
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-20 text-gray-500">
+          <Loader2 size={24} className="animate-spin mr-2" />
+          Loading explorer...
+        </div>
+      }
+    >
       <ExplorerContent />
     </Suspense>
   );

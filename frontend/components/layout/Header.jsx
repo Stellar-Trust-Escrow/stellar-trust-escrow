@@ -12,7 +12,6 @@
  * - Highlight active nav link
  */
 
-
 'use client';
 
 import Link from 'next/link';

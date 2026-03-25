@@ -49,6 +49,7 @@
     "jest": "^29.0.0",
     "jest-environment-jsdom": "^29.7.0",
     "postcss": "^8",
+    "safer-buffer": "^2.1.2",
     "storybook": "^8.6.18",
     "tailwindcss": "^3.3.0",
     "tough-cookie": "^6.0.1",

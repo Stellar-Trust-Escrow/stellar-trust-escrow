@@ -1,31 +1,66 @@
-/**
- * Tests for escrowController.js
- *
- * Uses supertest to make HTTP requests against the Express app.
- * Mocks Prisma so no real DB is needed.
- *
- * Run with: cd backend && npm test
- *
- * TODO (contributor — medium, Issue #47):
- * Complete the TODO test cases marked below. Uncomment as you implement
- * the corresponding controllers.
- */
+import { jest } from '@jest/globals';
 
- 
+const cacheMock = {
+  get: jest.fn(),
+  set: jest.fn(),
+  invalidate: jest.fn(),
+  invalidatePrefix: jest.fn(),
+  size: jest.fn(),
+};
 
-// Using CommonJS for Jest compatibility
-// const { request } = require('supertest'); // Uncomment when app is exported and tests are implemented (Issue #47)
-// const app = require("../server");
+const prismaMock = {
+  $transaction: jest.fn(async (operations) => Promise.all(operations)),
+  escrow: {
+    findMany: jest.fn(),
+    findUnique: jest.fn(),
+    count: jest.fn(),
+    groupBy: jest.fn(),
+  },
+  milestone: {
+    findMany: jest.fn(),
+    findUnique: jest.fn(),
+    count: jest.fn(),
+  },
+  dispute: {
+    findMany: jest.fn(),
+    findUnique: jest.fn(),
+    count: jest.fn(),
+  },
+  reputationRecord: {
+    findMany: jest.fn(),
+    findUnique: jest.fn(),
+    count: jest.fn(),
+  },
+};
 
-// TODO (contributor): mock Prisma
-// jest.mock('@prisma/client', () => ({
-//   PrismaClient: jest.fn().mockImplementation(() => ({
-//     escrow: {
-//       findMany: jest.fn(),
-//       findUnique: jest.fn(),
-//     },
-//   })),
-// }));
+jest.unstable_mockModule('../lib/cache.js', () => ({ default: cacheMock }));
+jest.unstable_mockModule('../lib/prisma.js', () => ({ default: prismaMock }));
+
+const { default: _escrowController } = await import('../api/controllers/escrowController.js');
+const { default: _userController } = await import('../api/controllers/userController.js');
+const { default: _disputeController } = await import('../api/controllers/disputeController.js');
+const { default: _reputationController } =
+  await import('../api/controllers/reputationController.js');
+
+function _createResponse() {
+  return {
+    statusCode: 200,
+    body: null,
+    status(code) {
+      this.statusCode = code;
+      return this;
+    },
+    json(payload) {
+      this.body = payload;
+      return this;
+    },
+  };
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  cacheMock.get.mockReturnValue(null);
+});
 
 describe('GET /api/escrows', () => {
   it('returns 200 with paginated escrow list', async () => {

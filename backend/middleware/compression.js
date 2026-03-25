@@ -95,6 +95,9 @@ function brotliMiddleware(req, res, next) {
   const acceptEncoding = req.headers['accept-encoding'] || '';
   if (!acceptEncoding.includes('br')) return next();
 
+  // Never compress the Prometheus scrape endpoint
+  if (req.path === '/metrics') return next();
+
   const contentLength = parseInt(res.getHeader('Content-Length') || '0');
   if (contentLength > 0 && contentLength < THRESHOLD) return next();
 

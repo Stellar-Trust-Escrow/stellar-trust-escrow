@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ExplorerPage from '../../app/explorer/page';
 
 const mockEscrows = [
@@ -53,7 +53,7 @@ describe('ExplorerPage', () => {
 
   it('renders status filter buttons', async () => {
     render(<ExplorerPage />);
-    expect(await screen.findByText("Filters")).toBeInTheDocument();
+    expect(await screen.findByText('Filters')).toBeInTheDocument();
   });
 
   it('renders fetched escrows by default', async () => {
@@ -69,7 +69,7 @@ describe('ExplorerPage', () => {
     // Wait for initial render
     await screen.findByText('Escrow #1');
     fireEvent.click(screen.getByText('Filters'));
-    
+
     // Click Completed filter
     const completedBtn = await screen.findByRole('button', { name: 'Completed' });
     fireEvent.click(completedBtn);
@@ -83,10 +83,9 @@ describe('ExplorerPage', () => {
     await screen.findByText('Escrow #1'); // wait for initial render
 
     const searchInput = await screen.findByPlaceholderText(/Search by/);
-    
+
     fireEvent.change(searchInput, { target: { value: '2' } });
 
-    const { waitFor } = require('@testing-library/react');
     await waitFor(() => {
       expect(screen.queryByText('Escrow #1')).not.toBeInTheDocument();
     });
@@ -96,7 +95,7 @@ describe('ExplorerPage', () => {
   it('shows empty state when no escrows match filter', async () => {
     render(<ExplorerPage />);
     await screen.findByText('Escrow #1');
-    
+
     fireEvent.click(screen.getByText('Filters'));
     fireEvent.click(screen.getByRole('button', { name: 'Cancelled' }));
 

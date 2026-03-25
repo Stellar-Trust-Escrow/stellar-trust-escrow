@@ -14,6 +14,7 @@ import { jest } from '@jest/globals';
 import zlib from 'zlib';
 import { promisify } from 'util';
 
+const _gunzip = promisify(zlib.gunzip);
 const brotliDecompress = promisify(zlib.brotliDecompress);
 
 // ── Mock metrics so the middleware can be imported without a real registry ────
@@ -129,10 +130,25 @@ describe('Compression middleware', () => {
   });
 
   it('compressed response is smaller than uncompressed', async () => {
-    const [compressed, plain] = await Promise.all([
-      supertest(app).get('/data').set('Accept-Encoding', 'gzip').buffer(true),
-      supertest(app).get('/data').set('Accept-Encoding', '').buffer(true),
-    ]);
+    const customParse = (res, callback) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => callback(null, Buffer.concat(chunks)));
+    };
+
+    // Use brotli for compressed request since supertest does NOT auto-decompress brotli,
+    // giving us the real compressed bytes on the wire.
+    const compressed = await supertest(app)
+      .get('/data')
+      .set('Accept-Encoding', 'br')
+      .buffer(true)
+      .parse(customParse);
+
+    const plain = await supertest(app)
+      .get('/data')
+      .set('Accept-Encoding', '')
+      .buffer(true)
+      .parse(customParse);
 
     const compressedSize = compressed.body.byteLength ?? compressed.body.length ?? 0;
     const plainSize =
@@ -140,6 +156,8 @@ describe('Compression middleware', () => {
         ? plain.body.byteLength
         : Buffer.byteLength(plain.text || JSON.stringify(plain.body) || '');
 
+    expect(compressed.headers['content-encoding']).toBe('br');
+    expect(plain.headers['content-encoding']).toBeUndefined();
     expect(compressedSize).toBeLessThan(plainSize);
   });
 });

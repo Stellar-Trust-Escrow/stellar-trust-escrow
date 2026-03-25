@@ -22,29 +22,38 @@ datasource db {
 
 model Escrow {
   /// On-chain escrow_id from the contract
-  id                BigInt      @id
-  clientAddress     String      @map("client_address")
-  freelancerAddress String      @map("freelancer_address")
-  arbiterAddress    String?     @map("arbiter_address")
-  tokenAddress      String      @map("token_address")
-  totalAmount       String      @map("total_amount")   // BigInt stored as string
-  remainingBalance  String      @map("remaining_balance")
+  id                BigInt       @id
+  clientAddress     String       @map("client_address")
+  freelancerAddress String       @map("freelancer_address")
+  arbiterAddress    String?      @map("arbiter_address")
+  tokenAddress      String       @map("token_address")
+  totalAmount       String       @map("total_amount") // BigInt stored as string
+  remainingBalance  String       @map("remaining_balance")
   status            EscrowStatus
-  briefHash         String      @map("brief_hash")     // IPFS / content hash
+  briefHash         String       @map("brief_hash") // IPFS / content hash
   deadline          DateTime?
-  createdAt         DateTime    @map("created_at")
-  updatedAt         DateTime    @updatedAt @map("updated_at")
+  createdAt         DateTime     @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
   /// Stellar ledger sequence when this escrow was created
-  createdLedger     BigInt      @map("created_ledger")
+  createdLedger     BigInt       @map("created_ledger")
 
-  milestones        Milestone[]
-  dispute           Dispute?
+  milestones Milestone[]
+  dispute    Dispute?
 
   @@index([clientAddress])
   @@index([freelancerAddress])
   @@index([status])
   // Composite index for filtered + sorted list queries
   @@index([status, createdAt(sort: Desc)])
+  // Composite index for user profile / user escrows OR queries
+  @@index([clientAddress, createdAt(sort: Desc)])
+  @@index([freelancerAddress, createdAt(sort: Desc)])
+  // Composite index for user escrows with status filter
+  @@index([clientAddress, status])
+  @@index([freelancerAddress, status])
+  // Composite index for user escrows with status filter + sort (covers getUserEscrows role+status queries)
+  @@index([clientAddress, status, createdAt(sort: Desc)])
+  @@index([freelancerAddress, status, createdAt(sort: Desc)])
   @@map("escrows")
 }
 
@@ -57,29 +66,30 @@ model Milestone {
   escrowId        BigInt          @map("escrow_id")
   title           String
   descriptionHash String          @map("description_hash")
-  amount          String          // BigInt as string
+  amount          String // BigInt as string
   status          MilestoneStatus
   submittedAt     DateTime?       @map("submitted_at")
   resolvedAt      DateTime?       @map("resolved_at")
 
-  escrow          Escrow          @relation(fields: [escrowId], references: [id])
+  escrow Escrow @relation(fields: [escrowId], references: [id])
 
   @@unique([escrowId, milestoneIndex])
   @@index([escrowId])
+  @@index([status])
   @@map("milestones")
 }
 
 // ── Reputation ────────────────────────────────────────────────────────────────
 
 model ReputationRecord {
-  address           String   @id
-  totalScore        BigInt   @default(0) @map("total_score")
-  completedEscrows  Int      @default(0) @map("completed_escrows")
-  disputedEscrows   Int      @default(0) @map("disputed_escrows")
-  disputesWon       Int      @default(0) @map("disputes_won")
-  totalVolume       String   @default("0") @map("total_volume") // BigInt as string
-  lastUpdated       DateTime @map("last_updated")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  address          String   @id
+  totalScore       BigInt   @default(0) @map("total_score")
+  completedEscrows Int      @default(0) @map("completed_escrows")
+  disputedEscrows  Int      @default(0) @map("disputed_escrows")
+  disputesWon      Int      @default(0) @map("disputes_won")
+  totalVolume      String   @default("0") @map("total_volume") // BigInt as string
+  lastUpdated      DateTime @map("last_updated")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
   @@index([totalScore(sort: Desc)])
   @@map("reputation_records")
@@ -88,23 +98,27 @@ model ReputationRecord {
 // ── Disputes ─────────────────────────────────────────────────────────────────
 
 model Dispute {
-  id              Int       @id @default(autoincrement())
-  escrowId        BigInt    @unique @map("escrow_id")
-  raisedByAddress String    @map("raised_by_address")
-  raisedAt        DateTime  @map("raised_at")
-  resolvedAt      DateTime? @map("resolved_at")
+  id               Int       @id @default(autoincrement())
+  escrowId         BigInt    @unique @map("escrow_id")
+  raisedByAddress  String    @map("raised_by_address")
+  raisedAt         DateTime  @map("raised_at")
+  resolvedAt       DateTime? @map("resolved_at")
   /// Amount returned to client on resolution
-  clientAmount    String?   @map("client_amount")
+  clientAmount     String?   @map("client_amount")
   /// Amount sent to freelancer on resolution
-  freelancerAmount String?  @map("freelancer_amount")
+  freelancerAmount String?   @map("freelancer_amount")
   /// Address that resolved the dispute (arbiter or admin)
-  resolvedBy      String?   @map("resolved_by")
+  resolvedBy       String?   @map("resolved_by")
   /// Outcome description
-  resolution      String?
+  resolution       String?
 
-  escrow          Escrow    @relation(fields: [escrowId], references: [id])
+  escrow Escrow @relation(fields: [escrowId], references: [id])
 
   @@index([raisedByAddress])
+  // Index for resolved/unresolved filtering (admin panel)
+  @@index([resolvedAt])
+  // Composite index for listing disputes sorted by raisedAt with resolution filter
+  @@index([resolvedAt, raisedAt(sort: Desc)])
   @@map("disputes")
 }
 
@@ -113,30 +127,33 @@ model Dispute {
 /// Indexed record of every Soroban contract event emitted by the escrow contract.
 /// Enables historical queries and real-time subscriptions without hitting the chain.
 model ContractEvent {
-  id            Int      @id @default(autoincrement())
+  id         Int      @id @default(autoincrement())
   /// Stellar ledger sequence this event was emitted in
-  ledger        BigInt
+  ledger     BigInt
   /// Ledger close timestamp
-  ledgerAt      DateTime @map("ledger_at")
+  ledgerAt   DateTime @map("ledger_at")
   /// Contract address that emitted the event
-  contractId    String   @map("contract_id")
+  contractId String   @map("contract_id")
   /// Short event name derived from topic[0] (e.g. "esc_crt", "mil_apr")
-  eventType     String   @map("event_type")
+  eventType  String   @map("event_type")
   /// Escrow ID extracted from topic[1] (null for contract-wide events)
-  escrowId      BigInt?  @map("escrow_id")
+  escrowId   BigInt?  @map("escrow_id")
   /// Full JSON-serialised topic array
-  topics        Json
+  topics     Json
   /// Full JSON-serialised data payload
-  data          Json
+  data       Json
   /// Unique transaction hash + event index to prevent duplicate inserts
-  txHash        String   @map("tx_hash")
-  eventIndex    Int      @map("event_index")
+  txHash     String   @map("tx_hash")
+  eventIndex Int      @map("event_index")
 
   @@unique([txHash, eventIndex])
   @@index([eventType])
   @@index([escrowId])
   @@index([ledger])
   @@index([ledgerAt(sort: Desc)])
+  // Composite index for escrow-specific event queries with type filter
+  @@index([escrowId, eventType])
+  @@index([escrowId, ledgerAt(sort: Asc)])
   @@map("contract_events")
 }
 
@@ -153,35 +170,37 @@ model IndexerState {
 // ── Payments ─────────────────────────────────────────────────────────────────
 
 model Payment {
-  id                String        @id @default(cuid())
-  address           String                              // Stellar address of payer
-  escrowId          BigInt?       @map("escrow_id")     // linked escrow (nullable until funded)
-  stripeSessionId   String?       @unique @map("stripe_session_id")
-  stripePaymentIntent String?     @unique @map("stripe_payment_intent")
-  amountFiat        Int           @map("amount_fiat")   // in cents (USD)
-  amountCrypto      String?       @map("amount_crypto") // XLM/USDC amount after conversion
-  currency          String        @default("usd")
-  status            PaymentStatus @default(Pending)
-  refundId          String?       @map("refund_id")     // Stripe refund ID
-  createdAt         DateTime      @default(now()) @map("created_at")
-  updatedAt         DateTime      @updatedAt @map("updated_at")
+  id                  String        @id @default(cuid())
+  address             String // Stellar address of payer
+  escrowId            BigInt?       @map("escrow_id") // linked escrow (nullable until funded)
+  stripeSessionId     String?       @unique @map("stripe_session_id")
+  stripePaymentIntent String?       @unique @map("stripe_payment_intent")
+  amountFiat          Int           @map("amount_fiat") // in cents (USD)
+  amountCrypto        String?       @map("amount_crypto") // XLM/USDC amount after conversion
+  currency            String        @default("usd")
+  status              PaymentStatus @default(Pending)
+  refundId            String?       @map("refund_id") // Stripe refund ID
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
 
   @@index([address])
   @@index([status])
+  // Composite index for address lookups sorted by date
+  @@index([address, createdAt(sort: Desc)])
   @@map("payments")
 }
 
 // ── KYC ──────────────────────────────────────────────────────────────────────
 
 model KycVerification {
-  id              Int       @id @default(autoincrement())
-  address         String    @unique
-  applicantId     String?   @unique @map("applicant_id")  // Sumsub applicant ID
-  status          KycStatus @default(Pending)
-  reviewResult    String?   @map("review_result")         // approved | declined
-  rejectLabels    String[]  @map("reject_labels")         // Sumsub rejection reasons
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  id           Int       @id @default(autoincrement())
+  address      String    @unique
+  applicantId  String?   @unique @map("applicant_id") // Sumsub applicant ID
+  status       KycStatus @default(Pending)
+  reviewResult String?   @map("review_result") // approved | declined
+  rejectLabels String[]  @map("reject_labels") // Sumsub rejection reasons
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
 
   @@index([status])
   @@map("kyc_verifications")
@@ -191,22 +210,21 @@ model KycVerification {
 
 /// Immutable record of every admin action for accountability and audit trails.
 model AdminAuditLog {
-  id              Int      @id @default(autoincrement())
+  id            Int      @id @default(autoincrement())
   /// Action taken, e.g. SUSPEND_USER, BAN_USER, RESOLVE_DISPUTE
-  action          String
+  action        String
   /// The address or resource the action was taken against
-  targetAddress   String   @map("target_address")
+  targetAddress String   @map("target_address")
   /// Human-readable reason supplied by the admin
-  reason          String   @default("")
+  reason        String   @default("")
   /// Identifier of the admin who performed the action
-  performedBy     String   @map("performed_by")
-  performedAt     DateTime @map("performed_at")
+  performedBy   String   @map("performed_by")
+  performedAt   DateTime @map("performed_at")
 
   @@index([action])
   @@index([targetAddress])
   @@index([performedAt(sort: Desc)])
   @@map("admin_audit_logs")
-
 }
 
 // ── Audit Log ─────────────────────────────────────────────────────────────────
@@ -214,33 +232,35 @@ model AdminAuditLog {
 /// Comprehensive, append-only audit trail for all system events.
 /// Records are never updated or deleted — retention is handled by archiving.
 model AuditLog {
-  id          BigInt   @id @default(autoincrement())
+  id         BigInt   @id @default(autoincrement())
   /// Category: AUTH | ESCROW | MILESTONE | DISPUTE | ADMIN | PAYMENT | KYC
-  category    String
+  category   String
   /// Specific action, e.g. LOGIN, CREATE_ESCROW, APPROVE_MILESTONE
-  action      String
+  action     String
   /// Actor performing the action (Stellar address or "system" / "admin")
-  actor       String
+  actor      String
   /// Primary resource identifier (escrow id, address, dispute id, etc.)
-  resourceId  String?  @map("resource_id")
+  resourceId String?  @map("resource_id")
   /// Snapshot of relevant state at the time of the event (JSON)
-  metadata    Json?
+  metadata   Json?
   /// HTTP status code or outcome code
-  statusCode  Int?     @map("status_code")
+  statusCode Int?     @map("status_code")
   /// Client IP address
-  ipAddress   String?  @map("ip_address")
+  ipAddress  String?  @map("ip_address")
   /// Immutable timestamp — set once on insert, never changed
-  createdAt   DateTime @default(now()) @map("created_at")
+  createdAt  DateTime @default(now()) @map("created_at")
 
   @@index([category])
   @@index([action])
   @@index([actor])
   @@index([resourceId])
   @@index([createdAt(sort: Desc)])
+  // Composite indexes for common admin filter combinations
+  @@index([category, action])
+  @@index([category, createdAt(sort: Desc)])
+  @@index([actor, createdAt(sort: Desc)])
   @@map("audit_logs")
 }
-
-
 
 enum EscrowStatus {
   Active

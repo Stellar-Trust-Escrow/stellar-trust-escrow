@@ -2,7 +2,7 @@
 process.env.WS_MAX_CONNECTIONS = '2';
 process.env.WS_HEARTBEAT_INTERVAL_MS = '1000';
 
-import { jest } from '@jest/globals';
+import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 
 const { pool } = await import('../api/websocket/handlers.js');
 
