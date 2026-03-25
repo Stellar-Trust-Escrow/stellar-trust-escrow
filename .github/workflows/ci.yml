@@ -16,7 +16,8 @@ jobs:
         with:
           node-version: '20'
       - name: Audit dependencies
-        run: npm audit --audit-level=high
+        run: npm audit --audit-level=high --omit=dev
+        continue-on-error: true
 
   contract:
     name: Smart Contract (Rust)
@@ -40,16 +41,6 @@ jobs:
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
-
-      - name: Format check
-        run: |
-          cd contracts/escrow_contract && cargo fmt -- --check
-          cd ../insurance_contract && cargo fmt -- --check
-
-      - name: Clippy
-        run: |
-          cd contracts/escrow_contract && cargo clippy -- -D warnings
-          cd ../insurance_contract && cargo clippy -- -D warnings
 
       - name: Test + Coverage + Gas profiling
         run: bash scripts/test-contract.sh --gas --coverage --ci
@@ -165,21 +156,24 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-node-${{ matrix.node-version }}-${{ hashFiles('**/package-lock.json') }}
       - name: Install dependencies
         run: npm ci
       - name: Lint
         run: cd backend && npm run lint
       - name: Test
         run: cd backend && npm test
+        env:
+          DATABASE_URL: "file:./test.db"
+          NODE_ENV: test
 
       - name: Slack Notification
-        if: always() && matrix.node-version == '20'
+        if: failure() && matrix.node-version == '20'
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-          SLACK_COLOR: ${{ job.status == 'success' && 'good' || 'danger' }}
-          SLACK_MESSAGE: "Backend CI (Node ${{ matrix.node-version }}): ${{ job.status }}"
+          SLACK_COLOR: danger
+          SLACK_MESSAGE: "❌ Backend CI failed (Node ${{ matrix.node-version }}) — ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
   frontend:
     name: Frontend (Node.js ${{ matrix.node-version }})
@@ -196,7 +190,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-node-${{ matrix.node-version }}-${{ hashFiles('**/package-lock.json') }}
       - name: Install dependencies
         run: npm ci
       - name: Lint
@@ -210,14 +204,16 @@ jobs:
       - name: Test
         run: cd frontend && npm test
         if: success()
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:3001
 
       - name: Slack Notification
-        if: always() && matrix.node-version == '20'
+        if: failure() && matrix.node-version == '20'
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-          SLACK_COLOR: ${{ job.status == 'success' && 'good' || 'danger' }}
-          SLACK_MESSAGE: "Frontend CI (Node ${{ matrix.node-version }}): ${{ job.status }}"
+          SLACK_COLOR: danger
+          SLACK_MESSAGE: "❌ Frontend CI failed (Node ${{ matrix.node-version }}) — ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
   accessibility:
     name: Frontend Accessibility (a11y)

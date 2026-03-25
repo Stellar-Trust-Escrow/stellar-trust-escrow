@@ -51,11 +51,12 @@ for CONTRACT in "${CONTRACTS[@]}"; do
 
   # Tests (with optional gas profiling)
   echo "🧪 Running tests…"
+  TEST_OUT="../../$ARTIFACTS_DIR/${CONTRACT}-test.txt"
   if [ "$GAS" = true ]; then
     echo "   ⛽ Gas profiling enabled"
-    (cd "$CONTRACT_DIR" && SOROBAN_GAS_PROFILE=1 cargo test -- --nocapture 2>&1 | tee "../../$ARTIFACTS_DIR/${CONTRACT}-gas.txt")
+    (cd "$CONTRACT_DIR" && SOROBAN_GAS_PROFILE=1 cargo test -- --nocapture 2>&1 | tee "../../$ARTIFACTS_DIR/${CONTRACT}-gas.txt" | tee "$TEST_OUT" > /dev/null)
   else
-    (cd "$CONTRACT_DIR" && cargo test -- --nocapture 2>&1 | tee "../../$ARTIFACTS_DIR/${CONTRACT}-test.txt")
+    (cd "$CONTRACT_DIR" && cargo test -- --nocapture 2>&1 | tee "$TEST_OUT")
   fi
   echo "   ✅ Tests OK"
 
