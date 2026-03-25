@@ -1,80 +1,1639 @@
 openapi: 3.0.3
 info:
-  title: Stellar Trust Escrow Backend API
+  title: Stellar Trust Escrow API
   version: 0.1.0
-  description: Shared pagination contract for collection endpoints.
+  description: |
+    REST API for the Stellar Trust Escrow platform — a trust-minimised escrow
+    service built on the Stellar blockchain.
+
+    ## Authentication
+    Most endpoints require a Bearer JWT token in the `Authorization` header.
+    Admin endpoints additionally require the `x-admin-api-key` header.
+
+    ## Pagination
+    All collection endpoints return a standardised envelope:
+    ```
+    {
+      "data": [...],
+      "page": 1, "limit": 20, "total": 42,
+      "totalPages": 3, "hasNextPage": true, "hasPreviousPage": false
+    }
+    ```
+
+    ## Environments
+    - **Testnet**: `https://api.test.stellar-trust-escrow.example.com`
+    - **Mainnet**: `https://api.stellar-trust-escrow.example.com`
+  contact:
+    name: Stellar Trust Escrow
+    url: https://stellar-trust-escrow.example.com
+  license:
+    name: AGPL-3.0
+    url: https://www.gnu.org/licenses/agpl-3.0.en.html
+  x-repository: https://github.com/Stellar-Trust-Escrow/stellar-trust-escrow
+  x-docs-url: https://docs.stellar-trust-escrow.example.com
+
+servers:
+  - url: http://localhost:4000
+    description: Local development
+  - url: https://api.test.stellar-trust-escrow.example.com
+    description: Testnet
+  - url: https://api.stellar-trust-escrow.example.com
+    description: Mainnet
+
+tags:
+  - name: Authentication
+    description: User registration, login, token management
+  - name: Escrows
+    description: Escrow lifecycle management
+  - name: Users
+    description: User profiles, stats, data export/import
+  - name: Disputes
+    description: Dispute filing and resolution
+  - name: Reputation
+    description: Reputation scores and leaderboard
+  - name: Payments
+    description: Stripe payment operations and webhooks
+  - name: Notifications
+    description: Email notification events and subscription management
+  - name: Events
+    description: Indexed on-chain Stellar events
+  - name: KYC
+    description: Sumsub KYC integration
+  - name: Admin
+    description: Admin-only operations (requires x-admin-api-key)
+  - name: Audit
+    description: Audit log search and export (requires x-admin-api-key)
+  - name: Health
+    description: Service health and metrics
+
+security:
+  - BearerAuth: []
+
 paths:
-  /api/v1/escrows:
+  /health:
     get:
-      summary: List escrows
-      parameters:
-        - $ref: '#/components/parameters/Page'
-        - $ref: '#/components/parameters/Limit'
+      tags: [Health]
+      summary: Service health check
+      description: Returns database connectivity, cache stats, WebSocket pool metrics, and uptime.
+      operationId: getHealth
+      security: []
       responses:
         '200':
-          description: Standardized paginated escrow list
+          description: All systems operational
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedResponse'
-  /api/v1/escrows/{id}/milestones:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Database unreachable — service degraded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /api/auth/register:
+    post:
+      tags: [Authentication]
+      summary: Register a new user
+      operationId: register
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            example:
+              email: user@example.com
+              password: MyStr0ng!Pass
+              stellarAddress: GDKHX...
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '409':
+          description: Email already registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/auth/login:
+    post:
+      tags: [Authentication]
+      summary: Login with email and password
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: user@example.com
+              password: MyStr0ng!Pass
+      responses:
+        '200':
+          description: JWT tokens returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/auth/refresh:
+    post:
+      tags: [Authentication]
+      summary: Refresh access token using refresh token
+      operationId: refreshToken
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+                  example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      responses:
+        '200':
+          description: New access token returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+                  expiresIn:
+                    type: integer
+                    example: 3600
+        '401':
+          description: Refresh token expired or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Invalidate refresh token (client-side discard of access token expected)
+      operationId: logout
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Logged out successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Logged out successfully
+
+  /api/escrows:
     get:
+      tags: [Escrows]
+      summary: List escrows with filters and pagination
+      operationId: listEscrows
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - name: status
+          in: query
+          description: Single value or comma-separated list
+          schema:
+            type: string
+            enum: [Active, Completed, Disputed, Cancelled]
+          example: Active,Completed
+        - name: client
+          in: query
+          description: Filter by client Stellar address
+          schema:
+            type: string
+            example: GDKHX...QZ4
+        - name: freelancer
+          in: query
+          description: Filter by freelancer Stellar address
+          schema:
+            type: string
+            example: GDKHX...QZ4
+        - name: search
+          in: query
+          description: Substring search on escrow ID or address
+          schema:
+            type: string
+        - name: minAmount
+          in: query
+          description: Minimum totalAmount (XLM string)
+          schema:
+            type: string
+            example: '100'
+        - name: maxAmount
+          in: query
+          description: Maximum totalAmount (XLM string)
+          schema:
+            type: string
+            example: '5000'
+        - name: dateFrom
+          in: query
+          description: 'ISO date — createdAt >= dateFrom'
+          schema:
+            type: string
+            format: date
+            example: '2024-01-01'
+        - name: dateTo
+          in: query
+          description: 'ISO date — createdAt <= dateTo (end of day)'
+          schema:
+            type: string
+            format: date
+            example: '2024-12-31'
+        - $ref: '#/components/parameters/SortBy'
+        - $ref: '#/components/parameters/SortOrder'
+      responses:
+        '200':
+          description: Paginated escrow list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedEscrows'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/escrows/broadcast:
+    post:
+      tags: [Escrows]
+      summary: Broadcast a pre-signed create_escrow transaction to Stellar
+      operationId: broadcastCreateEscrow
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [signedXdr]
+              properties:
+                signedXdr:
+                  type: string
+                  description: Base64-encoded signed Stellar transaction envelope
+                  example: AAAA...==
+      responses:
+        '202':
+          description: Transaction accepted for broadcast
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  txHash:
+                    type: string
+                    example: a1b2c3d4...
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/escrows/{id}:
+    get:
+      tags: [Escrows]
+      summary: Get full escrow details including milestones
+      operationId: getEscrow
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Escrow contract ID
+          schema:
+            type: string
+            example: escrow_abc123
+      responses:
+        '200':
+          description: Escrow details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EscrowDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/escrows/{id}/milestones:
+    get:
+      tags: [Escrows]
       summary: List milestones for an escrow
+      operationId: listMilestones
+      security:
+        - BearerAuth: []
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Limit'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
       responses:
         '200':
-          description: Standardized paginated milestone list
+          description: Paginated milestone list
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedResponse'
-  /api/v1/users/{address}/escrows:
+                $ref: '#/components/schemas/PaginatedMilestones'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/escrows/{id}/milestones/{milestoneId}:
     get:
-      summary: List escrows for a user
+      tags: [Escrows]
+      summary: Get a single milestone
+      operationId: getMilestone
+      security:
+        - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/Page'
-        - $ref: '#/components/parameters/Limit'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: milestoneId
+          in: path
+          required: true
+          schema:
+            type: string
+            example: '1'
       responses:
         '200':
-          description: Standardized paginated user escrow list
+          description: Milestone detail
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedResponse'
-  /api/v1/disputes:
+                $ref: '#/components/schemas/Milestone'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/users/{address}:
     get:
-      summary: List disputes
+      tags: [Users]
+      summary: Get user profile (reputation, escrow history, stats)
+      operationId: getUserProfile
+      security: []
       parameters:
-        - $ref: '#/components/parameters/Page'
-        - $ref: '#/components/parameters/Limit'
+        - name: address
+          in: path
+          required: true
+          description: Stellar public key (G...)
+          schema:
+            type: string
+            example: GDKHX...QZ4
       responses:
         '200':
-          description: Standardized paginated dispute list
+          description: User profile
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedResponse'
-  /api/v1/reputation/leaderboard:
+                $ref: '#/components/schemas/UserProfile'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/users/{address}/escrows:
     get:
-      summary: List reputation leaderboard entries
+      tags: [Users]
+      summary: List escrows for a specific user
+      operationId: getUserEscrows
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [client, freelancer, all]
+            default: all
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [Active, Completed, Disputed, Cancelled]
+      responses:
+        '200':
+          description: Paginated user escrow list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedEscrows'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/users/{address}/stats:
+    get:
+      tags: [Users]
+      summary: Aggregated user statistics
+      operationId: getUserStats
+      security: []
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserStats'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/users/{address}/export:
+    get:
+      tags: [Users]
+      summary: Export all user data as JSON
+      operationId: exportUserData
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Export data envelope
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserExport'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Address mismatch with authenticated user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/users/{address}/import:
+    post:
+      tags: [Users]
+      summary: Import user data from JSON
+      operationId: importUserData
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [data]
+              properties:
+                data:
+                  type: object
+                  description: Previously exported user data
+                mode:
+                  type: string
+                  enum: [merge, replace]
+                  default: merge
+      responses:
+        '200':
+          description: Import result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  results:
+                    type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/users/{address}/export/file:
+    get:
+      tags: [Users]
+      summary: Download user data as a JSON file
+      operationId: downloadExportFile
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: JSON file download
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  file:
+                    type: string
+                    example: data.json
+                  content:
+                    type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Address mismatch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/disputes:
+    get:
+      tags: [Disputes]
+      summary: List disputes with pagination
+      operationId: listDisputes
+      security: []
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Limit'
       responses:
         '200':
-          description: Standardized paginated leaderboard response
+          description: Paginated dispute list
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedResponse'
+                $ref: '#/components/schemas/PaginatedDisputes'
+
+  /api/disputes/{escrowId}:
+    get:
+      tags: [Disputes]
+      summary: Get dispute details for a specific escrow
+      operationId: getDispute
+      security: []
+      parameters:
+        - name: escrowId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Dispute detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dispute'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/reputation/leaderboard:
+    get:
+      tags: [Reputation]
+      summary: Top users by reputation score
+      operationId: getLeaderboard
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated leaderboard
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedLeaderboard'
+
+  /api/reputation/{address}:
+    get:
+      tags: [Reputation]
+      summary: Get full reputation record for an address
+      operationId: getReputation
+      security: []
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Reputation record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReputationRecord'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/payments/webhook:
+    post:
+      tags: [Payments]
+      summary: Stripe webhook endpoint
+      description: Must be registered before express.json() parses the body. Verifies Stripe signature.
+      operationId: stripeWebhook
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      parameters:
+        - name: stripe-signature
+          in: header
+          required: true
+          description: Stripe webhook signature
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Webhook processed
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: OK
+        '400':
+          description: Signature verification failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/payments/checkout:
+    post:
+      tags: [Payments]
+      summary: Create a Stripe Checkout session
+      description: Requires KYC Approved status. Creates a checkout.sessions record.
+      operationId: createCheckout
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [address, amountUsd]
+              properties:
+                address:
+                  type: string
+                  description: Stellar address
+                  example: GDKHX...QZ4
+                amountUsd:
+                  type: number
+                  minimum: 0.5
+                  example: 50.00
+                escrowId:
+                  type: string
+                  description: Optional — associates payment with an escrow
+                  example: escrow_abc123
+      responses:
+        '201':
+          description: Checkout session created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessionId:
+                    type: string
+                  url:
+                    type: string
+                    format: uri
+        '402':
+          description: KYC not approved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/payments/status/{sessionId}:
+    get:
+      tags: [Payments]
+      summary: Get payment status by Stripe session ID
+      operationId: getPaymentStatus
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            example: cs_test_abc123
+      responses:
+        '200':
+          description: Payment record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRecord'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/payments/{address}:
+    get:
+      tags: [Payments]
+      summary: List all payments for a Stellar address
+      operationId: listPayments
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Payment list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PaymentRecord'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/payments/{paymentId}/refund:
+    post:
+      tags: [Payments]
+      summary: Issue a full refund for a completed payment
+      operationId: refundPayment
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Refund issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  refundId:
+                    type: string
+                  status:
+                    type: string
+                    example: succeeded
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/notifications/events:
+    post:
+      tags: [Notifications]
+      summary: Enqueue an email notification event
+      operationId: enqueueNotification
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [eventType, data]
+              properties:
+                eventType:
+                  type: string
+                  enum:
+                    - escrow.status_changed
+                    - milestone.completed
+                    - dispute.raised
+                  example: milestone.completed
+                data:
+                  type: object
+                  required: [recipients]
+                  properties:
+                    recipients:
+                      type: array
+                      items:
+                        type: string
+                        format: email
+                      example: ['user@example.com']
+                    escrowId:
+                      type: string
+                    milestoneId:
+                      type: string
+      responses:
+        '202':
+          description: Event accepted for delivery
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enqueued:
+                    type: boolean
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/notifications/subscribe:
+    post:
+      tags: [Notifications]
+      summary: Re-subscribe an email to notifications
+      operationId: subscribe
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+      responses:
+        '200':
+          description: Resubscribed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  email:
+                    type: string
+                    format: email
+                  unsubscribedAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/notifications/unsubscribe:
+    get:
+      tags: [Notifications]
+      summary: Unsubscribe via email link (GET for browser redirect)
+      operationId: unsubscribeGet
+      security: []
+      parameters:
+        - name: email
+          in: query
+          required: true
+          schema:
+            type: string
+            format: email
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: reason
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: HTML confirmation page
+          content:
+            text/html:
+              schema:
+                type: string
+        '400':
+          description: Missing email or token
+          content:
+            text/html:
+              schema:
+                type: string
+    post:
+      tags: [Notifications]
+      summary: Unsubscribe via API
+      operationId: unsubscribePost
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, token]
+              properties:
+                email:
+                  type: string
+                  format: email
+                token:
+                  type: string
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Unsubscribed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  email:
+                    type: string
+                    format: email
+                  unsubscribedAt:
+                    type: string
+                    format: date-time
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/notifications/queue:
+    get:
+      tags: [Notifications]
+      summary: Get email queue snapshot (size, processing stats)
+      operationId: getQueueSnapshot
+      security: []
+      responses:
+        '200':
+          description: Queue snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pending:
+                    type: integer
+                  processing:
+                    type: integer
+                  processed:
+                    type: integer
+
+  /api/events:
+    get:
+      tags: [Events]
+      summary: List all indexed on-chain events
+      operationId: listEvents
+      security: []
+      parameters:
+        - name: eventType
+          in: query
+          schema:
+            type: string
+          example: escrow_created
+        - name: escrowId
+          in: query
+          schema:
+            type: string
+        - name: fromLedger
+          in: query
+          schema:
+            type: integer
+          description: Inclusive lower bound ledger sequence
+        - name: toLedger
+          in: query
+          schema:
+            type: integer
+          description: Inclusive upper bound ledger sequence
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated event list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedEvents'
+
+  /api/events/types:
+    get:
+      tags: [Events]
+      summary: List distinct event types in the index
+      operationId: listEventTypes
+      security: []
+      responses:
+        '200':
+          description: Distinct event types
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  types:
+                    type: array
+                    items:
+                      type: string
+                    example: ['escrow_created', 'milestone_completed', 'dispute_raised']
+
+  /api/events/stats:
+    get:
+      tags: [Events]
+      summary: Aggregate event counts per type
+      operationId: getEventStats
+      security: []
+      responses:
+        '200':
+          description: Event statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stats:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        eventType:
+                          type: string
+                        count:
+                          type: integer
+
+  /api/events/escrow/{escrowId}:
+    get:
+      tags: [Events]
+      summary: List all indexed events for a specific escrow
+      operationId: listEscrowEvents
+      security: []
+      parameters:
+        - name: escrowId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: eventType
+          in: query
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated escrow events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedEvents'
+
+  /api/events/{id}:
+    get:
+      tags: [Events]
+      summary: Get a single indexed event by database ID
+      operationId: getEvent
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Event detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IndexedEvent'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/kyc/token:
+    post:
+      tags: [KYC]
+      summary: Generate a Sumsub SDK access token
+      description: Returns a short-lived token for the frontend Sumsub widget.
+      operationId: getKycToken
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [address]
+              properties:
+                address:
+                  type: string
+                  description: Stellar address of the user
+                  example: GDKHX...QZ4
+      responses:
+        '200':
+          description: Sumsub access token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  expiresIn:
+                    type: integer
+                    example: 3600
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/kyc/status/{address}:
+    get:
+      tags: [KYC]
+      summary: Get KYC verification status for an address
+      operationId: getKycStatus
+      security: []
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: KYC status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycStatus'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/kyc/webhook:
+    post:
+      tags: [KYC]
+      summary: Sumsub webhook endpoint
+      description: Receives KYC status updates from Sumsub. Raw body required for signature verification.
+      operationId: kycWebhook
+      security: []
+      parameters:
+        - name: X-Sumsub-Signature
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Webhook acknowledged
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: OK
+
+  /api/kyc/admin:
+    get:
+      tags: [KYC]
+      summary: Admin — list all KYC records
+      operationId: adminListKyc
+      security:
+        - AdminAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [Pending, Init, Processing, Approved, Declined]
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated KYC records
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedKycRecords'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/admin/stats:
+    get:
+      tags: [Admin]
+      summary: Platform-wide statistics
+      operationId: getAdminStats
+      security:
+        - AdminAuth: []
+      responses:
+        '200':
+          description: Platform stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminStats'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/admin/users:
+    get:
+      tags: [Admin]
+      summary: List all users with pagination and search
+      operationId: adminListUsers
+      security:
+        - AdminAuth: []
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated user list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAdminUsers'
+
+  /api/admin/users/{address}:
+    get:
+      tags: [Admin]
+      summary: Get detailed user profile
+      operationId: adminGetUser
+      security:
+        - AdminAuth: []
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUserDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/admin/users/{address}/suspend:
+    post:
+      tags: [Admin]
+      summary: Suspend a user
+      operationId: suspendUser
+      security:
+        - AdminAuth: []
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  example: Terms of service violation
+      responses:
+        '200':
+          description: User suspended
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/admin/users/{address}/ban:
+    post:
+      tags: [Admin]
+      summary: Permanently ban a user
+      operationId: banUser
+      security:
+        - AdminAuth: []
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: User banned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/admin/disputes:
+    get:
+      tags: [Admin]
+      summary: List all disputes with pagination
+      operationId: adminListDisputes
+      security:
+        - AdminAuth: []
+      parameters:
+        - name: resolved
+          in: query
+          schema:
+            type: boolean
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated dispute list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedDisputes'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/admin/disputes/{id}/resolve:
+    post:
+      tags: [Admin]
+      summary: Resolve an open dispute
+      operationId: resolveDispute
+      security:
+        - AdminAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clientAmount, freelancerAmount]
+              properties:
+                clientAmount:
+                  type: string
+                  description: XLM amount to release to client
+                  example: '250'
+                freelancerAmount:
+                  type: string
+                  description: XLM amount to release to freelancer
+                  example: '750'
+                notes:
+                  type: string
+                  description: Internal resolution notes
+      responses:
+        '200':
+          description: Dispute resolved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  txHash:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/admin/settings:
+    get:
+      tags: [Admin]
+      summary: Read current platform settings
+      operationId: getSettings
+      security:
+        - AdminAuth: []
+      responses:
+        '200':
+          description: Platform settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformSettings'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    patch:
+      tags: [Admin]
+      summary: Update platform settings
+      operationId: updateSettings
+      security:
+        - AdminAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                platformFeePercent:
+                  type: number
+                  minimum: 0
+                  maximum: 100
+                  example: 2.5
+      responses:
+        '200':
+          description: Settings updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformSettings'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/admin/audit-logs:
+    get:
+      tags: [Admin]
+      summary: Paginated admin action audit log
+      operationId: getAdminAuditLogs
+      security:
+        - AdminAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated audit logs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAuditLogs'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/audit:
+    get:
+      tags: [Audit]
+      summary: Search audit logs with filters
+      operationId: searchAuditLogs
+      security:
+        - AdminAuth: []
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+          example: escrow
+        - name: action
+          in: query
+          schema:
+            type: string
+          example: created
+        - name: actor
+          in: query
+          schema:
+            type: string
+        - name: resourceId
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          description: ISO date/time lower bound
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: ISO date/time upper bound
+          schema:
+            type: string
+            format: date-time
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated audit log entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAuditLogs'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/audit/export:
+    get:
+      tags: [Audit]
+      summary: Export audit logs as CSV (max 10 000 rows)
+      operationId: exportAuditCsv
+      security:
+        - AdminAuth: []
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: action
+          in: query
+          schema:
+            type: string
+        - name: actor
+          in: query
+          schema:
+            type: string
+        - name: resourceId
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: CSV file download
+          content:
+            text/csv:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
 components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT access token obtained from /api/auth/login
+    AdminAuth:
+      type: apiKey
+      in: header
+      name: x-admin-api-key
+      description: Admin API key for protected admin endpoints
+
   parameters:
     Page:
       name: page
       in: query
-      description: 1-based page number. Values below 1 are normalized to 1.
+      description: 1-based page number. Values below 1 are normalised to 1.
       schema:
         type: integer
         default: 1
@@ -88,17 +1647,35 @@ components:
         default: 20
         minimum: 1
         maximum: 100
+    SortBy:
+      name: sortBy
+      in: query
+      schema:
+        type: string
+        enum: [createdAt, totalAmount, status]
+        default: createdAt
+    SortOrder:
+      name: sortOrder
+      in: query
+      schema:
+        type: string
+        enum: [asc, desc]
+        default: desc
+
   schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: Something went wrong
+        errorId:
+          type: string
+          description: Sentry event ID for support correlation
+
     PaginatedResponse:
       type: object
-      required:
-        - data
-        - page
-        - limit
-        - total
-        - totalPages
-        - hasNextPage
-        - hasPreviousPage
+      required: [data, page, limit, total, totalPages, hasNextPage, hasPreviousPage]
       properties:
         data:
           type: array
@@ -121,3 +1698,508 @@ components:
         hasPreviousPage:
           type: boolean
           example: false
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        timestamp:
+          type: string
+          format: date-time
+        uptime:
+          type: integer
+          description: Seconds since process start
+        cache:
+          type: object
+          properties:
+            hits:
+              type: integer
+            misses:
+              type: integer
+        websocket:
+          type: object
+        db:
+          type: object
+          properties:
+            status:
+              type: string
+            latencyMs:
+              type: integer
+              nullable: true
+            pool:
+              type: object
+              nullable: true
+
+    RegisterRequest:
+      type: object
+      required: [email, password, stellarAddress]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        stellarAddress:
+          type: string
+          pattern: '^G[A-Z0-9]{55}$'
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    AuthResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        expiresIn:
+          type: integer
+          example: 3600
+        user:
+          type: object
+          properties:
+            email:
+              type: string
+            stellarAddress:
+              type: string
+
+    Escrow:
+      type: object
+      properties:
+        id:
+          type: string
+          example: escrow_abc123
+        client:
+          type: string
+          example: GDKHX...QZ4
+        freelancer:
+          type: string
+          example: GDKHX...QZ4
+        totalAmount:
+          type: string
+          example: '1000'
+        status:
+          type: string
+          enum: [Active, Completed, Disputed, Cancelled]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    EscrowDetail:
+      allOf:
+        - $ref: '#/components/schemas/Escrow'
+        - type: object
+          properties:
+            milestones:
+              type: array
+              items:
+                $ref: '#/components/schemas/Milestone'
+
+    PaginatedEscrows:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/Escrow'
+
+    Milestone:
+      type: object
+      properties:
+        id:
+          type: string
+          example: '1'
+        escrowId:
+          type: string
+        description:
+          type: string
+        amount:
+          type: string
+        status:
+          type: string
+          enum: [Pending, Funded, Released, Disputed]
+        dueDate:
+          type: string
+          format: date
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    PaginatedMilestones:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/Milestone'
+
+    UserProfile:
+      type: object
+      properties:
+        address:
+          type: string
+        email:
+          type: string
+          nullable: true
+        kycStatus:
+          type: string
+          enum: [Pending, Init, Processing, Approved, Declined]
+        reputation:
+          type: object
+          properties:
+            score:
+              type: number
+            totalReviews:
+              type: integer
+            completionRate:
+              type: number
+        escrowStats:
+          type: object
+          properties:
+            asClient:
+              type: integer
+            asFreelancer:
+              type: integer
+            completed:
+              type: integer
+            disputed:
+              type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    UserStats:
+      type: object
+      properties:
+        address:
+          type: string
+        totalVolume:
+          type: string
+          description: Total XLM volume
+        completionRate:
+          type: number
+          example: 0.92
+        avgMilestoneTimeDays:
+          type: number
+        totalEscrows:
+          type: integer
+        completedEscrows:
+          type: integer
+        disputedEscrows:
+          type: integer
+
+    UserExport:
+      type: object
+      properties:
+        version:
+          type: string
+          example: '1.0'
+        exportedAt:
+          type: string
+          format: date-time
+        userAddress:
+          type: string
+        data:
+          type: object
+          properties:
+            escrows:
+              type: array
+            payments:
+              type: array
+            kyc:
+              type: object
+            reputation:
+              type: object
+
+    Dispute:
+      type: object
+      properties:
+        id:
+          type: string
+        escrowId:
+          type: string
+        raisedBy:
+          type: string
+        reason:
+          type: string
+        status:
+          type: string
+          enum: [Open, Resolved]
+        resolution:
+          type: object
+          nullable: true
+          properties:
+            clientAmount:
+              type: string
+            freelancerAmount:
+              type: string
+            notes:
+              type: string
+        createdAt:
+          type: string
+          format: date-time
+        resolvedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    PaginatedDisputes:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/Dispute'
+
+    ReputationRecord:
+      type: object
+      properties:
+        address:
+          type: string
+        score:
+          type: number
+        totalReviews:
+          type: integer
+        positiveReviews:
+          type: integer
+        negativeReviews:
+          type: integer
+        completionRate:
+          type: number
+        avgResponseTimeHours:
+          type: number
+          nullable: true
+        rank:
+          type: integer
+          nullable: true
+
+    PaginatedLeaderboard:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ReputationRecord'
+
+    PaymentRecord:
+      type: object
+      properties:
+        id:
+          type: string
+        stripeSessionId:
+          type: string
+        address:
+          type: string
+        amountUsd:
+          type: number
+        amountXlm:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [pending, completed, refunded, failed]
+        escrowId:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    IndexedEvent:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        ledger:
+          type: integer
+        txHash:
+          type: string
+        eventType:
+          type: string
+        escrowId:
+          type: string
+          nullable: true
+        data:
+          type: object
+          additionalProperties: true
+        timestamp:
+          type: string
+          format: date-time
+
+    PaginatedEvents:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/IndexedEvent'
+
+    KycStatus:
+      type: object
+      properties:
+        address:
+          type: string
+        status:
+          type: string
+          enum: [Pending, Init, Processing, Approved, Declined]
+        reviewResult:
+          type: object
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PaginatedKycRecords:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/KycStatus'
+
+    AdminStats:
+      type: object
+      properties:
+        totalEscrows:
+          type: integer
+        totalUsers:
+          type: integer
+        totalDisputes:
+          type: integer
+        openDisputes:
+          type: integer
+        totalVolumeXlm:
+          type: string
+        platformRevenueXlm:
+          type: string
+
+    AdminUserDetail:
+      allOf:
+        - $ref: '#/components/schemas/UserProfile'
+        - type: object
+          properties:
+            banStatus:
+              type: string
+              enum: [active, suspended, banned]
+            banReason:
+              type: string
+              nullable: true
+            bannedAt:
+              type: string
+              format: date-time
+              nullable: true
+
+    PaginatedAdminUsers:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/AdminUserDetail'
+
+    PlatformSettings:
+      type: object
+      properties:
+        platformFeePercent:
+          type: number
+          example: 2.5
+        minEscrowAmountXlm:
+          type: string
+        maxEscrowAmountXlm:
+          type: string
+        escrowLockPeriodDays:
+          type: integer
+        updatedAt:
+          type: string
+          format: date-time
+
+    PaginatedAuditLogs:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/AuditLogEntry'
+
+    AuditLogEntry:
+      type: object
+      properties:
+        id:
+          type: string
+        category:
+          type: string
+        action:
+          type: string
+        actor:
+          type: string
+        resourceId:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+          nullable: true
+        ipAddress:
+          type: string
+          nullable: true
+        userAgent:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid authentication token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    BadRequest:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

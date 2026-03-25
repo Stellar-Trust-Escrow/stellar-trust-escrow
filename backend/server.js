@@ -11,6 +11,7 @@ import express from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
 
+import docsRouter from './docs/index.js';
 import disputeRoutes from './api/routes/disputeRoutes.js';
 import escrowRoutes from './api/routes/escrowRoutes.js';
 import eventRoutes from './api/routes/eventRoutes.js';
@@ -23,8 +24,8 @@ import auditRoutes from './api/routes/auditRoutes.js';
 import authRoutes from './api/routes/authRoutes.js';
 import authMiddleware from './api/middleware/auth.js';
 import auditMiddleware from './api/middleware/audit.js';
-import apiV1Routes from './api/v1/index.js';
-import { deprecatedRoute } from './api/middleware/version.js';
+import _apiV1Routes from './api/v1/index.js';
+import { deprecatedRoute as _deprecatedRoute } from './api/middleware/version.js';
 import { createWebSocketServer, pool } from './api/websocket/handlers.js';
 import cache from './lib/cache.js';
 import { attachPrismaMetrics } from './lib/prismaMetrics.js';
@@ -41,8 +42,6 @@ attachPrismaMetrics(prisma);
 startConnectionMonitoring(prisma);
 
 const PORT = process.env.PORT || 4000;
-const app = express();
-
 const app = express();
 
 // ── Sentry request handler — must be first middleware ─────────────────────────
@@ -130,6 +129,7 @@ app.use('/api/events', eventRoutes);
 app.use('/api/kyc', kycRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/audit', auditRoutes);
+app.use('/docs', docsRouter);
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((req, res) => {

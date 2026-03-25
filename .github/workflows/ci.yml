@@ -70,6 +70,9 @@ jobs:
       - name: Test
         run: cd backend && npm test
 
+      - name: Validate OpenAPI spec
+        run: npx --yes @redocly/cli lint backend/openapi.yaml --format=stylish
+
   frontend:
     name: Frontend (Next.js)
     runs-on: ubuntu-latest
