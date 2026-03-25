@@ -36,7 +36,6 @@ import { useState } from 'react';
 import Badge from '../ui/Badge';
 import Button from '../ui/Button';
 import { useI18n } from '../../i18n/index.jsx';
-import { useI18n } from '../../i18n/index.jsx';
 
 export default function MilestoneItem({
   milestone,

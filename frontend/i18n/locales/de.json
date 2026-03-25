@@ -54,5 +54,46 @@
     "filter": "Filtern",
     "noResults": "Keine Ergebnisse"
   },
-  "network": { "mainnet": "Hauptnetz", "testnet": "Testnetz" }
+  "network": { "mainnet": "Hauptnetz", "testnet": "Testnetz" },
+  "home": {
+    "howItWorks": "So funktioniert es",
+    "features": { "title": "Für Freelancer und Auftraggeber" },
+    "cta": {
+      "title": "Bereit, Vertrauen on-chain aufzubauen?",
+      "desc": "Verbinden Sie Ihr Freighter-Wallet und erstellen Sie Ihre erste Treuhand in Minuten.",
+      "button": "Loslegen →"
+    },
+    "how": {
+      "create": {
+        "title": "Treuhand erstellen",
+        "desc": "Der Auftraggeber sperrt Mittel und definiert Meilensteine."
+      },
+      "deliver": {
+        "title": "Arbeit liefern",
+        "desc": "Der Freelancer reicht jeden Meilenstein zur Prüfung ein."
+      },
+      "release": {
+        "title": "Mittel freigeben",
+        "desc": "Der Auftraggeber genehmigt, Mittel werden automatisch freigegeben."
+      }
+    },
+    "feature": {
+      "lock": {
+        "title": "Meilenstein-Sperrung",
+        "desc": "Mittel werden on-chain gesperrt und erst nach Genehmigung freigegeben."
+      },
+      "rep": {
+        "title": "On-Chain-Reputation",
+        "desc": "Jede abgeschlossene Treuhand stärkt Ihren Reputationswert auf Stellar."
+      },
+      "dispute": {
+        "title": "Streitbeilegung",
+        "desc": "Ein Schiedsrichter kann bei Problemen die gesperrten Mittel verteilen."
+      },
+      "decentralized": {
+        "title": "Vollständig dezentralisiert",
+        "desc": "Keine Vermittler. Alles läuft in einem Soroban-Smart-Contract."
+      }
+    }
+  }
 }

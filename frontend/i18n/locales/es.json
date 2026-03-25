@@ -54,5 +54,46 @@
     "filter": "Filtrar",
     "noResults": "Sin resultados"
   },
-  "network": { "mainnet": "Red Principal", "testnet": "Red de Pruebas" }
+  "network": { "mainnet": "Red Principal", "testnet": "Red de Pruebas" },
+  "home": {
+    "howItWorks": "Cómo Funciona",
+    "features": { "title": "Para Freelancers y Clientes" },
+    "cta": {
+      "title": "¿Listo para construir confianza en la cadena?",
+      "desc": "Conecta tu billetera Freighter y crea tu primer depósito en minutos.",
+      "button": "Comenzar →"
+    },
+    "how": {
+      "create": {
+        "title": "Crear Depósito",
+        "desc": "El cliente bloquea fondos y define hitos del proyecto."
+      },
+      "deliver": {
+        "title": "Entregar Trabajo",
+        "desc": "El freelancer trabaja y envía cada hito para revisión."
+      },
+      "release": {
+        "title": "Liberar Fondos",
+        "desc": "El cliente aprueba, los fondos se liberan automáticamente."
+      }
+    },
+    "feature": {
+      "lock": {
+        "title": "Bloqueo por Hitos",
+        "desc": "Los fondos se bloquean en la cadena y solo se liberan cuando apruebas cada hito."
+      },
+      "rep": {
+        "title": "Reputación en Cadena",
+        "desc": "Cada depósito completado construye tu puntuación de reputación verificable en Stellar."
+      },
+      "dispute": {
+        "title": "Resolución de Disputas",
+        "desc": "Si surgen problemas, un árbitro de confianza puede distribuir los fondos bloqueados."
+      },
+      "decentralized": {
+        "title": "Totalmente Descentralizado",
+        "desc": "Sin intermediarios. Toda la lógica vive en un contrato inteligente Soroban."
+      }
+    }
+  }
 }

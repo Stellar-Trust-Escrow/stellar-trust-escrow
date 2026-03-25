@@ -54,5 +54,34 @@
     "filter": "筛选",
     "noResults": "无结果"
   },
-  "network": { "mainnet": "主网", "testnet": "测试网" }
+  "network": { "mainnet": "主网", "testnet": "测试网" },
+  "home": {
+    "howItWorks": "如何运作",
+    "features": { "title": "为自由职业者和客户而建" },
+    "cta": {
+      "title": "准备好在链上建立信任了吗？",
+      "desc": "连接您的 Freighter 钱包，几分钟内创建您的第一个托管。",
+      "button": "立即开始 →"
+    },
+    "how": {
+      "create": { "title": "创建托管", "desc": "客户锁定资金并定义项目里程碑。" },
+      "deliver": { "title": "交付工作", "desc": "自由职业者完成工作后提交每个里程碑供审核。" },
+      "release": { "title": "释放资金", "desc": "客户批准后，资金自动释放，声誉自动更新。" }
+    },
+    "feature": {
+      "lock": { "title": "里程碑锁定", "desc": "资金锁定在链上，仅在您批准每个里程碑后才释放。" },
+      "rep": {
+        "title": "链上声誉",
+        "desc": "每个完成的托管都会在 Stellar 区块链上建立您的永久可验证声誉分数。"
+      },
+      "dispute": {
+        "title": "争议解决",
+        "desc": "如有问题，受信任的仲裁员可以公平分配锁定的资金。"
+      },
+      "decentralized": {
+        "title": "完全去中心化",
+        "desc": "无中间商。所有逻辑都在开放可审计的 Soroban 智能合约中。"
+      }
+    }
+  }
 }

@@ -54,5 +54,46 @@
     "filter": "Filter",
     "noResults": "No results found"
   },
-  "network": { "mainnet": "Mainnet", "testnet": "Testnet" }
+  "network": { "mainnet": "Mainnet", "testnet": "Testnet" },
+  "home": {
+    "howItWorks": "How It Works",
+    "features": { "title": "Built for Freelancers & Clients" },
+    "cta": {
+      "title": "Ready to Build Trust On-Chain?",
+      "desc": "Connect your Freighter wallet and create your first escrow in minutes.",
+      "button": "Get Started →"
+    },
+    "how": {
+      "create": {
+        "title": "Create Escrow",
+        "desc": "Client locks funds and defines project milestones."
+      },
+      "deliver": {
+        "title": "Deliver Work",
+        "desc": "Freelancer works, then submits each milestone for review."
+      },
+      "release": {
+        "title": "Release Funds",
+        "desc": "Client approves, funds release automatically. Reputation updated."
+      }
+    },
+    "feature": {
+      "lock": {
+        "title": "Milestone-Based Locking",
+        "desc": "Funds are locked on-chain and only released when you approve each milestone. No trust required."
+      },
+      "rep": {
+        "title": "On-Chain Reputation",
+        "desc": "Every completed escrow builds your permanent, verifiable reputation score on the Stellar blockchain."
+      },
+      "dispute": {
+        "title": "Dispute Resolution",
+        "desc": "If issues arise, a trusted arbiter or the contract admin can fairly distribute locked funds."
+      },
+      "decentralized": {
+        "title": "Fully Decentralized",
+        "desc": "No intermediaries, no custody. All logic lives in a Soroban smart contract — open and auditable."
+      }
+    }
+  }
 }
