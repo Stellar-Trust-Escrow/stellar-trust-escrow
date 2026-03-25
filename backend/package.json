@@ -12,10 +12,17 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "db:migrate": "npx prisma migrate dev",
+    "db:migrate:up": "node database/migrations/migrate.js up",
+    "db:migrate:down": "node database/migrations/migrate.js down",
+    "db:migrate:status": "node database/migrations/migrate.js status",
+    "db:migrate:create": "node database/migrations/migrate.js create",
+    "db:migrate:deploy": "npx prisma migrate deploy",
     "db:generate": "npx prisma generate",
-    "db:seed": "node database/seed.js"
+    "db:seed": "node database/seed/index.js",
+    "db:seed:reset": "node database/seed/index.js --reset"
   },
   "dependencies": {
+    "@elastic/elasticsearch": "^9.3.4",
     "@prisma/client": "^5.0.0",
     "@sentry/node": "^8.55.0",
     "@stellar/stellar-sdk": "^12.0.0",
