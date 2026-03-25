@@ -9,7 +9,7 @@
 
 #![allow(dead_code)]
 
-use soroban_sdk::{symbol_short, Address, Env};
+use soroban_sdk::{symbol_short, Address, Env, String};
 
 /// Emitted when a new escrow is created and funds are locked.
 ///
@@ -94,12 +94,7 @@ pub fn emit_milestone_rejected(env: &Env, escrow_id: u64, milestone_id: u32, cli
 /// * `escrow_id`    - The escrow ID
 /// * `milestone_id` - The disputed milestone
 /// * `raised_by`    - Address of the party raising the dispute
-pub fn emit_milestone_disputed(
-    env: &Env,
-    escrow_id: u64,
-    milestone_id: u32,
-    raised_by: &Address,
-) {
+pub fn emit_milestone_disputed(env: &Env, escrow_id: u64, milestone_id: u32, raised_by: &Address) {
     env.events().publish(
         (symbol_short!("mil_dis"), escrow_id),
         (milestone_id, raised_by.clone()),
