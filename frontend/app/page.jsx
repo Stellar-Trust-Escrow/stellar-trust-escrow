@@ -73,17 +73,17 @@ export default function HomePage() {
           Lock funds in milestone-based smart contracts. Build your on-chain reputation. Work with
           anyone, anywhere — trustlessly.
         </p>
-        <div className="flex items-center justify-center gap-4">
-          <Button href="/escrow/create" variant="primary" size="lg">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <Button href="/escrow/create" variant="primary" size="lg" className="w-full sm:w-auto">
             Create Escrow
           </Button>
-          <Button href="/explorer" variant="secondary" size="lg">
+          <Button href="/explorer" variant="secondary" size="lg" className="w-full sm:w-auto">
             Browse Escrows
           </Button>
         </div>
 
         {/* TODO (contributor — Issue #42): add live platform stats here */}
-        <div className="flex justify-center gap-12 pt-8 border-t border-gray-800 text-center">
+        <div className="flex justify-center flex-wrap gap-8 md:gap-12 pt-8 border-t border-gray-800 text-center">
           {[
             { label: 'Escrows Created', value: '—' },
             { label: 'Total Value Locked', value: '—' },

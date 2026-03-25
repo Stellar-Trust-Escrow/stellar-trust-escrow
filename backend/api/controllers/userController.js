@@ -30,15 +30,25 @@ const getUserProfile = async (req, res) => {
     const cached = cache.get(cacheKey);
     if (cached) return res.json(cached);
 
-    const [reputation, recentEscrows] = await Promise.all([
+    const [reputation, clientEscrows, freelancerEscrows] = await Promise.all([
       prisma.reputationRecord.findUnique({ where: { address } }),
       prisma.escrow.findMany({
-        where: { OR: [{ clientAddress: address }, { freelancerAddress: address }] },
-        select: ESCROW_SUMMARY_SELECT,
+        where: { clientAddress: address },
+        select: { ...ESCROW_SUMMARY_SELECT, clientAddress: true, freelancerAddress: true },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      }),
+      prisma.escrow.findMany({
+        where: { freelancerAddress: address },
+        select: { ...ESCROW_SUMMARY_SELECT, clientAddress: true, freelancerAddress: true },
         orderBy: { createdAt: 'desc' },
         take: 5,
       }),
     ]);
+
+    const recentEscrows = [...clientEscrows, ...freelancerEscrows]
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, 5);
 
     const profile = {
       address,
@@ -68,27 +78,64 @@ const getUserEscrows = async (req, res) => {
     const { role = 'all', status } = req.query;
     const { page, limit, skip } = parsePagination(req.query);
 
-    const where = {};
-    if (status) where.status = status;
-
-    if (role === 'client') {
-      where.clientAddress = address;
-    } else if (role === 'freelancer') {
-      where.freelancerAddress = address;
-    } else {
-      where.OR = [{ clientAddress: address }, { freelancerAddress: address }];
-    }
-
     const cacheKey = `users:escrows:${address}:${role}:${status}:${page}:${limit}`;
     const cached = cache.get(cacheKey);
     if (cached) return res.json(cached);
 
-    const [data, total] = await prisma.$transaction([
-      prisma.escrow.findMany({ where, select: ESCROW_SUMMARY_SELECT, skip, take: limit, orderBy: { createdAt: 'desc' } }),
-      prisma.escrow.count({ where }),
+    if (role === 'client' || role === 'freelancer') {
+      const where = role === 'client' ? { clientAddress: address } : { freelancerAddress: address };
+      if (status) where.status = status;
+
+      const [data, total] = await prisma.$transaction([
+        prisma.escrow.findMany({
+          where,
+          select: ESCROW_SUMMARY_SELECT,
+          skip,
+          take: limit,
+          orderBy: { createdAt: 'desc' },
+        }),
+        prisma.escrow.count({ where }),
+      ]);
+
+      const result = buildPaginatedResponse(data, { total, page, limit });
+      cache.set(cacheKey, result, 15);
+      return res.json(result);
+    }
+
+    const clientWhere = { clientAddress: address };
+    const freelancerWhere = { freelancerAddress: address };
+    if (status) {
+      clientWhere.status = status;
+      freelancerWhere.status = status;
+    }
+
+    const [clientCount, freelancerCount] = await Promise.all([
+      prisma.escrow.count({ where: clientWhere }),
+      prisma.escrow.count({ where: freelancerWhere }),
     ]);
 
-    const result = buildPaginatedResponse(data, { total, page, limit });
+    const total = clientCount + freelancerCount;
+
+    const [clientEscrows, freelancerEscrows] = await Promise.all([
+      prisma.escrow.findMany({
+        where: clientWhere,
+        select: ESCROW_SUMMARY_SELECT,
+        orderBy: { createdAt: 'desc' },
+        take: skip + limit,
+      }),
+      prisma.escrow.findMany({
+        where: freelancerWhere,
+        select: ESCROW_SUMMARY_SELECT,
+        orderBy: { createdAt: 'desc' },
+        take: skip + limit,
+      }),
+    ]);
+
+    const merged = [...clientEscrows, ...freelancerEscrows]
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(skip, skip + limit);
+
+    const result = buildPaginatedResponse(merged, { total, page, limit });
     cache.set(cacheKey, result, 15);
     res.json(result);
   } catch (err) {
@@ -105,20 +152,34 @@ const getUserStats = async (req, res) => {
     const cached = cache.get(cacheKey);
     if (cached) return res.json(cached);
 
-    const [reputation, escrowCounts] = await Promise.all([
+    const [reputation, clientCounts, freelancerCounts] = await Promise.all([
       prisma.reputationRecord.findUnique({
         where: { address },
-        select: { totalScore: true, completedEscrows: true, disputedEscrows: true, totalVolume: true },
+        select: {
+          totalScore: true,
+          completedEscrows: true,
+          disputedEscrows: true,
+          totalVolume: true,
+        },
       }),
       prisma.escrow.groupBy({
         by: ['status'],
-        where: { OR: [{ clientAddress: address }, { freelancerAddress: address }] },
+        where: { clientAddress: address },
+        _count: { id: true },
+      }),
+      prisma.escrow.groupBy({
+        by: ['status'],
+        where: { freelancerAddress: address },
         _count: { id: true },
       }),
     ]);
 
-    const countsByStatus = Object.fromEntries(escrowCounts.map((record) => [record.status, record._count.id]));
-    const totalEscrows = escrowCounts.reduce((sum, record) => sum + record._count.id, 0);
+    const countsByStatus = {};
+    for (const record of [...clientCounts, ...freelancerCounts]) {
+      countsByStatus[record.status] = (countsByStatus[record.status] ?? 0) + record._count.id;
+    }
+
+    const totalEscrows = Object.values(countsByStatus).reduce((sum, c) => sum + c, 0);
     const completed = countsByStatus.Completed ?? 0;
 
     const stats = {

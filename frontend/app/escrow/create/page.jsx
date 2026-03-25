@@ -199,7 +199,7 @@ export default function CreateEscrowPage() {
       </div>
 
       {/* Navigation */}
-      <div className="flex justify-between">
+      <div className="flex flex-col sm:flex-row justify-between gap-4">
         <Button
           variant="secondary"
           onClick={() => setCurrentStep((step) => Math.max(1, step - 1))}
@@ -246,7 +246,7 @@ function StepCounterparty({ formData, setFormData }) {
         {/* TODO (contributor): add validation error display */}
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm text-gray-400 mb-1">Token</label>
           <select
