@@ -446,3 +446,185 @@ Release notes should always include:
   https://developers.stellar.org/docs/build/guides/conventions/upgrading-contracts
 - Stellar Docs: Extending a deployed contract's TTL
   https://developers.stellar.org/docs/build/guides/conventions/extending-wasm-ttl
+
+---
+
+## Escrow Lifecycle
+
+This section documents every state an escrow (and its milestones) can be in, what triggers each transition, and how to check state from code.
+
+---
+
+### Escrow States (`EscrowStatus`)
+
+| State                | Description                                                                 |
+| -------------------- | --------------------------------------------------------------------------- |
+| `Active`             | Escrow created, funds locked on-chain. Work can begin.                      |
+| `Disputed`           | A dispute has been raised. Funds are frozen pending arbiter resolution.     |
+| `CancellationPending`| A cancellation was requested. A dispute window is open before it executes.  |
+| `Completed`          | All milestones approved and all funds released. Terminal state.             |
+| `Cancelled`          | Escrow cancelled before completion. Remaining funds returned to client. Terminal state. |
+
+---
+
+### Milestone States (`MilestoneStatus`)
+
+| State       | Description                                                              |
+| ----------- | ------------------------------------------------------------------------ |
+| `Pending`   | Milestone defined but work not yet submitted.                            |
+| `Submitted` | Freelancer submitted work. Awaiting client review.                       |
+| `Approved`  | Client approved. Funds for this milestone released to freelancer.        |
+| `Rejected`  | Client rejected the submission. Freelancer should resubmit.              |
+| `Disputed`  | A dispute was raised on this milestone. Funds frozen.                    |
+
+---
+
+### State Transition Diagram
+
+```
+                         ┌─────────────────────────────────────────────────────┐
+                         │                   ESCROW STATES                     │
+                         └─────────────────────────────────────────────────────┘
+
+  create_escrow()
+       │
+       ▼
+   [ Active ] ──── raise_dispute() ──────────────────────► [ Disputed ]
+       │                                                        │
+       │                                                  resolve_dispute()
+       │                                                        │
+       ├──── request_cancellation()                             ▼
+       │            │                                     [ Completed ]
+       │            ▼                                     [ Cancelled ]
+       │   [ CancellationPending ]
+       │            │
+       │     dispute_cancellation()  ──► [ Disputed ]
+       │            │
+       │     execute_cancellation()
+       │            │
+       │            ▼
+       │       [ Cancelled ]
+       │
+       └──── cancel_escrow() ────────────────────────────► [ Cancelled ]
+       │     (immediate, no pending milestones)
+       │
+       └──── (all milestones approved) ─────────────────► [ Completed ]
+
+
+                         ┌─────────────────────────────────────────────────────┐
+                         │                  MILESTONE STATES                   │
+                         └─────────────────────────────────────────────────────┘
+
+  add_milestone()
+       │
+       ▼
+   [ Pending ] ◄──────────────────────────────────────────────────────────────┐
+       │                                                                       │
+  submit_milestone()                                                           │
+       │                                                                       │
+       ▼                                                                       │
+  [ Submitted ] ──── approve_milestone() ──► [ Approved ]                     │
+       │                                                                       │
+       ├──── reject_milestone() ──────────────────────────────────────────────┘
+       │
+       └──── raise_dispute() ──────────────────────────► [ Disputed ]
+```
+
+---
+
+### Transition Reference
+
+#### Escrow Transitions
+
+| From                  | To                    | Triggered By              | Who Can Call          |
+| --------------------- | --------------------- | ------------------------- | --------------------- |
+| —                     | `Active`              | `create_escrow()`         | Client                |
+| `Active`              | `Disputed`            | `raise_dispute()`         | Client or Freelancer  |
+| `Active`              | `CancellationPending` | `request_cancellation()`  | Client or Freelancer  |
+| `Active`              | `Cancelled`           | `cancel_escrow()`         | Client                |
+| `Active`              | `Completed`           | Last `approve_milestone()`| Client (auto)         |
+| `CancellationPending` | `Disputed`            | `dispute_cancellation()`  | Opposing party        |
+| `CancellationPending` | `Cancelled`           | `execute_cancellation()`  | Anyone (after window) |
+| `Disputed`            | `Completed`           | `resolve_dispute()`       | Arbiter or both parties |
+| `Disputed`            | `Cancelled`           | `resolve_dispute()`       | Arbiter or both parties |
+
+#### Milestone Transitions
+
+| From        | To          | Triggered By           | Who Can Call |
+| ----------- | ----------- | ---------------------- | ------------ |
+| —           | `Pending`   | `add_milestone()`      | Client       |
+| `Pending`   | `Submitted` | `submit_milestone()`   | Freelancer   |
+| `Rejected`  | `Submitted` | `submit_milestone()`   | Freelancer   |
+| `Submitted` | `Approved`  | `approve_milestone()`  | Client       |
+| `Submitted` | `Rejected`  | `reject_milestone()`   | Client       |
+| `Submitted` | `Disputed`  | `raise_dispute()`      | Client or Freelancer |
+| `Pending`   | `Disputed`  | `raise_dispute()`      | Client or Freelancer |
+
+---
+
+### Code Examples
+
+#### Check escrow state before acting
+
+```rust
+let escrow = client.get_escrow(&escrow_id).unwrap();
+
+match escrow.status {
+    EscrowStatus::Active => {
+        // safe to submit milestones, raise disputes, etc.
+    }
+    EscrowStatus::Disputed => {
+        // funds frozen — wait for resolve_dispute()
+    }
+    EscrowStatus::Completed | EscrowStatus::Cancelled => {
+        // terminal state — no further actions possible
+    }
+    EscrowStatus::CancellationPending => {
+        // dispute window open — call dispute_cancellation() to block it
+    }
+}
+```
+
+#### Check milestone state before submitting
+
+```rust
+let milestone = client.get_milestone(&escrow_id, &milestone_id).unwrap();
+
+if milestone.status == MilestoneStatus::Pending
+    || milestone.status == MilestoneStatus::Rejected
+{
+    client.submit_milestone(&freelancer, &escrow_id, &milestone_id, &proof_hash);
+}
+```
+
+#### Check if all milestones are done (escrow auto-completes)
+
+The contract automatically transitions the escrow to `Completed` when the last milestone is approved. You can verify this:
+
+```rust
+let escrow = client.get_escrow(&escrow_id).unwrap();
+assert_eq!(escrow.status, EscrowStatus::Completed);
+assert_eq!(escrow.remaining_balance, 0);
+```
+
+---
+
+### Troubleshooting Common State Issues
+
+**`EscrowNotActive` error when calling `submit_milestone` or `approve_milestone`**
+The escrow is not in `Active` state. Check `escrow.status` — it may be `Disputed`, `Cancelled`, or `Completed`. Resolve any open dispute first via `resolve_dispute()`.
+
+**`MilestoneNotSubmitted` error when calling `approve_milestone` or `reject_milestone`**
+The milestone status is not `Submitted`. The freelancer must call `submit_milestone()` first.
+
+**`AlreadyDisputed` error when calling `raise_dispute`**
+The escrow is already in `Disputed` state. Only one active dispute is allowed per escrow at a time.
+
+**Escrow stuck in `CancellationPending`**
+Either wait for the dispute window to expire and call `execute_cancellation()`, or call `dispute_cancellation()` to escalate to a full dispute if you believe the cancellation is unjustified.
+
+**Escrow never transitions to `Completed`**
+`Completed` is set automatically when the last milestone is approved. Verify that all milestones have `status == MilestoneStatus::Approved` and that `remaining_balance == 0`. If any milestone is still `Pending`, `Submitted`, or `Disputed`, the escrow stays `Active`.
+
+**`release_funds` fails even though milestone is `Approved`**
+`release_funds` requires the milestone to be in `Approved` state and the escrow `lock_time` (if set) to have passed. Check `escrow.lock_time` against the current ledger timestamp.
