@@ -1,0 +1,87 @@
+{
+  "nav": { "dashboard": "仪表板", "explorer": "浏览器", "profile": "个人资料" },
+  "wallet": {
+    "connect": "连接钱包",
+    "disconnect": "断开连接",
+    "connected": "已连接",
+    "connecting": "连接中...",
+    "notConnected": "未连接"
+  },
+  "escrow": {
+    "create": "创建托管",
+    "title": "托管",
+    "status": {
+      "active": "活跃",
+      "completed": "已完成",
+      "disputed": "争议中",
+      "cancelled": "已取消"
+    },
+    "fields": {
+      "client": "客户",
+      "freelancer": "自由职业者",
+      "amount": "金额",
+      "deadline": "截止日期",
+      "milestone": "里程碑",
+      "milestones": "里程碑列表"
+    },
+    "actions": {
+      "submit": "提交工作",
+      "approve": "批准并释放资金",
+      "reject": "拒绝",
+      "dispute": "提出争议",
+      "cancel": "取消托管"
+    }
+  },
+  "milestone": {
+    "status": {
+      "pending": "待处理",
+      "submitted": "已提交",
+      "approved": "已批准",
+      "rejected": "已拒绝",
+      "disputed": "争议中"
+    }
+  },
+  "common": {
+    "loading": "加载中...",
+    "error": "发生错误",
+    "notFound": "未找到",
+    "save": "保存",
+    "cancel": "取消",
+    "confirm": "确认",
+    "back": "返回",
+    "next": "下一步",
+    "search": "搜索",
+    "filter": "筛选",
+    "noResults": "无结果"
+  },
+  "network": { "mainnet": "主网", "testnet": "测试网" },
+  "home": {
+    "howItWorks": "如何运作",
+    "features": { "title": "为自由职业者和客户而建" },
+    "cta": {
+      "title": "准备好在链上建立信任了吗？",
+      "desc": "连接您的 Freighter 钱包，几分钟内创建您的第一个托管。",
+      "button": "立即开始 →"
+    },
+    "how": {
+      "create": { "title": "创建托管", "desc": "客户锁定资金并定义项目里程碑。" },
+      "deliver": { "title": "交付工作", "desc": "自由职业者完成工作后提交每个里程碑供审核。" },
+      "release": { "title": "释放资金", "desc": "客户批准后，资金自动释放，声誉自动更新。" }
+    },
+    "feature": {
+      "lock": { "title": "里程碑锁定", "desc": "资金锁定在链上，仅在您批准每个里程碑后才释放。" },
+      "rep": {
+        "title": "链上声誉",
+        "desc": "每个完成的托管都会在 Stellar 区块链上建立您的永久可验证声誉分数。"
+      },
+      "dispute": {
+        "title": "争议解决",
+        "desc": "如有问题，受信任的仲裁员可以公平分配锁定的资金。"
+      },
+      "decentralized": {
+        "title": "完全去中心化",
+        "desc": "无中间商。所有逻辑都在开放可审计的 Soroban 智能合约中。"
+      }
+    }
+  }
+}
