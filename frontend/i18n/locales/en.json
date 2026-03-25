@@ -1,0 +1,58 @@
+{
+  "nav": { "dashboard": "Dashboard", "explorer": "Explorer", "profile": "Profile" },
+  "wallet": {
+    "connect": "Connect Wallet",
+    "disconnect": "Disconnect",
+    "connected": "Connected",
+    "connecting": "Connecting...",
+    "notConnected": "Not Connected"
+  },
+  "escrow": {
+    "create": "Create Escrow",
+    "title": "Escrow",
+    "status": {
+      "active": "Active",
+      "completed": "Completed",
+      "disputed": "Disputed",
+      "cancelled": "Cancelled"
+    },
+    "fields": {
+      "client": "Client",
+      "freelancer": "Freelancer",
+      "amount": "Amount",
+      "deadline": "Deadline",
+      "milestone": "Milestone",
+      "milestones": "Milestones"
+    },
+    "actions": {
+      "submit": "Submit Work",
+      "approve": "Approve & Release Funds",
+      "reject": "Reject",
+      "dispute": "Raise Dispute",
+      "cancel": "Cancel Escrow"
+    }
+  },
+  "milestone": {
+    "status": {
+      "pending": "Pending",
+      "submitted": "Submitted",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "disputed": "Disputed"
+    }
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "notFound": "Not found",
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "back": "Back",
+    "next": "Next",
+    "search": "Search",
+    "filter": "Filter",
+    "noResults": "No results found"
+  },
+  "network": { "mainnet": "Mainnet", "testnet": "Testnet" }
+}

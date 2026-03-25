@@ -203,3 +203,50 @@ pub fn emit_lock_time_extended(
         (old_lock_time, new_lock_time, extended_by.clone()),
     );
 }
+
+pub fn emit_cancellation_requested(
+    env: &Env,
+    escrow_id: u64,
+    requester: &Address,
+    reason: &String,
+    dispute_deadline: u64,
+) {
+    env.events().publish(
+        (symbol_short!("can_req"), escrow_id),
+        (requester.clone(), reason.clone(), dispute_deadline),
+    );
+}
+
+pub fn emit_cancellation_executed(
+    env: &Env,
+    escrow_id: u64,
+    returned_amount: i128,
+    slash_amount: i128,
+    _slash_to_recipient: i128,
+) {
+    env.events().publish(
+        (symbol_short!("can_exe"), escrow_id),
+        (returned_amount, slash_amount),
+    );
+}
+
+pub fn emit_slash_disputed(env: &Env, escrow_id: u64, caller: &Address, amount: i128) {
+    env.events().publish(
+        (symbol_short!("slsh_dis"), escrow_id),
+        (caller.clone(), amount),
+    );
+}
+
+pub fn emit_slash_applied(
+    env: &Env,
+    escrow_id: u64,
+    slashed_user: &Address,
+    recipient: &Address,
+    amount: i128,
+    reason: &String,
+) {
+    env.events().publish(
+        (symbol_short!("slsh_app"), escrow_id),
+        (slashed_user.clone(), recipient.clone(), amount, reason.clone()),
+    );
+}

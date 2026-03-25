@@ -17,14 +17,16 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useWallet } from '../../hooks/useWallet';
+import { useI18n } from '../../i18n/index.jsx';
 import WalletStatus from '../ui/WalletStatus';
+import LanguageSwitcher from '../ui/LanguageSwitcher';
 
 export default function Header() {
   const wallet = useWallet();
+  const { t } = useI18n();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Determine network label & style from wallet state
-  const networkLabel = wallet.network === 'mainnet' ? 'Mainnet' : 'Testnet';
+  const networkLabel = wallet.network === 'mainnet' ? t('network.mainnet') : t('network.testnet');
   const networkStyles =
     wallet.network === 'mainnet'
       ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
@@ -48,17 +50,11 @@ export default function Header() {
 
           {/* Nav Links */}
           <nav className="hidden md:flex items-center gap-6">
-            <Link
-              href="/dashboard"
-              className="text-gray-400 hover:text-white text-sm transition-colors"
-            >
-              Dashboard
+            <Link href="/dashboard" className="text-gray-400 hover:text-white text-sm transition-colors">
+              {t('nav.dashboard')}
             </Link>
-            <Link
-              href="/explorer"
-              className="text-gray-400 hover:text-white text-sm transition-colors"
-            >
-              Explorer
+            <Link href="/explorer" className="text-gray-400 hover:text-white text-sm transition-colors">
+              {t('nav.explorer')}
             </Link>
             {/* TODO (contributor): add Leaderboard link */}
           </nav>
@@ -76,25 +72,18 @@ export default function Header() {
 
             {/* Wallet Status */}
             <WalletStatus wallet={wallet} />
+            <LanguageSwitcher />
           </div>
         </div>
 
         {/* Mobile Nav */}
         {isMobileMenuOpen && (
           <nav className="md:hidden py-4 border-t border-gray-800 flex flex-col gap-4">
-            <Link
-              href="/dashboard"
-              className="text-gray-400 hover:text-white transition-colors px-2"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              Dashboard
+            <Link href="/dashboard" className="text-gray-400 hover:text-white transition-colors px-2" onClick={() => setIsMobileMenuOpen(false)}>
+              {t('nav.dashboard')}
             </Link>
-            <Link
-              href="/explorer"
-              className="text-gray-400 hover:text-white transition-colors px-2"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              Explorer
+            <Link href="/explorer" className="text-gray-400 hover:text-white transition-colors px-2" onClick={() => setIsMobileMenuOpen(false)}>
+              {t('nav.explorer')}
             </Link>
           </nav>
         )}

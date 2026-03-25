@@ -1,0 +1,58 @@
+{
+  "nav": { "dashboard": "لوحة التحكم", "explorer": "المستكشف", "profile": "الملف الشخصي" },
+  "wallet": {
+    "connect": "ربط المحفظة",
+    "disconnect": "قطع الاتصال",
+    "connected": "متصل",
+    "connecting": "جارٍ الاتصال...",
+    "notConnected": "غير متصل"
+  },
+  "escrow": {
+    "create": "إنشاء ضمان",
+    "title": "ضمان",
+    "status": {
+      "active": "نشط",
+      "completed": "مكتمل",
+      "disputed": "متنازع عليه",
+      "cancelled": "ملغى"
+    },
+    "fields": {
+      "client": "العميل",
+      "freelancer": "المستقل",
+      "amount": "المبلغ",
+      "deadline": "الموعد النهائي",
+      "milestone": "مرحلة",
+      "milestones": "المراحل"
+    },
+    "actions": {
+      "submit": "تسليم العمل",
+      "approve": "موافقة وإصدار الأموال",
+      "reject": "رفض",
+      "dispute": "رفع نزاع",
+      "cancel": "إلغاء الضمان"
+    }
+  },
+  "milestone": {
+    "status": {
+      "pending": "قيد الانتظار",
+      "submitted": "مُسلَّم",
+      "approved": "موافق عليه",
+      "rejected": "مرفوض",
+      "disputed": "متنازع عليه"
+    }
+  },
+  "common": {
+    "loading": "جارٍ التحميل...",
+    "error": "حدث خطأ",
+    "notFound": "غير موجود",
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "confirm": "تأكيد",
+    "back": "رجوع",
+    "next": "التالي",
+    "search": "بحث",
+    "filter": "تصفية",
+    "noResults": "لا توجد نتائج"
+  },
+  "network": { "mainnet": "الشبكة الرئيسية", "testnet": "شبكة الاختبار" }
+}

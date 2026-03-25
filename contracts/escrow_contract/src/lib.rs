@@ -36,21 +36,24 @@ mod upgrade_tests;
 
 pub use errors::EscrowError;
 pub use types::{
-    DataKey, EscrowState, EscrowStatus, FeeDelegation, MetaTransaction, Milestone, MilestoneStatus,
-    ReputationRecord,
+    CancellationRequest, DataKey, EscrowState, EscrowStatus, FeeDelegation, MetaTransaction,
+    Milestone, MilestoneStatus, ReputationRecord, SlashRecord,
 };
 
-use alloc::string::ToString;
 use soroban_sdk::{
-    contract, contractimpl, contracttype, crypto, token, Address, BytesN, Env, String, Vec,
+    contract, contractimpl, contracttype, token, Address, BytesN, Env, String, Vec,
 };
 
 // ── TTL constants ─────────────────────────────────────────────────────────────
-// Bump only when remaining TTL falls below threshold, extending to target.
 const INSTANCE_TTL_THRESHOLD: u32 = 5_000;
 const INSTANCE_TTL_EXTEND_TO: u32 = 50_000;
 const PERSISTENT_TTL_THRESHOLD: u32 = 5_000;
 const PERSISTENT_TTL_EXTEND_TO: u32 = 50_000;
+
+// ── Cancellation / slash constants ────────────────────────────────────────────
+const CANCELLATION_DISPUTE_PERIOD: u64 = 7 * 24 * 60 * 60; // 7 days in seconds
+const SLASH_DISPUTE_PERIOD: u64 = 7 * 24 * 60 * 60;        // 7 days in seconds
+const SLASH_PERCENTAGE: u64 = 10;                            // 10% slash
 
 // ── Granular storage keys ─────────────────────────────────────────────────────
 // Separate keys for meta vs each milestone avoids deserialising the full
@@ -265,6 +268,8 @@ impl ContractStorage {
                 disputed_escrows: 0,
                 disputes_won: 0,
                 total_volume: 0,
+                slash_count: 0,
+                total_slashed: 0,
                 last_updated: env.ledger().timestamp(),
             },
         }
@@ -315,6 +320,44 @@ impl ContractStorage {
             events::emit_lock_time_expired(env, escrow_id, lt);
         }
         Ok(())
+    }
+
+    // ── Cancellation request storage ─────────────────────────────────────────
+
+    fn load_cancellation_request(env: &Env, escrow_id: u64) -> Result<CancellationRequest, EscrowError> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::CancellationRequest(escrow_id))
+            .ok_or(EscrowError::CancellationNotFound)
+    }
+
+    fn save_cancellation_request(env: &Env, request: &CancellationRequest) {
+        let key = DataKey::CancellationRequest(request.escrow_id);
+        env.storage().persistent().set(&key, request);
+        Self::bump_persistent_ttl(env, &key);
+    }
+
+    fn remove_cancellation_request(env: &Env, escrow_id: u64) {
+        env.storage().persistent().remove(&DataKey::CancellationRequest(escrow_id));
+    }
+
+    // ── Slash record storage ──────────────────────────────────────────────────
+
+    fn load_slash_record(env: &Env, escrow_id: u64) -> Result<SlashRecord, EscrowError> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::SlashRecord(escrow_id))
+            .ok_or(EscrowError::SlashNotFound)
+    }
+
+    fn save_slash_record(env: &Env, record: &SlashRecord) {
+        let key = DataKey::SlashRecord(record.escrow_id);
+        env.storage().persistent().set(&key, record);
+        Self::bump_persistent_ttl(env, &key);
+    }
+
+    fn remove_slash_record(env: &Env, escrow_id: u64) {
+        env.storage().persistent().remove(&DataKey::SlashRecord(escrow_id));
     }
 }
 
@@ -549,8 +592,6 @@ impl EscrowContract {
         );
 
         // O(1) balance update and completion check
-        meta.remaining_balance -= amount;
-
         // STE-04 fix: checked_sub instead of silent underflow
         meta.remaining_balance = meta
             .remaining_balance
@@ -915,7 +956,7 @@ impl EscrowContract {
 
         // Check if escrow is in a cancellable state
         if !matches!(meta.status, EscrowStatus::Active) {
-            return Err(EscrowError::InvalidEscrowState);
+            return Err(EscrowError::EscrowNotActive);
         }
 
         // Check if cancellation already exists
@@ -968,7 +1009,7 @@ impl EscrowContract {
         }
 
         // Calculate slash amount
-        let slash_amount = calculate_slash_amount(meta.remaining_balance);
+        let slash_amount = Self::calculate_slash_amount(meta.remaining_balance);
         let client_amount = meta.remaining_balance - slash_amount;
 
         // Determine who gets the slash (the non-requesting party)
@@ -980,7 +1021,7 @@ impl EscrowContract {
 
         // Apply slash
         let reason = String::from_str(&env, "Escrow cancellation");
-        apply_slash(
+        Self::apply_slash(
             &env,
             &request.requester,
             &slash_recipient,
@@ -1126,7 +1167,7 @@ impl EscrowContract {
 
         if upheld {
             // Slash is upheld - no changes needed
-            events::emit_slash_dispute_resolved(&env, escrow_id, true, slash_record.amount);
+            events::emit_dispute_resolved(&env, escrow_id, slash_record.amount, 0);
         } else {
             // Reverse the slash - return funds to slashed user
             token.transfer(
@@ -1142,7 +1183,7 @@ impl EscrowContract {
             reputation.total_score += 10; // Restore 10 points
             ContractStorage::save_reputation(&env, &reputation);
 
-            events::emit_slash_dispute_resolved(&env, escrow_id, false, 0);
+            events::emit_dispute_resolved(&env, escrow_id, 0, 0);
         }
 
         // Clean up slash record

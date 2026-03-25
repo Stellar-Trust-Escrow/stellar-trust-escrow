@@ -13,6 +13,8 @@
 import './globals.css';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
+import { I18nProvider } from '../i18n/index.jsx';
+import LocaleHtmlAttributes from '../components/LocaleHtmlAttributes';
 
 export const metadata = {
   title: 'StellarTrustEscrow — Decentralized Milestone Escrow',
@@ -24,19 +26,12 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body className="bg-gray-950 text-gray-100 min-h-screen flex flex-col">
-        {/*
-          TODO (contributor — Issue #30):
-          Wrap with <WalletProvider> and <SWRConfig> here.
-          Example:
-          <WalletProvider>
-            <SWRConfig value={{ fetcher: ... }}>
-              {children}
-            </SWRConfig>
-          </WalletProvider>
-        */}
-        <Header />
-        <main className="flex-1 container mx-auto px-4 py-8 max-w-7xl">{children}</main>
-        <Footer />
+        <I18nProvider>
+          <LocaleHtmlAttributes />
+          <Header />
+          <main className="flex-1 container mx-auto px-4 py-8 max-w-7xl">{children}</main>
+          <Footer />
+        </I18nProvider>
       </body>
     </html>
   );

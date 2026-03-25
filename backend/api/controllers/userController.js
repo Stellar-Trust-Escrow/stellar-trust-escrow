@@ -27,7 +27,7 @@ const getUserProfile = async (req, res) => {
     if (!validateAddress(address, res)) return;
 
     const cacheKey = `users:profile:${address}`;
-    const cached = cache.get(cacheKey);
+    const cached = await cache.get(cacheKey);
     if (cached) return res.json(cached);
 
     const [reputation, clientEscrows, freelancerEscrows] = await Promise.all([
@@ -63,7 +63,7 @@ const getUserProfile = async (req, res) => {
       recentEscrows,
     };
 
-    cache.set(cacheKey, profile, 60);
+    await cache.set(cacheKey, profile, 60);
     res.json(profile);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -79,7 +79,7 @@ const getUserEscrows = async (req, res) => {
     const { page, limit, skip } = parsePagination(req.query);
 
     const cacheKey = `users:escrows:${address}:${role}:${status}:${page}:${limit}`;
-    const cached = cache.get(cacheKey);
+    const cached = await cache.get(cacheKey);
     if (cached) return res.json(cached);
 
     if (role === 'client' || role === 'freelancer') {
@@ -98,7 +98,7 @@ const getUserEscrows = async (req, res) => {
       ]);
 
       const result = buildPaginatedResponse(data, { total, page, limit });
-      cache.set(cacheKey, result, 15);
+      await cache.set(cacheKey, result, 15);
       return res.json(result);
     }
 
@@ -136,7 +136,7 @@ const getUserEscrows = async (req, res) => {
       .slice(skip, skip + limit);
 
     const result = buildPaginatedResponse(merged, { total, page, limit });
-    cache.set(cacheKey, result, 15);
+    await cache.set(cacheKey, result, 15);
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -149,7 +149,7 @@ const getUserStats = async (req, res) => {
     if (!validateAddress(address, res)) return;
 
     const cacheKey = `users:stats:${address}`;
-    const cached = cache.get(cacheKey);
+    const cached = await cache.get(cacheKey);
     if (cached) return res.json(cached);
 
     const [reputation, clientCounts, freelancerCounts] = await Promise.all([
@@ -190,7 +190,7 @@ const getUserStats = async (req, res) => {
       reputation: reputation ?? null,
     };
 
-    cache.set(cacheKey, stats, 120);
+    await cache.set(cacheKey, stats, 120);
     res.json(stats);
   } catch (err) {
     res.status(500).json({ error: err.message });

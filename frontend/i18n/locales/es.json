@@ -1,0 +1,58 @@
+{
+  "nav": { "dashboard": "Panel", "explorer": "Explorador", "profile": "Perfil" },
+  "wallet": {
+    "connect": "Conectar Billetera",
+    "disconnect": "Desconectar",
+    "connected": "Conectado",
+    "connecting": "Conectando...",
+    "notConnected": "No Conectado"
+  },
+  "escrow": {
+    "create": "Crear Depósito",
+    "title": "Depósito",
+    "status": {
+      "active": "Activo",
+      "completed": "Completado",
+      "disputed": "En Disputa",
+      "cancelled": "Cancelado"
+    },
+    "fields": {
+      "client": "Cliente",
+      "freelancer": "Freelancer",
+      "amount": "Monto",
+      "deadline": "Fecha Límite",
+      "milestone": "Hito",
+      "milestones": "Hitos"
+    },
+    "actions": {
+      "submit": "Enviar Trabajo",
+      "approve": "Aprobar y Liberar Fondos",
+      "reject": "Rechazar",
+      "dispute": "Abrir Disputa",
+      "cancel": "Cancelar Depósito"
+    }
+  },
+  "milestone": {
+    "status": {
+      "pending": "Pendiente",
+      "submitted": "Enviado",
+      "approved": "Aprobado",
+      "rejected": "Rechazado",
+      "disputed": "En Disputa"
+    }
+  },
+  "common": {
+    "loading": "Cargando...",
+    "error": "Ocurrió un error",
+    "notFound": "No encontrado",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar",
+    "back": "Atrás",
+    "next": "Siguiente",
+    "search": "Buscar",
+    "filter": "Filtrar",
+    "noResults": "Sin resultados"
+  },
+  "network": { "mainnet": "Red Principal", "testnet": "Red de Pruebas" }
+}

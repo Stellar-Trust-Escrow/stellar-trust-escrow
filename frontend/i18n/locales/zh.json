@@ -1,0 +1,58 @@
+{
+  "nav": { "dashboard": "仪表板", "explorer": "浏览器", "profile": "个人资料" },
+  "wallet": {
+    "connect": "连接钱包",
+    "disconnect": "断开连接",
+    "connected": "已连接",
+    "connecting": "连接中...",
+    "notConnected": "未连接"
+  },
+  "escrow": {
+    "create": "创建托管",
+    "title": "托管",
+    "status": {
+      "active": "活跃",
+      "completed": "已完成",
+      "disputed": "争议中",
+      "cancelled": "已取消"
+    },
+    "fields": {
+      "client": "客户",
+      "freelancer": "自由职业者",
+      "amount": "金额",
+      "deadline": "截止日期",
+      "milestone": "里程碑",
+      "milestones": "里程碑列表"
+    },
+    "actions": {
+      "submit": "提交工作",
+      "approve": "批准并释放资金",
+      "reject": "拒绝",
+      "dispute": "提出争议",
+      "cancel": "取消托管"
+    }
+  },
+  "milestone": {
+    "status": {
+      "pending": "待处理",
+      "submitted": "已提交",
+      "approved": "已批准",
+      "rejected": "已拒绝",
+      "disputed": "争议中"
+    }
+  },
+  "common": {
+    "loading": "加载中...",
+    "error": "发生错误",
+    "notFound": "未找到",
+    "save": "保存",
+    "cancel": "取消",
+    "confirm": "确认",
+    "back": "返回",
+    "next": "下一步",
+    "search": "搜索",
+    "filter": "筛选",
+    "noResults": "无结果"
+  },
+  "network": { "mainnet": "主网", "testnet": "测试网" }
+}

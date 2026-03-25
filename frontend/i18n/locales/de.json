@@ -1,0 +1,58 @@
+{
+  "nav": { "dashboard": "Dashboard", "explorer": "Explorer", "profile": "Profil" },
+  "wallet": {
+    "connect": "Wallet verbinden",
+    "disconnect": "Trennen",
+    "connected": "Verbunden",
+    "connecting": "Verbinde...",
+    "notConnected": "Nicht verbunden"
+  },
+  "escrow": {
+    "create": "Treuhand erstellen",
+    "title": "Treuhand",
+    "status": {
+      "active": "Aktiv",
+      "completed": "Abgeschlossen",
+      "disputed": "Streitig",
+      "cancelled": "Abgebrochen"
+    },
+    "fields": {
+      "client": "Auftraggeber",
+      "freelancer": "Freelancer",
+      "amount": "Betrag",
+      "deadline": "Frist",
+      "milestone": "Meilenstein",
+      "milestones": "Meilensteine"
+    },
+    "actions": {
+      "submit": "Arbeit einreichen",
+      "approve": "Genehmigen und Freigeben",
+      "reject": "Ablehnen",
+      "dispute": "Streit eröffnen",
+      "cancel": "Treuhand abbrechen"
+    }
+  },
+  "milestone": {
+    "status": {
+      "pending": "Ausstehend",
+      "submitted": "Eingereicht",
+      "approved": "Genehmigt",
+      "rejected": "Abgelehnt",
+      "disputed": "Streitig"
+    }
+  },
+  "common": {
+    "loading": "Laden...",
+    "error": "Ein Fehler ist aufgetreten",
+    "notFound": "Nicht gefunden",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "confirm": "Bestätigen",
+    "back": "Zurück",
+    "next": "Weiter",
+    "search": "Suchen",
+    "filter": "Filtern",
+    "noResults": "Keine Ergebnisse"
+  },
+  "network": { "mainnet": "Hauptnetz", "testnet": "Testnetz" }
+}
