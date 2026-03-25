@@ -4,6 +4,7 @@ module.exports = {
   setupFilesAfterEnv: ['<rootDir>/jest.setup.cjs'],
   moduleNameMapper: {
     '^.+\\.css$': 'identity-obj-proxy',
+    '^@/(.*)$': '<rootDir>/$1',
     '^next/link$': '<rootDir>/tests/__mocks__/next/link.jsx',
     '^next/navigation$': '<rootDir>/tests/__mocks__/next/navigation.js',
     '^next/image$': '<rootDir>/tests/__mocks__/next/image.jsx',
@@ -12,6 +13,7 @@ module.exports = {
     '^.+\\.[jt]sx?$': ['babel-jest'],
   },
   testMatch: ['<rootDir>/tests/**/*.test.[jt]s?(x)'],
+  testPathIgnorePatterns: ['<rootDir>/tests/a11y/'],
   collectCoverageFrom: [
     'components/**/*.{js,jsx}',
     'app/**/*.{js,jsx}',

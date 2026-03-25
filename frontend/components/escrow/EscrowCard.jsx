@@ -23,8 +23,10 @@
 
 import Link from 'next/link';
 import Badge from '../ui/Badge';
+import { useI18n } from '../../i18n/index.jsx';
 
 export default function EscrowCard({ escrow }) {
+  const { t } = useI18n();
   const { id, title, status, totalAmount, milestoneProgress, counterparty, role } = escrow;
 
   const [done, total] = milestoneProgress?.split(' / ').map(Number) ?? [0, 0];
@@ -42,7 +44,7 @@ export default function EscrowCard({ escrow }) {
             {title}
           </h3>
           <p className="text-xs text-gray-500 mt-0.5">
-            {role === 'client' ? 'Freelancer:' : 'Client:'}{' '}
+            {role === 'client' ? `${t('escrow.fields.freelancer')}:` : `${t('escrow.fields.client')}:`}{' '}
             <span className="font-mono">{counterparty}</span>
           </p>
         </div>
@@ -60,7 +62,7 @@ export default function EscrowCard({ escrow }) {
       */}
       <div>
         <div className="flex justify-between text-xs text-gray-500 mb-1">
-          <span>Milestones</span>
+          <span>{t('escrow.fields.milestones')}</span>
           <span>{milestoneProgress}</span>
         </div>
         <div className="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden">
@@ -79,7 +81,7 @@ export default function EscrowCard({ escrow }) {
             role === 'client' ? 'text-blue-400' : 'text-emerald-400'
           }`}
         >
-          You are {role}
+          You are {role === 'client' ? t('escrow.fields.client') : t('escrow.fields.freelancer')}
         </span>
       </div>
     </Link>
