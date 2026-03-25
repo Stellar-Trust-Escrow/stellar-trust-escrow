@@ -35,6 +35,7 @@ import metricsMiddleware from './middleware/metricsMiddleware.js';
 import responseTime from './middleware/responseTime.js';
 import emailService from './services/emailService.js';
 import { startIndexer } from './services/eventIndexer.js';
+import { setupSwagger } from './api/docs/swagger.js';
 
 // Attach Prisma query instrumentation and monitoring
 attachPrismaMetrics(prisma);
@@ -120,6 +121,9 @@ app.get('/health', async (_req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/escrows', authMiddleware, escrowRoutes);
+
+// ── API Documentation ─────────────────────────────────────────────────────────
+setupSwagger(app);
 app.use('/api/users', authMiddleware, userRoutes);
 app.use('/api/reputation', reputationRoutes);
 app.use('/api/disputes', disputeRoutes);
