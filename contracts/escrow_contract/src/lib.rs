@@ -161,7 +161,11 @@ impl ContractStorage {
 
     // ── Milestones ────────────────────────────────────────────────────────────
 
-    fn load_milestone(env: &Env, escrow_id: u64, milestone_id: u32) -> Result<Milestone, EscrowError> {
+    fn load_milestone(
+        env: &Env,
+        escrow_id: u64,
+        milestone_id: u32,
+    ) -> Result<Milestone, EscrowError> {
         let key = PackedDataKey::Milestone(escrow_id, milestone_id);
         let m = env
             .storage()
@@ -244,16 +248,22 @@ impl ContractStorage {
     where
         K: soroban_sdk::IntoVal<Env, soroban_sdk::Val>,
     {
-        env.storage()
-            .persistent()
-            .extend_ttl(key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        env.storage().persistent().extend_ttl(
+            key,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
     }
 
     // ── Time lock helpers ─────────────────────────────────────────────────────────
 
     /// Checks if the lock time has expired for an escrow.
     /// Returns Ok(()) if funds can be released, Err if still locked.
-    fn check_lock_time_expired(env: &Env, escrow_id: u64, lock_time: Option<u64>) -> Result<(), EscrowError> {
+    fn check_lock_time_expired(
+        env: &Env,
+        escrow_id: u64,
+        lock_time: Option<u64>,
+    ) -> Result<(), EscrowError> {
         if let Some(lt) = lock_time {
             let now = env.ledger().timestamp();
             if now < lt {
@@ -552,11 +562,6 @@ impl EscrowContract {
         Ok(())
     }
 
-    /// Admin-triggered fund release for an already-approved milestone.
-    ///
-    /// # Gas notes
-    /// - Validates milestone state before loading meta.
-    pub fn release_funds(env: Env, escrow_id: u64, milestone_id: u32) -> Result<(), EscrowError> {
     /// Admin-only fallback for edge cases. Normal flow uses `approve_milestone`.
     ///
     /// # Security (STE-01, STE-02)
@@ -587,7 +592,7 @@ impl EscrowContract {
         }
 
         // Load meta to check lock time
-        let meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
+        let mut meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
 
         // Check if lock time has expired
         ContractStorage::check_lock_time_expired(&env, escrow_id, meta.lock_time)?;
@@ -603,7 +608,6 @@ impl EscrowContract {
             &meta.freelancer,
             &amount,
         );
-        meta.remaining_balance -= amount;
         ContractStorage::save_escrow_meta(&env, &meta);
 
         events::emit_funds_released(&env, escrow_id, &meta.freelancer, amount);
@@ -747,7 +751,7 @@ impl EscrowContract {
         let mut meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
 
         // Caller must be arbiter or admin
-        let is_arbiter = meta.arbiter.as_ref().map_or(false, |a| *a == caller);
+        let is_arbiter = meta.arbiter.as_ref().is_some_and(|a| *a == caller);
         if !is_arbiter {
             ContractStorage::require_admin(&env, &caller)?;
         }
@@ -802,7 +806,11 @@ impl EscrowContract {
 
     // ── Upgrade ───────────────────────────────────────────────────────────────
 
-    pub fn upgrade(env: Env, caller: Address, new_wasm_hash: BytesN<32>) -> Result<(), EscrowError> {
+    pub fn upgrade(
+        env: Env,
+        caller: Address,
+        new_wasm_hash: BytesN<32>,
+    ) -> Result<(), EscrowError> {
         caller.require_auth();
         ContractStorage::require_admin(&env, &caller)?;
         env.deployer().update_current_contract_wasm(new_wasm_hash);
@@ -823,7 +831,11 @@ impl EscrowContract {
         ContractStorage::escrow_count(&env)
     }
 
-    pub fn get_milestone(env: Env, escrow_id: u64, milestone_id: u32) -> Result<Milestone, EscrowError> {
+    pub fn get_milestone(
+        env: Env,
+        escrow_id: u64,
+        milestone_id: u32,
+    ) -> Result<Milestone, EscrowError> {
         ContractStorage::load_milestone(&env, escrow_id, milestone_id)
     }
 
@@ -910,13 +922,17 @@ mod tests {
             &BytesN::from_array(&env, &[1; 32]),
             &None,
             &None,
+            &None,
         );
 
         assert_eq!(escrow_id, 0);
         assert_eq!(token_client.balance(&contract_id), 1_000_i128);
 
         env.as_contract(&contract_id, || {
-            assert!(env.storage().persistent().has(&PackedDataKey::EscrowMeta(escrow_id)));
+            assert!(env
+                .storage()
+                .persistent()
+                .has(&PackedDataKey::EscrowMeta(escrow_id)));
             assert!(!env.storage().persistent().has(&DataKey::Escrow(escrow_id)));
         });
     }
@@ -940,6 +956,7 @@ mod tests {
             &token_id,
             &1_000_i128,
             &BytesN::from_array(&env, &[2; 32]),
+            &None,
             &None,
             &None,
         );
@@ -995,6 +1012,7 @@ mod tests {
             &BytesN::from_array(&env, &[4; 32]),
             &None,
             &None,
+            &None,
         );
 
         let mid = client.add_milestone(
@@ -1044,6 +1062,7 @@ mod tests {
             &token_id,
             &200_i128,
             &BytesN::from_array(&env, &[6; 32]),
+            &None,
             &None,
             &None,
         );
