@@ -12,7 +12,7 @@
 
 import 'dotenv/config';
 import { execSync } from 'child_process';
-import { existsSync, mkdirSync, writeFileSync, readdirSync } from 'fs';
+import { writeFileSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { PrismaClient } from '@prisma/client';
@@ -36,7 +36,7 @@ async function ensureMigrationLog() {
 
 async function getApplied() {
   const rows = await prisma.$queryRawUnsafe(
-    `SELECT version FROM _migration_log WHERE rolled_back = FALSE ORDER BY version ASC`
+    `SELECT version FROM _migration_log WHERE rolled_back = FALSE ORDER BY version ASC`,
   );
   return rows.map((r) => r.version);
 }
@@ -45,14 +45,14 @@ async function logMigration(version, name) {
   await prisma.$executeRawUnsafe(
     `INSERT INTO _migration_log (version, name) VALUES ($1, $2) ON CONFLICT (version) DO UPDATE SET rolled_back = FALSE, applied_at = NOW()`,
     version,
-    name
+    name,
   );
 }
 
 async function unlogMigration(version) {
   await prisma.$executeRawUnsafe(
     `UPDATE _migration_log SET rolled_back = TRUE WHERE version = $1`,
-    version
+    version,
   );
 }
 
@@ -169,7 +169,7 @@ export async function down(prisma) {
   // TODO: implement rollback
   // await prisma.$executeRawUnsafe(\`ALTER TABLE ...\`);
 }
-`
+`,
   );
 
   console.log(`✅ Created migration: ${filename}`);

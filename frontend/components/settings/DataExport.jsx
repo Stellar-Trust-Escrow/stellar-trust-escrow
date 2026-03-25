@@ -99,7 +99,9 @@ export default function DataExport({ address }) {
         throw new Error(result.error || 'Failed to import data');
       }
 
-      setMessage(`Import successful! ${result.results.escrows.imported} escrows, ${result.results.payments.imported} payments imported.`);
+      setMessage(
+        `Import successful! ${result.results.escrows.imported} escrows, ${result.results.payments.imported} payments imported.`,
+      );
       setImportFile(null);
     } catch (err) {
       if (err instanceof SyntaxError && err.message.includes('JSON')) {
@@ -117,8 +119,8 @@ export default function DataExport({ address }) {
       <div>
         <h2 className="text-lg font-semibold text-white mb-2">Data Export/Import</h2>
         <p className="text-gray-400 text-sm">
-          Export your data for backup or import data from a previous export.
-          Your data portability right ensures you can move your data elsewhere.
+          Export your data for backup or import data from a previous export. Your data portability
+          right ensures you can move your data elsewhere.
         </p>
       </div>
 
@@ -129,11 +131,7 @@ export default function DataExport({ address }) {
           Download all your escrows, payments, KYC status, and reputation data.
         </p>
         <div className="flex gap-3">
-          <button
-            onClick={handleExport}
-            disabled={loading}
-            className="btn btn-primary text-sm"
-          >
+          <button onClick={handleExport} disabled={loading} className="btn btn-primary text-sm">
             {loading ? 'Exporting...' : 'Export Data'}
           </button>
           {exportData && (
@@ -148,8 +146,8 @@ export default function DataExport({ address }) {
       <div className="border-t border-gray-700 pt-4">
         <h3 className="text-sm font-medium text-white mb-3">Import Data</h3>
         <p className="text-gray-500 text-xs mb-3">
-          Import data from a previously exported file. Existing data will be merged
-          or replaced based on your choice.
+          Import data from a previously exported file. Existing data will be merged or replaced
+          based on your choice.
         </p>
 
         <div className="space-y-3">
@@ -218,8 +216,7 @@ export default function DataExport({ address }) {
               {exportData.data.payments?.length || 0}
             </p>
             <p>
-              <span className="text-indigo-400">KYC:</span>{' '}
-              {exportData.data.kyc?.status || 'None'}
+              <span className="text-indigo-400">KYC:</span> {exportData.data.kyc?.status || 'None'}
             </p>
           </div>
         </div>

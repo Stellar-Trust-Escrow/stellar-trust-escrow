@@ -73,7 +73,7 @@ describe('Compression middleware', () => {
     if (res.headers['content-encoding'] === 'gzip') {
       expect(res.headers['vary']).toMatch(/Accept-Encoding/i);
       // Verify the body is valid gzip and decompresses to JSON
-      const decompressed = await gunzip(res.body);
+      const decompressed = await _gunzip(res.body);
       const parsed = JSON.parse(decompressed.toString());
       expect(parsed).toHaveProperty('items');
     } else {

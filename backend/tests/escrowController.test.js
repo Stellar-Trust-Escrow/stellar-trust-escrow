@@ -105,7 +105,7 @@ describe('escrowController', () => {
           where: expect.objectContaining({
             status: { in: ['Active', 'Completed'] },
           }),
-        })
+        }),
       );
     });
 
@@ -120,7 +120,7 @@ describe('escrowController', () => {
           where: expect.objectContaining({
             OR: expect.arrayContaining([{ id: 123n }]),
           }),
-        })
+        }),
       );
     });
 
@@ -135,7 +135,7 @@ describe('escrowController', () => {
           where: expect.objectContaining({
             totalAmount: { gte: '100', lte: '500' },
           }),
-        })
+        }),
       );
     });
 
