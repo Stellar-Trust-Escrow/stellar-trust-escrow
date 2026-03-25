@@ -1,9 +1,9 @@
 import js from '@eslint/js';
+import globals from 'globals';
 import tseslint from 'typescript-eslint';
 import react from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
 import prettier from 'eslint-config-prettier';
-import globals from 'globals';
 
 export default [
   // Ignore build artifacts and deps
@@ -20,22 +20,6 @@ export default [
       globals: {
         ...globals.node,
         ...globals.es2022,
-      },
-    },
-    rules: {
-      'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
-      '@typescript-eslint/no-unused-vars': 'off',
-    },
-  },
-
-  // ── Backend: Test files (Jest globals) ────────────────────────────────────
-  {
-    files: ['backend/tests/**/*.js', '**/*.test.js', '**/*.spec.js'],
-    languageOptions: {
-      globals: {
-        ...globals.node,
-        ...globals.es2022,
-        ...globals.jest,
       },
     },
     rules: {
@@ -77,6 +61,27 @@ export default [
     },
   },
 
+  // ── Test files: Jest globals (must come after frontend to override) ───────
+  {
+    files: [
+      '**/*.test.{js,jsx}',
+      '**/*.spec.{js,jsx}',
+      'backend/tests/**/*.js',
+      '**/__mocks__/**/*.js',
+    ],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+        ...globals.es2022,
+        ...globals.jest,
+      },
+    },
+    rules: {
+      'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': 'off',
+    },
+  },
+
   // ── TypeScript rules (scoped strictly to .ts/.tsx only) ───────────────────
   {
     files: ['**/*.{ts,tsx}'],
@@ -89,6 +94,7 @@ export default [
     rules: {
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/consistent-type-imports': 'error',
+      // 🔥 Prevent bad async code
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
       '@typescript-eslint/no-floating-promises': 'error',
       '@typescript-eslint/await-thenable': 'error',

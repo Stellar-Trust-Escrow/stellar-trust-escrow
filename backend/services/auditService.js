@@ -87,6 +87,26 @@ export async function log(entry) {
   }
 }
 
+// ── Shared filter builder ─────────────────────────────────────────────────────
+
+/**
+ * Builds a Prisma `where` clause from the standard audit log filter shape.
+ * Reused by search() and exportCsv() to avoid logic drift.
+ */
+function buildWhereClause({ category, action, actor, resourceId, from, to } = {}) {
+  const where = {};
+  if (category) where.category = category;
+  if (action) where.action = action;
+  if (actor) where.actor = { contains: actor, mode: 'insensitive' };
+  if (resourceId) where.resourceId = { contains: resourceId, mode: 'insensitive' };
+  if (from || to) {
+    where.createdAt = {};
+    if (from) where.createdAt.gte = new Date(from);
+    if (to) where.createdAt.lte = new Date(to);
+  }
+  return where;
+}
+
 // ── Search ────────────────────────────────────────────────────────────────────
 
 /**
@@ -104,23 +124,13 @@ export async function log(entry) {
  * @returns {{ data: AuditLog[], total: number, page: number, limit: number, pages: number }}
  */
 export async function search(filters = {}) {
-  const { category, action, actor, resourceId, from, to } = filters;
   const page = Math.max(1, parseInt(filters.page) || 1);
   const limit = Math.min(200, Math.max(1, parseInt(filters.limit) || 50));
   const skip = (page - 1) * limit;
 
-  const where = {};
-  if (category) where.category = category;
-  if (action) where.action = action;
-  if (actor) where.actor = { contains: actor, mode: 'insensitive' };
-  if (resourceId) where.resourceId = { contains: resourceId, mode: 'insensitive' };
-  if (from || to) {
-    where.createdAt = {};
-    if (from) where.createdAt.gte = new Date(from);
-    if (to) where.createdAt.lte = new Date(to);
-  }
+  const where = buildWhereClause(filters);
 
-  const [data, total] = await Promise.all([
+  const [data, total] = await prisma.$transaction([
     prisma.auditLog.findMany({
       where,
       skip,
@@ -135,7 +145,16 @@ export async function search(filters = {}) {
 
 // ── Export ────────────────────────────────────────────────────────────────────
 
-const CSV_COLUMNS = ['id', 'category', 'action', 'actor', 'resourceId', 'statusCode', 'ipAddress', 'createdAt'];
+const CSV_COLUMNS = [
+  'id',
+  'category',
+  'action',
+  'actor',
+  'resourceId',
+  'statusCode',
+  'ipAddress',
+  'createdAt',
+];
 
 /**
  * Export audit logs matching the given filters as a CSV string.
@@ -145,18 +164,7 @@ const CSV_COLUMNS = ['id', 'category', 'action', 'actor', 'resourceId', 'statusC
  * @returns {string} CSV content
  */
 export async function exportCsv(filters = {}) {
-  const { category, action, actor, resourceId, from, to } = filters;
-
-  const where = {};
-  if (category) where.category = category;
-  if (action) where.action = action;
-  if (actor) where.actor = { contains: actor, mode: 'insensitive' };
-  if (resourceId) where.resourceId = { contains: resourceId, mode: 'insensitive' };
-  if (from || to) {
-    where.createdAt = {};
-    if (from) where.createdAt.gte = new Date(from);
-    if (to) where.createdAt.lte = new Date(to);
-  }
+  const where = buildWhereClause(filters);
 
   const rows = await prisma.auditLog.findMany({
     where,

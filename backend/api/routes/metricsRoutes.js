@@ -5,7 +5,6 @@
  * GET /health   — Enhanced liveness/readiness check
  */
 
-/* eslint-disable no-undef */
 import express from 'express';
 import { register, cacheSize } from '../../lib/metrics.js';
 import cache from '../../lib/cache.js';

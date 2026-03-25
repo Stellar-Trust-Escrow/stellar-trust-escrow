@@ -5,12 +5,7 @@
  */
 
 import * as Sentry from '@sentry/nextjs';
-import {
-  SENTRY_DSN,
-  SENTRY_ENV,
-  SENTRY_RELEASE,
-  TRACES_SAMPLE_RATE,
-} from './lib/sentry.js';
+import { SENTRY_DSN, SENTRY_ENV, SENTRY_RELEASE, TRACES_SAMPLE_RATE } from './lib/sentry.js';
 
 Sentry.init({
   dsn: SENTRY_DSN,

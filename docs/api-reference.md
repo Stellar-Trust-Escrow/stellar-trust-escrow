@@ -12,9 +12,9 @@ All `/api/*` endpoints are protected by rate limiting middleware.
 
 Default behavior:
 
-| Scope | Window | Limit |
-| ----- | ------ | ----- |
-| All API endpoints | 1 minute | 60 requests |
+| Scope                             | Window   | Limit       |
+| --------------------------------- | -------- | ----------- |
+| All API endpoints                 | 1 minute | 60 requests |
 | `GET /api/reputation/leaderboard` | 1 minute | 30 requests |
 
 How identities are tracked:
@@ -24,10 +24,10 @@ How identities are tracked:
 
 Environment variables:
 
-| Variable | Default | Description |
-| -------- | ------- | ----------- |
-| `RATE_LIMIT_MAX_REQUESTS_PER_MINUTE` | `60` | Global per-user/IP request cap for API routes |
-| `LEADERBOARD_RATE_LIMIT_MAX_REQUESTS_PER_MINUTE` | `30` | Stricter cap for leaderboard reads |
+| Variable                                         | Default | Description                                   |
+| ------------------------------------------------ | ------- | --------------------------------------------- |
+| `RATE_LIMIT_MAX_REQUESTS_PER_MINUTE`             | `60`    | Global per-user/IP request cap for API routes |
+| `LEADERBOARD_RATE_LIMIT_MAX_REQUESTS_PER_MINUTE` | `30`    | Stricter cap for leaderboard reads            |
 
 When a client exceeds the limit, the API returns `429 Too Many Requests`:
 

@@ -562,11 +562,7 @@ impl EscrowContract {
         Ok(())
     }
 
-    /// Admin-triggered fund release for an already-approved milestone.
-    ///
-    /// # Gas notes
-    /// - Validates milestone state before loading meta.
-    /// - Admin-only fallback for edge cases. Normal flow uses `approve_milestone`.
+    /// Admin-only fallback for edge cases. Normal flow uses `approve_milestone`.
     ///
     /// # Security (STE-01, STE-02)
     /// - Requires admin authorization.
@@ -596,7 +592,7 @@ impl EscrowContract {
         }
 
         // Load meta to check lock time
-        let meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
+        let mut meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
 
         // Check if lock time has expired
         ContractStorage::check_lock_time_expired(&env, escrow_id, meta.lock_time)?;
@@ -612,7 +608,6 @@ impl EscrowContract {
             &meta.freelancer,
             &amount,
         );
-        meta.remaining_balance -= amount;
         ContractStorage::save_escrow_meta(&env, &meta);
 
         events::emit_funds_released(&env, escrow_id, &meta.freelancer, amount);
@@ -756,7 +751,7 @@ impl EscrowContract {
         let mut meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
 
         // Caller must be arbiter or admin
-        let is_arbiter = meta.arbiter.as_ref().map_or(false, |a| *a == caller);
+        let is_arbiter = meta.arbiter.as_ref().is_some_and(|a| *a == caller);
         if !is_arbiter {
             ContractStorage::require_admin(&env, &caller)?;
         }
@@ -1237,6 +1232,7 @@ mod tests {
             &BytesN::from_array(&env, &[1; 32]),
             &None,
             &None,
+            &None,
         );
 
         assert_eq!(escrow_id, 0);
@@ -1270,6 +1266,7 @@ mod tests {
             &token_id,
             &1_000_i128,
             &BytesN::from_array(&env, &[2; 32]),
+            &None,
             &None,
             &None,
         );
@@ -1325,6 +1322,7 @@ mod tests {
             &BytesN::from_array(&env, &[4; 32]),
             &None,
             &None,
+            &None,
         );
 
         let mid = client.add_milestone(
@@ -1374,6 +1372,7 @@ mod tests {
             &token_id,
             &200_i128,
             &BytesN::from_array(&env, &[6; 32]),
+            &None,
             &None,
             &None,
         );

@@ -6,9 +6,15 @@ const localStorageMock = (() => {
   let store = {};
   return {
     getItem: (key) => store[key] || null,
-    setItem: (key, value) => { store[key] = value; },
-    removeItem: (key) => { delete store[key]; },
-    clear: () => { store = {}; },
+    setItem: (key, value) => {
+      store[key] = value;
+    },
+    removeItem: (key) => {
+      delete store[key];
+    },
+    clear: () => {
+      store = {};
+    },
   };
 })();
 Object.defineProperty(window, 'localStorage', { value: localStorageMock });
@@ -41,7 +47,11 @@ describe('AdminDashboard', () => {
   it('submits API key on form submit', () => {
     global.fetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ escrows: { total: 10, active: 5, completed: 4, disputed: 1 }, users: { total: 20 }, disputes: { open: 1, resolved: 0 } }),
+      json: async () => ({
+        escrows: { total: 10, active: 5, completed: 4, disputed: 1 },
+        users: { total: 20 },
+        disputes: { open: 1, resolved: 0 },
+      }),
     });
     render(<AdminDashboard />);
     fireEvent.change(screen.getByPlaceholderText('Enter admin API key'), {
@@ -55,7 +65,11 @@ describe('AdminDashboard', () => {
     localStorageMock.setItem('adminApiKey', 'test-key');
     global.fetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ escrows: { total: 10, active: 5, completed: 4, disputed: 1 }, users: { total: 20 }, disputes: { open: 1, resolved: 0 } }),
+      json: async () => ({
+        escrows: { total: 10, active: 5, completed: 4, disputed: 1 },
+        users: { total: 20 },
+        disputes: { open: 1, resolved: 0 },
+      }),
     });
     render(<AdminDashboard />);
     expect(await screen.findByText('User Management')).toBeInTheDocument();
@@ -78,7 +92,11 @@ describe('AdminDashboard', () => {
     localStorageMock.setItem('adminApiKey', 'test-key');
     global.fetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ escrows: { total: 0, active: 0, completed: 0, disputed: 0 }, users: { total: 0 }, disputes: { open: 0, resolved: 0 } }),
+      json: async () => ({
+        escrows: { total: 0, active: 0, completed: 0, disputed: 0 },
+        users: { total: 0 },
+        disputes: { open: 0, resolved: 0 },
+      }),
     });
     render(<AdminDashboard />);
     const signOut = await screen.findByText('Sign out');

@@ -96,9 +96,7 @@ export default function KycPage() {
           <p className="text-sm text-gray-500 mb-1">Verification Status</p>
           <Badge status={status} />
         </div>
-        <p className="text-sm text-gray-400 max-w-xs text-right">
-          {STATUS_MESSAGES[status] ?? ''}
-        </p>
+        <p className="text-sm text-gray-400 max-w-xs text-right">{STATUS_MESSAGES[status] ?? ''}</p>
       </div>
 
       {error && (

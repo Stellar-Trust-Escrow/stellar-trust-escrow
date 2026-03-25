@@ -37,7 +37,6 @@ const STATUS_STYLES = {
   // KYC statuses
   Init: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
   Processing: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-  Approved: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
   Declined: 'bg-red-500/20 text-red-400 border-red-500/30',
 };
 
@@ -57,7 +56,6 @@ const ICONS = {
   // KYC
   Init: '🔄',
   Processing: '⏳',
-  Approved: '✅',
   Declined: '❌',
 };
 

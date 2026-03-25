@@ -21,7 +21,6 @@
  * - On success: redirect to /escrow/[id]
  */
 
-
 'use client';
 
 import { useState } from 'react';
@@ -121,7 +120,7 @@ export default function CreateEscrowPage() {
       </div>
 
       {/* Navigation */}
-      <div className="flex justify-between">
+      <div className="flex flex-col sm:flex-row justify-between gap-4">
         <Button
           variant="secondary"
           onClick={() => setCurrentStep((s) => Math.max(1, s - 1))}
@@ -167,7 +166,7 @@ function StepCounterparty({ formData, setFormData }) {
         {/* TODO (contributor): add validation error display */}
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm text-gray-400 mb-1">Token</label>
           {/* TODO (contributor — Issue #33): implement token selector dropdown */}

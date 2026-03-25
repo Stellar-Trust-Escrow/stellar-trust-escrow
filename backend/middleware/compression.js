@@ -18,10 +18,13 @@
  *  COMPRESSION_THRESHOLD  min bytes to compress (default: 1024)
  */
 
-/* eslint-disable no-undef */
 import zlib from 'zlib';
 import compression from 'compression';
-import { compressionRatio, compressedResponsesTotal, compressionBytesTotal } from '../lib/metrics.js';
+import {
+  compressionRatio,
+  compressedResponsesTotal,
+  compressionBytesTotal,
+} from '../lib/metrics.js';
 
 const GZIP_LEVEL = parseInt(process.env.COMPRESSION_LEVEL || '6');
 const BROTLI_QUALITY = parseInt(process.env.BROTLI_QUALITY || '4');
@@ -35,11 +38,20 @@ function shouldCompress(req, res) {
   // Never compress the Prometheus scrape endpoint
   if (req.path === '/metrics') return false;
 
+  // Get Content-Type (may be set by route handler or not yet)
   const contentType = res.getHeader('Content-Type') || '';
+
   // Skip already-compressed formats
   if (/image|audio|video|zip|gzip|br|compress/.test(contentType)) return false;
 
-  return compression.filter(req, res);
+  // Allow compression for common text-based, compressible types
+  // This is similar to what compression.filter does by default
+  if (contentType) {
+    return /text\/|application\/(json|javascript|xml)|xml/.test(contentType);
+  }
+
+  // If no content-type set yet, allow compression (route handler will set appropriate type)
+  return true;
 }
 
 /**
@@ -91,6 +103,9 @@ function wrapResponseForMetrics(req, res) {
 function brotliMiddleware(req, res, next) {
   const acceptEncoding = req.headers['accept-encoding'] || '';
   if (!acceptEncoding.includes('br')) return next();
+
+  // Never compress /metrics endpoint (same exclusion as gzip)
+  if (req.path === '/metrics') return next();
 
   const contentLength = parseInt(res.getHeader('Content-Length') || '0');
   if (contentLength > 0 && contentLength < THRESHOLD) return next();

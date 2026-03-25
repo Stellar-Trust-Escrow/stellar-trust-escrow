@@ -44,3 +44,5 @@ coverage/
 bundle-stats.json
 
 /ISSUES.md
+load-tests/results/*.json
+!load-tests/results/.gitkeep
