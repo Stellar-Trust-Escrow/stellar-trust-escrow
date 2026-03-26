@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(node -e \"import\\(''''redis''''\\).then\\(m => console.log\\(''''redis available'''', Object.keys\\(m\\)\\)\\)\")",
-      "Bash(NODE_OPTIONS=--experimental-vm-modules npx jest --runInBand --config=backend/jest.config.js --testPathPattern=\"backend/tests/\\(rateLimiter|deprecation|rateLimit\\)\")"
-    ]
-  }
-}
