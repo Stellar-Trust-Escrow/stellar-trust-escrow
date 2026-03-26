@@ -4,6 +4,7 @@ import './lib/sentry.js';
 import * as Sentry from '@sentry/node';
 
 import 'dotenv/config';
+import { initSecrets } from './lib/secrets.js';
 import http from 'http';
 import compressionMiddleware from './middleware/compression.js';
 import cors from 'cors';
@@ -11,11 +12,13 @@ import express from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
 
+import docsRouter from './docs/index.js';
 import disputeRoutes from './api/routes/disputeRoutes.js';
 import searchRoutes from './api/routes/searchRoutes.js';
 import escrowRoutes from './api/routes/escrowRoutes.js';
 import eventRoutes from './api/routes/eventRoutes.js';
 import kycRoutes from './api/routes/kycRoutes.js';
+import adminRoutes from './api/routes/adminRoutes.js';
 import notificationRoutes from './api/routes/notificationRoutes.js';
 import paymentRoutes from './api/routes/paymentRoutes.js';
 import relayerRoutes from './api/routes/relayerRoutes.js';
@@ -23,8 +26,12 @@ import reputationRoutes from './api/routes/reputationRoutes.js';
 import userRoutes from './api/routes/userRoutes.js';
 import auditRoutes from './api/routes/auditRoutes.js';
 import authRoutes from './api/routes/authRoutes.js';
+import complianceRoutes from './api/routes/complianceRoutes.js';
+import incidentRoutes from './api/routes/incidentRoutes.js';
 import authMiddleware from './api/middleware/auth.js';
 import auditMiddleware from './api/middleware/audit.js';
+import _apiV1Routes from './api/v1/index.js';
+import { deprecatedRoute as _deprecatedRoute } from './api/middleware/version.js';
 import { createWebSocketServer, pool } from './api/websocket/handlers.js';
 import cache from './lib/cache.js';
 import { attachPrismaMetrics } from './lib/prismaMetrics.js';
@@ -34,7 +41,9 @@ import { apiRateLimit, leaderboardRateLimit } from './middleware/rateLimit.js';
 import metricsMiddleware from './middleware/metricsMiddleware.js';
 import responseTime from './middleware/responseTime.js';
 import emailService from './services/emailService.js';
+import complianceService from './services/complianceService.js';
 import { startIndexer } from './services/eventIndexer.js';
+import { setupSwagger } from './api/docs/swagger.js';
 
 // Attach Prisma query instrumentation and monitoring
 attachPrismaMetrics(prisma);
@@ -60,6 +69,7 @@ app.use(
 app.use(morgan('combined'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use('/uploads', express.static('uploads'));
 app.use(auditMiddleware);
 
 // ── Sentry tracing handler — after body parsers, before routes ────────────────
@@ -120,6 +130,9 @@ app.get('/health', async (_req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/escrows', authMiddleware, escrowRoutes);
+
+// ── API Documentation ─────────────────────────────────────────────────────────
+setupSwagger(app);
 app.use('/api/users', authMiddleware, userRoutes);
 app.use('/api/reputation', reputationRoutes);
 app.use('/api/disputes', disputeRoutes);
@@ -129,6 +142,10 @@ app.use('/api/kyc', kycRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/relayer', relayerRoutes);
 app.use('/api/audit', auditRoutes);
+app.use('/api/compliance', complianceRoutes);
+app.use('/api/incidents', incidentRoutes);
+app.use('/docs', docsRouter);
+app.use('/api/admin', adminRoutes);
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((req, res) => {
@@ -168,10 +185,15 @@ const server = http.createServer(app);
 createWebSocketServer(server);
 
 server.listen(PORT, async () => {
+  // Load secrets first — merges vault/env secrets into process.env
+  await initSecrets();
+  console.log(`[Secrets] Backend: ${process.env.SECRETS_BACKEND || 'env'}`);
   console.log(`API running on port ${PORT}`);
   console.log(`Network: ${process.env.STELLAR_NETWORK}`);
   await emailService.start();
   console.log('[EmailService] Queue processor started');
+  complianceService.startScheduler();
+  console.log('[ComplianceService] Scheduler started');
   console.log('[WebSocket] Server attached');
   startIndexer().catch((err) => {
     console.error('[Indexer] Failed to start:', err.message);

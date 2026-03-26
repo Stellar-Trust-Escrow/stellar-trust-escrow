@@ -110,7 +110,7 @@ export const refresh = async (req, res) => {
         refreshToken,
         process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret',
       );
-    } catch (err) {
+    } catch (_err) {
       return res.status(403).json({ error: 'Invalid or expired refresh token' });
     }
 
@@ -157,7 +157,7 @@ export const logout = async (req, res) => {
           { ignoreExpiration: true }, // allow logout even if expired
         );
       }
-    } catch (err) {
+    } catch (_err) {
       // If we can't decode, just move on
     }
 

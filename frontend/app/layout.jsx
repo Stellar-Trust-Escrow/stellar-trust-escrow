@@ -19,7 +19,17 @@
 import './globals.css';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
+import { ThemeProvider } from '../contexts/ThemeContext';
+import { CurrencyProvider } from '../contexts/CurrencyContext';
 import ServiceWorkerRegistrar from '../components/ServiceWorkerRegistrar';
+import ErrorBoundary from '../../components/error/ErrorBoundary';
+
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
+const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' });
+
+const API_ORIGIN = process.env.NEXT_PUBLIC_API_URL
+  ? new URL(process.env.NEXT_PUBLIC_API_URL).origin
+  : '';
 
 const API_ORIGIN = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -51,7 +61,7 @@ export default function RootLayout({ children }) {
         <link rel="preconnect" href={API_ORIGIN} crossOrigin="anonymous" />
       </head>
       <body className="bg-gray-950 text-gray-100 min-h-screen flex flex-col font-sans">
-        {/*
+        {/* 
           TODO (contributor — Issue #30):
           Wrap with <WalletProvider> and <SWRConfig> here.
           Example:
@@ -61,11 +71,21 @@ export default function RootLayout({ children }) {
             </SWRConfig>
           </WalletProvider>
         */}
-        <Header />
-        <main className="flex-1 container mx-auto px-4 py-8 max-w-7xl">{children}</main>
-        <Footer />
+        <ThemeProvider>
+          <CurrencyProvider>
+            <Header />
+            <ErrorBoundary>
+              <main className="flex-1 container mx-auto px-4 py-8 max-w-7xl">{children}</main>
+            </ErrorBoundary>
+            <Footer />
+          </CurrencyProvider>
+        </ThemeProvider>
+
+        {/* Core Web Vitals monitoring — renders nothing to DOM */}
+        <PerformanceMonitor />
         <ServiceWorkerRegistrar />
       </body>
     </html>
   );
 }
+

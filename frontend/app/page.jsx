@@ -19,51 +19,20 @@ import Button from '../components/ui/Button';
 import LazySection from './LazySection';
 
 const FEATURES = [
-  {
-    icon: '🔒',
-    title: 'Milestone-Based Locking',
-    description:
-      'Funds are locked on-chain and only released when you approve each milestone. No trust required.',
-  },
-  {
-    icon: '⭐',
-    title: 'On-Chain Reputation',
-    description:
-      'Every completed escrow builds your permanent, verifiable reputation score on the Stellar blockchain.',
-  },
-  {
-    icon: '⚖️',
-    title: 'Dispute Resolution',
-    description:
-      'If issues arise, a trusted arbiter or the contract admin can fairly distribute locked funds.',
-  },
-  {
-    icon: '🌐',
-    title: 'Fully Decentralized',
-    description:
-      'No intermediaries, no custody. All logic lives in a Soroban smart contract — open and auditable.',
-  },
+  { icon: '🔒', titleKey: 'home.feature.lock.title', descKey: 'home.feature.lock.desc' },
+  { icon: '⭐', titleKey: 'home.feature.rep.title', descKey: 'home.feature.rep.desc' },
+  { icon: '⚖️', titleKey: 'home.feature.dispute.title', descKey: 'home.feature.dispute.desc' },
+  { icon: '🌐', titleKey: 'home.feature.decentralized.title', descKey: 'home.feature.decentralized.desc' },
 ];
 
-const HOW_IT_WORKS = [
-  {
-    step: '01',
-    title: 'Create Escrow',
-    desc: 'Client locks funds and defines project milestones.',
-  },
-  {
-    step: '02',
-    title: 'Deliver Work',
-    desc: 'Freelancer works, then submits each milestone for review.',
-  },
-  {
-    step: '03',
-    title: 'Release Funds',
-    desc: 'Client approves, funds release automatically. Reputation updated.',
-  },
+const HOW_IT_WORKS_KEYS = [
+  { step: '01', titleKey: 'home.how.create.title', descKey: 'home.how.create.desc' },
+  { step: '02', titleKey: 'home.how.deliver.title', descKey: 'home.how.deliver.desc' },
+  { step: '03', titleKey: 'home.how.release.title', descKey: 'home.how.release.desc' },
 ];
 
 export default function HomePage() {
+  const { t } = useI18n();
   return (
     <div className="space-y-24">
       {/* Hero — renders immediately, above the fold */}
@@ -81,10 +50,10 @@ export default function HomePage() {
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <Button href="/escrow/create" variant="primary" size="lg" className="w-full sm:w-auto">
-            Create Escrow
+            {t('escrow.create')}
           </Button>
           <Button href="/explorer" variant="secondary" size="lg" className="w-full sm:w-auto">
-            Browse Escrows
+            {t('nav.explorer')}
           </Button>
         </div>
 

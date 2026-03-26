@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod pause_tests {
-    use soroban_sdk::{testutils::Address as _, token, BytesN, Env, String, Address};
     use crate::{EscrowContract, EscrowContractClient, EscrowError, EscrowStatus, MilestoneStatus};
+    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String};
 
     fn setup() -> (Env, Address, Address, EscrowContractClient<'static>) {
         let env = Env::default();
@@ -49,7 +49,7 @@ mod pause_tests {
         let (env, admin, _, client) = setup();
         let client_addr = Address::generate(&env);
         let freelancer = Address::generate(&env);
-        let token = register_token(&env, &admin, &client_addr, 1000);
+        let token = register_token(&env, &admin, &client_addr, 1030);
 
         client.pause(&admin);
 
@@ -64,10 +64,13 @@ mod pause_tests {
             &None,
         );
 
-        assert!(match result {
-            Err(Ok(EscrowError::ContractPaused)) => true,
-            _ => false,
-        }, "Should fail with ContractPaused error");
+        assert!(
+            match result {
+                Err(Ok(EscrowError::ContractPaused)) => true,
+                _ => false,
+            },
+            "Should fail with ContractPaused error"
+        );
     }
 
     #[test]
@@ -75,7 +78,7 @@ mod pause_tests {
         let (env, admin, _, client) = setup();
         let client_addr = Address::generate(&env);
         let freelancer = Address::generate(&env);
-        let token = register_token(&env, &admin, &client_addr, 1000);
+        let token = register_token(&env, &admin, &client_addr, 1030);
 
         let escrow_id = client.create_escrow(
             &client_addr,
@@ -98,10 +101,13 @@ mod pause_tests {
             &500,
         );
 
-        assert!(match result {
-            Err(Ok(EscrowError::ContractPaused)) => true,
-            _ => false,
-        }, "Should fail with ContractPaused error");
+        assert!(
+            match result {
+                Err(Ok(EscrowError::ContractPaused)) => true,
+                _ => false,
+            },
+            "Should fail with ContractPaused error"
+        );
     }
 
     #[test]
@@ -109,7 +115,7 @@ mod pause_tests {
         let (env, admin, _, client) = setup();
         let client_addr = Address::generate(&env);
         let freelancer = Address::generate(&env);
-        let token_addr = register_token(&env, &admin, &client_addr, 1000);
+        let token_addr = register_token(&env, &admin, &client_addr, 1060);
 
         let escrow_id = client.create_escrow(
             &client_addr,
@@ -141,7 +147,7 @@ mod pause_tests {
         client.approve_milestone(&client_addr, &escrow_id, &mid);
         let milestone = client.get_milestone(&escrow_id, &mid);
         assert_eq!(milestone.status, MilestoneStatus::Approved);
-        
+
         let escrow = client.get_escrow(&escrow_id);
         assert_eq!(escrow.status, EscrowStatus::Completed);
     }

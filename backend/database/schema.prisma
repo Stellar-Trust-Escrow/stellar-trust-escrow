@@ -120,12 +120,18 @@ model Dispute {
   clientAmount     String?   @map("client_amount")
   /// Amount sent to freelancer on resolution
   freelancerAmount String?   @map("freelancer_amount")
-  /// Address that resolved the dispute (arbiter or admin)
+  /// Address that resolved the dispute (arbiter, admin, or "system")
   resolvedBy       String?   @map("resolved_by")
   /// Outcome description
   resolution       String?
+  /// AUTO | MANUAL | ESCALATED
+  resolutionType   String?   @map("resolution_type")
+  /// Whether this dispute was auto-resolved
+  autoResolved     Boolean   @default(false) @map("auto_resolved")
 
-  escrow Escrow @relation(fields: [escrowId], references: [id])
+  escrow   Escrow            @relation(fields: [escrowId], references: [id])
+  evidence DisputeEvidence[]
+  appeals  DisputeAppeal[]
 
   @@index([raisedByAddress])
   // Index for resolved/unresolved filtering (admin panel)
@@ -135,7 +141,56 @@ model Dispute {
   @@map("disputes")
 }
 
+model DisputeEvidence {
+  id          Int      @id @default(autoincrement())
+  disputeId   Int      @map("dispute_id")
+  submittedBy String   @map("submitted_by")
+  /// client | freelancer | arbiter | admin
+  role        String
+  /// text | url | hash
+  evidenceType String  @map("evidence_type")
+  content     String
+  description String?
+  submittedAt DateTime @default(now()) @map("submitted_at")
+
+  dispute Dispute @relation(fields: [disputeId], references: [id])
+
+  @@index([disputeId])
+  @@index([submittedBy])
+  @@map("dispute_evidence")
+}
+
+model DisputeAppeal {
+  id          Int       @id @default(autoincrement())
+  disputeId   Int       @map("dispute_id")
+  appealedBy  String    @map("appealed_by")
+  reason      String
+  status      String    @default("pending")
+  reviewedBy  String?   @map("reviewed_by")
+  reviewNotes String?   @map("review_notes")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  resolvedAt  DateTime? @map("resolved_at")
+
+  dispute Dispute @relation(fields: [disputeId], references: [id])
+
+  @@index([disputeId])
+  @@index([status])
+  @@map("dispute_appeals")
+}
+
 // ── Contract Events ───────────────────────────────────────────────────────────
+
+model UserProfile {
+  address     String   @id
+  displayName String?  @map("display_name")
+  bio         String?
+  avatarUrl   String?  @map("avatar_url")
+  preferences Json?    
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("user_profiles")
+}
 
 /// Indexed record of every Soroban contract event emitted by the escrow contract.
 /// Enables historical queries and real-time subscriptions without hitting the chain.
