@@ -80,14 +80,7 @@ export function useWallet() {
     setError(null);
     try {
       // TODO (contributor — Issue #35): implement Freighter connection
-      // const access = await requestAccess();
-      // const publicKey = await getPublicKey();
-      // const { networkPassphrase } = await getNetworkDetails();
-      // setAddress(publicKey);
-      // setNetwork(networkPassphrase.includes('Test') ? 'testnet' : 'mainnet');
-      // setIsConnected(true);
-      // localStorage.setItem('wallet_address', publicKey);
-      throw new Error('Freighter integration not yet implemented — see Issue #35');
+      setError('Wallet connection not yet implemented. See Issue #35.');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -122,7 +115,6 @@ export function useWallet() {
   const signTx = useCallback(
     async (_unsignedXdr) => {
       if (!isConnected) throw new Error('Wallet not connected');
-      // TODO (contributor — Issue #35): implement
       throw new Error('signTx not implemented — see Issue #35');
     },
     [isConnected],
