@@ -7,13 +7,14 @@
 
 'use client';
 
-
+import { useState, useRef, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Search, SlidersHorizontal, X, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import EscrowCard from '../../components/escrow/EscrowCard';
 import SearchFilters from '../../components/explorer/SearchFilters';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
+import EmptyState from '../../components/ui/EmptyState';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -342,18 +343,17 @@ function ExplorerContent() {
               <p className="text-gray-500 text-sm">{error}</p>
             </div>
           ) : escrows.length === 0 ? (
-            <div className="text-center py-16 text-gray-500">
-              <p className="text-lg mb-2">No escrows found</p>
-              <p className="text-sm">Try adjusting your search or filters.</p>
-              {activeFilterCount > 0 && (
-                <button
-                  onClick={handleReset}
-                  className="mt-4 text-indigo-400 hover:text-indigo-300 text-sm transition-colors"
-                >
-                  Clear all filters
-                </button>
-              )}
-            </div>
+            <EmptyState
+              title="No escrows found"
+              description={
+                activeFilterCount > 0
+                  ? 'No escrows match your current filters. Try adjusting or clearing them.'
+                  : 'There are no escrows to display yet. Create one to get started.'
+              }
+              actionLabel={activeFilterCount > 0 ? 'Clear all filters' : 'Create Escrow'}
+              onAction={activeFilterCount > 0 ? handleReset : undefined}
+              actionHref={activeFilterCount > 0 ? undefined : '/escrow/create'}
+            />
           ) : (
             <div
               className={`grid gap-4 ${showFilters ? 'md:grid-cols-2' : 'md:grid-cols-2 lg:grid-cols-3'}`}
@@ -439,6 +439,7 @@ function ExplorerContent() {
 }
 
 
+export default function ExplorerPage() {
   return (
     <Suspense
       fallback={
@@ -449,7 +450,6 @@ function ExplorerContent() {
       }
     >
       <ExplorerContent />
-</Suspense>
-    </ErrorBoundary>
+    </Suspense>
   );
 }
