@@ -90,10 +90,9 @@ describe('DashboardPage', () => {
 
   it('renders stat cards', async () => {
     render(<DashboardPage />);
-    // expect(await screen.findByText('Total Escrows')).toBeInTheDocument();
-    expect(screen.getByText('Success Rate')).toBeInTheDocument();
-    expect(screen.getByText('Total Locked')).toBeInTheDocument();
-    expect(screen.getByText('Completed')).toBeInTheDocument();
+    expect(await screen.findByText('Success Rate')).toBeInTheDocument();
+    expect(await screen.findByText('Total Locked')).toBeInTheDocument();
+    expect(await screen.findByText('Completed')).toBeInTheDocument();
   });
 
   it('renders fetched stats values', async () => {
