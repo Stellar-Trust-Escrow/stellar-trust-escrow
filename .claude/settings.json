@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(NODE_OPTIONS=--experimental-vm-modules npx jest --runInBand --config=backend/jest.config.js --testPathPattern=\"backend/tests/health\")"
+    ]
+  }
+}

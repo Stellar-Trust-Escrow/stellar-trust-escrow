@@ -29,9 +29,9 @@ import authMiddleware from './api/middleware/auth.js';
 import auditMiddleware from './api/middleware/audit.js';
 import _apiV1Routes from './api/v1/index.js';
 import { deprecatedRoute as _deprecatedRoute } from './api/middleware/version.js';
-import { createWebSocketServer, pool } from './api/websocket/handlers.js';
-import cache from './lib/cache.js';
+import { createWebSocketServer } from './api/websocket/handlers.js';
 import { attachPrismaMetrics } from './lib/prismaMetrics.js';
+import healthRoutes from './api/routes/healthRoutes.js';
 import prisma, { startConnectionMonitoring } from './lib/prisma.js';
 import { errorsTotal } from './lib/metrics.js';
 import { apiRateLimit, leaderboardRateLimit } from './middleware/rateLimit.js';
@@ -74,55 +74,7 @@ app.use(Sentry.expressTracingHandler());
 app.use('/api/', apiRateLimit);
 app.use('/api/reputation/leaderboard', leaderboardRateLimit);
 
-app.get('/health', async (_req, res) => {
-  let dbStatus = 'ok';
-  let dbLatencyMs = null;
-  let dbPoolInfo = null;
-
-  try {
-    const t0 = Date.now();
-    // Test basic connectivity
-    await prisma.$queryRaw`SELECT 1`;
-    dbLatencyMs = Date.now() - t0;
-
-    // Get basic pool info if available
-    try {
-      // This is a simplified check - in production with direct pg access,
-      // you could get detailed pool stats
-      const poolCheck = await prisma.$queryRaw`
-        SELECT
-          count(*) as connection_count,
-          now() as current_time
-        FROM pg_stat_activity
-        WHERE datname = current_database()
-      `;
-      dbPoolInfo = {
-        activeConnections: parseInt(poolCheck[0].connection_count),
-        timestamp: poolCheck[0].current_time,
-      };
-    } catch (poolError) {
-      // Pool info not available, that's ok
-      console.warn('[HEALTH] Could not get pool info:', poolError.message);
-    }
-  } catch (error) {
-    dbStatus = 'error';
-    console.error('[HEALTH] Database check failed:', error.message);
-  }
-
-  const status = dbStatus === 'ok' ? 'ok' : 'degraded';
-  res.status(dbStatus === 'ok' ? 200 : 503).json({
-    status,
-    timestamp: new Date().toISOString(),
-    uptime: Math.floor(process.uptime()),
-    cache: cache.analytics(),
-    websocket: pool.getMetrics(),
-    db: {
-      status: dbStatus,
-      latencyMs: dbLatencyMs,
-      pool: dbPoolInfo,
-    },
-  });
-});
+app.use('/health', healthRoutes);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/escrows', authMiddleware, escrowRoutes);
