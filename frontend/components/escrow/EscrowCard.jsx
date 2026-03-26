@@ -24,11 +24,12 @@
 import Link from 'next/link';
 import Badge from '../ui/Badge';
 import CurrencyAmount from '../ui/CurrencyAmount';
+import CopyButton from '../ui/CopyButton';
 import { useI18n } from '../../i18n/index.jsx';
 
 export default function EscrowCard({ escrow }) {
   const { t } = useI18n();
-  const { id, title, status, totalAmount, milestoneProgress, counterparty, role } = escrow;
+  const { id, title, status, totalAmount, milestoneProgress, counterparty, role, transactionHash } = escrow;
 
   const [done, total] = milestoneProgress?.split(' / ').map(Number) ?? [0, 0];
   const progressPct = total > 0 ? Math.round((done / total) * 100) : 0;
@@ -56,11 +57,6 @@ export default function EscrowCard({ escrow }) {
       <CurrencyAmount amount={totalAmount} showUsdc size="md" className="mb-3" />
 
       {/* Milestone Progress Bar */}
-      {/*
-        TODO (contributor — Issue #39):
-        Replace this simple bar with individual milestone status dots
-        (one circle per milestone, colored by MilestoneStatus)
-      */}
       <div>
         <div className="flex justify-between text-xs text-gray-500 mb-1">
           <span>{t('escrow.fields.milestones')}</span>
@@ -73,6 +69,19 @@ export default function EscrowCard({ escrow }) {
           />
         </div>
       </div>
+
+      {/* Transaction Hash */}
+      {transactionHash && (
+        <div className="mt-3 pt-3 border-t border-gray-800">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-gray-500">TX:</span>
+            <span className="text-xs font-mono text-gray-400 truncate">{transactionHash.slice(0, 16)}...</span>
+            <div onClick={(e) => e.preventDefault()}>
+              <CopyButton text={transactionHash} label="Copy" />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-800">

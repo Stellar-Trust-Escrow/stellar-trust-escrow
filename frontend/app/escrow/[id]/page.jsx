@@ -21,10 +21,12 @@
 import { useState } from 'react';
 import MilestoneList from '../../../components/escrow/MilestoneList';
 import DisputeModal from '../../../components/escrow/DisputeModal';
+import CancelEscrowModal from '../../../components/escrow/CancelEscrowModal';
 import Badge from '../../../components/ui/Badge';
 import Button from '../../../components/ui/Button';
 import ReputationBadge from '../../../components/ui/ReputationBadge';
 import CurrencyAmount from '../../../components/ui/CurrencyAmount';
+import TransactionHash from '../../../components/ui/TransactionHash';
 
 // TODO (contributor): replace with SWR fetch
 const PLACEHOLDER_ESCROW = {
@@ -37,6 +39,7 @@ const PLACEHOLDER_ESCROW = {
   remainingBalance: '1,500 USDC',
   createdAt: '2025-03-01',
   deadline: '2025-04-01',
+  transactionHash: 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6a7b8c9d0e1f2',
   milestones: [
     {
       id: 0,
@@ -65,6 +68,7 @@ const PLACEHOLDER_ESCROW = {
 export default function EscrowDetailPage({ params }) {
   const { id } = params;
   const [isDisputeOpen, setDisputeOpen] = useState(false);
+  const [isCancelOpen, setCancelOpen] = useState(false);
 
   // TODO (contributor — Issue #34):
   // const { data: escrow, isLoading, error } = useSWR(`/api/escrows/${id}`);
@@ -92,6 +96,15 @@ export default function EscrowDetailPage({ params }) {
     console.log('TODO: reject milestone', milestoneId);
   };
 
+  const handleCancelEscrow = async () => {
+    // TODO (contributor — Issue #34):
+    // 1. Build cancel_escrow Soroban tx
+    // 2. Sign with Freighter
+    // 3. Broadcast
+    // 4. Redirect to dashboard
+    console.log('TODO: cancel escrow', id);
+  };
+
   return (
     <div className="space-y-8 max-w-4xl mx-auto">
       {/* Header */}
@@ -105,9 +118,14 @@ export default function EscrowDetailPage({ params }) {
         </div>
         <div className="flex gap-2 flex-shrink-0">
           {escrow.status === 'Active' && (
-            <Button variant="danger" size="sm" onClick={() => setDisputeOpen(true)}>
-              ⚠ Raise Dispute
-            </Button>
+            <>
+              <Button variant="danger" size="sm" onClick={() => setDisputeOpen(true)}>
+                ⚠ Raise Dispute
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => setCancelOpen(true)}>
+                Cancel Escrow
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -119,6 +137,17 @@ export default function EscrowDetailPage({ params }) {
         <InfoCell label="Created" value={escrow.createdAt} />
         <InfoCell label="Deadline" value={escrow.deadline || 'None'} />
       </div>
+
+      {/* Transaction Hash */}
+      {escrow.transactionHash && (
+        <div className="card">
+          <TransactionHash
+            hash={escrow.transactionHash}
+            label="Transaction Hash"
+            explorerUrl={`https://stellar.expert/explorer/testnet/tx/${escrow.transactionHash}`}
+          />
+        </div>
+      )}
 
       {/* Parties */}
       <div className="card grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -150,6 +179,14 @@ export default function EscrowDetailPage({ params }) {
 
       {/* Dispute Modal */}
       <DisputeModal isOpen={isDisputeOpen} onClose={() => setDisputeOpen(false)} escrowId={id} />
+
+      {/* Cancel Escrow Modal */}
+      <CancelEscrowModal
+        isOpen={isCancelOpen}
+        onClose={() => setCancelOpen(false)}
+        escrowId={id}
+        onConfirm={handleCancelEscrow}
+      />
     </div>
   );
 }
