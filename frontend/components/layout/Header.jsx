@@ -20,6 +20,7 @@ import { useWallet } from '../../hooks/useWallet';
 import { useI18n } from '../../i18n/index.jsx';
 import WalletStatus from '../ui/WalletStatus';
 import ThemeToggle from './ThemeToggle';
+import CurrencySelector from '../ui/CurrencySelector';
 
 export default function Header() {
   const wallet = useWallet();
@@ -78,6 +79,9 @@ export default function Header() {
 
             {/* Wallet Status */}
             <WalletStatus wallet={wallet} />
+
+            {/* Currency Selector */}
+            <CurrencySelector size="sm" />
 
             {/* Theme Toggle */}
             <ThemeToggle />

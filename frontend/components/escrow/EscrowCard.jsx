@@ -23,6 +23,7 @@
 
 import Link from 'next/link';
 import Badge from '../ui/Badge';
+import CurrencyAmount from '../ui/CurrencyAmount';
 import { useI18n } from '../../i18n/index.jsx';
 
 export default function EscrowCard({ escrow }) {
@@ -51,8 +52,8 @@ export default function EscrowCard({ escrow }) {
         <Badge status={status} size="sm" />
       </div>
 
-      {/* Amount */}
-      <p className="text-lg font-bold text-white mb-3">{totalAmount}</p>
+      {/* Amount — converted to user's selected currency */}
+      <CurrencyAmount amount={totalAmount} showUsdc size="md" className="mb-3" />
 
       {/* Milestone Progress Bar */}
       {/*

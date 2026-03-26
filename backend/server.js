@@ -26,6 +26,7 @@ import reputationRoutes from './api/routes/reputationRoutes.js';
 import userRoutes from './api/routes/userRoutes.js';
 import auditRoutes from './api/routes/auditRoutes.js';
 import authRoutes from './api/routes/authRoutes.js';
+import incidentRoutes from './api/routes/incidentRoutes.js';
 import authMiddleware from './api/middleware/auth.js';
 import auditMiddleware from './api/middleware/audit.js';
 import _apiV1Routes from './api/v1/index.js';
@@ -139,6 +140,7 @@ app.use('/api/kyc', kycRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/relayer', relayerRoutes);
 app.use('/api/audit', auditRoutes);
+app.use('/api/incidents', incidentRoutes);
 app.use('/docs', docsRouter);
 app.use('/api/admin', adminRoutes);
 
