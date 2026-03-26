@@ -13,6 +13,25 @@ jest.mock('../../hooks/useEscrow', () => ({
   }),
 }));
 
+// Mock components that require context providers not set up in tests.
+jest.mock('../../components/ui/CurrencyAmount', () =>
+  function CurrencyAmount({ amount }) {
+    return <span>{amount}</span>;
+  }
+);
+
+jest.mock('../../components/escrow/MilestoneList', () =>
+  function MilestoneList({ milestones }) {
+    return (
+      <ul>
+        {milestones.map((m) => (
+          <li key={m.id}>{m.title}</li>
+        ))}
+      </ul>
+    );
+  }
+);
+
 const params = { id: '1' };
 
 beforeEach(() => {
