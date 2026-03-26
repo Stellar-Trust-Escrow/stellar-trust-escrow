@@ -125,6 +125,68 @@ pub fn emit_escrow_completed(env: &Env, escrow_id: u64) {
         .publish((symbol_short!("esc_done"), escrow_id), ());
 }
 
+/// Emitted when a recurring payment schedule is configured for an escrow.
+pub fn emit_recurring_schedule_created(
+    env: &Env,
+    escrow_id: u64,
+    payment_amount: i128,
+    total_payments: u32,
+    next_payment_at: u64,
+) {
+    env.events().publish(
+        (symbol_short!("rec_crt"), escrow_id),
+        (payment_amount, total_payments, next_payment_at),
+    );
+}
+
+/// Emitted when one or more recurring payments are processed.
+pub fn emit_recurring_payments_processed(
+    env: &Env,
+    escrow_id: u64,
+    processed_count: u32,
+    total_released: i128,
+    next_payment_at: Option<u64>,
+) {
+    env.events().publish(
+        (symbol_short!("rec_pay"), escrow_id),
+        (processed_count, total_released, next_payment_at),
+    );
+}
+
+/// Emitted when a recurring schedule is paused.
+pub fn emit_recurring_schedule_paused(env: &Env, escrow_id: u64, paused_by: &Address) {
+    env.events().publish(
+        (symbol_short!("rec_pau"), escrow_id),
+        paused_by.clone(),
+    );
+}
+
+/// Emitted when a recurring schedule is resumed.
+pub fn emit_recurring_schedule_resumed(
+    env: &Env,
+    escrow_id: u64,
+    resumed_by: &Address,
+    next_payment_at: u64,
+) {
+    env.events().publish(
+        (symbol_short!("rec_res"), escrow_id),
+        (resumed_by.clone(), next_payment_at),
+    );
+}
+
+/// Emitted when a recurring schedule is cancelled.
+pub fn emit_recurring_schedule_cancelled(
+    env: &Env,
+    escrow_id: u64,
+    cancelled_by: &Address,
+    refunded_amount: i128,
+) {
+    env.events().publish(
+        (symbol_short!("rec_can"), escrow_id),
+        (cancelled_by.clone(), refunded_amount),
+    );
+}
+
 /// Emitted when an escrow is cancelled and remaining funds returned to client.
 ///
 /// # Arguments

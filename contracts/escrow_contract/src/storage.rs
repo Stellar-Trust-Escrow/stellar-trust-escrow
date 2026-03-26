@@ -32,7 +32,7 @@
 use soroban_sdk::{contracttype, Address, BytesN, Env, Vec};
 
 use crate::PackedDataKey;
-use crate::{DataKey, EscrowMeta, EscrowState, EscrowStatus, Milestone, MilestoneStatus};
+use crate::{DataKey, Milestone};
 
 // Current storage version - increment when storage layout changes
 pub const STORAGE_VERSION: u32 = 2;
@@ -155,7 +155,7 @@ impl StorageManager {
             if let Some(v1_escrow) = env
                 .storage()
                 .persistent()
-                .get::<DataKey, EscrowState>(&v1_key)
+                .get::<DataKey, EscrowStateV1>(&v1_key)
             {
                 // Count approved milestones
                 let approved_count = v1_escrow
@@ -183,6 +183,8 @@ impl StorageManager {
                     lock_time: v1_escrow.lock_time,
                     lock_time_extension: v1_escrow.lock_time_extension,
                     brief_hash: v1_escrow.brief_hash,
+                    rent_balance: 0,
+                    last_rent_collection_at: v1_escrow.created_at,
                 };
 
                 // Store meta in v2 format using PackedDataKey
