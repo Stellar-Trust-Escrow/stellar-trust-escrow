@@ -1,0 +1,59 @@
+{
+  "escrows": [
+    {
+      "id": "1",
+      "clientAddress": "GCLIENT1",
+      "freelancerAddress": "GFREELANCER1",
+      "status": "Active",
+      "totalAmount": "1000",
+      "remainingBalance": "1000",
+      "deadline": 1742908800000,
+      "createdAt": "2026-03-24T00:00:00Z"
+    },
+    {
+      "id": "2",
+      "clientAddress": "GCLIENT2",
+      "freelancerAddress": "GFREELANCER2",
+      "status": "Completed",
+      "totalAmount": "2000",
+      "remainingBalance": "0",
+      "deadline": null,
+      "createdAt": "2026-03-23T00:00:00Z"
+    }
+  ],
+  "milestones": [
+    {
+      "id": "m1",
+      "escrowId": "1",
+      "milestoneIndex": 0,
+      "title": "Milestone 1",
+      "amount": "500",
+      "status": "Approved",
+      "submittedAt": "2026-03-24T10:00:00Z",
+      "resolvedAt": "2026-03-24T12:00:00Z"
+    },
+    {
+      "id": "m2",
+      "escrowId": "1",
+      "milestoneIndex": 1,
+      "title": "Milestone 2",
+      "amount": "500",
+      "status": "Active",
+      "submittedAt": null,
+      "resolvedAt": null
+    }
+  ],
+  "disputes": [
+    {
+      "id": "d1",
+      "escrowId": "1",
+      "raisedByAddress": "GCLIENT1",
+      "raisedAt": "2026-03-24T15:00:00Z",
+      "resolvedAt": null,
+      "clientAmount": "200",
+      "freelancerAmount": "300",
+      "resolvedBy": null,
+      "resolution": "Refund"
+    }
+  ]
+}

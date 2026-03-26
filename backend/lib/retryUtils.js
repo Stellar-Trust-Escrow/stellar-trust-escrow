@@ -2,9 +2,12 @@
  * Database Retry and Reconnection Utilities
  *
  * Provides retry logic for transient database errors and enhanced error handling.
+ * Integrates with the circuit breaker to stop retrying when a dependency is
+ * confirmed unhealthy, preventing cascading failures.
  */
 
 import { dbConnectionErrorsTotal } from './metrics.js';
+import { getBreaker, CircuitOpenError } from './circuitBreaker.js';
 
 const RETRY_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 1000;
@@ -45,18 +48,41 @@ export function isRetryableError(error) {
 }
 
 /**
- * Retry a database operation with exponential backoff
+ * Retry a database operation with exponential backoff, guarded by a circuit breaker.
+ *
+ * The circuit breaker ("database") opens after 5 failures within a 10 s window.
+ * When open, this function rejects immediately with a CircuitOpenError — no
+ * retries are attempted, preventing connection pool exhaustion during outages.
+ *
  * @param {Function} operation - Async operation to retry
  * @param {Object} config - Retry configuration
  * @returns {Promise} Operation result
  */
 export async function retryDatabaseOperation(operation, config = retryConfig) {
+  const breaker = getBreaker('database', {
+    failureThreshold: 5,
+    successThreshold: 2,
+    timeout: 30_000,
+    windowSize: 10_000,
+  });
+
+  // Fail fast if the circuit is open — no point retrying
+  if (breaker.state === 'OPEN') {
+    throw new CircuitOpenError('database', breaker._nextAttemptAt);
+  }
+
   let lastError;
 
   for (let attempt = 1; attempt <= config.attempts; attempt++) {
     try {
-      return await operation();
+      const result = await breaker.execute(operation);
+      return result;
     } catch (error) {
+      // Re-throw immediately for circuit-open rejections — no retry
+      if (error instanceof CircuitOpenError) {
+        throw error;
+      }
+
       lastError = error;
 
       // Track connection errors

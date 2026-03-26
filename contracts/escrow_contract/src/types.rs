@@ -50,7 +50,7 @@ pub enum MilestoneStatus {
 /// payment amount. Funds for a milestone are released only after
 /// the client approves the submission.
 #[contracttype]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Milestone {
     /// Sequential ID within this escrow (starts at 0).
     pub id: u32,
@@ -220,6 +220,52 @@ pub struct SlashRecord {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// META-TRANSACTIONS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Meta-transaction data structure.
+///
+/// Allows users to sign transaction intents off-chain and have them
+/// executed by a relayer without the user paying transaction fees.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct MetaTransaction {
+    /// The address of the user who signed this transaction
+    pub signer: Address,
+
+    /// Unique nonce to prevent replay attacks
+    pub nonce: u64,
+
+    /// Maximum timestamp when this meta-tx is valid (Unix timestamp)
+    pub deadline: u64,
+
+    /// The function name to call (e.g., "create_escrow")
+    pub function_name: String,
+
+    /// Serialized function arguments as JSON
+    pub function_args: String,
+
+    /// Ed25519 signature of the transaction data
+    pub signature: BytesN<64>,
+}
+
+/// Fee delegation information for meta-transactions.
+///
+/// Specifies how fees should be paid when executing meta-transactions.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct FeeDelegation {
+    /// Address that will pay the transaction fees
+    pub fee_payer: Address,
+
+    /// Maximum fee amount the fee_payer is willing to pay
+    pub max_fee: i128,
+
+    /// Token contract address for fee payment (typically XLM)
+    pub fee_token: Address,
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // STORAGE KEYS
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -236,6 +282,8 @@ pub enum DataKey {
     Reputation(Address),
     /// Contract admin address — value: Address
     Admin,
+    /// Contract pause state — value: bool
+    Paused,
     /// Cancellation request by escrow ID — key: u64, value: CancellationRequest
     CancellationRequest(u64),
     /// Slash record by escrow ID — key: u64, value: SlashRecord

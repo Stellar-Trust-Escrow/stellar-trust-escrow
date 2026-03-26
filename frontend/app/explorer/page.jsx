@@ -7,7 +7,7 @@
 
 'use client';
 
-import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
+
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Search, SlidersHorizontal, X, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import EscrowCard from '../../components/escrow/EscrowCard';
@@ -438,7 +438,7 @@ function ExplorerContent() {
   );
 }
 
-export default function ExplorerPage() {
+
   return (
     <Suspense
       fallback={
@@ -449,6 +449,7 @@ export default function ExplorerPage() {
       }
     >
       <ExplorerContent />
-    </Suspense>
+</Suspense>
+    </ErrorBoundary>
   );
 }
