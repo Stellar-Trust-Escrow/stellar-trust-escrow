@@ -20,6 +20,7 @@
  */
 
 import { useState, useEffect, Suspense } from 'react';
+import CardSkeleton from '../../components/ui/CardSkeleton';
 import dynamic from 'next/dynamic';
 import EscrowCard from '../../components/escrow/EscrowCard';
 import ReputationBadge from '../../components/ui/ReputationBadge';
@@ -67,15 +68,7 @@ const PLACEHOLDER_ADDRESS = 'GABCD1234';
 
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 
-function EscrowCardSkeleton() {
-  return (
-    <div className="card animate-pulse">
-      <div className="h-4 w-40 bg-gray-700 rounded mb-3" />
-      <div className="h-3 w-28 bg-gray-800 rounded mb-2" />
-      <div className="h-3 w-20 bg-gray-800 rounded" />
-    </div>
-  );
-}
+
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
@@ -185,12 +178,13 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {escrowsLoading ? (
-          <div className="grid gap-4 md:grid-cols-2">
-            <EscrowCardSkeleton />
-            <EscrowCardSkeleton />
-          </div>
-        ) : escrows.length === 0 ? (
+{escrowsLoading ? (
+  <div className="grid gap-4 md:grid-cols-2">
+    <CardSkeleton />
+    <CardSkeleton />
+    <CardSkeleton />
+  </div>
+) : escrows.length === 0 ? (
           <div className="card text-center py-10">
             <p className="text-3xl mb-2">📭</p>
             <p className="text-gray-400 font-medium">{t('common.noResults')}</p>

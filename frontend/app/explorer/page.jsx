@@ -9,7 +9,11 @@
 
 import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Search, SlidersHorizontal, X, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { Search, SlidersHorizontal, X, ChevronLeft, ChevronRight, Loader2, Loader2 as SpinnerIcon } from 'lucide-react';
+import Progress from '../../components/ui/Progress';
+import CardSkeleton from '../../components/ui/CardSkeleton';
+import Skeleton from '../../components/ui/Skeleton';
+
 import EscrowCard from '../../components/escrow/EscrowCard';
 import SearchFilters from '../../components/explorer/SearchFilters';
 import Button from '../../components/ui/Button';
@@ -331,10 +335,16 @@ function ExplorerContent() {
 
         {/* Results */}
         <div className="flex-1 min-w-0">
-          {loading ? (
-            <div className="flex items-center justify-center py-20 text-gray-500">
-              <Loader2 size={24} className="animate-spin mr-2" />
-              Loading escrows…
+{loading ? (
+            <div className="flex flex-col items-center justify-center py-20 gap-8 text-gray-500">
+              <Progress indeterminate size="lg" />
+              <div className="space-y-2 text-center">
+                <Skeleton variant="heading" />
+                <Skeleton variant="text" />
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-w-4xl">
+                {Array(6).fill().map((_, i) => <CardSkeleton key={i} className="col-span-1" />)}
+              </div>
             </div>
           ) : error ? (
             <div className="text-center py-16">
@@ -440,14 +450,17 @@ function ExplorerContent() {
 
 export default function ExplorerPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex items-center justify-center py-20 text-gray-500">
-          <Loader2 size={24} className="animate-spin mr-2" />
-          Loading explorer...
-        </div>
-      }
-    >
+        <Suspense
+          fallback={
+            <div className="flex flex-col items-center justify-center py-20 gap-8 text-gray-500">
+              <Progress indeterminate size="lg" />
+              <div className="space-y-2 text-center">
+                <Skeleton variant="heading" className="mx-auto" />
+                <Skeleton variant="text" className="mx-auto w-64" />
+              </div>
+            </div>
+          }
+        >
       <ExplorerContent />
     </Suspense>
   );
