@@ -31,21 +31,23 @@
 
 mod errors;
 mod events;
-mod pause_tests;
 mod types;
 mod upgrade_tests;
 mod pause_tests;
 mod event_tests;
 
-
 pub use errors::EscrowError;
-use types::{CancellationRequest, SlashRecord};
-pub use types::{DataKey, EscrowState, EscrowStatus, Milestone, MilestoneStatus, ReputationRecord};
+use storage::StorageManager;
+use types::{CancellationRequest, RecurringPaymentConfig, RecurringInterval, SlashRecord};
+pub use types::{
+    DataKey, EscrowState, EscrowStatus, Milestone, MilestoneStatus, ReputationRecord,
+};
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype, token, Address, BytesN, Env, String, Vec,
     contract, contractimpl, contracttype, symbol_short, token, Address, BytesN, Env, String, Vec,
 };
+
+mod storage;
 
 // ── TTL constants ─────────────────────────────────────────────────────────────
 const INSTANCE_TTL_THRESHOLD: u32 = 5_000;
@@ -68,6 +70,7 @@ const RENT_PER_ENTRY_PER_PERIOD: i128 = 1;
 pub enum PackedDataKey {
     EscrowMeta(u64),
     Milestone(u64, u32),
+    RecurringConfig(u64),
 }
 
 // ── Meta-transaction argument structs ────────────────────────────────────────
@@ -115,31 +118,31 @@ struct ApproveMilestoneArgs {
 // `approved_count` replaces the O(n) "all approved?" loop in approve_milestone.
 #[contracttype]
 #[derive(Clone, Debug)]
-struct EscrowMeta {
-    escrow_id: u64,
-    client: Address,
-    freelancer: Address,
-    token: Address,
-    total_amount: i128,
+pub(crate) struct EscrowMeta {
+    pub(crate) escrow_id: u64,
+    pub(crate) client: Address,
+    pub(crate) freelancer: Address,
+    pub(crate) token: Address,
+    pub(crate) total_amount: i128,
     /// Running sum of milestone amounts added so far (allocation guard).
-    allocated_amount: i128,
-    remaining_balance: i128,
-    status: EscrowStatus,
-    milestone_count: u32,
+    pub(crate) allocated_amount: i128,
+    pub(crate) remaining_balance: i128,
+    pub(crate) status: EscrowStatus,
+    pub(crate) milestone_count: u32,
     /// Number of milestones in Approved state — avoids full scan on completion check.
-    approved_count: u32,
-    arbiter: Option<Address>,
-    created_at: u64,
-    deadline: Option<u64>,
+    pub(crate) approved_count: u32,
+    pub(crate) arbiter: Option<Address>,
+    pub(crate) created_at: u64,
+    pub(crate) deadline: Option<u64>,
     /// Optional lock time (ledger timestamp) - funds locked until this time.
-    lock_time: Option<u64>,
+    pub(crate) lock_time: Option<u64>,
     /// Optional extension deadline for the lock time.
-    lock_time_extension: Option<u64>,
-    brief_hash: BytesN<32>,
+    pub(crate) lock_time_extension: Option<u64>,
+    pub(crate) brief_hash: BytesN<32>,
     /// Prepaid storage rent reserve held by the contract in the escrow token.
-    rent_balance: i128,
+    pub(crate) rent_balance: i128,
     /// Timestamp of the last successful rent collection checkpoint.
-    last_rent_collection_at: u64,
+    pub(crate) last_rent_collection_at: u64,
 }
 
 // ── Storage helpers ───────────────────────────────────────────────────────────
@@ -263,6 +266,34 @@ impl ContractStorage {
         env.storage()
             .persistent()
             .remove(&PackedDataKey::Milestone(escrow_id, milestone_id));
+    }
+
+    // ── Recurring configuration ─────────────────────────────────────────────
+
+    fn load_recurring_config(
+        env: &Env,
+        escrow_id: u64,
+    ) -> Result<RecurringPaymentConfig, EscrowError> {
+        let key = PackedDataKey::RecurringConfig(escrow_id);
+        let config = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(EscrowError::RecurringConfigNotFound)?;
+        Self::bump_persistent_ttl(env, &key);
+        Ok(config)
+    }
+
+    fn save_recurring_config(env: &Env, escrow_id: u64, config: &RecurringPaymentConfig) {
+        let key = PackedDataKey::RecurringConfig(escrow_id);
+        env.storage().persistent().set(&key, config);
+        Self::bump_persistent_ttl(env, &key);
+    }
+
+    fn remove_recurring_config(env: &Env, escrow_id: u64) {
+        env.storage()
+            .persistent()
+            .remove(&PackedDataKey::RecurringConfig(escrow_id));
     }
 
     // ── Full escrow view (read-only, assembles EscrowState for callers) ───────
@@ -394,6 +425,13 @@ impl ContractStorage {
     #[inline]
     fn active_storage_entries(env: &Env, meta: &EscrowMeta) -> i128 {
         let mut entries = 1 + i128::from(meta.milestone_count);
+        if env
+            .storage()
+            .persistent()
+            .has(&PackedDataKey::RecurringConfig(meta.escrow_id))
+        {
+            entries += 1;
+        }
         if env
             .storage()
             .persistent()
@@ -557,6 +595,7 @@ impl ContractStorage {
             Self::remove_milestone(env, meta.escrow_id, milestone_id);
         }
 
+        Self::remove_recurring_config(env, meta.escrow_id);
         Self::remove_cancellation_request(env, meta.escrow_id);
         Self::remove_slash_record(env, meta.escrow_id);
         Self::remove_escrow_meta(env, meta.escrow_id);
@@ -706,6 +745,97 @@ impl EscrowContract {
         Ok(escrow_id)
     }
 
+    /// Creates a recurring escrow that automatically releases funds on a schedule.
+    pub fn create_recurring_escrow(
+        env: Env,
+        client: Address,
+        freelancer: Address,
+        token: Address,
+        payment_amount: i128,
+        interval: RecurringInterval,
+        start_time: u64,
+        end_date: Option<u64>,
+        number_of_payments: Option<u32>,
+        brief_hash: BytesN<32>,
+    ) -> Result<u64, EscrowError> {
+        client.require_auth();
+        ContractStorage::require_initialized(&env)?;
+        ContractStorage::require_not_paused(&env)?;
+
+        if payment_amount <= 0 {
+            return Err(EscrowError::InvalidMilestoneAmount);
+        }
+
+        let now = env.ledger().timestamp();
+        if start_time <= now {
+            return Err(EscrowError::InvalidRecurringSchedule);
+        }
+        let total_payments =
+            Self::resolve_total_payments(start_time, interval.clone(), end_date, number_of_payments)?;
+        let total_amount = payment_amount
+            .checked_mul(i128::from(total_payments))
+            .ok_or(EscrowError::AmountMismatch)?;
+        let escrow_id = ContractStorage::next_escrow_id(&env)?;
+        let base_rent_reserve = ContractStorage::reserve_for_entries(1);
+
+        token::Client::new(&env, &token).transfer(
+            &client,
+            &env.current_contract_address(),
+            &total_amount,
+        );
+        ContractStorage::charge_rent_reserve(&env, &token, &client, base_rent_reserve)?;
+
+        let mut meta = EscrowMeta {
+            escrow_id,
+            client: client.clone(),
+            freelancer: freelancer.clone(),
+            token,
+            total_amount,
+            allocated_amount: 0,
+            remaining_balance: total_amount,
+            status: EscrowStatus::Active,
+            milestone_count: 0,
+            approved_count: 0,
+            arbiter: None,
+            created_at: now,
+            deadline: None,
+            lock_time: None,
+            lock_time_extension: None,
+            brief_hash,
+            rent_balance: base_rent_reserve,
+            last_rent_collection_at: now,
+        };
+        ContractStorage::charge_entry_rent(&env, &mut meta, &client, 1)?;
+        ContractStorage::save_escrow_meta(&env, &meta);
+
+        events::emit_escrow_created(&env, escrow_id, &client, &freelancer, total_amount);
+
+        let recurring = RecurringPaymentConfig {
+            interval,
+            payment_amount,
+            start_time,
+            next_payment_at: start_time,
+            end_date,
+            total_payments,
+            payments_remaining: total_payments,
+            processed_payments: 0,
+            paused: false,
+            cancelled: false,
+            paused_at: None,
+            last_payment_at: None,
+        };
+        ContractStorage::save_recurring_config(&env, escrow_id, &recurring);
+
+        events::emit_recurring_schedule_created(
+            &env,
+            escrow_id,
+            payment_amount,
+            total_payments,
+            start_time,
+        );
+        Ok(escrow_id)
+    }
+
     /// Adds a milestone to an existing escrow.
     ///
     /// # Gas notes
@@ -768,6 +898,123 @@ impl EscrowContract {
 
         events::emit_milestone_added(&env, escrow_id, milestone_id, amount);
         Ok(milestone_id)
+    }
+
+    /// Releases all recurring payments that are due at the current ledger timestamp.
+    pub fn process_recurring_payments(env: Env, escrow_id: u64) -> Result<u32, EscrowError> {
+        ContractStorage::require_initialized(&env)?;
+
+        let mut meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
+        if meta.status != EscrowStatus::Active {
+            return Err(EscrowError::EscrowNotActive);
+        }
+
+        let mut recurring = ContractStorage::load_recurring_config(&env, escrow_id)?;
+        if recurring.cancelled {
+            return Err(EscrowError::RecurringScheduleCancelled);
+        }
+        if recurring.paused {
+            return Err(EscrowError::RecurringSchedulePaused);
+        }
+
+        let now = env.ledger().timestamp();
+        if recurring.payments_remaining == 0 || now < recurring.next_payment_at {
+            return Err(EscrowError::NoRecurringPaymentDue);
+        }
+
+        let mut processed_count: u32 = 0;
+        let mut total_released: i128 = 0;
+
+        while recurring.payments_remaining > 0 && now >= recurring.next_payment_at {
+            let milestone_id = meta.milestone_count;
+            meta.milestone_count = meta
+                .milestone_count
+                .checked_add(1)
+                .ok_or(EscrowError::TooManyMilestones)?;
+            meta.approved_count = meta
+                .approved_count
+                .checked_add(1)
+                .ok_or(EscrowError::TooManyMilestones)?;
+            meta.allocated_amount = meta
+                .allocated_amount
+                .checked_add(recurring.payment_amount)
+                .ok_or(EscrowError::AmountMismatch)?;
+            meta.remaining_balance = meta
+                .remaining_balance
+                .checked_sub(recurring.payment_amount)
+                .ok_or(EscrowError::AmountMismatch)?;
+
+            let payment_number = recurring
+                .processed_payments
+                .checked_add(1)
+                .ok_or(EscrowError::TooManyMilestones)?;
+            let title = String::from_str(&env, "Recurring payment");
+            ContractStorage::save_milestone(
+                &env,
+                escrow_id,
+                &Milestone {
+                    id: milestone_id,
+                    title,
+                    description_hash: meta.brief_hash.clone(),
+                    amount: recurring.payment_amount,
+                    status: MilestoneStatus::Approved,
+                    submitted_at: Some(recurring.next_payment_at),
+                    resolved_at: Some(now),
+                },
+            );
+
+            token::Client::new(&env, &meta.token).transfer(
+                &env.current_contract_address(),
+                &meta.freelancer,
+                &recurring.payment_amount,
+            );
+
+            recurring.processed_payments = payment_number;
+            recurring.payments_remaining -= 1;
+            recurring.last_payment_at = Some(now);
+            total_released = total_released
+                .checked_add(recurring.payment_amount)
+                .ok_or(EscrowError::AmountMismatch)?;
+            processed_count += 1;
+
+            if recurring.payments_remaining == 0 {
+                recurring.next_payment_at = 0;
+                break;
+            }
+
+            recurring.next_payment_at =
+                Self::next_schedule_time(recurring.next_payment_at, &recurring.interval)?;
+
+            if let Some(end_date) = recurring.end_date {
+                if recurring.next_payment_at > end_date {
+                    recurring.payments_remaining = 0;
+                    recurring.next_payment_at = 0;
+                    break;
+                }
+            }
+        }
+
+        if recurring.payments_remaining == 0 {
+            meta.status = EscrowStatus::Completed;
+            events::emit_escrow_completed(&env, escrow_id);
+        }
+
+        ContractStorage::save_escrow_meta(&env, &meta);
+        ContractStorage::save_recurring_config(&env, escrow_id, &recurring);
+
+        events::emit_recurring_payments_processed(
+            &env,
+            escrow_id,
+            processed_count,
+            total_released,
+            if recurring.payments_remaining == 0 {
+                None
+            } else {
+                Some(recurring.next_payment_at)
+            },
+        );
+        events::emit_funds_released(&env, escrow_id, &meta.freelancer, total_released);
+        Ok(processed_count)
     }
 
     /// Freelancer submits work for a milestone.
@@ -1195,6 +1442,106 @@ impl EscrowContract {
         ContractStorage::is_paused(&env)
     }
 
+    /// Pauses scheduled recurring releases for an escrow.
+    pub fn pause_recurring_schedule(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+
+        let meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
+        if caller != meta.client {
+            return Err(EscrowError::ClientOnly);
+        }
+
+        let mut recurring = ContractStorage::load_recurring_config(&env, escrow_id)?;
+        if recurring.cancelled {
+            return Err(EscrowError::RecurringScheduleCancelled);
+        }
+        recurring.paused = true;
+        recurring.paused_at = Some(env.ledger().timestamp());
+        ContractStorage::save_recurring_config(&env, escrow_id, &recurring);
+
+        events::emit_recurring_schedule_paused(&env, escrow_id, &caller);
+        Ok(())
+    }
+
+    /// Resumes scheduled recurring releases for an escrow.
+    pub fn resume_recurring_schedule(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+
+        let meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
+        if caller != meta.client {
+            return Err(EscrowError::ClientOnly);
+        }
+
+        let mut recurring = ContractStorage::load_recurring_config(&env, escrow_id)?;
+        if recurring.cancelled {
+            return Err(EscrowError::RecurringScheduleCancelled);
+        }
+        if !recurring.paused {
+            return Ok(());
+        }
+
+        let now = env.ledger().timestamp();
+        recurring.paused = false;
+        recurring.next_payment_at = now.max(recurring.next_payment_at);
+        recurring.paused_at = None;
+        ContractStorage::save_recurring_config(&env, escrow_id, &recurring);
+
+        events::emit_recurring_schedule_resumed(&env, escrow_id, &caller, recurring.next_payment_at);
+        Ok(())
+    }
+
+    /// Cancels a recurring schedule and refunds all future payments to the client.
+    pub fn cancel_recurring_escrow(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+
+        let mut meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
+        if caller != meta.client {
+            return Err(EscrowError::ClientOnly);
+        }
+        if meta.status != EscrowStatus::Active {
+            return Err(EscrowError::EscrowNotActive);
+        }
+
+        let mut recurring = ContractStorage::load_recurring_config(&env, escrow_id)?;
+        if recurring.cancelled {
+            return Err(EscrowError::RecurringScheduleCancelled);
+        }
+
+        let refunded_amount = meta.remaining_balance;
+        if refunded_amount > 0 {
+            token::Client::new(&env, &meta.token).transfer(
+                &env.current_contract_address(),
+                &meta.client,
+                &refunded_amount,
+            );
+        }
+
+        recurring.cancelled = true;
+        recurring.paused = false;
+        recurring.payments_remaining = 0;
+        recurring.next_payment_at = 0;
+        meta.remaining_balance = 0;
+        meta.status = EscrowStatus::Cancelled;
+
+        ContractStorage::save_escrow_meta(&env, &meta);
+        ContractStorage::save_recurring_config(&env, escrow_id, &recurring);
+
+        events::emit_recurring_schedule_cancelled(&env, escrow_id, &caller, refunded_amount);
+        Ok(())
+    }
+
     // ── View Functions ────────────────────────────────────────────────────────
 
     pub fn get_escrow(env: Env, escrow_id: u64) -> Result<EscrowState, EscrowError> {
@@ -1238,6 +1585,14 @@ impl EscrowContract {
 
     pub fn get_reputation(env: Env, address: Address) -> Result<ReputationRecord, EscrowError> {
         Ok(ContractStorage::load_reputation(&env, &address))
+    }
+
+    pub fn get_recurring_config(
+        env: Env,
+        escrow_id: u64,
+    ) -> Result<RecurringPaymentConfig, EscrowError> {
+        ContractStorage::ensure_live_escrow(&env, escrow_id)?;
+        ContractStorage::load_recurring_config(&env, escrow_id)
     }
 
     pub fn escrow_count(env: Env) -> u64 {
@@ -1480,7 +1835,6 @@ impl EscrowContract {
         caller.require_auth();
 
         let slash_record = ContractStorage::load_slash_record(&env, escrow_id)?;
-        let meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
         let meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
 
         // Caller must be arbiter or admin
@@ -1553,6 +1907,60 @@ impl EscrowContract {
         events::emit_reputation_updated(env, address, record.total_score);
     }
 
+    fn resolve_total_payments(
+        start_time: u64,
+        interval: RecurringInterval,
+        end_date: Option<u64>,
+        number_of_payments: Option<u32>,
+    ) -> Result<u32, EscrowError> {
+        let derived_from_end_date = if let Some(end) = end_date {
+            if end < start_time {
+                return Err(EscrowError::InvalidRecurringSchedule);
+            }
+
+            let mut payments: u32 = 1;
+            let mut scheduled_at = start_time;
+            while scheduled_at < end {
+                let next = Self::next_schedule_time(scheduled_at, &interval)?;
+                if next > end {
+                    break;
+                }
+                payments = payments
+                    .checked_add(1)
+                    .ok_or(EscrowError::InvalidRecurringSchedule)?;
+                scheduled_at = next;
+            }
+            Some(payments)
+        } else {
+            None
+        };
+
+        let total = match (derived_from_end_date, number_of_payments) {
+            (Some(by_end_date), Some(by_count)) => by_end_date.min(by_count),
+            (Some(by_end_date), None) => by_end_date,
+            (None, Some(by_count)) => by_count,
+            (None, None) => return Err(EscrowError::InvalidRecurringSchedule),
+        };
+
+        if total == 0 {
+            return Err(EscrowError::InvalidRecurringSchedule);
+        }
+
+        Ok(total)
+    }
+
+    fn next_schedule_time(current: u64, interval: &RecurringInterval) -> Result<u64, EscrowError> {
+        let seconds = match interval {
+            RecurringInterval::Daily => 86_400_u64,
+            RecurringInterval::Weekly => 7 * 86_400_u64,
+            RecurringInterval::Monthly => 30 * 86_400_u64,
+        };
+
+        current
+            .checked_add(seconds)
+            .ok_or(EscrowError::InvalidRecurringSchedule)
+    }
+
     // ── Slashing helpers ─────────────────────────────────────────────────────
 
     /// Calculates the slash amount based on remaining balance.
@@ -1617,6 +2025,159 @@ mod tests {
 
     fn advance(env: &Env, seconds: u64) {
         env.ledger().with_mut(|ledger| ledger.timestamp += seconds);
+    }
+
+    #[test]
+    fn test_create_recurring_escrow_stores_schedule() {
+        let (env, admin, _, client) = setup();
+        client.initialize(&admin);
+
+        let escrow_client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_id = token_contract.address();
+        let token_admin = token::StellarAssetClient::new(&env, &token_id);
+
+        let total_reserve = 2 * ContractStorage::reserve_for_entries(1);
+        token_admin.mint(&escrow_client, &(300_i128 + total_reserve));
+
+        let start_time = env.ledger().timestamp() + 100;
+        let escrow_id = client.create_recurring_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &100_i128,
+            &RecurringInterval::Weekly,
+            &start_time,
+            &None,
+            &Some(3_u32),
+            &BytesN::from_array(&env, &[12; 32]),
+        );
+
+        let state = client.get_escrow(&escrow_id);
+        let recurring = client.get_recurring_config(&escrow_id);
+
+        assert_eq!(state.total_amount, 300_i128);
+        assert_eq!(recurring.total_payments, 3);
+        assert_eq!(recurring.payments_remaining, 3);
+        assert_eq!(recurring.next_payment_at, start_time);
+    }
+
+    #[test]
+    fn test_process_recurring_payments_releases_due_amounts() {
+        let (env, admin, _, client) = setup();
+        client.initialize(&admin);
+
+        let escrow_client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_id = token_contract.address();
+        let token_admin = token::StellarAssetClient::new(&env, &token_id);
+        let token_client = token::Client::new(&env, &token_id);
+
+        let total_reserve = 2 * ContractStorage::reserve_for_entries(1);
+        token_admin.mint(&escrow_client, &(200_i128 + total_reserve));
+
+        let start_time = env.ledger().timestamp() + 10;
+        let escrow_id = client.create_recurring_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &100_i128,
+            &RecurringInterval::Daily,
+            &start_time,
+            &None,
+            &Some(2_u32),
+            &BytesN::from_array(&env, &[13; 32]),
+        );
+
+        advance(&env, 10);
+        assert_eq!(client.process_recurring_payments(&escrow_id), 1);
+        assert_eq!(token_client.balance(&freelancer), 100_i128);
+        assert_eq!(client.get_escrow(&escrow_id).remaining_balance, 100_i128);
+
+        advance(&env, 86_400);
+        assert_eq!(client.process_recurring_payments(&escrow_id), 1);
+        assert_eq!(token_client.balance(&freelancer), 200_i128);
+        assert_eq!(client.get_escrow(&escrow_id).status, EscrowStatus::Completed);
+    }
+
+    #[test]
+    fn test_pause_and_resume_recurring_schedule() {
+        let (env, admin, _, client) = setup();
+        client.initialize(&admin);
+
+        let escrow_client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_id = token_contract.address();
+        let token_admin = token::StellarAssetClient::new(&env, &token_id);
+
+        let total_reserve = 2 * ContractStorage::reserve_for_entries(1);
+        token_admin.mint(&escrow_client, &(200_i128 + total_reserve));
+
+        let start_time = env.ledger().timestamp() + 10;
+        let escrow_id = client.create_recurring_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &100_i128,
+            &RecurringInterval::Daily,
+            &start_time,
+            &None,
+            &Some(2_u32),
+            &BytesN::from_array(&env, &[14; 32]),
+        );
+
+        client.pause_recurring_schedule(&escrow_client, &escrow_id);
+        advance(&env, 10);
+        let paused_result = client.try_process_recurring_payments(&escrow_id);
+        assert!(matches!(
+            paused_result,
+            Err(Ok(EscrowError::RecurringSchedulePaused))
+        ));
+
+        client.resume_recurring_schedule(&escrow_client, &escrow_id);
+        let recurring = client.get_recurring_config(&escrow_id);
+        assert!(!recurring.paused);
+        assert_eq!(client.process_recurring_payments(&escrow_id), 1);
+    }
+
+    #[test]
+    fn test_cancel_recurring_escrow_refunds_unreleased_balance() {
+        let (env, admin, _, client) = setup();
+        client.initialize(&admin);
+
+        let escrow_client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_id = token_contract.address();
+        let token_admin = token::StellarAssetClient::new(&env, &token_id);
+        let token_client = token::Client::new(&env, &token_id);
+
+        let total_reserve = 2 * ContractStorage::reserve_for_entries(1);
+        token_admin.mint(&escrow_client, &(300_i128 + total_reserve));
+
+        let start_time = env.ledger().timestamp() + 10;
+        let escrow_id = client.create_recurring_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &100_i128,
+            &RecurringInterval::Daily,
+            &start_time,
+            &None,
+            &Some(3_u32),
+            &BytesN::from_array(&env, &[15; 32]),
+        );
+
+        advance(&env, 10);
+        client.process_recurring_payments(&escrow_id);
+        client.cancel_recurring_escrow(&escrow_client, &escrow_id);
+
+        assert_eq!(token_client.balance(&escrow_client), 200_i128);
+        assert_eq!(client.get_escrow(&escrow_id).status, EscrowStatus::Cancelled);
+        assert!(client.get_recurring_config(&escrow_id).cancelled);
     }
 
     #[test]

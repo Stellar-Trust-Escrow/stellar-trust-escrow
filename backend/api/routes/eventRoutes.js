@@ -1,38 +1,45 @@
 import express from 'express';
 import eventController from '../controllers/eventController.js';
+import { cacheResponse, TTL } from '../middleware/cache.js';
 
 const router = express.Router();
 
-/**
- * @route  GET /api/events/types
- * @desc   List distinct event types present in the index.
- */
-router.get('/types', eventController.listEventTypes);
+// Event data is append-only — short TTL is fine, no invalidation needed.
 
-/**
- * @route  GET /api/events/stats
- * @desc   Aggregate event counts per type.
- */
-router.get('/stats', eventController.getEventStats);
+router.get(
+  '/types',
+  cacheResponse({ ttl: TTL.STATIC, tags: ['events:types'] }),
+  eventController.listEventTypes,
+);
 
-/**
- * @route  GET /api/events/escrow/:escrowId
- * @desc   List all indexed events for a specific escrow (chronological order).
- * @query  eventType, page, limit
- */
-router.get('/escrow/:escrowId', eventController.listEscrowEvents);
+router.get(
+  '/stats',
+  cacheResponse({ ttl: TTL.EVENTS, tags: ['events:stats'] }),
+  eventController.getEventStats,
+);
 
-/**
- * @route  GET /api/events/:id
- * @desc   Get a single indexed event by database ID.
- */
-router.get('/:id', eventController.getEvent);
+router.get(
+  '/escrow/:escrowId',
+  cacheResponse({
+    ttl: TTL.EVENTS,
+    tags: (req) => ['events', `events:escrow:${req.params.escrowId}`],
+  }),
+  eventController.listEscrowEvents,
+);
 
-/**
- * @route  GET /api/events
- * @desc   List all indexed events with optional filters.
- * @query  eventType, escrowId, fromLedger, toLedger, page, limit
- */
-router.get('/', eventController.listEvents);
+router.get(
+  '/:id',
+  cacheResponse({
+    ttl: TTL.STATIC,
+    tags: (req) => [`event:${req.params.id}`],
+  }),
+  eventController.getEvent,
+);
+
+router.get(
+  '/',
+  cacheResponse({ ttl: TTL.EVENTS, tags: ['events'] }),
+  eventController.listEvents,
+);
 
 export default router;

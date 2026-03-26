@@ -1,146 +1,258 @@
-import { describe, expect, it, beforeEach } from '@jest/globals';
-import express from 'express';
-import request from 'supertest';
+/**
+ * Tests for API Deprecation Middleware
+ */
+
+// Set up environment before imports
+process.env.API_DOCS_URL = '/docs';
 
 import {
   deprecate,
-  deprecationDiscovery,
-  getDeprecationRegistry,
-  registerDeprecation,
+  deprecateVersion,
+  enforceSunset,
+  addDeprecationToResponse,
+  createDeprecationNotice,
+  deprecationPresets,
 } from '../api/middleware/deprecation.js';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+describe('Deprecation Middleware', () => {
+  let req, res, next;
 
-function buildApp(middlewares = []) {
-  const app = express();
-  for (const mw of middlewares) app.use(mw);
-  app.get('/resource', (_req, res) => res.json({ data: 'ok' }));
-  return app;
-}
-
-const DEPRECATED_AT = new Date('2025-01-01T00:00:00.000Z');
-const SUNSET_AT = new Date('2026-07-01T00:00:00.000Z');
-
-// ── deprecate() middleware ────────────────────────────────────────────────────
-
-describe('deprecate middleware', () => {
-  it('sets the Deprecation header', async () => {
-    const app = buildApp([deprecate({ deprecatedAt: DEPRECATED_AT })]);
-    const res = await request(app).get('/resource');
-    expect(res.headers['deprecation']).toBe(DEPRECATED_AT.toUTCString());
-  });
-
-  it('sets the Sunset header when sunsetAt is provided', async () => {
-    const app = buildApp([deprecate({ deprecatedAt: DEPRECATED_AT, sunsetAt: SUNSET_AT })]);
-    const res = await request(app).get('/resource');
-    expect(res.headers['sunset']).toBe(SUNSET_AT.toUTCString());
-  });
-
-  it('omits Sunset header when sunsetAt is not provided', async () => {
-    const app = buildApp([deprecate({ deprecatedAt: DEPRECATED_AT })]);
-    const res = await request(app).get('/resource');
-    expect(res.headers['sunset']).toBeUndefined();
-  });
-
-  it('sets the Link header with rel=deprecation when link is provided', async () => {
-    const app = buildApp([
-      deprecate({ deprecatedAt: DEPRECATED_AT, link: 'https://docs.example.com/migration' }),
-    ]);
-    const res = await request(app).get('/resource');
-    expect(res.headers['link']).toContain('rel="deprecation"');
-    expect(res.headers['link']).toContain('https://docs.example.com/migration');
-  });
-
-  it('omits Link header when link is not provided', async () => {
-    const app = buildApp([deprecate({ deprecatedAt: DEPRECATED_AT })]);
-    const res = await request(app).get('/resource');
-    expect(res.headers['link']).toBeUndefined();
-  });
-
-  it('sets the Warning header', async () => {
-    const app = buildApp([deprecate({ deprecatedAt: DEPRECATED_AT })]);
-    const res = await request(app).get('/resource');
-    expect(res.headers['warning']).toMatch(/^299/);
-    expect(res.headers['warning']).toContain('deprecated');
-  });
-
-  it('includes sunset date and successor in Warning message', async () => {
-    const app = buildApp([
-      deprecate({
-        deprecatedAt: DEPRECATED_AT,
-        sunsetAt: SUNSET_AT,
-        successor: '/api/v2/resource',
-      }),
-    ]);
-    const res = await request(app).get('/resource');
-    expect(res.headers['warning']).toContain(SUNSET_AT.toUTCString());
-    expect(res.headers['warning']).toContain('/api/v2/resource');
-  });
-
-  it('still passes the request to the next handler (200)', async () => {
-    const app = buildApp([deprecate({ deprecatedAt: DEPRECATED_AT })]);
-    const res = await request(app).get('/resource');
-    expect(res.status).toBe(200);
-    expect(res.body.data).toBe('ok');
-  });
-
-  it('accepts date strings as well as Date objects', async () => {
-    const app = buildApp([
-      deprecate({ deprecatedAt: '2025-01-01', sunsetAt: '2026-07-01' }),
-    ]);
-    const res = await request(app).get('/resource');
-    expect(res.headers['deprecation']).toBeDefined();
-    expect(res.headers['sunset']).toBeDefined();
-  });
-});
-
-// ── registerDeprecation / getDeprecationRegistry ──────────────────────────────
-
-describe('deprecation registry', () => {
   beforeEach(() => {
-    // Clear the module-level registry between tests by re-registering with a
-    // unique id — the registry is additive so we use unique keys per test.
+    req = {
+      path: '/api/test',
+      method: 'GET',
+      get: jest.fn((header) => {
+        if (header === 'user-agent') return 'TestClient/1.0';
+        return null;
+      }),
+      ip: '127.0.0.1',
+    };
+
+    res = {
+      setHeader: jest.fn(),
+      json: jest.fn(),
+      status: jest.fn().mockReturnThis(),
+    };
+
+    next = jest.fn();
+
+    // Mock console.warn to avoid noise in tests
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
-  it('registerDeprecation adds an entry to the registry', () => {
-    registerDeprecation('reg-test-1', {
-      deprecatedAt: DEPRECATED_AT,
-      sunsetAt: SUNSET_AT,
-      link: 'https://docs.example.com',
-      successor: '/api/v1/resource',
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  describe('deprecate()', () => {
+    it('should set all required deprecation headers', () => {
+      const config = {
+        version: 'v1',
+        sunsetDate: new Date('2026-12-31T23:59:59Z'),
+        replacement: '/api/v2/test',
+        message: 'Test deprecation',
+      };
+
+      const middleware = deprecate(config);
+      middleware(req, res, next);
+
+      expect(res.setHeader).toHaveBeenCalledWith('Deprecation', 'true');
+      expect(res.setHeader).toHaveBeenCalledWith('Sunset', config.sunsetDate.toUTCString());
+      expect(res.setHeader).toHaveBeenCalledWith('X-API-Deprecated', 'true');
+      expect(res.setHeader).toHaveBeenCalledWith('X-API-Deprecated-Version', 'v1');
+      expect(res.setHeader).toHaveBeenCalledWith('X-API-Replacement', '/api/v2/test');
+      expect(next).toHaveBeenCalled();
     });
-    const registry = getDeprecationRegistry();
-    expect(registry['reg-test-1']).toBeDefined();
-    expect(registry['reg-test-1'].deprecatedAt).toBe(DEPRECATED_AT.toISOString());
-    expect(registry['reg-test-1'].sunsetAt).toBe(SUNSET_AT.toISOString());
-    expect(registry['reg-test-1'].link).toBe('https://docs.example.com');
-    expect(registry['reg-test-1'].successor).toBe('/api/v1/resource');
-  });
 
-  it('getDeprecationRegistry returns null for optional fields when not provided', () => {
-    registerDeprecation('reg-test-2', { deprecatedAt: DEPRECATED_AT });
-    const registry = getDeprecationRegistry();
-    expect(registry['reg-test-2'].sunsetAt).toBeNull();
-    expect(registry['reg-test-2'].link).toBeNull();
-    expect(registry['reg-test-2'].successor).toBeNull();
-  });
-});
+    it('should set Warning header with correct format', () => {
+      const config = {
+        version: 'v1',
+        sunsetDate: new Date('2026-12-31'),
+        replacement: '/api/v2/test',
+      };
 
-// ── deprecationDiscovery() endpoint ──────────────────────────────────────────
+      const middleware = deprecate(config);
+      middleware(req, res, next);
 
-describe('deprecationDiscovery', () => {
-  it('returns JSON with registered deprecations', async () => {
-    registerDeprecation('discovery-test', {
-      deprecatedAt: DEPRECATED_AT,
-      sunsetAt: SUNSET_AT,
+      const warningCall = res.setHeader.mock.calls.find((call) => call[0] === 'Warning');
+      expect(warningCall).toBeDefined();
+      expect(warningCall[1]).toContain('299');
+      expect(warningCall[1]).toContain('v1');
+      expect(warningCall[1]).toContain('/api/v2/test');
     });
 
-    const app = express();
-    app.get('/.well-known/api-deprecations', deprecationDiscovery());
+    it('should set Link header for documentation', () => {
+      const config = {
+        version: 'v1',
+        sunsetDate: new Date('2026-12-31'),
+        documentationUrl: 'https://docs.example.com',
+      };
 
-    const res = await request(app).get('/.well-known/api-deprecations');
-    expect(res.status).toBe(200);
-    expect(res.body['discovery-test']).toBeDefined();
-    expect(res.body['discovery-test'].deprecatedAt).toBe(DEPRECATED_AT.toISOString());
+      const middleware = deprecate(config);
+      middleware(req, res, next);
+
+      expect(res.setHeader).toHaveBeenCalledWith(
+        'Link',
+        '<https://docs.example.com>; rel="deprecation"; type="text/html"',
+      );
+    });
+
+    it('should log deprecation usage', () => {
+      const config = {
+        version: 'v1',
+        sunsetDate: new Date('2026-12-31'),
+      };
+
+      const middleware = deprecate(config);
+      middleware(req, res, next);
+
+      expect(console.warn).toHaveBeenCalledWith(
+        '[DEPRECATION]',
+        expect.objectContaining({
+          path: '/api/test',
+          method: 'GET',
+          version: 'v1',
+        }),
+      );
+    });
+
+    it('should throw error if version is missing', () => {
+      expect(() => {
+        deprecate({ sunsetDate: new Date('2026-12-31') });
+      }).toThrow('Deprecation config must include version');
+    });
+
+    it('should throw error if sunsetDate is invalid', () => {
+      expect(() => {
+        deprecate({ version: 'v1', sunsetDate: 'invalid' });
+      }).toThrow('Deprecation config must include valid sunsetDate');
+    });
+  });
+
+  describe('deprecateVersion()', () => {
+    it('should work as alias for deprecate', () => {
+      const config = {
+        version: 'v1',
+        sunsetDate: new Date('2026-12-31'),
+      };
+
+      const middleware = deprecateVersion(config);
+      middleware(req, res, next);
+
+      expect(res.setHeader).toHaveBeenCalledWith('Deprecation', 'true');
+      expect(next).toHaveBeenCalled();
+    });
+  });
+
+  describe('enforceSunset()', () => {
+    it('should return 410 Gone if sunset date has passed', () => {
+      const pastDate = new Date('2020-01-01');
+      const middleware = enforceSunset(pastDate);
+
+      middleware(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(410);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: 'Gone',
+          message: expect.stringContaining('sunset'),
+        }),
+      );
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    it('should call next() if sunset date has not passed', () => {
+      const futureDate = new Date('2030-12-31');
+      const middleware = enforceSunset(futureDate);
+
+      middleware(req, res, next);
+
+      expect(res.status).not.toHaveBeenCalled();
+      expect(res.json).not.toHaveBeenCalled();
+      expect(next).toHaveBeenCalled();
+    });
+
+    it('should throw error if sunsetDate is invalid', () => {
+      expect(() => {
+        enforceSunset('invalid');
+      }).toThrow('enforceSunset requires a valid Date object');
+    });
+  });
+
+  describe('addDeprecationToResponse()', () => {
+    it('should inject deprecation notice into JSON response', () => {
+      const config = {
+        version: 'v1',
+        sunsetDate: new Date('2026-12-31'),
+        replacement: '/api/v2/test',
+      };
+
+      const middleware = addDeprecationToResponse(config);
+      middleware(req, res, next);
+
+      // Simulate controller calling res.json()
+      const testData = { users: [{ id: 1 }] };
+      res.json(testData);
+
+      expect(res.json).toHaveBeenCalled();
+      const callArg = res.json.mock.calls[0][0];
+      expect(callArg).toHaveProperty('_deprecation');
+      expect(callArg._deprecation).toHaveProperty('deprecated', true);
+      expect(callArg._deprecation).toHaveProperty('version', 'v1');
+      expect(callArg.users).toEqual([{ id: 1 }]);
+    });
+  });
+
+  describe('createDeprecationNotice()', () => {
+    it('should create proper deprecation notice object', () => {
+      const config = {
+        version: 'v1',
+        sunsetDate: new Date('2026-12-31'),
+        replacement: '/api/v2/test',
+        message: 'Test message',
+      };
+
+      const notice = createDeprecationNotice(config);
+
+      expect(notice).toEqual({
+        deprecated: true,
+        version: 'v1',
+        sunsetDate: expect.any(String),
+        daysUntilSunset: expect.any(Number),
+        message: 'Test message',
+        replacement: '/api/v2/test',
+        documentation: expect.any(String),
+        migrationGuide: expect.any(String),
+      });
+    });
+
+    it('should calculate days until sunset correctly', () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 30); // 30 days from now
+
+      const notice = createDeprecationNotice({
+        version: 'v1',
+        sunsetDate: futureDate,
+      });
+
+      expect(notice.daysUntilSunset).toBeGreaterThanOrEqual(29);
+      expect(notice.daysUntilSunset).toBeLessThanOrEqual(31);
+    });
+  });
+
+  describe('deprecationPresets', () => {
+    it('should have legacyUnversioned preset', () => {
+      expect(deprecationPresets.legacyUnversioned).toBeDefined();
+      expect(deprecationPresets.legacyUnversioned.version).toBe('unversioned');
+      expect(deprecationPresets.legacyUnversioned.sunsetDate).toBeInstanceOf(Date);
+      expect(deprecationPresets.legacyUnversioned.replacement).toBe('/api/v1');
+    });
+
+    it('should have v1 preset', () => {
+      expect(deprecationPresets.v1).toBeDefined();
+      expect(deprecationPresets.v1.version).toBe('v1');
+      expect(deprecationPresets.v1.sunsetDate).toBeInstanceOf(Date);
+      expect(deprecationPresets.v1.replacement).toBe('/api/v2');
+    });
   });
 });

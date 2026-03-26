@@ -23,6 +23,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Button from '../../../components/ui/Button';
+import ErrorAlert from '../../../components/ui/ErrorAlert';
 import TemplateSelector from '../../../components/escrow/TemplateSelector';
 import templatesData from '../../../data/templates.json';
 
@@ -158,6 +159,8 @@ export default function CreateEscrowPage() {
         </div>
       )}
 
+      {error && <ErrorAlert message={error} onDismiss={() => setError(null)} />}
+
       {/* Step Indicator */}
       <div className="flex items-center gap-2">
         {STEPS.map((step, i) => (
@@ -194,7 +197,7 @@ export default function CreateEscrowPage() {
         )}
         {currentStep === 3 && <StepReview formData={formData} />}
         {currentStep === 4 && (
-          <StepSign onSubmit={handleSubmit} isSubmitting={isSubmitting} error={error} />
+          <StepSign />
         )}
       </div>
 
@@ -399,7 +402,7 @@ function StepReview({ formData }) {
  * Step 4: Sign with Freighter.
  * TODO (contributor — Issue #33): build and sign the Soroban transaction
  */
-function StepSign({ error }) {
+function StepSign() {
   return (
     <div className="space-y-4 text-center">
       <h2 className="text-lg font-semibold text-white">Sign & Submit</h2>
@@ -407,11 +410,6 @@ function StepSign({ error }) {
         Clicking the button below will open your Freighter wallet to sign the transaction. Your
         funds will be locked on-chain once confirmed.
       </p>
-      {error && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm">
-          {error}
-        </div>
-      )}
       <p className="text-xs text-amber-400">
         🚧 Freighter integration is not yet implemented — see Issue #33
       </p>
