@@ -46,3 +46,6 @@ bundle-stats.json
 /ISSUES.md
 load-tests/results/*.json
 !load-tests/results/.gitkeep
+
+# Gas profiling — latest run output (not committed; baseline is gas-report.prev.json)
+/gas-report.json

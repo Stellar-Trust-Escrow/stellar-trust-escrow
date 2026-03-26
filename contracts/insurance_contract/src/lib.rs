@@ -32,6 +32,7 @@
 mod errors;
 mod events;
 mod types;
+mod gas_profiling;
 
 pub use errors::InsuranceError;
 pub use types::{Claim, ClaimStatus, DataKey, FundInfo, FundStats};

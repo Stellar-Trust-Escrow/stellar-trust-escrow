@@ -34,6 +34,7 @@ mod events;
 mod types;
 mod upgrade_tests;
 mod pause_tests;
+mod gas_profiling;
 
 
 pub use errors::EscrowError;
