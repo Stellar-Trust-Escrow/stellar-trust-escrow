@@ -8,17 +8,20 @@
  * - Freelancer: Submit milestone button
  * - Both:       Raise Dispute button (if Active)
  *
+ * Auto-refresh: data is polled every 30 seconds via SWR.
+ * Polling pauses when the page tab is hidden and resumes on visibility.
+ * A manual refresh button and last-updated timestamp are always shown.
+ *
  * TODO (contributor — hard, Issue #34):
- * - Fetch escrow data: GET /api/escrows/:id
  * - Detect wallet role (client vs freelancer)
  * - Wire approve/reject/submit/dispute to contract interactions via Freighter
- * - Show real-time milestone status with SWR polling
- * - Handle loading and error states
+ * - Handle error states
  */
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useEscrow } from '../../../hooks/useEscrow';
 import MilestoneList from '../../../components/escrow/MilestoneList';
 import DisputeModal from '../../../components/escrow/DisputeModal';
 import CancelEscrowModal from '../../../components/escrow/CancelEscrowModal';
@@ -28,7 +31,7 @@ import ReputationBadge from '../../../components/ui/ReputationBadge';
 import CurrencyAmount from '../../../components/ui/CurrencyAmount';
 import TransactionHash from '../../../components/ui/TransactionHash';
 
-// TODO (contributor): replace with SWR fetch
+// Fallback data used while the API integration (Issue #34) is pending.
 const PLACEHOLDER_ESCROW = {
   id: 1,
   title: 'Smart Contract Audit',
@@ -69,10 +72,34 @@ export default function EscrowDetailPage({ params }) {
   const { id } = params;
   const [isDisputeOpen, setDisputeOpen] = useState(false);
   const [isCancelOpen, setCancelOpen] = useState(false);
+  const [lastRefreshed, setLastRefreshed] = useState(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // TODO (contributor — Issue #34):
-  // const { data: escrow, isLoading, error } = useSWR(`/api/escrows/${id}`);
-  const escrow = PLACEHOLDER_ESCROW;
+  const { escrow: fetchedEscrow, isLoading, mutate } = useEscrow(id);
+
+  // Use fetched data when available, fall back to placeholder during development.
+  const escrow = fetchedEscrow ?? PLACEHOLDER_ESCROW;
+
+  // Update the last-refreshed timestamp whenever data arrives from SWR
+  // (initial load, scheduled poll, or manual refresh).
+  useEffect(() => {
+    setLastRefreshed(new Date());
+  }, [fetchedEscrow]);
+
+  // Set an initial timestamp on mount so the UI is never empty.
+  useEffect(() => {
+    setLastRefreshed(new Date());
+  }, []);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await mutate();
+      setLastRefreshed(new Date());
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   // TODO (contributor): derive from connected wallet address
   const connectedRole = 'client'; // "client" | "freelancer" | "observer"
@@ -105,6 +132,14 @@ export default function EscrowDetailPage({ params }) {
     console.log('TODO: cancel escrow', id);
   };
 
+  if (isLoading && !fetchedEscrow) {
+    return (
+      <div className="flex items-center justify-center min-h-[40vh] text-gray-400">
+        Loading escrow…
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 max-w-4xl mx-auto">
       {/* Header */}
@@ -128,6 +163,24 @@ export default function EscrowDetailPage({ params }) {
             </>
           )}
         </div>
+      </div>
+
+      {/* Refresh bar — last updated timestamp + manual refresh button */}
+      <div className="flex items-center justify-between text-sm text-gray-500">
+        <span data-testid="last-refreshed">
+          {lastRefreshed
+            ? `Last updated: ${lastRefreshed.toLocaleTimeString()}`
+            : 'Loading…'}
+        </span>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleRefresh}
+          isLoading={isRefreshing}
+          aria-label="Refresh escrow data"
+        >
+          ↻ Refresh
+        </Button>
       </div>
 
       {/* Info Grid */}

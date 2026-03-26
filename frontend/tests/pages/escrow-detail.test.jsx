@@ -1,7 +1,23 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import EscrowDetailPage from '../../app/escrow/[id]/page';
 
+// Mock useEscrow so tests don't hit the network.
+const mockMutate = jest.fn().mockResolvedValue(undefined);
+
+jest.mock('../../hooks/useEscrow', () => ({
+  useEscrow: () => ({
+    escrow: null,   // page falls back to PLACEHOLDER_ESCROW
+    isLoading: false,
+    error: null,
+    mutate: mockMutate,
+  }),
+}));
+
 const params = { id: '1' };
+
+beforeEach(() => {
+  mockMutate.mockClear();
+});
 
 describe('EscrowDetailPage', () => {
   it('renders escrow title', () => {
@@ -62,5 +78,46 @@ describe('EscrowDetailPage', () => {
     render(<EscrowDetailPage params={params} />);
     expect(screen.getByText('Client')).toBeInTheDocument();
     expect(screen.getByText('Freelancer')).toBeInTheDocument();
+  });
+
+  // Auto-refresh tests
+  describe('auto-refresh', () => {
+    it('shows last updated timestamp on mount', () => {
+      render(<EscrowDetailPage params={params} />);
+      expect(screen.getByTestId('last-refreshed')).toHaveTextContent(/Last updated:/);
+    });
+
+    it('renders a manual Refresh button', () => {
+      render(<EscrowDetailPage params={params} />);
+      expect(screen.getByRole('button', { name: /Refresh escrow data/ })).toBeInTheDocument();
+    });
+
+    it('calls mutate when the Refresh button is clicked', async () => {
+      render(<EscrowDetailPage params={params} />);
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Refresh escrow data/ }));
+      });
+      expect(mockMutate).toHaveBeenCalledTimes(1);
+    });
+
+    it('updates the last updated timestamp after a manual refresh', async () => {
+      render(<EscrowDetailPage params={params} />);
+
+      const timestampBefore = screen.getByTestId('last-refreshed').textContent;
+
+      // Advance time so the new timestamp will differ
+      jest.useFakeTimers();
+      jest.advanceTimersByTime(5000);
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Refresh escrow data/ }));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('last-refreshed').textContent).not.toBe(timestampBefore);
+      });
+
+      jest.useRealTimers();
+    });
   });
 });
