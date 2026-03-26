@@ -107,3 +107,29 @@ router.patch('/rate-limits/:tier', adminController.updateRateLimit);
 router.get('/rate-limits/usage/:userId', adminController.getUserRateLimitUsage);
 
 export default router;
+
+// ── Secrets Management ─────────────────────────────────────────────────────────
+import { getAuditLog, rotateSecrets } from '../../lib/secrets.js';
+
+/**
+ * @route  GET /api/admin/secrets/audit
+ * @desc   Returns the in-process secrets access audit log.
+ *         Wire to a SIEM or persistent store in production.
+ */
+router.get('/secrets/audit', (_req, res) => {
+  res.json({ data: getAuditLog() });
+});
+
+/**
+ * @route  POST /api/admin/secrets/rotate
+ * @desc   Forces an immediate cache invalidation and re-fetch from the
+ *         secrets backend. Use after rotating credentials in Vault.
+ */
+router.post('/secrets/rotate', async (_req, res) => {
+  try {
+    await rotateSecrets();
+    res.json({ ok: true, message: 'Secrets rotated successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});

@@ -4,6 +4,7 @@ import './lib/sentry.js';
 import * as Sentry from '@sentry/node';
 
 import 'dotenv/config';
+import { initSecrets } from './lib/secrets.js';
 import http from 'http';
 import compressionMiddleware from './middleware/compression.js';
 import cors from 'cors';
@@ -179,6 +180,9 @@ const server = http.createServer(app);
 createWebSocketServer(server);
 
 server.listen(PORT, async () => {
+  // Load secrets first — merges vault/env secrets into process.env
+  await initSecrets();
+  console.log(`[Secrets] Backend: ${process.env.SECRETS_BACKEND || 'env'}`);
   console.log(`API running on port ${PORT}`);
   console.log(`Network: ${process.env.STELLAR_NETWORK}`);
   await emailService.start();
