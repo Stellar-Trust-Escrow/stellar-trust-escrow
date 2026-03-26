@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
 import { appReducer, createInitialAppState, loadPersistedState, persistState } from './state';
 
 const defaultState = createInitialAppState();
@@ -45,9 +45,9 @@ function useStoreDevtools(state) {
     };
   }, []);
 
-  return (action, nextState) => {
+  return useCallback((action, nextState) => {
     devtoolsRef.current?.send(action, nextState);
-  };
+  }, []);
 }
 
 export function AppStoreProvider({ children }) {
