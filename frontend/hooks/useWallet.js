@@ -49,35 +49,31 @@
 
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
+import { useWalletStore } from '../store/app-store';
 
 export function useWallet() {
-  const [address, setAddress] = useState(null);
-  const [network, setNetwork] = useState(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [isFreighterInstalled, setIsFreighterInstalled] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [error, setError] = useState(null);
+  const {
+    address,
+    network,
+    isConnected,
+    isFreighterInstalled,
+    isConnecting,
+    error,
+    setFreighterInstalled,
+    startConnect,
+    setConnectError,
+    disconnect,
+  } = useWalletStore();
 
   // ── Detect Freighter on mount ──────────────────────────────────────────────
   useEffect(() => {
-    // TODO (contributor — Issue #35):
-    // Check if window.freighter exists (or use isConnected from freighter-api)
-    // setIsFreighterInstalled(typeof window !== 'undefined' && !!window.freighter);
-    setIsFreighterInstalled(false); // placeholder
-  }, []);
-
-  // ── Restore session on mount ───────────────────────────────────────────────
-  useEffect(() => {
-    // TODO (contributor — Issue #35):
-    // const savedAddress = localStorage.getItem('wallet_address');
-    // if (savedAddress) { setAddress(savedAddress); setIsConnected(true); }
+    setFreighterInstalled(typeof window !== 'undefined' && !!window.freighter);
   }, []);
 
   // ── Connect ────────────────────────────────────────────────────────────────
   const connect = useCallback(async () => {
-    setIsConnecting(true);
-    setError(null);
+    startConnect();
     try {
       // TODO (contributor — Issue #35): implement Freighter connection
       // const access = await requestAccess();
@@ -89,19 +85,9 @@ export function useWallet() {
       // localStorage.setItem('wallet_address', publicKey);
       throw new Error('Freighter integration not yet implemented — see Issue #35');
     } catch (err) {
-      setError(err.message);
-    } finally {
-      setIsConnecting(false);
+      setConnectError(err.message);
     }
-  }, []);
-
-  // ── Disconnect ─────────────────────────────────────────────────────────────
-  const disconnect = useCallback(() => {
-    setAddress(null);
-    setNetwork(null);
-    setIsConnected(false);
-    // TODO: localStorage.removeItem('wallet_address');
-  }, []);
+  }, [setConnectError, startConnect]);
 
   // ── Sign Transaction ───────────────────────────────────────────────────────
   /**

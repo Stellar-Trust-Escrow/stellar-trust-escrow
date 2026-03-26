@@ -20,6 +20,7 @@ import './globals.css';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
 import ServiceWorkerRegistrar from '../components/ServiceWorkerRegistrar';
+import { AppStoreProvider } from '../store/app-store';
 
 const API_ORIGIN = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -51,20 +52,12 @@ export default function RootLayout({ children }) {
         <link rel="preconnect" href={API_ORIGIN} crossOrigin="anonymous" />
       </head>
       <body className="bg-gray-950 text-gray-100 min-h-screen flex flex-col font-sans">
-        {/*
-          TODO (contributor — Issue #30):
-          Wrap with <WalletProvider> and <SWRConfig> here.
-          Example:
-          <WalletProvider>
-            <SWRConfig value={{ fetcher: ... }}>
-              {children}
-            </SWRConfig>
-          </WalletProvider>
-        */}
-        <Header />
-        <main className="flex-1 container mx-auto px-4 py-8 max-w-7xl">{children}</main>
-        <Footer />
-        <ServiceWorkerRegistrar />
+        <AppStoreProvider>
+          <Header />
+          <main className="flex-1 container mx-auto px-4 py-8 max-w-7xl">{children}</main>
+          <Footer />
+          <ServiceWorkerRegistrar />
+        </AppStoreProvider>
       </body>
     </html>
   );
