@@ -40,6 +40,15 @@ pub enum MilestoneStatus {
     Disputed,
 }
 
+/// Supported recurring payment intervals.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RecurringInterval {
+    Daily,
+    Weekly,
+    Monthly,
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // STRUCTS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -75,6 +84,47 @@ pub struct Milestone {
 
     /// Ledger timestamp when the client approved or rejected.
     pub resolved_at: Option<u64>,
+}
+
+/// Configuration for a recurring/subscription escrow.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RecurringPaymentConfig {
+    /// Payment interval cadence.
+    pub interval: RecurringInterval,
+
+    /// Amount released each time a payment becomes due.
+    pub payment_amount: i128,
+
+    /// Timestamp of the first scheduled payment.
+    pub start_time: u64,
+
+    /// Timestamp when the next payment becomes due.
+    pub next_payment_at: u64,
+
+    /// Optional schedule end date.
+    pub end_date: Option<u64>,
+
+    /// Total number of scheduled payments for this escrow.
+    pub total_payments: u32,
+
+    /// Remaining scheduled payments not yet released.
+    pub payments_remaining: u32,
+
+    /// Number of payments already processed.
+    pub processed_payments: u32,
+
+    /// Whether scheduled releases are currently paused.
+    pub paused: bool,
+
+    /// Whether the recurring schedule has been cancelled.
+    pub cancelled: bool,
+
+    /// Optional timestamp when the schedule was paused.
+    pub paused_at: Option<u64>,
+
+    /// Optional timestamp of the most recent processed payment.
+    pub last_payment_at: Option<u64>,
 }
 
 /// The main escrow agreement.
@@ -288,4 +338,6 @@ pub enum DataKey {
     CancellationRequest(u64),
     /// Slash record by escrow ID — key: u64, value: SlashRecord
     SlashRecord(u64),
+    /// Recurring payment config by escrow ID — key: u64, value: RecurringPaymentConfig
+    RecurringConfig(u64),
 }

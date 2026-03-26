@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import AdminDisputesPage from '../../../app/admin/disputes/page';
+import { renderWithStore } from '../../../store/test-utils';
 
 const localStorageMock = (() => {
   let store = {};
@@ -43,7 +44,7 @@ describe('AdminDisputesPage', () => {
       ok: true,
       json: async () => ({ disputes: [], pagination: { page: 1, total: 0, pages: 1 } }),
     });
-    render(<AdminDisputesPage />);
+    renderWithStore(<AdminDisputesPage />);
     expect(screen.getByText('Dispute Resolution')).toBeInTheDocument();
   });
 
@@ -52,7 +53,7 @@ describe('AdminDisputesPage', () => {
       ok: true,
       json: async () => ({ disputes: [], pagination: { page: 1, total: 0, pages: 1 } }),
     });
-    render(<AdminDisputesPage />);
+    renderWithStore(<AdminDisputesPage />);
     expect(screen.getByRole('button', { name: 'Open' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Resolved' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument();
@@ -63,7 +64,7 @@ describe('AdminDisputesPage', () => {
       ok: true,
       json: async () => ({ disputes: [], pagination: { page: 1, total: 0, pages: 1 } }),
     });
-    render(<AdminDisputesPage />);
+    renderWithStore(<AdminDisputesPage />);
     await waitFor(() => {
       expect(screen.getByText('No disputes found.')).toBeInTheDocument();
     });
@@ -74,7 +75,7 @@ describe('AdminDisputesPage', () => {
       ok: true,
       json: async () => ({ disputes: [mockDispute], pagination: { page: 1, total: 1, pages: 1 } }),
     });
-    render(<AdminDisputesPage />);
+    renderWithStore(<AdminDisputesPage />);
     await waitFor(() => {
       expect(screen.getByText('Dispute #1')).toBeInTheDocument();
     });
@@ -85,7 +86,7 @@ describe('AdminDisputesPage', () => {
       ok: true,
       json: async () => ({ disputes: [mockDispute], pagination: { page: 1, total: 1, pages: 1 } }),
     });
-    render(<AdminDisputesPage />);
+    renderWithStore(<AdminDisputesPage />);
     await waitFor(() => {
       expect(screen.getByText('Resolve')).toBeInTheDocument();
     });
@@ -96,7 +97,7 @@ describe('AdminDisputesPage', () => {
       ok: true,
       json: async () => ({ disputes: [mockDispute], pagination: { page: 1, total: 1, pages: 1 } }),
     });
-    render(<AdminDisputesPage />);
+    renderWithStore(<AdminDisputesPage />);
     await waitFor(() => screen.getByText('Resolve'));
     fireEvent.click(screen.getByText('Resolve'));
     expect(screen.getByText('Resolve Dispute #1')).toBeInTheDocument();
@@ -107,7 +108,7 @@ describe('AdminDisputesPage', () => {
       ok: true,
       json: async () => ({ disputes: [mockDispute], pagination: { page: 1, total: 1, pages: 1 } }),
     });
-    render(<AdminDisputesPage />);
+    renderWithStore(<AdminDisputesPage />);
     await waitFor(() => screen.getByText('Resolve'));
     fireEvent.click(screen.getByText('Resolve'));
     fireEvent.click(screen.getByText('Cancel'));
@@ -119,7 +120,7 @@ describe('AdminDisputesPage', () => {
       ok: false,
       json: async () => ({ error: 'Unauthorized' }),
     });
-    render(<AdminDisputesPage />);
+    renderWithStore(<AdminDisputesPage />);
     await waitFor(() => {
       expect(screen.getByText(/Unauthorized/)).toBeInTheDocument();
     });

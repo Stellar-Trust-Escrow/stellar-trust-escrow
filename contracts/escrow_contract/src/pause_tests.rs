@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod pause_tests {
     use crate::{EscrowContract, EscrowContractClient, EscrowError, EscrowStatus, MilestoneStatus};
-    use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env, String};
     use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String};
 
     fn setup() -> (Env, Address, Address, EscrowContractClient<'static>) {
