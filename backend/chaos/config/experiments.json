@@ -1,0 +1,101 @@
+{
+  "version": "1.0",
+  "description": "Chaos experiment definitions for stellar-trust-escrow",
+  "experiments": [
+    {
+      "id": "db-latency",
+      "name": "Database High Latency",
+      "description": "Injects 2 000 ms delay on every request to simulate a slow database. The circuit breaker on DB calls should open after 5 consecutive slow responses and return 503 to clients.",
+      "hypothesis": "Under sustained DB latency the circuit breaker opens within 5 requests and the API returns 503 within the timeout window instead of hanging.",
+      "type": "latency",
+      "target": "database",
+      "routes": ["*"],
+      "config": {
+        "delayMs": 2000,
+        "jitterMs": 300,
+        "probability": 1.0
+      },
+      "duration": 60,
+      "expectedBehavior": "API responds with 503 after circuit opens; recovers automatically after 30 s"
+    },
+    {
+      "id": "db-failure",
+      "name": "Database Connection Failure",
+      "description": "Simulates a Prisma P1001 error (database unreachable) on 100% of DB operations. Tests that retryUtils exhaust retries and the circuit breaker opens.",
+      "hypothesis": "DB errors trigger retry logic (3 attempts with backoff), then the circuit opens and subsequent requests fail-fast.",
+      "type": "error",
+      "target": "database",
+      "routes": ["*"],
+      "config": {
+        "errorCode": "P1001",
+        "message": "Can't reach database server",
+        "probability": 1.0
+      },
+      "duration": 30,
+      "expectedBehavior": "Requests return 503 within 7 s (3 retries × 1-2 s backoff); circuit opens; recovery after 30 s"
+    },
+    {
+      "id": "stellar-rpc-timeout",
+      "name": "Stellar RPC Timeout",
+      "description": "Wraps all Stellar RPC calls with a 3 000 ms hard timeout. Tests that transaction submission returns a TIMEOUT status rather than hanging for 60 s.",
+      "hypothesis": "Transaction broadcast times out gracefully within 3 s and returns 504 to the client.",
+      "type": "timeout",
+      "target": "stellar",
+      "routes": ["/api/v1/escrows/broadcast"],
+      "config": {
+        "timeoutMs": 3000,
+        "probability": 1.0
+      },
+      "duration": 30,
+      "expectedBehavior": "POST /broadcast returns 504 Gateway Timeout within 3 s instead of polling for 60 s"
+    },
+    {
+      "id": "stellar-rpc-error",
+      "name": "Stellar RPC 503 Errors",
+      "description": "Injects STELLAR_RPC_ERROR on 100% of Stellar RPC calls. Validates the circuit breaker on the Stellar service opens and stops hammering the RPC endpoint.",
+      "hypothesis": "Repeated RPC errors open the Stellar circuit breaker; broadcast endpoint returns 503 fail-fast after the threshold.",
+      "type": "error",
+      "target": "stellar",
+      "routes": ["/api/v1/escrows/broadcast"],
+      "config": {
+        "errorCode": "STELLAR_RPC_ERROR",
+        "message": "Stellar RPC unavailable",
+        "probability": 1.0
+      },
+      "duration": 30,
+      "expectedBehavior": "Circuit opens after 5 failures; subsequent requests return 503 in <1 ms"
+    },
+    {
+      "id": "partial-api-errors",
+      "name": "Partial API Error Rate (30%)",
+      "description": "Injects HTTP 500 errors on 30% of all escrow read requests to simulate intermittent upstream failures.",
+      "hypothesis": "Clients observe a ~30% error rate; the circuit breaker does NOT open (below threshold); healthy requests still succeed.",
+      "type": "http-error",
+      "target": "api",
+      "routes": ["/api/v1/escrows"],
+      "config": {
+        "statusCode": 500,
+        "message": "Internal server error (chaos)",
+        "probability": 0.3
+      },
+      "duration": 60,
+      "expectedBehavior": "~30% of requests fail with 500; circuit stays CLOSED; error rate visible in Prometheus"
+    },
+    {
+      "id": "high-latency-reads",
+      "name": "High Latency on Escrow Reads",
+      "description": "Adds 1 000–1 500 ms latency to all GET /escrows requests. Validates that timeout middleware and Prometheus SLO alerts trigger.",
+      "hypothesis": "P99 latency exceeds the 1 000 ms SLO; Grafana alert fires; clients receive responses (not timeouts) because no hard timeout is enforced at this level.",
+      "type": "latency",
+      "target": "api",
+      "routes": ["/api/v1/escrows"],
+      "config": {
+        "delayMs": 1000,
+        "jitterMs": 500,
+        "probability": 1.0
+      },
+      "duration": 60,
+      "expectedBehavior": "All GET /escrows respond with 200 but P99 > 1 000 ms; Prometheus histogram reflects latency spike"
+    }
+  ]
+}

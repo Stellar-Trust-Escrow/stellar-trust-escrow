@@ -9,6 +9,7 @@
     "build": "echo 'No build step required for backend'",
     "start": "node server.js",
     "test": "NODE_OPTIONS=--experimental-vm-modules npx jest --runInBand",
+    "test:chaos": "NODE_OPTIONS=--experimental-vm-modules npx jest --runInBand --testPathPattern=tests/chaos",
     "lint": "eslint .",
     "format": "prettier --write .",
     "db:migrate": "npx prisma migrate dev",

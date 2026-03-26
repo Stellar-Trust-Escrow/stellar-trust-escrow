@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(NODE_OPTIONS=--experimental-vm-modules npx jest --runInBand --testPathPattern=tests/chaos)",
+      "Bash(NODE_OPTIONS=--experimental-vm-modules npx jest --runInBand --testPathPattern=tests/chaos --no-coverage)",
+      "Bash(ls .env*)",
+      "Bash(npx jest:*)"
+    ]
+  }
+}
