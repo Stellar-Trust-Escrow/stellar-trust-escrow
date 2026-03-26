@@ -362,8 +362,8 @@ describe('Metric emission', () => {
   it('chaosInjectedTotal is incremented on each fault injection', async () => {
     enableChaos('db-failure');
 
-    injectDatabaseError('db-failure');
-    injectDatabaseError('db-failure');
+    try { injectDatabaseError('db-failure'); } catch { /* expected */ }
+    try { injectDatabaseError('db-failure'); } catch { /* expected */ }
 
     expect(metricsMock.chaosInjectedTotal.inc).toHaveBeenCalledTimes(2);
     expect(metricsMock.chaosInjectedTotal.inc).toHaveBeenCalledWith(

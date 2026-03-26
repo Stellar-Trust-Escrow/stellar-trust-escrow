@@ -9,7 +9,7 @@
     "build": "echo 'No build step required for backend'",
     "start": "node server.js",
     "test": "NODE_OPTIONS=--experimental-vm-modules npx jest --runInBand",
-    "test:chaos": "NODE_OPTIONS=--experimental-vm-modules npx jest --runInBand --testPathPattern=tests/chaos",
+    "test:chaos": "NODE_OPTIONS=--experimental-vm-modules npx jest --runInBand --testPathPattern=backend/tests/chaos --config=backend/jest.config.js",
     "lint": "eslint .",
     "format": "prettier --write .",
     "db:migrate": "npx prisma migrate dev",
@@ -45,7 +45,6 @@
     "swagger-ui-express": "^5.0.1",
     "winston": "^3.11.0",
     "yaml": "^2.4.2"
-    "winston": "^3.11.0"
   },
   "devDependencies": {
     "jest": "^29.7.0",
