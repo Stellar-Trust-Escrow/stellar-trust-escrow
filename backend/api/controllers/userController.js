@@ -30,7 +30,7 @@ const getUserProfile = async (req, res) => {
     const cached = await cache.get(cacheKey);
     if (cached) return res.json(cached);
 
-    const [reputation, clientEscrows, freelancerEscrows] = await Promise.all([
+    const [reputation, clientEscrows, freelancerEscrows, userProfile] = await Promise.all([
       prisma.reputationRecord.findUnique({ where: { address } }),
       prisma.escrow.findMany({
         where: { clientAddress: address },
