@@ -1,0 +1,25 @@
+# Local Vault dev server for StellarTrustEscrow
+#
+# Usage:
+#   docker compose -f backend/config/vault.docker-compose.yml up -d
+#   export VAULT_ADDR=http://127.0.0.1:8200
+#   export VAULT_TOKEN=dev-root-token
+#   bash backend/config/vault-setup.sh
+
+services:
+  vault:
+    image: hashicorp/vault:1.16
+    container_name: stellar-trust-vault
+    ports:
+      - "8200:8200"
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: dev-root-token
+      VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
+    cap_add:
+      - IPC_LOCK
+    command: server -dev
+    healthcheck:
+      test: ["CMD", "vault", "status"]
+      interval: 5s
+      timeout: 3s
+      retries: 5

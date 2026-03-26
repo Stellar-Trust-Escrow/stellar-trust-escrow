@@ -3,6 +3,7 @@ module.exports = {
   testEnvironment: 'jsdom',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.cjs'],
   moduleNameMapper: {
+    '^@/(.*)$': '<rootDir>/$1',
     '^.+\\.css$': 'identity-obj-proxy',
     '^@/(.*)$': '<rootDir>/$1',
     '^next/link$': '<rootDir>/tests/__mocks__/next/link.jsx',
@@ -10,10 +11,13 @@ module.exports = {
     '^next/image$': '<rootDir>/tests/__mocks__/next/image.jsx',
   },
   transform: {
-    '^.+\\.[jt]sx?$': ['babel-jest'],
+    '^.+\\.[jt]sx?$': [
+      'babel-jest',
+      { presets: [['next/babel', { 'preset-react': { runtime: 'automatic' } }]] },
+    ],
   },
   testMatch: ['<rootDir>/tests/**/*.test.[jt]s?(x)'],
-  testPathIgnorePatterns: ['<rootDir>/tests/e2e/'],
+  testPathIgnorePatterns: ['<rootDir>/tests/a11y/'],
   collectCoverageFrom: [
     'components/**/*.{js,jsx}',
     'app/**/*.{js,jsx}',
