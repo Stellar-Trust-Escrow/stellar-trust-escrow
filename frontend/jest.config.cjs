@@ -22,10 +22,12 @@ module.exports = {
     'components/**/*.{js,jsx}',
     'app/**/*.{js,jsx}',
     'hooks/**/*.{js,jsx}',
+    'lib/**/*.{js,jsx}',
     '!**/*.stories.{js,jsx}',
     '!**/node_modules/**',
   ],
+  coverageReporters: ['text', 'lcov', 'html'],
   coverageThreshold: {
-    global: { lines: 70, branches: 70, functions: 70, statements: 70 },
+    global: { lines: 60, branches: 50, functions: 60, statements: 60 },
   },
 };

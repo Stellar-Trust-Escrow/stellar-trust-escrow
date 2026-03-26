@@ -17,13 +17,14 @@
  */
 
 import './globals.css';
-import { Inter, JetBrains_Mono } from 'next/font/google';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
 import { ThemeProvider } from '../contexts/ThemeContext';
 import { CurrencyProvider } from '../contexts/CurrencyContext';
 import ServiceWorkerRegistrar from '../components/ServiceWorkerRegistrar';
-import ErrorBoundary from '../../components/error/ErrorBoundary';
+import ErrorBoundary from '../components/error/ErrorBoundary';
+import PerformanceMonitor from '../components/performance/PerformanceMonitor';
+import PerformanceMonitor from '../components/performance/PerformanceMonitor';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' });
@@ -31,6 +32,8 @@ const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mon
 const API_ORIGIN = process.env.NEXT_PUBLIC_API_URL
   ? new URL(process.env.NEXT_PUBLIC_API_URL).origin
   : '';
+
+const API_ORIGIN = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 export const metadata = {
   title: 'StellarTrustEscrow — Decentralized Milestone Escrow',
@@ -53,7 +56,7 @@ export const viewport = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
+    <html lang="en">
       <head>
         {/* DNS prefetch + preconnect for API to reduce latency on first fetch */}
         <link rel="dns-prefetch" href={API_ORIGIN} />
@@ -87,4 +90,3 @@ export default function RootLayout({ children }) {
     </html>
   );
 }
-
