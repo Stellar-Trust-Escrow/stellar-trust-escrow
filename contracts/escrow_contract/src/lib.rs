@@ -34,6 +34,7 @@ mod events;
 mod types;
 mod upgrade_tests;
 mod pause_tests;
+mod event_tests;
 
 pub use errors::EscrowError;
 use storage::StorageManager;
