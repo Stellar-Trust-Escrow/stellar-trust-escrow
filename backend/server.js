@@ -25,6 +25,7 @@ import reputationRoutes from './api/routes/reputationRoutes.js';
 import userRoutes from './api/routes/userRoutes.js';
 import auditRoutes from './api/routes/auditRoutes.js';
 import authRoutes from './api/routes/authRoutes.js';
+import batchRoutes from './api/routes/batchRoutes.js';
 import authMiddleware from './api/middleware/auth.js';
 import auditMiddleware from './api/middleware/audit.js';
 import _apiV1Routes from './api/v1/index.js';
@@ -125,6 +126,7 @@ app.get('/health', async (_req, res) => {
 });
 
 app.use('/api/auth', authRoutes);
+app.use('/api/batch', batchRoutes);
 app.use('/api/escrows', authMiddleware, escrowRoutes);
 
 // ── API Documentation ─────────────────────────────────────────────────────────

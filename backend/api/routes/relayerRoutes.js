@@ -5,8 +5,8 @@
  */
 
 import express from 'express';
-import { createRelayer } from '../services/relayerService.js';
-import { errorsTotal } from '../lib/metrics.js';
+import { createRelayer } from '../../services/relayerService.js';
+import { errorsTotal } from '../../lib/metrics.js';
 
 const router = express.Router();
 
