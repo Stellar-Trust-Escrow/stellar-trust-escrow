@@ -8,23 +8,8 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-
-function getAdminKey() {
-  return typeof window !== 'undefined' ? localStorage.getItem('adminApiKey') || '' : '';
-}
-
-function adminFetch(path, options = {}) {
-  return fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      'x-admin-api-key': getAdminKey(),
-      ...(options.headers || {}),
-    },
-  });
-}
+import { useAdminStore } from '../../../store/app-store';
+import { adminFetch } from '../../../store/admin';
 
 function ResolveModal({ dispute, onClose, onConfirm }) {
   const [clientAmount, setClientAmount] = useState('');
@@ -110,6 +95,7 @@ function StatusBadge({ resolved }) {
 }
 
 export default function AdminDisputesPage() {
+  const { apiKey } = useAdminStore();
   const [disputes, setDisputes] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, total: 0, pages: 1 });
   const [filter, setFilter] = useState('false'); // 'false'=open, 'true'=resolved, ''=all
@@ -124,7 +110,7 @@ export default function AdminDisputesPage() {
     try {
       const params = new URLSearchParams({ page, limit: 20 });
       if (resolved !== '') params.set('resolved', resolved);
-      const res = await adminFetch(`/api/admin/disputes?${params}`);
+      const res = await adminFetch(`/api/admin/disputes?${params}`, apiKey);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to fetch disputes');
       setDisputes(data.disputes);
@@ -134,11 +120,11 @@ export default function AdminDisputesPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [apiKey]);
 
   useEffect(() => {
     fetchDisputes(1, filter);
-  }, [filter, fetchDisputes]);
+  }, [apiKey, filter, fetchDisputes]);
 
   const showToast = (msg) => {
     setToast(msg);
@@ -149,10 +135,14 @@ export default function AdminDisputesPage() {
     const id = selectedDispute.id;
     setSelectedDispute(null);
     try {
-      const res = await adminFetch(`/api/admin/disputes/${id}/resolve`, {
-        method: 'POST',
-        body: JSON.stringify({ clientAmount, freelancerAmount, notes }),
-      });
+      const res = await adminFetch(
+        `/api/admin/disputes/${id}/resolve`,
+        apiKey,
+        {
+          method: 'POST',
+          body: JSON.stringify({ clientAmount, freelancerAmount, notes }),
+        },
+      );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to resolve dispute');
       showToast('Dispute resolved successfully.');
