@@ -24,6 +24,7 @@ import DisputeModal from '../../../components/escrow/DisputeModal';
 import Badge from '../../../components/ui/Badge';
 import Button from '../../../components/ui/Button';
 import ReputationBadge from '../../../components/ui/ReputationBadge';
+import CurrencyAmount from '../../../components/ui/CurrencyAmount';
 
 // TODO (contributor): replace with SWR fetch
 const PLACEHOLDER_ESCROW = {
@@ -113,8 +114,8 @@ export default function EscrowDetailPage({ params }) {
 
       {/* Info Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <InfoCell label="Total" value={escrow.totalAmount} />
-        <InfoCell label="Remaining" value={escrow.remainingBalance} />
+        <InfoCell label="Total" value={escrow.totalAmount} isAmount />
+        <InfoCell label="Remaining" value={escrow.remainingBalance} isAmount />
         <InfoCell label="Created" value={escrow.createdAt} />
         <InfoCell label="Deadline" value={escrow.deadline || 'None'} />
       </div>
@@ -153,11 +154,14 @@ export default function EscrowDetailPage({ params }) {
   );
 }
 
-function InfoCell({ label, value }) {
+function InfoCell({ label, value, isAmount = false }) {
   return (
     <div className="card py-3">
       <p className="text-xs text-gray-500 uppercase tracking-wider">{label}</p>
-      <p className="text-white font-semibold mt-1">{value}</p>
+      {isAmount
+        ? <CurrencyAmount amount={value} showUsdc size="md" className="mt-1" />
+        : <p className="text-white font-semibold mt-1">{value}</p>
+      }
     </div>
   );
 }

@@ -133,3 +133,41 @@ router.post('/secrets/rotate', async (_req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ── Cache Management ───────────────────────────────────────────────────────────
+import cache from '../../lib/cache.js';
+
+/**
+ * @route  GET /api/admin/cache/stats
+ * @desc   Returns cache hit/miss analytics.
+ */
+router.get('/cache/stats', (_req, res) => {
+  res.json(cache.analytics());
+});
+
+/**
+ * @route  DELETE /api/admin/cache
+ * @desc   Flush the entire cache (all tags and keys).
+ * @body   { tag?: string, prefix?: string } — optional scope
+ */
+router.delete('/cache', async (req, res) => {
+  try {
+    const { tag, prefix } = req.body ?? {};
+    if (tag) {
+      await cache.invalidateTag(tag);
+      return res.json({ ok: true, invalidated: `tag:${tag}` });
+    }
+    if (prefix) {
+      await cache.invalidatePrefix(prefix);
+      return res.json({ ok: true, invalidated: `prefix:${prefix}` });
+    }
+    // Full flush — invalidate all known top-level tags
+    await cache.invalidateTags([
+      'escrows', 'disputes', 'reputation', 'reputation:leaderboard',
+      'events', 'events:stats', 'events:types', 'milestones',
+    ]);
+    res.json({ ok: true, invalidated: 'all' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
