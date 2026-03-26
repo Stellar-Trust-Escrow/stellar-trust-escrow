@@ -2,14 +2,16 @@ import { randomUUID } from 'crypto';
 import { WebSocketServer } from 'ws';
 
 const HEARTBEAT_INTERVAL_MS = parseInt(process.env.WS_HEARTBEAT_INTERVAL_MS || '30000', 10);
+const HEARTBEAT_TIMEOUT_MS = parseInt(process.env.WS_HEARTBEAT_TIMEOUT_MS || '10000', 10);
 const MAX_CONNECTIONS = parseInt(process.env.WS_MAX_CONNECTIONS || '100', 10);
 
 class WebSocketPool {
   constructor() {
-    this.connections = new Map(); // id -> { ws, topics: Set, isAlive: boolean }
+    this.connections = new Map(); // id -> { ws, topics, isAlive, pingTimeout, connectedAt, ip, missedPings, totalPings, totalPongs }
     this.peakConnections = 0;
     this.totalConnected = 0;
     this.totalDisconnected = 0;
+    this.totalTimeouts = 0;
     this.heartbeatInterval = null;
   }
 
@@ -25,8 +27,12 @@ class WebSocketPool {
       ws,
       topics: new Set(),
       isAlive: true,
+      pingTimeout: null,
       connectedAt: Date.now(),
       ip: req.socket.remoteAddress,
+      missedPings: 0,
+      totalPings: 0,
+      totalPongs: 0,
     };
 
     this.connections.set(id, meta);
@@ -35,22 +41,25 @@ class WebSocketPool {
       this.peakConnections = this.connections.size;
     }
 
-    // Ping/pong health checks
     ws.on('pong', () => {
       const conn = this.connections.get(id);
-      if (conn) conn.isAlive = true;
+      if (!conn) return;
+      conn.isAlive = true;
+      conn.missedPings = 0;
+      conn.totalPongs++;
+      // Clear the per-ping hard timeout
+      if (conn.pingTimeout) {
+        clearTimeout(conn.pingTimeout);
+        conn.pingTimeout = null;
+      }
     });
 
-    ws.on('close', () => {
-      this.removeConnection(id);
-    });
+    ws.on('close', () => this.removeConnection(id));
 
     ws.on('error', (err) => {
       console.error(`[WebSocket] ID ${id} error:`, err.message);
-      // 'close' event will usually follow and clean up
     });
 
-    // Handle incoming messages (e.g., subscribing to topics)
     ws.on('message', (data) => {
       try {
         const message = JSON.parse(data.toString());
@@ -58,13 +67,15 @@ class WebSocketPool {
           this.subscribe(id, message.topic);
         } else if (message.type === 'unsubscribe' && message.topic) {
           this.unsubscribe(id, message.topic);
+        } else if (message.type === 'ping') {
+          // Client-initiated ping — respond immediately
+          ws.send(JSON.stringify({ type: 'pong', ts: Date.now() }));
         }
       } catch {
         console.warn(`[WebSocket] Invalid message from ${id}:`, data.toString());
       }
     });
 
-    // Start heartbeat if it isn't running
     if (!this.heartbeatInterval) {
       this.startHeartbeat();
     }
@@ -73,35 +84,35 @@ class WebSocketPool {
   }
 
   removeConnection(id) {
-    if (this.connections.has(id)) {
+    const conn = this.connections.get(id);
+    if (conn) {
+      if (conn.pingTimeout) clearTimeout(conn.pingTimeout);
       this.connections.delete(id);
       this.totalDisconnected++;
-
-      // Stop heartbeat if no connections left
-      if (this.connections.size === 0) {
-        this.stopHeartbeat();
-      }
+      if (this.connections.size === 0) this.stopHeartbeat();
     }
+  }
+
+  _terminateStale(id, conn) {
+    console.log(`[WebSocket] Timeout: terminating unresponsive connection ${id} (missed ${conn.missedPings} pings)`);
+    this.totalTimeouts++;
+    conn.ws.terminate();
+    this.removeConnection(id);
   }
 
   subscribe(id, topic) {
     const conn = this.connections.get(id);
-    if (conn) {
-      conn.topics.add(topic);
-    }
+    if (conn) conn.topics.add(topic);
   }
 
   unsubscribe(id, topic) {
     const conn = this.connections.get(id);
-    if (conn) {
-      conn.topics.delete(topic);
-    }
+    if (conn) conn.topics.delete(topic);
   }
 
   broadcast(topic, payload) {
     let sentCount = 0;
     const messageStr = JSON.stringify({ topic, payload });
-
     for (const [_id, conn] of this.connections.entries()) {
       if (conn.topics.has(topic) && conn.ws.readyState === 1 /* OPEN */) {
         conn.ws.send(messageStr);
@@ -115,14 +126,29 @@ class WebSocketPool {
     this.heartbeatInterval = setInterval(() => {
       for (const [id, conn] of this.connections.entries()) {
         if (!conn.isAlive) {
-          console.log(`[WebSocket] Terminating unresponsive connection ${id}`);
-          conn.ws.terminate();
-          this.removeConnection(id);
+          // Pong never arrived from previous cycle — terminate
+          this._terminateStale(id, conn);
           continue;
         }
 
+        // Mark as waiting for pong
         conn.isAlive = false;
-        conn.ws.ping();
+        conn.missedPings++;
+        conn.totalPings++;
+
+        try {
+          conn.ws.ping();
+        } catch {
+          this._terminateStale(id, conn);
+          continue;
+        }
+
+        // Per-ping hard timeout: terminate if pong doesn't arrive within HEARTBEAT_TIMEOUT_MS
+        conn.pingTimeout = setTimeout(() => {
+          if (!conn.isAlive) {
+            this._terminateStale(id, conn);
+          }
+        }, HEARTBEAT_TIMEOUT_MS);
       }
     }, HEARTBEAT_INTERVAL_MS);
   }
@@ -135,12 +161,13 @@ class WebSocketPool {
   }
 
   getMetrics() {
-    // Topic distribution counts
     const topicCounts = {};
+    let totalMissedPings = 0;
     for (const conn of this.connections.values()) {
       for (const topic of conn.topics) {
         topicCounts[topic] = (topicCounts[topic] || 0) + 1;
       }
+      totalMissedPings += conn.missedPings;
     }
 
     return {
@@ -148,31 +175,23 @@ class WebSocketPool {
       peakConnections: this.peakConnections,
       totalConnected: this.totalConnected,
       totalDisconnected: this.totalDisconnected,
+      totalTimeouts: this.totalTimeouts,
+      totalMissedPings,
+      heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
+      heartbeatTimeoutMs: HEARTBEAT_TIMEOUT_MS,
       subscriptionsByTopic: topicCounts,
     };
   }
 }
 
-// Global pool instance
 export const pool = new WebSocketPool();
 
-/**
- * Attaches a WebSocket server to the given HTTP server.
- *
- * @param {import('http').Server} httpServer - The running HTTP server
- * @returns {WebSocketServer}
- */
 export function createWebSocketServer(httpServer) {
   const wss = new WebSocketServer({ noServer: true });
 
-  // Handle HTTTP upgrade request integration
   httpServer.on('upgrade', (request, socket, head) => {
-    // Check path
     const { pathname } = new URL(request.url, `http://${request.headers.host}`);
-
     if (pathname === '/api/ws') {
-      // Future: add Authentication check here
-
       wss.handleUpgrade(request, socket, head, (ws) => {
         wss.emit('connection', ws, request);
       });
@@ -181,26 +200,25 @@ export function createWebSocketServer(httpServer) {
     }
   });
 
-  // Handle actual connection
   wss.on('connection', (ws, request) => {
     const id = pool.addConnection(ws, request);
     if (id) {
       console.log(`[WebSocket] New connection established: ${id}`);
-
-      // Welcome message
       ws.send(
         JSON.stringify({
           type: 'welcome',
           id,
           message: 'Connected to Stellar Trust Escrow WebSocket Server',
+          heartbeat: {
+            intervalMs: HEARTBEAT_INTERVAL_MS,
+            timeoutMs: HEARTBEAT_TIMEOUT_MS,
+          },
         }),
       );
     }
   });
 
-  wss.on('close', () => {
-    pool.stopHeartbeat();
-  });
+  wss.on('close', () => pool.stopHeartbeat());
 
   return wss;
 }
