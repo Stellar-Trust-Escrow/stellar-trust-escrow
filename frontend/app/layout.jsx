@@ -21,6 +21,7 @@ import { Inter, JetBrains_Mono } from 'next/font/google';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
 import { ThemeProvider } from '../contexts/ThemeContext';
+import { CurrencyProvider } from '../contexts/CurrencyContext';
 import ServiceWorkerRegistrar from '../components/ServiceWorkerRegistrar';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
@@ -68,9 +69,13 @@ export default function RootLayout({ children }) {
             </SWRConfig>
           </WalletProvider>
         */}
-        <Header />
-        <main className="flex-1 container mx-auto px-4 py-8 max-w-7xl">{children}</main>
-        <Footer />
+        <ThemeProvider>
+          <CurrencyProvider>
+            <Header />
+            <main className="flex-1 container mx-auto px-4 py-8 max-w-7xl">{children}</main>
+            <Footer />
+          </CurrencyProvider>
+        </ThemeProvider>
 
         {/* Core Web Vitals monitoring — renders nothing to DOM */}
         <PerformanceMonitor />
