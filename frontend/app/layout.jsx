@@ -17,7 +17,6 @@
  */
 
 import './globals.css';
-import { Inter, JetBrains_Mono } from 'next/font/google';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
 import { ThemeProvider } from '../contexts/ThemeContext';
@@ -31,6 +30,8 @@ const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mon
 const API_ORIGIN = process.env.NEXT_PUBLIC_API_URL
   ? new URL(process.env.NEXT_PUBLIC_API_URL).origin
   : '';
+
+const API_ORIGIN = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 export const metadata = {
   title: 'StellarTrustEscrow — Decentralized Milestone Escrow',
@@ -53,7 +54,7 @@ export const viewport = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
+    <html lang="en">
       <head>
         {/* DNS prefetch + preconnect for API to reduce latency on first fetch */}
         <link rel="dns-prefetch" href={API_ORIGIN} />
