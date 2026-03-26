@@ -56,7 +56,27 @@
     "errorMsg": "Branch name structure: feature/NV-1234-new-feature\nAllowed prefixes: feature, fix, refactor, hotfix, release, conflict"
   },
   "dependencies": {
+    "@prisma/client": "^7.5.0",
+    "@sentry/node": "^10.46.0",
+    "@stellar/stellar-sdk": "^14.6.1",
+    "bcryptjs": "^3.0.3",
+    "compression": "^1.8.1",
+    "cors": "^2.8.6",
+    "csv-stringify": "^6.7.0",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.3.1",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.3",
+    "morgan": "^1.10.1",
+    "multer": "^2.1.1",
+    "prom-client": "^15.1.3",
+    "redis": "^5.11.0",
     "safer-buffer": "^2.1.2",
-    "tough-cookie": "^6.0.1"
+    "stripe": "^21.0.0",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1",
+    "tough-cookie": "^6.0.1",
+    "ws": "^8.20.0",
+    "yaml": "^2.8.3"
   }
 }
