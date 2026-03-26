@@ -1,7 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(node -e \"import\\(''''redis''''\\).then\\(m => console.log\\(''''redis available'''', Object.keys\\(m\\)\\)\\)\")"
-    ]
-  }
-}
