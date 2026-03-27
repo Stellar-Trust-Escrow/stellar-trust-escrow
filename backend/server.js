@@ -12,6 +12,14 @@ import express from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
 
+import cookieParser from 'cookie-parser';
+import {
+  sanitizeInputs,
+  csrfProtection,
+  generateCsrfToken,
+  REQUEST_SIZE_LIMIT,
+} from './middleware/validation.js';
+
 import disputeRoutes from './api/routes/disputeRoutes.js';
 import escrowRoutes from './api/routes/escrowRoutes.js';
 import eventRoutes from './api/routes/eventRoutes.js';
@@ -54,8 +62,11 @@ app.use(
   }),
 );
 app.use(morgan('combined'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: REQUEST_SIZE_LIMIT }));
+app.use(express.urlencoded({ extended: true, limit: REQUEST_SIZE_LIMIT }));
+app.use(cookieParser());
+app.use(sanitizeInputs);
+app.use(csrfProtection);
 app.use(auditMiddleware);
 
 // ── Sentry tracing handler — after body parsers, before routes ────────────────
@@ -113,6 +124,8 @@ app.get('/health', async (_req, res) => {
     },
   });
 });
+
+app.get('/api/csrf-token', generateCsrfToken);
 
 app.use('/api/escrows', escrowRoutes);
 app.use('/api/users', userRoutes);

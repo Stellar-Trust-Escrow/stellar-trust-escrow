@@ -1,6 +1,12 @@
 import prisma from '../../lib/prisma.js';
 import cache from '../../lib/cache.js';
 import { buildPaginatedResponse, parsePagination } from '../../lib/pagination.js';
+import {
+  escrowIdParam,
+  signedXdrBody,
+  paginationQuery,
+  handleValidationErrors,
+} from '../../middleware/validation.js';
 
 const ESCROW_SUMMARY_SELECT = {
   id: true,
@@ -202,3 +208,8 @@ const getMilestone = async (req, res) => {
 };
 
 export default { listEscrows, getEscrow, broadcastCreateEscrow, getMilestones, getMilestone };
+
+// ── Validation rule sets (used by escrowRoutes) ───────────────────────────────
+export const validateBroadcast = [signedXdrBody, handleValidationErrors];
+export const validateEscrowId = [escrowIdParam, handleValidationErrors];
+export const validatePagination = [...paginationQuery, handleValidationErrors];
