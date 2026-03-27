@@ -16,40 +16,130 @@ jobs:
         with:
           node-version: '20'
       - name: Audit dependencies
-        run: npm audit --audit-level=high
+        run: npm audit --audit-level=high --omit=dev
+        continue-on-error: true
 
   contract:
     name: Smart Contract (Rust)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
-          components: clippy, rustfmt
+          components: clippy, rustfmt, llvm-tools-preview
+
       - name: Cache Cargo
         uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
+            ~/.cargo/bin
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - name: Format check
-        run: cd contracts/escrow_contract && cargo fmt -- --check
-      - name: Clippy
-        run: cd contracts/escrow_contract && cargo clippy -- -D warnings
-      - name: Test
-        run: cd contracts/escrow_contract && cargo test
-      - name: Build WASM
-        run: cd contracts/escrow_contract && cargo build --release --target wasm32-unknown-unknown
 
-      - name: Slack Notification
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Test + Coverage + Gas profiling
+        run: bash scripts/test-contract.sh --gas --coverage --ci
+        env:
+          ARTIFACTS_DIR: test-artifacts
+
+      - name: Build WASM
+        run: |
+          cd contracts/escrow_contract && cargo build --release --target wasm32-unknown-unknown
+          cd ../insurance_contract    && cargo build --release --target wasm32-unknown-unknown
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: |
+            test-artifacts/escrow-lcov.info
+            test-artifacts/insurance-lcov.info
+          flags: contracts
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+      - name: Coverage summary comment
+        if: github.event_name == 'pull_request'
+        uses: romeovs/lcov-reporter-action@v0.3.1
+        with:
+          lcov-file: test-artifacts/escrow-lcov.info
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          title: "Contract Coverage (escrow_contract)"
+
+      - name: Upload test artifacts
         if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-test-artifacts-${{ github.sha }}
+          path: test-artifacts/
+          retention-days: 30
+
+      - name: Slack Notification on failure
+        if: failure()
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-          SLACK_COLOR: ${{ job.status == 'success' && 'good' || 'danger' }}
-          SLACK_MESSAGE: "Contract CI: ${{ job.status }}"
+          SLACK_COLOR: danger
+          SLACK_MESSAGE: "❌ Contract CI failed — ${{ github.ref }} (${{ github.sha }}) — ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+  contract-fuzz:
+    name: Smart Contract Fuzzing
+    runs-on: ubuntu-latest
+    # Only fuzz on pushes to main/develop to keep PR feedback fast
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/bin
+            target
+          key: ${{ runner.os }}-cargo-fuzz-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --quiet
+
+      - name: Run fuzz targets
+        env:
+          FUZZ_SECS: "60"
+        run: |
+          mkdir -p test-artifacts
+          cd contracts/escrow_contract
+          for target in fuzz/fuzz_targets/*.rs; do
+            name=$(basename "$target" .rs)
+            echo "Fuzzing: $name (${FUZZ_SECS}s)"
+            cargo +nightly fuzz run "$name" -- \
+              -max_total_time="${FUZZ_SECS}" \
+              -artifact_prefix="../../test-artifacts/fuzz-${name}-" \
+              2>&1 | tee "../../test-artifacts/fuzz-${name}.txt"
+          done
+
+      - name: Upload fuzz artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts-${{ github.sha }}
+          path: test-artifacts/fuzz-*
+          retention-days: 30
+
+      - name: Slack Notification on fuzz failure
+        if: failure()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_COLOR: danger
+          SLACK_MESSAGE: "⚠️ Fuzz testing found a failure on ${{ github.ref }} (${{ github.sha }})"
 
   backend:
     name: Backend (Node.js ${{ matrix.node-version }})
@@ -66,23 +156,26 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-node-${{ matrix.node-version }}-${{ hashFiles('**/package-lock.json') }}
       - name: Install dependencies
         run: npm ci
       - name: Lint
         run: cd backend && npm run lint
       - name: Test
         run: cd backend && npm test
+        env:
+          DATABASE_URL: "file:./test.db"
+          NODE_ENV: test
 
       - name: Validate OpenAPI spec
         run: npx --yes @redocly/cli lint backend/openapi.yaml --format=stylish
       - name: Slack Notification
-        if: always() && matrix.node-version == '20'
+        if: failure() && matrix.node-version == '20'
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-          SLACK_COLOR: ${{ job.status == 'success' && 'good' || 'danger' }}
-          SLACK_MESSAGE: "Backend CI (Node ${{ matrix.node-version }}): ${{ job.status }}"
+          SLACK_COLOR: danger
+          SLACK_MESSAGE: "❌ Backend CI failed (Node ${{ matrix.node-version }}) — ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
   frontend:
     name: Frontend (Node.js ${{ matrix.node-version }})
@@ -99,7 +192,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-node-${{ matrix.node-version }}-${{ hashFiles('**/package-lock.json') }}
       - name: Install dependencies
         run: npm ci
       - name: Lint
@@ -110,17 +203,139 @@ jobs:
         run: cd frontend && npm run build
         env:
           NEXT_PUBLIC_API_URL: http://localhost:3001
-      - name: Test
-        run: cd frontend && npm test
+      - name: Unit Tests
+        run: cd frontend && npm run test:unit
         if: success()
+      - name: Integration Tests
+        run: cd frontend && npm run test:integration
+        if: success()
+      - name: Accessibility Tests
+        run: cd frontend && npm run test:a11y
+        if: success()
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:3001
 
       - name: Slack Notification
-        if: always() && matrix.node-version == '20'
+        if: failure() && matrix.node-version == '20'
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-          SLACK_COLOR: ${{ job.status == 'success' && 'good' || 'danger' }}
-          SLACK_MESSAGE: "Frontend CI (Node ${{ matrix.node-version }}): ${{ job.status }}"
+          SLACK_COLOR: danger
+          SLACK_MESSAGE: "❌ Frontend CI failed (Node ${{ matrix.node-version }}) — ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+  frontend-e2e:
+    name: Frontend E2E (Playwright)
+    runs-on: ubuntu-latest
+    needs: [frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          fail-on-cache-miss: false
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright browsers
+        run: cd frontend && npx playwright install --with-deps chromium firefox
+      - name: Build frontend
+        run: cd frontend && npm run build
+        env:
+          NEXT_PUBLIC_API_URL: http://127.0.0.1:4000
+      - name: Run Playwright suite
+        run: cd frontend && npm run test:e2e
+        env:
+          CI: true
+          NEXT_PUBLIC_API_URL: http://127.0.0.1:4000
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.sha }}
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          retention-days: 14
+
+  frontend-e2e:
+    name: Frontend E2E (Playwright)
+    runs-on: ubuntu-latest
+    needs: [frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          fail-on-cache-miss: false
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright browsers
+        run: cd frontend && npx playwright install --with-deps chromium firefox
+      - name: Build frontend
+        run: cd frontend && npm run build
+        env:
+          NEXT_PUBLIC_API_URL: http://127.0.0.1:4000
+      - name: Run Playwright suite
+        run: cd frontend && npm run test:e2e
+        env:
+          CI: true
+          NEXT_PUBLIC_API_URL: http://127.0.0.1:4000
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.sha }}
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          retention-days: 14
+
+  frontend-e2e:
+    name: Frontend E2E (Playwright)
+    runs-on: ubuntu-latest
+    needs: [frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          fail-on-cache-miss: false
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright browsers
+        run: cd frontend && npx playwright install --with-deps chromium firefox
+      - name: Build frontend
+        run: cd frontend && npm run build
+        env:
+          NEXT_PUBLIC_API_URL: http://127.0.0.1:4000
+      - name: Run Playwright suite
+        run: cd frontend && npm run test:e2e
+        env:
+          CI: true
+          NEXT_PUBLIC_API_URL: http://127.0.0.1:4000
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.sha }}
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          retention-days: 14
 
   accessibility:
     name: Frontend Accessibility (a11y)

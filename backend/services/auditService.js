@@ -20,6 +20,7 @@ export const AuditCategory = {
   ADMIN: 'ADMIN',
   PAYMENT: 'PAYMENT',
   KYC: 'KYC',
+  REPORTING: 'REPORTING',
 };
 
 export const AuditAction = {
@@ -56,6 +57,12 @@ export const AuditAction = {
   KYC_SUBMITTED: 'KYC_SUBMITTED',
   KYC_APPROVED: 'KYC_APPROVED',
   KYC_DECLINED: 'KYC_DECLINED',
+  // Reporting
+  REPORT_GENERATED: 'REPORT_GENERATED',
+  REPORT_EXPORTED: 'REPORT_EXPORTED',
+  REPORT_SCHEDULED: 'REPORT_SCHEDULED',
+  REPORT_SCHEDULED_RUN: 'REPORT_SCHEDULED_RUN',
+  REPORT_SCHEDULE_DISABLED: 'REPORT_SCHEDULE_DISABLED',
 };
 
 // ── Write ─────────────────────────────────────────────────────────────────────

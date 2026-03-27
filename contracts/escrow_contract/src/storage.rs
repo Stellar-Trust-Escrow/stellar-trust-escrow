@@ -32,7 +32,7 @@
 use soroban_sdk::{contracttype, Address, BytesN, Env, Vec};
 
 use crate::PackedDataKey;
-use crate::{DataKey, EscrowMeta, EscrowState, EscrowStatus, Milestone, MilestoneStatus};
+use crate::{DataKey, Milestone};
 
 // Current storage version - increment when storage layout changes
 pub const STORAGE_VERSION: u32 = 2;
@@ -91,6 +91,10 @@ impl StorageManager {
 
     /// Check if storage migration is needed.
     /// Returns true if current version is less than STORAGE_VERSION.
+    #[expect(
+        dead_code,
+        reason = "kept as a small migration-status helper for future upgrade flows"
+    )]
     pub fn needs_migration(env: &Env) -> bool {
         Self::get_version(env) < STORAGE_VERSION
     }
@@ -155,7 +159,7 @@ impl StorageManager {
             if let Some(v1_escrow) = env
                 .storage()
                 .persistent()
-                .get::<DataKey, EscrowState>(&v1_key)
+                .get::<DataKey, EscrowStateV1>(&v1_key)
             {
                 // Count approved milestones
                 let approved_count = v1_escrow
@@ -183,6 +187,8 @@ impl StorageManager {
                     lock_time: v1_escrow.lock_time,
                     lock_time_extension: v1_escrow.lock_time_extension,
                     brief_hash: v1_escrow.brief_hash,
+                    rent_balance: 0,
+                    last_rent_collection_at: v1_escrow.created_at,
                 };
 
                 // Store meta in v2 format using PackedDataKey
@@ -241,6 +247,7 @@ mod tests {
     fn test_escrow_state_v1_has_required_fields() {
         // Verify EscrowStateV1 struct has all required fields
         // This is a compile-time check only
+        #[allow(dead_code)]
         fn check_v1_fields(_: &EscrowStateV1) {}
         // The function signature verifies the type exists
     }

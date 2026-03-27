@@ -1,7 +1,7 @@
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod pause_tests {
     use crate::{EscrowContract, EscrowContractClient, EscrowError, EscrowStatus, MilestoneStatus};
-    use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env, String};
     use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String};
 
     fn setup() -> (Env, Address, Address, EscrowContractClient<'static>) {
@@ -66,10 +66,7 @@ mod pause_tests {
         );
 
         assert!(
-            match result {
-                Err(Ok(EscrowError::ContractPaused)) => true,
-                _ => false,
-            },
+            matches!(result, Err(Ok(EscrowError::ContractPaused))),
             "Should fail with ContractPaused error"
         );
     }
@@ -103,10 +100,7 @@ mod pause_tests {
         );
 
         assert!(
-            match result {
-                Err(Ok(EscrowError::ContractPaused)) => true,
-                _ => false,
-            },
+            matches!(result, Err(Ok(EscrowError::ContractPaused))),
             "Should fail with ContractPaused error"
         );
     }

@@ -1,11 +1,11 @@
 import express from 'express';
-import multer from 'multer';
 import userController from '../controllers/userController.js';
 import exportController from '../controllers/exportController.js';
-
-const upload = multer({ dest: 'uploads/' });
+import authMiddleware from '../middleware/auth.js';
+import { authorizeParamAddress } from '../middleware/authorization.js';
 
 const router = express.Router();
+router.use(authMiddleware);
 
 /**
  * @route  GET /api/users/:address
@@ -33,7 +33,7 @@ router.get('/:address/stats', userController.getUserStats);
  * @desc   Export all user data in JSON format
  * @returns { version, exportedAt, userAddress, data: { escrows, payments, kyc, reputation } }
  */
-router.get('/:address/export', exportController.exportUserData);
+router.get('/:address/export', authorizeParamAddress('address'), exportController.exportUserData);
 
 /**
  * @route  POST /api/users/:address/import
@@ -41,13 +41,17 @@ router.get('/:address/export', exportController.exportUserData);
  * @body   { data: {...}, mode: 'merge' | 'replace' }
  * @returns { success, results }
  */
-router.post('/:address/import', exportController.importUserData);
+router.post('/:address/import', authorizeParamAddress('address'), exportController.importUserData);
 
 /**
  * @route  GET /api/users/:address/export/file
  * @desc   Download user data as a file
  * @returns { file: 'data.json', content: {...} }
  */
-router.get('/:address/export/file', exportController.downloadExportFile);
+router.get(
+  '/:address/export/file',
+  authorizeParamAddress('address'),
+  exportController.downloadExportFile,
+);
 
 export default router;

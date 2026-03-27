@@ -1,8 +1,9 @@
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod event_tests {
     use soroban_sdk::{
-        testutils::{Address as _, Events},
-        token, Address, BytesN, Env, IntoVal, String, Val,
+        testutils::{Address as _, Events, Ledger},
+        token, Address, BytesN, Env, String, Symbol, TryFromVal, Val,
     };
 
     use crate::{EscrowContract, EscrowContractClient};
@@ -21,7 +22,7 @@ mod event_tests {
 
     fn register_token(env: &Env, admin: &Address, recipient: &Address, amount: i128) -> Address {
         let sac = env.register_stellar_asset_contract_v2(admin.clone());
-        token::StellarAssetClient::new(env, &sac.address()).mint(recipient, &amount);
+        token::StellarAssetClient::new(env, &sac.address()).mint(recipient, &(amount + 1_000));
         sac.address()
     }
 
@@ -38,6 +39,21 @@ mod event_tests {
             }
         }
         out
+    }
+
+    fn has_topic_symbol(env: &Env, topics: &soroban_sdk::Vec<Val>, expected: Symbol) -> bool {
+        topics
+            .get(0)
+            .map(|val| {
+                Symbol::try_from_val(env, &val).expect("event topic[0] should be a symbol")
+                    == expected
+            })
+            .unwrap_or(false)
+    }
+
+    fn topic_u64(env: &Env, topics: &soroban_sdk::Vec<Val>, index: u32) -> u64 {
+        let val = topics.get(index).expect("missing event topic");
+        soroban_sdk::FromVal::from_val(env, &val)
     }
 
     // ── escrow_created ────────────────────────────────────────────────────────
@@ -63,11 +79,11 @@ mod event_tests {
         let events = contract_events(&env, &contract_id);
         let (_, topics, data) = events
             .iter()
-            .find(|(_, t, _)| t.get(0) == Some(soroban_sdk::symbol_short!("esc_crt").into_val(&env)))
+            .find(|(_, t, _)| has_topic_symbol(&env, t, soroban_sdk::symbol_short!("esc_crt")))
             .expect("esc_crt event not emitted");
 
         // topic[1] == escrow_id
-        assert_eq!(topics.get(1).unwrap(), escrow_id.into_val(&env));
+        assert_eq!(topic_u64(&env, &topics, 1), escrow_id);
 
         // data == (client, freelancer, amount)
         let (c, f, amt): (Address, Address, i128) = soroban_sdk::FromVal::from_val(&env, &data);
@@ -107,10 +123,10 @@ mod event_tests {
         let events = contract_events(&env, &contract_id);
         let (_, topics, data) = events
             .iter()
-            .find(|(_, t, _)| t.get(0) == Some(soroban_sdk::symbol_short!("mil_add").into_val(&env)))
+            .find(|(_, t, _)| has_topic_symbol(&env, t, soroban_sdk::symbol_short!("mil_add")))
             .expect("mil_add event not emitted");
 
-        assert_eq!(topics.get(1).unwrap(), escrow_id.into_val(&env));
+        assert_eq!(topic_u64(&env, &topics, 1), escrow_id);
 
         let (mid, amt): (u32, i128) = soroban_sdk::FromVal::from_val(&env, &data);
         assert_eq!(mid, milestone_id);
@@ -149,10 +165,10 @@ mod event_tests {
         let events = contract_events(&env, &contract_id);
         let (_, topics, data) = events
             .iter()
-            .find(|(_, t, _)| t.get(0) == Some(soroban_sdk::symbol_short!("mil_sub").into_val(&env)))
+            .find(|(_, t, _)| has_topic_symbol(&env, t, soroban_sdk::symbol_short!("mil_sub")))
             .expect("mil_sub event not emitted");
 
-        assert_eq!(topics.get(1).unwrap(), escrow_id.into_val(&env));
+        assert_eq!(topic_u64(&env, &topics, 1), escrow_id);
 
         let (emitted_mid, emitted_freelancer): (u32, Address) =
             soroban_sdk::FromVal::from_val(&env, &data);
@@ -194,9 +210,9 @@ mod event_tests {
         // mil_apr
         let (_, topics, data) = events
             .iter()
-            .find(|(_, t, _)| t.get(0) == Some(soroban_sdk::symbol_short!("mil_apr").into_val(&env)))
+            .find(|(_, t, _)| has_topic_symbol(&env, t, soroban_sdk::symbol_short!("mil_apr")))
             .expect("mil_apr event not emitted");
-        assert_eq!(topics.get(1).unwrap(), escrow_id.into_val(&env));
+        assert_eq!(topic_u64(&env, &topics, 1), escrow_id);
         let (emitted_mid, amt): (u32, i128) = soroban_sdk::FromVal::from_val(&env, &data);
         assert_eq!(emitted_mid, mid);
         assert_eq!(amt, 300_i128);
@@ -204,9 +220,9 @@ mod event_tests {
         // funds_rel
         let (_, topics, data) = events
             .iter()
-            .find(|(_, t, _)| t.get(0) == Some(soroban_sdk::symbol_short!("funds_rel").into_val(&env)))
+            .find(|(_, t, _)| has_topic_symbol(&env, t, soroban_sdk::symbol_short!("funds_rel")))
             .expect("funds_rel event not emitted");
-        assert_eq!(topics.get(1).unwrap(), escrow_id.into_val(&env));
+        assert_eq!(topic_u64(&env, &topics, 1), escrow_id);
         let (to, released): (Address, i128) = soroban_sdk::FromVal::from_val(&env, &data);
         assert_eq!(to, freelancer);
         assert_eq!(released, 300_i128);
@@ -214,9 +230,9 @@ mod event_tests {
         // esc_done (single milestone → escrow completed)
         let (_, topics, _) = events
             .iter()
-            .find(|(_, t, _)| t.get(0) == Some(soroban_sdk::symbol_short!("esc_done").into_val(&env)))
+            .find(|(_, t, _)| has_topic_symbol(&env, t, soroban_sdk::symbol_short!("esc_done")))
             .expect("esc_done event not emitted");
-        assert_eq!(topics.get(1).unwrap(), escrow_id.into_val(&env));
+        assert_eq!(topic_u64(&env, &topics, 1), escrow_id);
     }
 
     // ── milestone_rejected ────────────────────────────────────────────────────
@@ -251,10 +267,10 @@ mod event_tests {
         let events = contract_events(&env, &contract_id);
         let (_, topics, data) = events
             .iter()
-            .find(|(_, t, _)| t.get(0) == Some(soroban_sdk::symbol_short!("mil_rej").into_val(&env)))
+            .find(|(_, t, _)| has_topic_symbol(&env, t, soroban_sdk::symbol_short!("mil_rej")))
             .expect("mil_rej event not emitted");
 
-        assert_eq!(topics.get(1).unwrap(), escrow_id.into_val(&env));
+        assert_eq!(topic_u64(&env, &topics, 1), escrow_id);
         let (emitted_mid, emitted_client): (u32, Address) =
             soroban_sdk::FromVal::from_val(&env, &data);
         assert_eq!(emitted_mid, mid);
@@ -285,10 +301,10 @@ mod event_tests {
         let events = contract_events(&env, &contract_id);
         let (_, topics, data) = events
             .iter()
-            .find(|(_, t, _)| t.get(0) == Some(soroban_sdk::symbol_short!("esc_can").into_val(&env)))
+            .find(|(_, t, _)| has_topic_symbol(&env, t, soroban_sdk::symbol_short!("esc_can")))
             .expect("esc_can event not emitted");
 
-        assert_eq!(topics.get(1).unwrap(), escrow_id.into_val(&env));
+        assert_eq!(topic_u64(&env, &topics, 1), escrow_id);
         let returned: i128 = soroban_sdk::FromVal::from_val(&env, &data);
         assert_eq!(returned, 200_i128);
     }
@@ -325,10 +341,10 @@ mod event_tests {
         let events = contract_events(&env, &contract_id);
         let (_, topics, data) = events
             .iter()
-            .find(|(_, t, _)| t.get(0) == Some(soroban_sdk::symbol_short!("dis_rai").into_val(&env)))
+            .find(|(_, t, _)| has_topic_symbol(&env, t, soroban_sdk::symbol_short!("dis_rai")))
             .expect("dis_rai event not emitted");
 
-        assert_eq!(topics.get(1).unwrap(), escrow_id.into_val(&env));
+        assert_eq!(topic_u64(&env, &topics, 1), escrow_id);
         let raised_by: Address = soroban_sdk::FromVal::from_val(&env, &data);
         assert_eq!(raised_by, client_addr);
     }
@@ -367,10 +383,10 @@ mod event_tests {
         let events = contract_events(&env, &contract_id);
         let (_, topics, data) = events
             .iter()
-            .find(|(_, t, _)| t.get(0) == Some(soroban_sdk::symbol_short!("dis_res").into_val(&env)))
+            .find(|(_, t, _)| has_topic_symbol(&env, t, soroban_sdk::symbol_short!("dis_res")))
             .expect("dis_res event not emitted");
 
-        assert_eq!(topics.get(1).unwrap(), escrow_id.into_val(&env));
+        assert_eq!(topic_u64(&env, &topics, 1), escrow_id);
         let (client_amt, freelancer_amt): (i128, i128) =
             soroban_sdk::FromVal::from_val(&env, &data);
         assert_eq!(client_amt, 200_i128);
@@ -380,49 +396,40 @@ mod event_tests {
     // ── reputation_updated ────────────────────────────────────────────────────
 
     #[test]
-    fn test_event_reputation_updated_on_escrow_completion() {
-        let (env, admin, contract_id, client) = setup();
+    fn test_event_reputation_updated_topics_and_payload() {
+        let (env, _admin, contract_id, client) = setup();
         let client_addr = Address::generate(&env);
         let freelancer = Address::generate(&env);
-        let token = register_token(&env, &admin, &client_addr, 1_000);
 
-        let escrow_id = client.create_escrow(
-            &client_addr,
-            &freelancer,
-            &token,
-            &1_000_i128,
-            &BytesN::from_array(&env, &[1; 32]),
-            &None,
-            &None,
-            &None,
-        );
-        let mid = client.add_milestone(
-            &client_addr,
-            &escrow_id,
-            &String::from_str(&env, "Final"),
-            &BytesN::from_array(&env, &[2; 32]),
-            &1_000_i128,
-        );
-        client.submit_milestone(&freelancer, &escrow_id, &mid);
-        client.approve_milestone(&client_addr, &escrow_id, &mid);
+        client.update_reputation(&client_addr, &true, &false, &2_000_i128);
+        client.update_reputation(&freelancer, &false, &true, &0_i128);
 
         let events = contract_events(&env, &contract_id);
         let mut rep_events: soroban_sdk::Vec<(Address, soroban_sdk::Vec<Val>, Val)> =
             soroban_sdk::Vec::new(&env);
         for e in events.iter() {
-            if e.1.get(0) == Some(soroban_sdk::symbol_short!("rep_upd").into_val(&env)) {
+            if has_topic_symbol(&env, &e.1, soroban_sdk::symbol_short!("rep_upd")) {
                 rep_events.push_back(e);
             }
         }
 
-        // Both client and freelancer reputation should be updated
         assert!(rep_events.len() >= 2, "Expected at least 2 rep_upd events");
 
+        let mut saw_client = false;
+        let mut saw_freelancer = false;
         for (_, _, data) in rep_events.iter() {
-            let (addr, score): (Address, u64) = soroban_sdk::FromVal::from_val(&env, data);
-            // Score should be > 0 after a completed escrow
-            assert!(score > 0, "Reputation score should increase after completion for {addr:?}");
+            let (addr, score): (Address, u64) = soroban_sdk::FromVal::from_val(&env, &data);
+            if addr == client_addr {
+                saw_client = true;
+                assert_eq!(score, 12);
+            } else if addr == freelancer {
+                saw_freelancer = true;
+                assert_eq!(score, 0);
+            }
         }
+
+        assert!(saw_client, "Expected rep_upd event for client");
+        assert!(saw_freelancer, "Expected rep_upd event for freelancer");
     }
 
     // ── contract_paused / contract_unpaused ───────────────────────────────────
@@ -435,7 +442,7 @@ mod event_tests {
         let events = contract_events(&env, &contract_id);
         let (_, _, data) = events
             .iter()
-            .find(|(_, t, _)| t.get(0) == Some(soroban_sdk::symbol_short!("paused").into_val(&env)))
+            .find(|(_, t, _)| has_topic_symbol(&env, t, soroban_sdk::symbol_short!("paused")))
             .expect("paused event not emitted");
         let emitted_admin: Address = soroban_sdk::FromVal::from_val(&env, &data);
         assert_eq!(emitted_admin, admin);
@@ -444,7 +451,7 @@ mod event_tests {
         let events = contract_events(&env, &contract_id);
         let (_, _, data) = events
             .iter()
-            .find(|(_, t, _)| t.get(0) == Some(soroban_sdk::symbol_short!("unpaused").into_val(&env)))
+            .find(|(_, t, _)| has_topic_symbol(&env, t, soroban_sdk::symbol_short!("unpaused")))
             .expect("unpaused event not emitted");
         let emitted_admin: Address = soroban_sdk::FromVal::from_val(&env, &data);
         assert_eq!(emitted_admin, admin);
@@ -459,9 +466,9 @@ mod event_tests {
         let freelancer = Address::generate(&env);
         let token = register_token(&env, &admin, &client_addr, 500);
 
-        // Set lock_time in the past so it's already expired
-        let lock_time: u64 = 1_000;
-        env.ledger().set_timestamp(2_000);
+        // Create the escrow with a valid future lock time, then advance past it before approval.
+        env.ledger().set_timestamp(1_000);
+        let lock_time: u64 = 2_000;
 
         let escrow_id = client.create_escrow(
             &client_addr,
@@ -481,15 +488,16 @@ mod event_tests {
             &500_i128,
         );
         client.submit_milestone(&freelancer, &escrow_id, &mid);
+        env.ledger().set_timestamp(3_000);
         client.approve_milestone(&client_addr, &escrow_id, &mid);
 
         let events = contract_events(&env, &contract_id);
         let (_, topics, data) = events
             .iter()
-            .find(|(_, t, _)| t.get(0) == Some(soroban_sdk::symbol_short!("lock_exp").into_val(&env)))
+            .find(|(_, t, _)| has_topic_symbol(&env, t, soroban_sdk::symbol_short!("lock_exp")))
             .expect("lock_exp event not emitted");
 
-        assert_eq!(topics.get(1).unwrap(), escrow_id.into_val(&env));
+        assert_eq!(topic_u64(&env, &topics, 1), escrow_id);
         let emitted_lock_time: u64 = soroban_sdk::FromVal::from_val(&env, &data);
         assert_eq!(emitted_lock_time, lock_time);
     }
@@ -519,10 +527,10 @@ mod event_tests {
         let events = contract_events(&env, &contract_id);
         let (_, topics, data) = events
             .iter()
-            .find(|(_, t, _)| t.get(0) == Some(soroban_sdk::symbol_short!("can_req").into_val(&env)))
+            .find(|(_, t, _)| has_topic_symbol(&env, t, soroban_sdk::symbol_short!("can_req")))
             .expect("can_req event not emitted");
 
-        assert_eq!(topics.get(1).unwrap(), escrow_id.into_val(&env));
+        assert_eq!(topic_u64(&env, &topics, 1), escrow_id);
         let (requester, emitted_reason, _deadline): (Address, String, u64) =
             soroban_sdk::FromVal::from_val(&env, &data);
         assert_eq!(requester, client_addr);
@@ -548,11 +556,7 @@ mod event_tests {
             &None,
             &None,
         );
-        client.request_cancellation(
-            &client_addr,
-            &escrow_id,
-            &String::from_str(&env, "Done"),
-        );
+        client.request_cancellation(&client_addr, &escrow_id, &String::from_str(&env, "Done"));
 
         // Advance ledger past the dispute period
         let ts = env.ledger().timestamp();
@@ -563,10 +567,10 @@ mod event_tests {
         let events = contract_events(&env, &contract_id);
         let (_, topics, data) = events
             .iter()
-            .find(|(_, t, _)| t.get(0) == Some(soroban_sdk::symbol_short!("can_exe").into_val(&env)))
+            .find(|(_, t, _)| has_topic_symbol(&env, t, soroban_sdk::symbol_short!("can_exe")))
             .expect("can_exe event not emitted");
 
-        assert_eq!(topics.get(1).unwrap(), escrow_id.into_val(&env));
+        assert_eq!(topic_u64(&env, &topics, 1), escrow_id);
         let (client_amt, slash_amt): (i128, i128) = soroban_sdk::FromVal::from_val(&env, &data);
         // Full balance returned (no milestones added), no slash
         assert_eq!(client_amt + slash_amt, 400_i128);
@@ -604,12 +608,11 @@ mod event_tests {
         let events = contract_events(&env, &contract_id);
         let (_, topics, data) = events
             .iter()
-            .find(|(_, t, _)| t.get(0) == Some(soroban_sdk::symbol_short!("mil_dis").into_val(&env)))
+            .find(|(_, t, _)| has_topic_symbol(&env, t, soroban_sdk::symbol_short!("mil_dis")))
             .expect("mil_dis event not emitted");
 
-        assert_eq!(topics.get(1).unwrap(), escrow_id.into_val(&env));
-        let (emitted_mid, raised_by): (u32, Address) =
-            soroban_sdk::FromVal::from_val(&env, &data);
+        assert_eq!(topic_u64(&env, &topics, 1), escrow_id);
+        let (emitted_mid, raised_by): (u32, Address) = soroban_sdk::FromVal::from_val(&env, &data);
         assert_eq!(emitted_mid, mid);
         assert_eq!(raised_by, client_addr);
     }
@@ -644,10 +647,12 @@ mod event_tests {
         client.approve_milestone(&client_addr, &escrow_id, &mid);
 
         let events = contract_events(&env, &contract_id);
-        let mut topic_names: soroban_sdk::Vec<soroban_sdk::Val> = soroban_sdk::Vec::new(&env);
+        let mut topic_names: soroban_sdk::Vec<Symbol> = soroban_sdk::Vec::new(&env);
         for e in events.iter() {
             if let Some(t) = e.1.get(0) {
-                topic_names.push_back(t);
+                topic_names.push_back(
+                    Symbol::try_from_val(&env, &t).expect("event topic[0] should be a symbol"),
+                );
             }
         }
 
@@ -661,10 +666,7 @@ mod event_tests {
             soroban_sdk::symbol_short!("esc_done"),
         ];
         for sym in expected {
-            assert!(
-                topic_names.contains(&sym.into_val(&env)),
-                "Missing event: {sym:?}"
-            );
+            assert!(topic_names.contains(&sym), "Missing event: {sym:?}");
         }
     }
 }

@@ -1,6 +1,13 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ExplorerPage from '../../app/explorer/page';
 
+// EscrowCard uses useI18n which requires I18nProvider — mock it for tests.
+jest.mock('../../components/escrow/EscrowCard', () =>
+  function EscrowCard({ escrow }) {
+    return <div data-testid="escrow-card">Escrow #{escrow.id}</div>;
+  }
+);
+
 const mockEscrows = [
   { id: 1, status: 'Active', totalAmount: '1000', clientAddress: '0x1A2B' },
   { id: 2, status: 'Active', totalAmount: '2000', clientAddress: '0x3C4D' },

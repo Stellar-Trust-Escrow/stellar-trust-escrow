@@ -81,4 +81,11 @@ pub enum EscrowError {
     // ── Storage Migration ───────────────────────────────────────────────────────
     /// Storage migration failed - possibly due to incompatible data format.
     StorageMigrationFailed = 42,
+
+    // ── Recurring Payments ───────────────────────────────────────────────────
+    RecurringConfigNotFound = 43,
+    InvalidRecurringSchedule = 44,
+    NoRecurringPaymentDue = 45,
+    RecurringSchedulePaused = 46,
+    RecurringScheduleCancelled = 47,
 }

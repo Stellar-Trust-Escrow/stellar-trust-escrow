@@ -4,6 +4,7 @@ import './lib/sentry.js';
 import * as Sentry from '@sentry/node';
 
 import 'dotenv/config';
+import { initSecrets } from './lib/secrets.js';
 import http from 'http';
 import compressionMiddleware from './middleware/compression.js';
 import cors from 'cors';
@@ -25,21 +26,29 @@ import reputationRoutes from './api/routes/reputationRoutes.js';
 import userRoutes from './api/routes/userRoutes.js';
 import auditRoutes from './api/routes/auditRoutes.js';
 import authRoutes from './api/routes/authRoutes.js';
+import complianceRoutes from './api/routes/complianceRoutes.js';
+import incidentRoutes from './api/routes/incidentRoutes.js';
 import authMiddleware from './api/middleware/auth.js';
+import tenantMiddleware from './api/middleware/tenant.js';
 import auditMiddleware from './api/middleware/audit.js';
 import _apiV1Routes from './api/v1/index.js';
 import { deprecatedRoute as _deprecatedRoute } from './api/middleware/version.js';
+import { deprecationPresets, deprecateVersion } from './api/middleware/deprecation.js';
 import { createWebSocketServer, pool } from './api/websocket/handlers.js';
 import cache from './lib/cache.js';
 import { attachPrismaMetrics } from './lib/prismaMetrics.js';
+import healthRoutes from './api/routes/healthRoutes.js';
+import tenantRoutes from './api/routes/tenantRoutes.js';
 import prisma, { startConnectionMonitoring } from './lib/prisma.js';
 import { errorsTotal } from './lib/metrics.js';
 import { apiRateLimit, leaderboardRateLimit } from './middleware/rateLimit.js';
 import metricsMiddleware from './middleware/metricsMiddleware.js';
 import responseTime from './middleware/responseTime.js';
 import emailService from './services/emailService.js';
+import complianceService from './services/complianceService.js';
 import { startIndexer } from './services/eventIndexer.js';
 import { setupSwagger } from './api/docs/swagger.js';
+import { getBackupStatus } from './services/backupMonitor.js';
 
 // Attach Prisma query instrumentation and monitoring
 attachPrismaMetrics(prisma);
@@ -73,6 +82,30 @@ app.use(Sentry.expressTracingHandler());
 
 app.use('/api/', apiRateLimit);
 app.use('/api/reputation/leaderboard', leaderboardRateLimit);
+
+// ── Deprecation registry ───────────────────────────────────────────────────────
+// Register policies for all endpoints that are queued for removal.
+registerDeprecation('unversioned-api', {
+  deprecatedAt: new Date('2025-01-01'),
+  sunsetAt: new Date('2026-07-01'),
+  link: '/docs',
+  successor: '/api/v1/',
+});
+
+// Discovery endpoint — lists all registered deprecation policies.
+app.get('/.well-known/api-deprecations', deprecationDiscovery());
+
+// Attach deprecation headers to all unversioned /api/* routes so clients
+// know to migrate to /api/v1/*.
+app.use(
+  '/api/',
+  deprecate({
+    deprecatedAt: new Date('2025-01-01'),
+    sunsetAt: new Date('2026-07-01'),
+    link: '/docs',
+    successor: '/api/v1/',
+  }),
+);
 
 app.get('/health', async (_req, res) => {
   let dbStatus = 'ok';
@@ -109,6 +142,7 @@ app.get('/health', async (_req, res) => {
     console.error('[HEALTH] Database check failed:', error.message);
   }
 
+  const backupStatus = await getBackupStatus();
   const status = dbStatus === 'ok' ? 'ok' : 'degraded';
   res.status(dbStatus === 'ok' ? 200 : 503).json({
     status,
@@ -121,15 +155,21 @@ app.get('/health', async (_req, res) => {
       latencyMs: dbLatencyMs,
       pool: dbPoolInfo,
     },
+    backup: backupStatus,
   });
 });
 
+// ── API Routes with Deprecation Strategy ──────────────────────────────────────
+// Current routes (no deprecation) - these are the active API endpoints
+app.use('/api/health', healthRoutes);
+app.use('/api', tenantMiddleware);
 app.use('/api/auth', authRoutes);
+app.use('/api/tenant', tenantRoutes);
 app.use('/api/escrows', authMiddleware, escrowRoutes);
 
 // ── API Documentation ─────────────────────────────────────────────────────────
 setupSwagger(app);
-app.use('/api/users', authMiddleware, userRoutes);
+app.use('/api/users', userRoutes);
 app.use('/api/reputation', reputationRoutes);
 app.use('/api/disputes', disputeRoutes);
 app.use('/api/notifications', notificationRoutes);
@@ -138,8 +178,14 @@ app.use('/api/kyc', kycRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/relayer', relayerRoutes);
 app.use('/api/audit', auditRoutes);
-app.use('/docs', docsRouter);
+app.use('/api/compliance', complianceRoutes);
+app.use('/api/incidents', incidentRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/docs', docsRouter);
+
+// ── Example: Deprecated API Version ───────────────────────────────────────────
+// Uncomment to deprecate unversioned endpoints in favor of /api/v1
+// app.use('/api', deprecateVersion(deprecationPresets.legacyUnversioned));
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((req, res) => {
@@ -179,10 +225,15 @@ const server = http.createServer(app);
 createWebSocketServer(server);
 
 server.listen(PORT, async () => {
+  // Load secrets first — merges vault/env secrets into process.env
+  await initSecrets();
+  console.log(`[Secrets] Backend: ${process.env.SECRETS_BACKEND || 'env'}`);
   console.log(`API running on port ${PORT}`);
   console.log(`Network: ${process.env.STELLAR_NETWORK}`);
   await emailService.start();
   console.log('[EmailService] Queue processor started');
+  complianceService.startScheduler();
+  console.log('[ComplianceService] Scheduler started');
   console.log('[WebSocket] Server attached');
   startIndexer().catch((err) => {
     console.error('[Indexer] Failed to start:', err.message);

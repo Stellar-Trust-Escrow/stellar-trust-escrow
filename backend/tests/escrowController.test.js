@@ -76,19 +76,23 @@ describe('escrowController', () => {
       expect(res.json).toHaveBeenCalled();
       expect(res.body.data).toHaveLength(fixtures.escrows.length);
       expect(res.body.total).toBe(fixtures.escrows.length);
-      expect(cacheMock.set).toHaveBeenCalled();
     });
 
-    it('returns cached data if available', async () => {
+    it('returns the normalized paginated response shape', async () => {
       const req = { query: {} };
       const res = createMockRes();
-      const cachedData = { data: [], pagination: {} };
-      cacheMock.get.mockReturnValue(cachedData);
 
       await escrowController.listEscrows(req, res);
 
-      expect(res.json).toHaveBeenCalledWith(cachedData);
-      expect(prismaMock.escrow.findMany).not.toHaveBeenCalled();
+      expect(res.json).toHaveBeenCalledWith({
+        data: [],
+        page: 1,
+        limit: 20,
+        total: 0,
+        totalPages: 0,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      });
     });
 
     it('applies status filter correctly', async () => {
@@ -161,7 +165,6 @@ describe('escrowController', () => {
       await escrowController.getEscrow(req, res);
 
       expect(res.json).toHaveBeenCalledWith(escrow);
-      expect(cacheMock.set).toHaveBeenCalled();
     });
 
     it('returns 404 if escrow not found', async () => {

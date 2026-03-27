@@ -9,15 +9,16 @@
     "build": "echo 'No build step required for backend'",
     "start": "node server.js",
     "test": "NODE_OPTIONS=--experimental-vm-modules npx jest --runInBand",
+    "test:chaos": "NODE_OPTIONS=--experimental-vm-modules npx jest --runInBand --testPathPattern=backend/tests/chaos --config=backend/jest.config.js",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "db:migrate": "npx prisma migrate dev",
+    "db:migrate": "npx prisma migrate dev --schema=database/schema.prisma",
     "db:migrate:up": "node database/migrations/migrate.js up",
     "db:migrate:down": "node database/migrations/migrate.js down",
     "db:migrate:status": "node database/migrations/migrate.js status",
     "db:migrate:create": "node database/migrations/migrate.js create",
-    "db:migrate:deploy": "npx prisma migrate deploy",
-    "db:generate": "npx prisma generate",
+    "db:migrate:deploy": "npx prisma migrate deploy --schema=database/schema.prisma",
+    "db:generate": "npx prisma generate --schema=database/schema.prisma",
     "db:seed": "node database/seed/index.js",
     "db:seed:reset": "node database/seed/index.js --reset"
   },
@@ -44,7 +45,6 @@
     "swagger-ui-express": "^5.0.1",
     "winston": "^3.11.0",
     "yaml": "^2.4.2"
-    "winston": "^3.11.0"
   },
   "devDependencies": {
     "jest": "^29.7.0",

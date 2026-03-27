@@ -18,16 +18,51 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ── Tenants ───────────────────────────────────────────────────────────────────
+
+model Tenant {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  name          String
+  status        String   @default("active")
+  domains       String[] @default([])
+  branding      Json?
+  configuration Json?
+  metadata      Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  users             User[]
+  escrows           Escrow[]
+  milestones        Milestone[]
+  reputationRecords ReputationRecord[]
+  disputes          Dispute[]
+  disputeEvidence   DisputeEvidence[]
+  disputeAppeals    DisputeAppeal[]
+  userProfiles      UserProfile[]
+  contractEvents    ContractEvent[]
+  payments          Payment[]
+  kycVerifications  KycVerification[]
+  adminAuditLogs    AdminAuditLog[]
+  auditLogs         AuditLog[]
+
+  @@map("tenants")
+}
+
 // ── Users ─────────────────────────────────────────────────────────────────────
 
 model User {
   id           Int      @id @default(autoincrement())
+  tenantId     String   @map("tenant_id")
   email        String   @unique
   password     String
   refreshToken String?  @map("refresh_token")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, createdAt(sort: Desc)])
   @@map("users")
 }
 
@@ -36,6 +71,7 @@ model User {
 model Escrow {
   /// On-chain escrow_id from the contract
   id                BigInt       @id
+  tenantId          String       @map("tenant_id")
   clientAddress     String       @map("client_address")
   freelancerAddress String       @map("freelancer_address")
   arbiterAddress    String?      @map("arbiter_address")
@@ -50,9 +86,17 @@ model Escrow {
   /// Stellar ledger sequence when this escrow was created
   createdLedger     BigInt       @map("created_ledger")
 
+  tenant     Tenant      @relation(fields: [tenantId], references: [id])
   milestones Milestone[]
   dispute    Dispute?
 
+  @@index([tenantId])
+  @@index([tenantId, clientAddress])
+  @@index([tenantId, freelancerAddress])
+  @@index([tenantId, status])
+  @@index([tenantId, status, createdAt(sort: Desc)])
+  @@index([tenantId, clientAddress, createdAt(sort: Desc)])
+  @@index([tenantId, freelancerAddress, createdAt(sort: Desc)])
   @@index([clientAddress])
   @@index([freelancerAddress])
   @@index([status])
@@ -74,6 +118,7 @@ model Escrow {
 
 model Milestone {
   id              Int             @id @default(autoincrement())
+  tenantId        String          @map("tenant_id")
   /// on-chain milestone index within the escrow
   milestoneIndex  Int             @map("milestone_index")
   escrowId        BigInt          @map("escrow_id")
@@ -84,9 +129,12 @@ model Milestone {
   submittedAt     DateTime?       @map("submitted_at")
   resolvedAt      DateTime?       @map("resolved_at")
 
+  tenant Tenant @relation(fields: [tenantId], references: [id])
   escrow Escrow @relation(fields: [escrowId], references: [id])
 
   @@unique([escrowId, milestoneIndex])
+  @@index([tenantId, escrowId])
+  @@index([tenantId, status])
   @@index([escrowId])
   @@index([status])
   @@map("milestones")
@@ -95,6 +143,7 @@ model Milestone {
 // ── Reputation ────────────────────────────────────────────────────────────────
 
 model ReputationRecord {
+  tenantId         String   @map("tenant_id")
   address          String   @id
   totalScore       BigInt   @default(0) @map("total_score")
   completedEscrows Int      @default(0) @map("completed_escrows")
@@ -104,6 +153,10 @@ model ReputationRecord {
   lastUpdated      DateTime @map("last_updated")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, address])
+  @@index([tenantId, totalScore(sort: Desc)])
   @@index([totalScore(sort: Desc)])
   @@map("reputation_records")
 }
@@ -112,6 +165,7 @@ model ReputationRecord {
 
 model Dispute {
   id               Int       @id @default(autoincrement())
+  tenantId         String    @map("tenant_id")
   escrowId         BigInt    @unique @map("escrow_id")
   raisedByAddress  String    @map("raised_by_address")
   raisedAt         DateTime  @map("raised_at")
@@ -129,10 +183,13 @@ model Dispute {
   /// Whether this dispute was auto-resolved
   autoResolved     Boolean   @default(false) @map("auto_resolved")
 
+  tenant   Tenant            @relation(fields: [tenantId], references: [id])
   escrow   Escrow            @relation(fields: [escrowId], references: [id])
   evidence DisputeEvidence[]
   appeals  DisputeAppeal[]
 
+  @@index([tenantId, raisedByAddress])
+  @@index([tenantId, resolvedAt])
   @@index([raisedByAddress])
   // Index for resolved/unresolved filtering (admin panel)
   @@index([resolvedAt])
@@ -142,19 +199,23 @@ model Dispute {
 }
 
 model DisputeEvidence {
-  id          Int      @id @default(autoincrement())
-  disputeId   Int      @map("dispute_id")
-  submittedBy String   @map("submitted_by")
+  id           Int      @id @default(autoincrement())
+  tenantId     String   @map("tenant_id")
+  disputeId    Int      @map("dispute_id")
+  submittedBy  String   @map("submitted_by")
   /// client | freelancer | arbiter | admin
-  role        String
+  role         String
   /// text | url | hash
-  evidenceType String  @map("evidence_type")
-  content     String
-  description String?
-  submittedAt DateTime @default(now()) @map("submitted_at")
+  evidenceType String   @map("evidence_type")
+  content      String
+  description  String?
+  submittedAt  DateTime @default(now()) @map("submitted_at")
 
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
   dispute Dispute @relation(fields: [disputeId], references: [id])
 
+  @@index([tenantId, disputeId])
+  @@index([tenantId, submittedBy])
   @@index([disputeId])
   @@index([submittedBy])
   @@map("dispute_evidence")
@@ -162,6 +223,7 @@ model DisputeEvidence {
 
 model DisputeAppeal {
   id          Int       @id @default(autoincrement())
+  tenantId    String    @map("tenant_id")
   disputeId   Int       @map("dispute_id")
   appealedBy  String    @map("appealed_by")
   reason      String
@@ -171,8 +233,11 @@ model DisputeAppeal {
   createdAt   DateTime  @default(now()) @map("created_at")
   resolvedAt  DateTime? @map("resolved_at")
 
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
   dispute Dispute @relation(fields: [disputeId], references: [id])
 
+  @@index([tenantId, disputeId])
+  @@index([tenantId, status])
   @@index([disputeId])
   @@index([status])
   @@map("dispute_appeals")
@@ -181,14 +246,19 @@ model DisputeAppeal {
 // ── Contract Events ───────────────────────────────────────────────────────────
 
 model UserProfile {
+  tenantId    String   @map("tenant_id")
   address     String   @id
   displayName String?  @map("display_name")
   bio         String?
   avatarUrl   String?  @map("avatar_url")
-  preferences Json?    
+  preferences Json?
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, address])
+  @@index([tenantId, updatedAt(sort: Desc)])
   @@map("user_profiles")
 }
 
@@ -196,6 +266,7 @@ model UserProfile {
 /// Enables historical queries and real-time subscriptions without hitting the chain.
 model ContractEvent {
   id         Int      @id @default(autoincrement())
+  tenantId   String   @map("tenant_id")
   /// Stellar ledger sequence this event was emitted in
   ledger     BigInt
   /// Ledger close timestamp
@@ -214,7 +285,12 @@ model ContractEvent {
   txHash     String   @map("tx_hash")
   eventIndex Int      @map("event_index")
 
-  @@unique([txHash, eventIndex])
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, txHash, eventIndex])
+  @@index([tenantId, eventType])
+  @@index([tenantId, escrowId])
+  @@index([tenantId, ledgerAt(sort: Desc)])
   @@index([eventType])
   @@index([escrowId])
   @@index([ledger])
@@ -239,6 +315,7 @@ model IndexerState {
 
 model Payment {
   id                  String        @id @default(cuid())
+  tenantId            String        @map("tenant_id")
   address             String // Stellar address of payer
   escrowId            BigInt?       @map("escrow_id") // linked escrow (nullable until funded)
   stripeSessionId     String?       @unique @map("stripe_session_id")
@@ -251,6 +328,11 @@ model Payment {
   createdAt           DateTime      @default(now()) @map("created_at")
   updatedAt           DateTime      @updatedAt @map("updated_at")
 
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, address])
+  @@index([tenantId, status])
+  @@index([tenantId, address, createdAt(sort: Desc)])
   @@index([address])
   @@index([status])
   // Composite index for address lookups sorted by date
@@ -262,6 +344,7 @@ model Payment {
 
 model KycVerification {
   id           Int       @id @default(autoincrement())
+  tenantId     String    @map("tenant_id")
   address      String    @unique
   applicantId  String?   @unique @map("applicant_id") // Sumsub applicant ID
   status       KycStatus @default(Pending)
@@ -270,6 +353,10 @@ model KycVerification {
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, address])
+  @@index([tenantId, status])
   @@index([status])
   @@map("kyc_verifications")
 }
@@ -279,6 +366,7 @@ model KycVerification {
 /// Immutable record of every admin action for accountability and audit trails.
 model AdminAuditLog {
   id            Int      @id @default(autoincrement())
+  tenantId      String   @map("tenant_id")
   /// Action taken, e.g. SUSPEND_USER, BAN_USER, RESOLVE_DISPUTE
   action        String
   /// The address or resource the action was taken against
@@ -289,6 +377,11 @@ model AdminAuditLog {
   performedBy   String   @map("performed_by")
   performedAt   DateTime @map("performed_at")
 
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, action])
+  @@index([tenantId, targetAddress])
+  @@index([tenantId, performedAt(sort: Desc)])
   @@index([action])
   @@index([targetAddress])
   @@index([performedAt(sort: Desc)])
@@ -301,6 +394,7 @@ model AdminAuditLog {
 /// Records are never updated or deleted — retention is handled by archiving.
 model AuditLog {
   id         BigInt   @id @default(autoincrement())
+  tenantId   String   @map("tenant_id")
   /// Category: AUTH | ESCROW | MILESTONE | DISPUTE | ADMIN | PAYMENT | KYC
   category   String
   /// Specific action, e.g. LOGIN, CREATE_ESCROW, APPROVE_MILESTONE
@@ -318,6 +412,11 @@ model AuditLog {
   /// Immutable timestamp — set once on insert, never changed
   createdAt  DateTime @default(now()) @map("created_at")
 
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, category])
+  @@index([tenantId, actor])
+  @@index([tenantId, createdAt(sort: Desc)])
   @@index([category])
   @@index([action])
   @@index([actor])

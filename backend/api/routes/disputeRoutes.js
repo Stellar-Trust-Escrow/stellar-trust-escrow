@@ -1,41 +1,87 @@
 import express from 'express';
 import disputeController from '../controllers/disputeController.js';
+import { cacheResponse, invalidateOn, TTL } from '../middleware/cache.js';
+import authMiddleware from '../middleware/auth.js';
 
 const router = express.Router();
+router.use(authMiddleware);
 
 // ── List / Get ────────────────────────────────────────────────────────────────
 
-/** GET /api/disputes — paginated list */
-router.get('/', disputeController.listDisputes);
+router.get(
+  '/',
+  cacheResponse({ ttl: TTL.LIST, tags: ['disputes'] }),
+  disputeController.listDisputes,
+);
 
-/** GET /api/disputes/history — resolved disputes with resolution metadata */
-router.get('/history', disputeController.getResolutionHistory);
+router.get(
+  '/history',
+  cacheResponse({ ttl: TTL.LIST, tags: ['disputes', 'disputes:history'] }),
+  disputeController.getResolutionHistory,
+);
 
-/** GET /api/disputes/:escrowId — dispute detail by escrow id */
-router.get('/:escrowId', disputeController.getDispute);
+router.get(
+  '/:escrowId',
+  cacheResponse({
+    ttl: TTL.DETAIL,
+    tags: (req) => ['disputes', `dispute:${req.params.escrowId}`],
+  }),
+  disputeController.getDispute,
+);
 
 // ── Evidence ──────────────────────────────────────────────────────────────────
 
-/** POST /api/disputes/:id/evidence — submit evidence */
-router.post('/:id/evidence', disputeController.postEvidence);
+router.post(
+  '/:id/evidence',
+  invalidateOn({ tags: (req) => [`dispute:${req.params.id}`, 'disputes'] }),
+  disputeController.postEvidence,
+);
 
-/** GET /api/disputes/:id/evidence — list evidence */
-router.get('/:id/evidence', disputeController.listEvidence);
+router.get(
+  '/:id/evidence',
+  cacheResponse({
+    ttl: TTL.DETAIL,
+    tags: (req) => [`dispute:${req.params.id}`],
+  }),
+  disputeController.listEvidence,
+);
 
 // ── Automated Resolution ──────────────────────────────────────────────────────
 
-/** POST /api/disputes/:id/resolve/auto — trigger automated resolution */
-router.post('/:id/resolve/auto', disputeController.autoResolve);
+router.post(
+  '/:id/resolve/auto',
+  invalidateOn({
+    tags: (req) => [
+      `dispute:${req.params.id}`,
+      `escrow:${req.params.id}`,
+      'disputes',
+      'escrows',
+    ],
+  }),
+  disputeController.autoResolve,
+);
 
-/** GET /api/disputes/:id/resolve/recommendation — get resolution recommendation */
-router.get('/:id/resolve/recommendation', disputeController.getRecommendation);
+router.get(
+  '/:id/resolve/recommendation',
+  cacheResponse({
+    ttl: TTL.DETAIL,
+    tags: (req) => [`dispute:${req.params.id}`],
+  }),
+  disputeController.getRecommendation,
+);
 
 // ── Appeals ───────────────────────────────────────────────────────────────────
 
-/** POST /api/disputes/:id/appeals — submit an appeal */
-router.post('/:id/appeals', disputeController.postAppeal);
+router.post(
+  '/:id/appeals',
+  invalidateOn({ tags: (req) => [`dispute:${req.params.id}`, 'disputes'] }),
+  disputeController.postAppeal,
+);
 
-/** PATCH /api/disputes/appeals/:appealId — review an appeal (admin) */
-router.patch('/appeals/:appealId', disputeController.patchAppeal);
+router.patch(
+  '/appeals/:appealId',
+  invalidateOn({ tags: ['disputes'] }),
+  disputeController.patchAppeal,
+);
 
 export default router;

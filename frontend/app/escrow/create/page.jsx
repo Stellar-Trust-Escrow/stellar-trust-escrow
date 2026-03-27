@@ -212,8 +212,8 @@ export default function CreateEscrowPage() {
             Next →
           </Button>
         ) : (
-          <Button variant="primary" onClick={handleSubmit} disabled={isSubmitting}>
-            {isSubmitting ? 'Signing…' : 'Sign & Create Escrow'}
+          <Button variant="primary" onClick={handleSubmit} isLoading={isSubmitting}>
+            Sign & Create Escrow
           </Button>
         )}
       </div>

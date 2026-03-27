@@ -5,8 +5,9 @@
  */
 
 import express from 'express';
-import { createRelayer } from '../services/relayerService.js';
-import { errorsTotal } from '../lib/metrics.js';
+import authMiddleware from '../middleware/auth.js';
+import { createRelayer } from '../../services/relayerService.js';
+import { errorsTotal } from '../../lib/metrics.js';
 
 const router = express.Router();
 
@@ -24,7 +25,7 @@ const relayer = createRelayer({
  * POST /api/relayer/execute
  * Execute a meta-transaction
  */
-router.post('/execute', async (req, res) => {
+router.post('/execute', authMiddleware, async (req, res) => {
   try {
     const { metaTx, feeDelegation } = req.body;
 
@@ -65,7 +66,7 @@ router.post('/execute', async (req, res) => {
  * GET /api/relayer/fee-estimate
  * Estimate fee for a meta-transaction
  */
-router.post('/fee-estimate', async (req, res) => {
+router.post('/fee-estimate', authMiddleware, async (req, res) => {
   try {
     const { metaTx } = req.body;
 

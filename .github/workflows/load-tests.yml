@@ -24,7 +24,7 @@ jobs:
           fail-on-cache-miss: false
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --ignore-scripts
 
       - name: Generate load-test data
         run: npm run loadtest:generate

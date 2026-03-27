@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import AdminUsersPage from '../../../app/admin/users/page';
+import { renderWithStore } from '../../../store/test-utils';
 
 const localStorageMock = (() => {
   let store = {};
@@ -38,7 +39,7 @@ describe('AdminUsersPage', () => {
       ok: true,
       json: async () => ({ users: [], pagination: { page: 1, total: 0, pages: 1 } }),
     });
-    render(<AdminUsersPage />);
+    renderWithStore(<AdminUsersPage />);
     expect(screen.getByText('User Management')).toBeInTheDocument();
   });
 
@@ -47,7 +48,7 @@ describe('AdminUsersPage', () => {
       ok: true,
       json: async () => ({ users: [], pagination: { page: 1, total: 0, pages: 1 } }),
     });
-    render(<AdminUsersPage />);
+    renderWithStore(<AdminUsersPage />);
     expect(screen.getByPlaceholderText(/Search by Stellar address/)).toBeInTheDocument();
   });
 
@@ -56,7 +57,7 @@ describe('AdminUsersPage', () => {
       ok: true,
       json: async () => ({ users: [], pagination: { page: 1, total: 0, pages: 1 } }),
     });
-    render(<AdminUsersPage />);
+    renderWithStore(<AdminUsersPage />);
     await waitFor(() => {
       expect(screen.getByText('No users found.')).toBeInTheDocument();
     });
@@ -67,7 +68,7 @@ describe('AdminUsersPage', () => {
       ok: true,
       json: async () => ({ users: [mockUser], pagination: { page: 1, total: 1, pages: 1 } }),
     });
-    render(<AdminUsersPage />);
+    renderWithStore(<AdminUsersPage />);
     await waitFor(() => {
       expect(screen.getByText('150')).toBeInTheDocument();
     });
@@ -78,7 +79,7 @@ describe('AdminUsersPage', () => {
       ok: true,
       json: async () => ({ users: [mockUser], pagination: { page: 1, total: 1, pages: 1 } }),
     });
-    render(<AdminUsersPage />);
+    renderWithStore(<AdminUsersPage />);
     await waitFor(() => {
       expect(screen.getByText('Suspend')).toBeInTheDocument();
       expect(screen.getByText('Ban')).toBeInTheDocument();
@@ -90,7 +91,7 @@ describe('AdminUsersPage', () => {
       ok: true,
       json: async () => ({ users: [mockUser], pagination: { page: 1, total: 1, pages: 1 } }),
     });
-    render(<AdminUsersPage />);
+    renderWithStore(<AdminUsersPage />);
     await waitFor(() => screen.getByText('Suspend'));
     fireEvent.click(screen.getByText('Suspend'));
     expect(screen.getByText('suspend User')).toBeInTheDocument();
@@ -101,7 +102,7 @@ describe('AdminUsersPage', () => {
       ok: true,
       json: async () => ({ users: [mockUser], pagination: { page: 1, total: 1, pages: 1 } }),
     });
-    render(<AdminUsersPage />);
+    renderWithStore(<AdminUsersPage />);
     await waitFor(() => screen.getByText('Ban'));
     fireEvent.click(screen.getByText('Ban'));
     expect(screen.getByText('ban User')).toBeInTheDocument();
@@ -112,7 +113,7 @@ describe('AdminUsersPage', () => {
       ok: true,
       json: async () => ({ users: [mockUser], pagination: { page: 1, total: 1, pages: 1 } }),
     });
-    render(<AdminUsersPage />);
+    renderWithStore(<AdminUsersPage />);
     await waitFor(() => screen.getByText('Suspend'));
     fireEvent.click(screen.getByText('Suspend'));
     fireEvent.click(screen.getByText('Cancel'));
@@ -129,7 +130,7 @@ describe('AdminUsersPage', () => {
         ok: true,
         json: async () => ({ users: [], pagination: { page: 1, total: 0, pages: 1 } }),
       });
-    render(<AdminUsersPage />);
+    renderWithStore(<AdminUsersPage />);
     const input = screen.getByPlaceholderText(/Search by Stellar address/);
     fireEvent.change(input, { target: { value: 'GABC' } });
     fireEvent.keyDown(input, { key: 'Enter' });
