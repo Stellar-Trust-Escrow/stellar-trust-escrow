@@ -22,6 +22,7 @@
 
 import { useState, useEffect } from 'react';
 import { useEscrow } from '../../../hooks/useEscrow';
+import { useRelativeTime } from '../../../hooks/useRelativeTime';
 import MilestoneList from '../../../components/escrow/MilestoneList';
 import DisputeModal from '../../../components/escrow/DisputeModal';
 import CancelEscrowModal from '../../../components/escrow/CancelEscrowModal';
@@ -76,6 +77,7 @@ export default function EscrowDetailPage({ params }) {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const { escrow: fetchedEscrow, isLoading, mutate } = useEscrow(id);
+  const relativeTime = useRelativeTime(lastRefreshed);
 
   // Use fetched data when available, fall back to placeholder during development.
   const escrow = fetchedEscrow ?? PLACEHOLDER_ESCROW;
@@ -167,10 +169,8 @@ export default function EscrowDetailPage({ params }) {
 
       {/* Refresh bar — last updated timestamp + manual refresh button */}
       <div className="flex items-center justify-between text-sm text-gray-500">
-        <span data-testid="last-refreshed">
-          {lastRefreshed
-            ? `Last updated: ${lastRefreshed.toLocaleTimeString()}`
-            : 'Loading…'}
+        <span data-testid="last-refreshed" className="text-gray-500 text-sm">
+          {relativeTime ? `Last updated: ${relativeTime}` : 'Loading…'}
         </span>
         <Button
           variant="ghost"
