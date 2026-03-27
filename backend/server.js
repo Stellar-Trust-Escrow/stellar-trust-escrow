@@ -28,6 +28,7 @@ import auditRoutes from './api/routes/auditRoutes.js';
 import authRoutes from './api/routes/authRoutes.js';
 import complianceRoutes from './api/routes/complianceRoutes.js';
 import incidentRoutes from './api/routes/incidentRoutes.js';
+import batchRoutes from './api/routes/batchRoutes.js';
 import authMiddleware from './api/middleware/auth.js';
 import tenantMiddleware from './api/middleware/tenant.js';
 import auditMiddleware from './api/middleware/audit.js';
@@ -178,6 +179,7 @@ app.use('/api/audit', auditRoutes);
 app.use('/api/compliance', complianceRoutes);
 app.use('/api/incidents', incidentRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/batch', batchRoutes);
 app.use('/docs', docsRouter);
 
 // ── Example: Deprecated API Version ───────────────────────────────────────────
