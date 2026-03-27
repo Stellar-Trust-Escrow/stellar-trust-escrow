@@ -16,6 +16,7 @@
 //! implemented. Remove the attribute as each issue is resolved.
 
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod upgrade_tests {
     use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String};
 

@@ -1,4 +1,5 @@
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod event_tests {
     use soroban_sdk::{
         testutils::{Address as _, Events, Ledger},
