@@ -15,6 +15,7 @@
 
 import ReputationBadge from '../../../components/ui/ReputationBadge';
 import Badge from '../../../components/ui/Badge';
+import TruncatedAddress from '../../../components/ui/TruncatedAddress';
 
 // TODO (contributor): replace with SWR fetch
 const PLACEHOLDER_USER = {
@@ -41,9 +42,8 @@ export default function ProfilePage({ params }) {
         </div>
         <div className="flex-1">
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-xl font-bold text-white font-mono">
-              {/* TODO (contributor): truncate to G...XXXX format */}
-              {address.slice(0, 6)}...{address.slice(-4)}
+            <h1 className="text-xl font-bold text-white">
+              <TruncatedAddress address={address} />
             </h1>
             <Badge status={user.badge} />
           </div>

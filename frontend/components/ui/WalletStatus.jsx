@@ -18,17 +18,7 @@
 import { useState } from 'react';
 import Button from './Button';
 import Spinner from './Spinner';
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-/**
- * Truncate a Stellar address to first 6 + last 4 chars.
- * e.g. GABCDEF...XY12
- */
-function truncateAddress(address) {
-  if (!address) return '';
-  return `${address.slice(0, 6)}…${address.slice(-4)}`;
-}
+import { truncateAddress } from '../../lib/truncateAddress';
 
 // ── Status Dot ────────────────────────────────────────────────────────────────
 

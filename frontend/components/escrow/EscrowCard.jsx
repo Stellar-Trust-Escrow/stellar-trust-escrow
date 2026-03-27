@@ -23,6 +23,7 @@
 
 import Link from 'next/link';
 import Badge from '../ui/Badge';
+import TruncatedAddress from '../ui/TruncatedAddress';
 
 export default function EscrowCard({ escrow }) {
   const { id, title, status, totalAmount, milestoneProgress, counterparty, role } = escrow;
@@ -43,7 +44,7 @@ export default function EscrowCard({ escrow }) {
           </h3>
           <p className="text-xs text-gray-500 mt-0.5">
             {role === 'client' ? 'Freelancer:' : 'Client:'}{' '}
-            <span className="font-mono">{counterparty}</span>
+            <TruncatedAddress address={counterparty} />
           </p>
         </div>
         <Badge status={status} size="sm" />
