@@ -48,6 +48,7 @@ import emailService from './services/emailService.js';
 import complianceService from './services/complianceService.js';
 import { startIndexer } from './services/eventIndexer.js';
 import { setupSwagger } from './api/docs/swagger.js';
+import { getBackupStatus } from './services/backupMonitor.js';
 
 // Attach Prisma query instrumentation and monitoring
 attachPrismaMetrics(prisma);
@@ -141,6 +142,7 @@ app.get('/health', async (_req, res) => {
     console.error('[HEALTH] Database check failed:', error.message);
   }
 
+  const backupStatus = await getBackupStatus();
   const status = dbStatus === 'ok' ? 'ok' : 'degraded';
   res.status(dbStatus === 'ok' ? 200 : 503).json({
     status,
@@ -153,6 +155,7 @@ app.get('/health', async (_req, res) => {
       latencyMs: dbLatencyMs,
       pool: dbPoolInfo,
     },
+    backup: backupStatus,
   });
 });
 
