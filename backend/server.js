@@ -29,6 +29,7 @@ import authRoutes from './api/routes/authRoutes.js';
 import complianceRoutes from './api/routes/complianceRoutes.js';
 import incidentRoutes from './api/routes/incidentRoutes.js';
 import authMiddleware from './api/middleware/auth.js';
+import tenantMiddleware from './api/middleware/tenant.js';
 import auditMiddleware from './api/middleware/audit.js';
 import _apiV1Routes from './api/v1/index.js';
 import { deprecatedRoute as _deprecatedRoute } from './api/middleware/version.js';
@@ -37,6 +38,7 @@ import { createWebSocketServer, pool } from './api/websocket/handlers.js';
 import cache from './lib/cache.js';
 import { attachPrismaMetrics } from './lib/prismaMetrics.js';
 import healthRoutes from './api/routes/healthRoutes.js';
+import tenantRoutes from './api/routes/tenantRoutes.js';
 import prisma, { startConnectionMonitoring } from './lib/prisma.js';
 import { errorsTotal } from './lib/metrics.js';
 import { apiRateLimit, leaderboardRateLimit } from './middleware/rateLimit.js';
@@ -156,7 +158,10 @@ app.get('/health', async (_req, res) => {
 
 // ── API Routes with Deprecation Strategy ──────────────────────────────────────
 // Current routes (no deprecation) - these are the active API endpoints
+app.use('/api/health', healthRoutes);
+app.use('/api', tenantMiddleware);
 app.use('/api/auth', authRoutes);
+app.use('/api/tenant', tenantRoutes);
 app.use('/api/escrows', authMiddleware, escrowRoutes);
 
 // ── API Documentation ─────────────────────────────────────────────────────────
@@ -172,8 +177,8 @@ app.use('/api/relayer', relayerRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/compliance', complianceRoutes);
 app.use('/api/incidents', incidentRoutes);
-app.use('/docs', docsRouter);
 app.use('/api/admin', adminRoutes);
+app.use('/docs', docsRouter);
 
 // ── Example: Deprecated API Version ───────────────────────────────────────────
 // Uncomment to deprecate unversioned endpoints in favor of /api/v1

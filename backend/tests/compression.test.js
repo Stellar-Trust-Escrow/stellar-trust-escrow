@@ -17,6 +17,25 @@ import { promisify } from 'util';
 const gunzip = promisify(zlib.gunzip);
 const brotliDecompress = promisify(zlib.brotliDecompress);
 
+async function parseMaybeCompressedJson(body, encoding) {
+  if (!Buffer.isBuffer(body)) return body;
+
+  if (encoding === 'br') {
+    return JSON.parse((await brotliDecompress(body)).toString());
+  }
+
+  if (encoding === 'gzip') {
+    try {
+      return JSON.parse((await gunzip(body)).toString());
+    } catch {
+      // Some clients transparently decompress gzip while preserving the header.
+      return JSON.parse(body.toString());
+    }
+  }
+
+  return JSON.parse(body.toString());
+}
+
 // ── Mock metrics so the middleware can be imported without a real registry ────
 jest.unstable_mockModule('../lib/metrics.js', () => ({
   compressedResponsesTotal: { inc: jest.fn() },
@@ -66,20 +85,21 @@ describe('Compression middleware', () => {
   const app = buildApp(8192);
 
   it('compresses with gzip when Accept-Encoding: gzip', async () => {
-    const res = await supertest(app).get('/data').set('Accept-Encoding', 'gzip');
+    const res = await supertest(app)
+      .get('/data')
+      .set('Accept-Encoding', 'gzip')
+      .buffer(true)
+      .parse((res, callback) => {
+        const chunks = [];
+        res.on('data', (c) => chunks.push(c));
+        res.on('end', () => callback(null, Buffer.concat(chunks)));
+      });
 
-    // supertest auto-decompresses gzip; verify the header was set and body is valid
-    if (res.headers['content-encoding'] === 'gzip') {
-      expect(res.headers['vary']).toMatch(/Accept-Encoding/i);
-      // Verify the body is valid gzip and decompresses to JSON
-      const decompressed = await _gunzip(res.body);
-      const parsed = JSON.parse(decompressed.toString());
-      expect(parsed).toHaveProperty('items');
-    } else {
-      // If not compressed, just verify response is valid JSON
-      expect(res.body).toHaveProperty('items');
-    }
-    expect(res.body).toHaveProperty('items');
+    expect(res.headers['content-encoding']).toBe('gzip');
+    expect(res.headers['vary']).toMatch(/Accept-Encoding/i);
+
+    const parsed = await parseMaybeCompressedJson(res.body, res.headers['content-encoding']);
+    expect(parsed).toHaveProperty('items');
   });
 
   it('compresses with brotli when Accept-Encoding: br', async () => {
@@ -96,8 +116,7 @@ describe('Compression middleware', () => {
     expect(res.headers['content-encoding']).toBe('br');
     expect(res.headers['vary']).toMatch(/Accept-Encoding/i);
 
-    const decompressed = await brotliDecompress(res.body);
-    const parsed = JSON.parse(decompressed.toString());
+    const parsed = await parseMaybeCompressedJson(res.body, res.headers['content-encoding']);
     expect(parsed).toHaveProperty('items');
   });
 

@@ -1,4 +1,4 @@
-const prisma = require('../lib/prisma');
+import prisma from '../lib/prisma.js';
 
 /**
  * Export/Import Service for Stellar Trust Escrow
@@ -373,4 +373,4 @@ class ExportService {
   }
 }
 
-module.exports = new ExportService();
+export default new ExportService();

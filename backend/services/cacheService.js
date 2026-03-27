@@ -17,6 +17,7 @@
  */
 
 import { createClient } from 'redis';
+import { scopeCacheKey, scopeCacheTag } from '../lib/tenantContext.js';
 
 // ── Analytics counters ────────────────────────────────────────────────────────
 
@@ -103,14 +104,16 @@ async function redisTagDel(tag) {
 // ── Public API ────────────────────────────────────────────────────────────────
 
 async function get(key) {
+  const scopedKey = scopeCacheKey(key);
+
   if (redisReady) {
-    const raw = await redis.get(key).catch(() => null);
+    const raw = await redis.get(scopedKey).catch(() => null);
     if (raw !== null) {
       stats.hits++;
       return JSON.parse(raw);
     }
   } else {
-    const val = mem.get(key);
+    const val = mem.get(scopedKey);
     if (val !== null) {
       stats.hits++;
       return val;
@@ -121,13 +124,15 @@ async function get(key) {
 }
 
 async function set(key, value, ttlSeconds = 60) {
+  const scopedKey = scopeCacheKey(key);
+
   stats.sets++;
   if (redisReady) {
-    await redis.set(key, JSON.stringify(value), { EX: ttlSeconds }).catch(() => {
-      mem.set(key, value, ttlSeconds);
+    await redis.set(scopedKey, JSON.stringify(value), { EX: ttlSeconds }).catch(() => {
+      mem.set(scopedKey, value, ttlSeconds);
     });
   } else {
-    mem.set(key, value, ttlSeconds);
+    mem.set(scopedKey, value, ttlSeconds);
   }
 }
 
@@ -140,30 +145,37 @@ async function set(key, value, ttlSeconds = 60) {
  * @param {string[]} tags  — logical group names, e.g. ['escrows', 'escrow:42']
  */
 async function setWithTags(key, value, ttlSeconds = 60, tags = []) {
+  const scopedKey = scopeCacheKey(key);
+  const scopedTags = tags.map((tag) => scopeCacheTag(tag));
+
   await set(key, value, ttlSeconds);
-  for (const tag of tags) {
+  for (const tag of scopedTags) {
     if (redisReady) {
-      await redisTagAdd(tag, key, ttlSeconds);
+      await redisTagAdd(tag, scopedKey, ttlSeconds);
     } else {
-      mem.tagAdd(tag, key);
+      mem.tagAdd(tag, scopedKey);
     }
   }
 }
 
 async function invalidate(key) {
+  const scopedKey = scopeCacheKey(key);
+
   stats.invalidations++;
-  if (redisReady) await redis.del(key).catch(() => null);
-  mem.del(key);
+  if (redisReady) await redis.del(scopedKey).catch(() => null);
+  mem.del(scopedKey);
 }
 
 async function invalidatePrefix(prefix) {
+  const scopedPrefix = scopeCacheKey(prefix);
+
   stats.invalidations++;
   if (redisReady) {
-    const keys = await redis.keys(`${prefix}*`).catch(() => []);
+    const keys = await redis.keys(`${scopedPrefix}*`).catch(() => []);
     if (keys.length) await redis.del(keys).catch(() => null);
   }
   for (const key of mem.keys()) {
-    if (key.startsWith(prefix)) mem.del(key);
+    if (key.startsWith(scopedPrefix)) mem.del(key);
   }
 }
 
@@ -173,14 +185,16 @@ async function invalidatePrefix(prefix) {
  * @param {string} tag
  */
 async function invalidateTag(tag) {
+  const scopedTag = scopeCacheTag(tag);
+
   stats.invalidations++;
   if (redisReady) {
-    const keys = await redisTagKeys(tag);
+    const keys = await redisTagKeys(scopedTag);
     if (keys.length) await redis.del(keys).catch(() => null);
-    await redisTagDel(tag);
+    await redisTagDel(scopedTag);
   } else {
-    for (const key of mem.tagKeys(tag)) mem.del(key);
-    mem.tagDel(tag);
+    for (const key of mem.tagKeys(scopedTag)) mem.del(key);
+    mem.tagDel(scopedTag);
   }
 }
 

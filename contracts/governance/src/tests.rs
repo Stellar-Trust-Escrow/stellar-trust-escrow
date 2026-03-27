@@ -1,10 +1,13 @@
 #[cfg(test)]
 mod tests {
-    use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env, String};
+    use soroban_sdk::{
+        testutils::{Address as _, Ledger},
+        token, Address, Env, String,
+    };
 
     use crate::{
-        FundPayload, GovConfig, GovernanceContract, GovernanceContractClient, ParameterPayload,
-        ProposalPayload, ProposalStatus, ProposalType, UpgradePayload,
+        FundPayload, GovernanceContract, GovernanceContractClient, ParameterPayload,
+        ProposalPayload, ProposalStatus, ProposalType,
     };
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -12,11 +15,17 @@ mod tests {
     const VOTING_DELAY: u64 = 60;
     const VOTING_PERIOD: u64 = 3_600;
     const TIMELOCK_DELAY: u64 = 7_200;
-    const QUORUM_BPS: u32 = 400;       // 4%
-    const APPROVAL_BPS: u32 = 5_100;   // 51%
+    const QUORUM_BPS: u32 = 400; // 4%
+    const APPROVAL_BPS: u32 = 5_100; // 51%
     const THRESHOLD: i128 = 100;
 
-    fn setup() -> (Env, Address, Address, Address, GovernanceContractClient<'static>) {
+    fn setup() -> (
+        Env,
+        Address,
+        Address,
+        Address,
+        GovernanceContractClient<'static>,
+    ) {
         let env = Env::default();
         env.mock_all_auths();
 
@@ -44,7 +53,7 @@ mod tests {
         (env, admin, token_admin, token, client)
     }
 
-    fn mint(env: &Env, token_admin: &Address, token: &Address, to: &Address, amount: i128) {
+    fn mint(env: &Env, _token_admin: &Address, token: &Address, to: &Address, amount: i128) {
         token::StellarAssetClient::new(env, token).mint(to, &amount);
     }
 
@@ -56,15 +65,11 @@ mod tests {
         String::from_str(env, s)
     }
 
-    fn hash(env: &Env, seed: u8) -> BytesN<32> {
-        BytesN::from_array(env, &[seed; 32])
-    }
-
     // ── Initialization ────────────────────────────────────────────────────────
 
     #[test]
     fn test_initialize_stores_config() {
-        let (env, _admin, _ta, token, client) = setup();
+        let (_env, _admin, _ta, token, client) = setup();
         let config = client.get_config();
         assert_eq!(config.token, token);
         assert_eq!(config.quorum_bps, QUORUM_BPS);
@@ -75,11 +80,16 @@ mod tests {
 
     #[test]
     fn test_double_initialize_fails() {
-        let (env, admin, _ta, token, client) = setup();
+        let (_env, admin, _ta, token, client) = setup();
         let result = client.try_initialize(
-            &admin, &token, &THRESHOLD,
-            &VOTING_DELAY, &VOTING_PERIOD, &TIMELOCK_DELAY,
-            &QUORUM_BPS, &APPROVAL_BPS,
+            &admin,
+            &token,
+            &THRESHOLD,
+            &VOTING_DELAY,
+            &VOTING_PERIOD,
+            &TIMELOCK_DELAY,
+            &QUORUM_BPS,
+            &APPROVAL_BPS,
         );
         assert!(result.is_err());
     }
@@ -155,8 +165,11 @@ mod tests {
         mint(&env, &ta, &token, &voter, 1_000);
 
         let id = client.create_proposal(
-            &proposer, &str(&env, "T"), &str(&env, "D"),
-            &ProposalType::TextProposal, &ProposalPayload::Text,
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
             &10_000i128,
         );
 
@@ -178,8 +191,11 @@ mod tests {
         mint(&env, &ta, &token, &voter, 500);
 
         let id = client.create_proposal(
-            &proposer, &str(&env, "T"), &str(&env, "D"),
-            &ProposalType::TextProposal, &ProposalPayload::Text,
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
             &10_000i128,
         );
 
@@ -199,8 +215,11 @@ mod tests {
         mint(&env, &ta, &token, &voter, 1_000);
 
         let id = client.create_proposal(
-            &proposer, &str(&env, "T"), &str(&env, "D"),
-            &ProposalType::TextProposal, &ProposalPayload::Text,
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
             &10_000i128,
         );
 
@@ -220,8 +239,11 @@ mod tests {
         mint(&env, &ta, &token, &voter, 1_000);
 
         let id = client.create_proposal(
-            &proposer, &str(&env, "T"), &str(&env, "D"),
-            &ProposalType::TextProposal, &ProposalPayload::Text,
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
             &10_000i128,
         );
 
@@ -239,8 +261,11 @@ mod tests {
         mint(&env, &ta, &token, &voter, 1_000);
 
         let id = client.create_proposal(
-            &proposer, &str(&env, "T"), &str(&env, "D"),
-            &ProposalType::TextProposal, &ProposalPayload::Text,
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
             &10_000i128,
         );
 
@@ -262,8 +287,11 @@ mod tests {
         mint(&env, &ta, &token, &voter, 10_000);
 
         let id = client.create_proposal(
-            &proposer, &str(&env, "T"), &str(&env, "D"),
-            &ProposalType::TextProposal, &ProposalPayload::Text,
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
             &10_000i128,
         );
 
@@ -289,8 +317,11 @@ mod tests {
         mint(&env, &ta, &token, &whale, 99_800);
 
         let id = client.create_proposal(
-            &proposer, &str(&env, "T"), &str(&env, "D"),
-            &ProposalType::TextProposal, &ProposalPayload::Text,
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
             &10_000i128,
         );
 
@@ -309,8 +340,11 @@ mod tests {
         mint(&env, &ta, &token, &proposer, THRESHOLD);
 
         let id = client.create_proposal(
-            &proposer, &str(&env, "T"), &str(&env, "D"),
-            &ProposalType::TextProposal, &ProposalPayload::Text,
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
             &10_000i128,
         );
 
@@ -330,8 +364,11 @@ mod tests {
         mint(&env, &ta, &token, &voter, 10_000);
 
         let id = client.create_proposal(
-            &proposer, &str(&env, "T"), &str(&env, "D"),
-            &ProposalType::TextProposal, &ProposalPayload::Text,
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
             &10_000i128,
         );
 
@@ -354,8 +391,11 @@ mod tests {
         mint(&env, &ta, &token, &voter, 10_000);
 
         let id = client.create_proposal(
-            &proposer, &str(&env, "T"), &str(&env, "D"),
-            &ProposalType::TextProposal, &ProposalPayload::Text,
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
             &10_000i128,
         );
 
@@ -391,8 +431,11 @@ mod tests {
         });
 
         let id = client.create_proposal(
-            &proposer, &str(&env, "Fund"), &str(&env, "Allocate"),
-            &ProposalType::FundAllocation, &payload,
+            &proposer,
+            &str(&env, "Fund"),
+            &str(&env, "Allocate"),
+            &ProposalType::FundAllocation,
+            &payload,
             &10_000i128,
         );
 
@@ -416,8 +459,11 @@ mod tests {
         mint(&env, &ta, &token, &proposer, THRESHOLD);
 
         let id = client.create_proposal(
-            &proposer, &str(&env, "T"), &str(&env, "D"),
-            &ProposalType::TextProposal, &ProposalPayload::Text,
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
             &10_000i128,
         );
 
@@ -433,8 +479,11 @@ mod tests {
         mint(&env, &ta, &token, &proposer, THRESHOLD);
 
         let id = client.create_proposal(
-            &proposer, &str(&env, "T"), &str(&env, "D"),
-            &ProposalType::TextProposal, &ProposalPayload::Text,
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
             &10_000i128,
         );
 
@@ -451,8 +500,11 @@ mod tests {
         mint(&env, &ta, &token, &proposer, THRESHOLD);
 
         let id = client.create_proposal(
-            &proposer, &str(&env, "T"), &str(&env, "D"),
-            &ProposalType::TextProposal, &ProposalPayload::Text,
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
             &10_000i128,
         );
 
@@ -464,7 +516,7 @@ mod tests {
 
     #[test]
     fn test_admin_can_update_config() {
-        let (env, admin, _ta, token, client) = setup();
+        let (_env, admin, _ta, _token, client) = setup();
         let mut config = client.get_config();
         config.quorum_bps = 1_000; // 10%
 

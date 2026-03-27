@@ -39,9 +39,9 @@ pub enum ProposalStatus {
 #[derive(Clone, Debug)]
 pub struct Vote {
     pub voter: Address,
-    pub support: bool,   // true = for, false = against
-    pub power: i128,     // voting power at time of vote
-    pub cast_at: u64,    // ledger timestamp
+    pub support: bool, // true = for, false = against
+    pub power: i128,   // voting power at time of vote
+    pub cast_at: u64,  // ledger timestamp
 }
 
 /// Execution payload for a ParameterChange proposal.

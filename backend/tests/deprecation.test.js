@@ -2,6 +2,8 @@
  * Tests for API Deprecation Middleware
  */
 
+import { jest } from '@jest/globals';
+
 // Set up environment before imports
 process.env.API_DOCS_URL = '/docs';
 
@@ -187,6 +189,7 @@ describe('Deprecation Middleware', () => {
         replacement: '/api/v2/test',
       };
 
+      const originalJson = res.json;
       const middleware = addDeprecationToResponse(config);
       middleware(req, res, next);
 
@@ -194,8 +197,8 @@ describe('Deprecation Middleware', () => {
       const testData = { users: [{ id: 1 }] };
       res.json(testData);
 
-      expect(res.json).toHaveBeenCalled();
-      const callArg = res.json.mock.calls[0][0];
+      expect(originalJson).toHaveBeenCalled();
+      const callArg = originalJson.mock.calls[0][0];
       expect(callArg).toHaveProperty('_deprecation');
       expect(callArg._deprecation).toHaveProperty('deprecated', true);
       expect(callArg._deprecation).toHaveProperty('version', 'v1');

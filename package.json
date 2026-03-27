@@ -20,7 +20,7 @@
     "loadtest:generate": "node load-tests/data/generate.js",
     "loadtest": "node load-tests/run.js",
     "loadtest:ci": "node load-tests/run.js --ci",
-    "prepare": "husky install",
+    "prepare": "node .husky/install.mjs",
     "fix": "npm run lint:fix && npm run format"
   },
   "devDependencies": {

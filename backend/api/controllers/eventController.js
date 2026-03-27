@@ -45,7 +45,7 @@ const listEvents = async (req, res) => {
     }
 
     const cacheKey = `events:list:${JSON.stringify({ where, page, limit })}`;
-    const cached = cache.get(cacheKey);
+    const cached = await cache.get(cacheKey);
     if (cached) return res.json(cached);
 
     const [data, total] = await prisma.$transaction([
@@ -71,7 +71,7 @@ const listEvents = async (req, res) => {
     ]);
 
     const result = buildPaginatedResponse(data.map(serializeEvent), { total, page, limit });
-    cache.set(cacheKey, result, EVENT_TTL);
+    await cache.set(cacheKey, result, EVENT_TTL);
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -88,14 +88,14 @@ const getEvent = async (req, res) => {
     if (Number.isNaN(id)) return res.status(400).json({ error: 'Invalid event id' });
 
     const cacheKey = `events:${id}`;
-    const cached = cache.get(cacheKey);
+    const cached = await cache.get(cacheKey);
     if (cached) return res.json(cached);
 
     const event = await prisma.contractEvent.findUnique({ where: { id } });
     if (!event) return res.status(404).json({ error: 'Event not found' });
 
     const result = serializeEvent(event);
-    cache.set(cacheKey, result, 300);
+    await cache.set(cacheKey, result, 300);
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -122,7 +122,7 @@ const listEscrowEvents = async (req, res) => {
     if (eventType) where.eventType = eventType;
 
     const cacheKey = `events:escrow:${escrowId}:${eventType ?? ''}:${page}:${limit}`;
-    const cached = cache.get(cacheKey);
+    const cached = await cache.get(cacheKey);
     if (cached) return res.json(cached);
 
     const [data, total] = await prisma.$transaction([
@@ -136,7 +136,7 @@ const listEscrowEvents = async (req, res) => {
     ]);
 
     const result = buildPaginatedResponse(data.map(serializeEvent), { total, page, limit });
-    cache.set(cacheKey, result, EVENT_TTL);
+    await cache.set(cacheKey, result, EVENT_TTL);
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -148,10 +148,10 @@ const listEscrowEvents = async (req, res) => {
  * Returns the list of distinct event types present in the index.
  * Useful for building filter UIs.
  */
-const listEventTypes = async (_req, res) => {
+const listEventTypes = async (req, res) => {
   try {
     const cacheKey = 'events:types';
-    const cached = cache.get(cacheKey);
+    const cached = await cache.get(cacheKey);
     if (cached) return res.json(cached);
 
     const rows = await prisma.contractEvent.findMany({
@@ -161,7 +161,7 @@ const listEventTypes = async (_req, res) => {
     });
 
     const result = rows.map((r) => r.eventType);
-    cache.set(cacheKey, result, 60);
+    await cache.set(cacheKey, result, 60);
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -172,10 +172,10 @@ const listEventTypes = async (_req, res) => {
  * GET /api/events/stats
  * Returns aggregate counts per event type — useful for dashboards.
  */
-const getEventStats = async (_req, res) => {
+const getEventStats = async (req, res) => {
   try {
     const cacheKey = 'events:stats';
-    const cached = cache.get(cacheKey);
+    const cached = await cache.get(cacheKey);
     if (cached) return res.json(cached);
 
     const rows = await prisma.contractEvent.groupBy({
@@ -185,7 +185,7 @@ const getEventStats = async (_req, res) => {
     });
 
     const result = rows.map((r) => ({ eventType: r.eventType, count: r._count.id }));
-    cache.set(cacheKey, result, 30);
+    await cache.set(cacheKey, result, 30);
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });

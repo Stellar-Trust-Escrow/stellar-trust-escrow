@@ -22,7 +22,7 @@ const mockCache = {
   invalidateTags: jest.fn(async (tags) => tags.forEach((t) => store.delete(`tag:${t}`))),
 };
 
-jest.unstable_mockModule('../../lib/cache.js', () => ({ default: mockCache }));
+jest.unstable_mockModule('../lib/cache.js', () => ({ default: mockCache }));
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -58,21 +58,21 @@ beforeEach(() => {
 });
 
 test('buildCacheKey sorts query params deterministically', async () => {
-  const { buildCacheKey } = await import('../middleware/cache.js');
+  const { buildCacheKey } = await import('../api/middleware/cache.js');
   const req1 = makeReq({ query: { b: '2', a: '1' } });
   const req2 = makeReq({ query: { a: '1', b: '2' } });
   expect(buildCacheKey(req1)).toBe(buildCacheKey(req2));
 });
 
 test('buildCacheKey includes path and method', async () => {
-  const { buildCacheKey } = await import('../middleware/cache.js');
+  const { buildCacheKey } = await import('../api/middleware/cache.js');
   const key = buildCacheKey(makeReq({ method: 'GET', path: '/api/escrows' }));
   expect(key).toContain('GET');
   expect(key).toContain('/api/escrows');
 });
 
 test('cacheResponse returns cached value on HIT', async () => {
-  const { cacheResponse } = await import('../middleware/cache.js');
+  const { cacheResponse } = await import('../api/middleware/cache.js');
   const cached = { data: [{ id: 1 }] };
   mockCache.get.mockResolvedValueOnce(cached);
 
@@ -89,7 +89,7 @@ test('cacheResponse returns cached value on HIT', async () => {
 });
 
 test('cacheResponse calls next and stores response on MISS', async () => {
-  const { cacheResponse } = await import('../middleware/cache.js');
+  const { cacheResponse } = await import('../api/middleware/cache.js');
   mockCache.get.mockResolvedValueOnce(null);
 
   const req = makeReq();
@@ -114,7 +114,7 @@ test('cacheResponse calls next and stores response on MISS', async () => {
 });
 
 test('cacheResponse skips non-GET methods', async () => {
-  const { cacheResponse } = await import('../middleware/cache.js');
+  const { cacheResponse } = await import('../api/middleware/cache.js');
   const req = makeReq({ method: 'POST' });
   const res = makeRes();
   const next = jest.fn();
@@ -127,7 +127,7 @@ test('cacheResponse skips non-GET methods', async () => {
 });
 
 test('cacheResponse respects skip function', async () => {
-  const { cacheResponse } = await import('../middleware/cache.js');
+  const { cacheResponse } = await import('../api/middleware/cache.js');
   const req = makeReq();
   const res = makeRes();
   const next = jest.fn();
@@ -140,7 +140,7 @@ test('cacheResponse respects skip function', async () => {
 });
 
 test('cacheResponse resolves tag function with req', async () => {
-  const { cacheResponse } = await import('../middleware/cache.js');
+  const { cacheResponse } = await import('../api/middleware/cache.js');
   mockCache.get.mockResolvedValueOnce(null);
 
   const req = makeReq({ params: { id: '42' } });
@@ -160,7 +160,7 @@ test('cacheResponse resolves tag function with req', async () => {
 });
 
 test('invalidateOn after — calls invalidateTags after response finish', async () => {
-  const { invalidateOn } = await import('../middleware/cache.js');
+  const { invalidateOn } = await import('../api/middleware/cache.js');
   const req = makeReq({ method: 'POST' });
   const res = makeRes();
   const next = jest.fn();
@@ -182,7 +182,7 @@ test('invalidateOn after — calls invalidateTags after response finish', async 
 });
 
 test('invalidateOn before — invalidates before calling next', async () => {
-  const { invalidateOn } = await import('../middleware/cache.js');
+  const { invalidateOn } = await import('../api/middleware/cache.js');
   const req = makeReq({ method: 'DELETE' });
   const res = makeRes();
   const next = jest.fn();
@@ -195,7 +195,7 @@ test('invalidateOn before — invalidates before calling next', async () => {
 });
 
 test('TTL exports are positive integers', async () => {
-  const { TTL } = await import('../middleware/cache.js');
+  const { TTL } = await import('../api/middleware/cache.js');
   for (const [k, v] of Object.entries(TTL)) {
     expect(typeof v).toBe('number');
     expect(v).toBeGreaterThan(0);
