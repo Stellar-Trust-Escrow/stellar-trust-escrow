@@ -19,6 +19,7 @@ import ReputationBadge from '../../components/ui/ReputationBadge';
 import Button from '../../components/ui/Button';
 import StatWidgets from '../../components/dashboard/StatWidgets';
 import ActivityTimeline from '../../components/dashboard/ActivityTimeline';
+import PageTransition from '../../components/layout/PageTransition';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -74,6 +75,7 @@ export default function DashboardPage() {
     : null;
 
   return (
+    <PageTransition>
     <div className="space-y-8">
       {/* Page Header */}
       <div className="flex items-center justify-between">
@@ -146,5 +148,6 @@ export default function DashboardPage() {
         )}
       </section>
     </div>
+    </PageTransition>
   );
 }

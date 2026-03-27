@@ -13,6 +13,7 @@
 import './globals.css';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
+import NavigationProgress from '../components/layout/NavigationProgress';
 
 export const metadata = {
   title: 'StellarTrustEscrow — Decentralized Milestone Escrow',
@@ -35,6 +36,7 @@ export default function RootLayout({ children }) {
           </WalletProvider>
         */}
         <Header />
+        <NavigationProgress />
         <main className="flex-1 container mx-auto px-4 py-8 max-w-7xl">{children}</main>
         <Footer />
       </body>
