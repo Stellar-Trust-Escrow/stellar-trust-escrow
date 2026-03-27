@@ -17,10 +17,18 @@
 import Link from 'next/link';
 
 const VARIANTS = {
-  primary: 'bg-indigo-600 hover:bg-indigo-500 text-white',
-  secondary: 'bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700',
-  danger: 'bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30',
-  ghost: 'hover:bg-gray-800 text-gray-400 hover:text-white',
+  primary:
+    'bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 active:scale-95 text-white ' +
+    'focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950',
+  secondary:
+    'bg-gray-800 hover:bg-gray-700 active:bg-gray-900 active:scale-95 text-gray-300 border border-gray-700 ' +
+    'focus-visible:ring-2 focus-visible:ring-gray-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950',
+  danger:
+    'bg-red-500/10 hover:bg-red-500/20 active:bg-red-500/30 active:scale-95 text-red-400 border border-red-500/30 ' +
+    'focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950',
+  ghost:
+    'hover:bg-gray-800 active:bg-gray-700 active:scale-95 text-gray-400 hover:text-white ' +
+    'focus-visible:ring-2 focus-visible:ring-gray-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950',
 };
 
 const SIZES = {
@@ -41,8 +49,8 @@ export default function Button({
   ...rest
 }) {
   const base = `inline-flex items-center justify-center gap-2 font-medium
-                transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500/50
-                disabled:opacity-50 disabled:cursor-not-allowed`;
+                transition-all duration-150 focus:outline-none
+                disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100`;
 
   const classes = `${base} ${VARIANTS[variant]} ${SIZES[size]} ${className}`;
 
