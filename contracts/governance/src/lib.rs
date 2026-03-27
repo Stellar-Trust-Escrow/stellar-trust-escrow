@@ -25,11 +25,12 @@
 //! `votes_for >= (votes_for + votes_against) * approval_threshold_bps / 10_000`
 
 #![no_std]
+#![allow(clippy::too_many_arguments)]
 
 mod errors;
 mod events;
-mod types;
 mod tests;
+mod types;
 
 pub use errors::GovError;
 pub use types::{
@@ -56,9 +57,11 @@ impl Storage {
     }
 
     fn bump_persistent<K: soroban_sdk::IntoVal<Env, soroban_sdk::Val>>(env: &Env, key: &K) {
-        env.storage()
-            .persistent()
-            .extend_ttl(key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        env.storage().persistent().extend_ttl(
+            key,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
     }
 
     fn require_initialized(env: &Env) -> Result<(), GovError> {
@@ -136,8 +139,7 @@ fn evaluate(proposal: &Proposal, config: &GovConfig) -> bool {
     let total_votes = proposal.votes_for + proposal.votes_against;
 
     // Quorum: enough participation?
-    let quorum_required =
-        proposal.total_supply_snapshot * config.quorum_bps as i128 / 10_000;
+    let quorum_required = proposal.total_supply_snapshot * config.quorum_bps as i128 / 10_000;
     if total_votes < quorum_required {
         return false;
     }
@@ -477,11 +479,7 @@ impl GovernanceContract {
     // ── Admin ─────────────────────────────────────────────────────────────────
 
     /// Updates governance configuration. Admin only.
-    pub fn update_config(
-        env: Env,
-        caller: Address,
-        new_config: GovConfig,
-    ) -> Result<(), GovError> {
+    pub fn update_config(env: Env, caller: Address, new_config: GovConfig) -> Result<(), GovError> {
         Storage::require_initialized(&env)?;
         caller.require_auth();
 

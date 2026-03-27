@@ -30,18 +30,16 @@
 #![allow(clippy::too_many_arguments)]
 
 mod errors;
+mod event_tests;
 mod events;
+mod pause_tests;
 mod types;
 mod upgrade_tests;
-mod pause_tests;
-mod event_tests;
 
 pub use errors::EscrowError;
 use storage::StorageManager;
-use types::{CancellationRequest, RecurringPaymentConfig, RecurringInterval, SlashRecord};
-pub use types::{
-    DataKey, EscrowState, EscrowStatus, Milestone, MilestoneStatus, ReputationRecord,
-};
+use types::{CancellationRequest, RecurringInterval, RecurringPaymentConfig, SlashRecord};
+pub use types::{DataKey, EscrowState, EscrowStatus, Milestone, MilestoneStatus, ReputationRecord};
 
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, token, Address, BytesN, Env, String, Vec,
@@ -770,8 +768,12 @@ impl EscrowContract {
         if start_time <= now {
             return Err(EscrowError::InvalidRecurringSchedule);
         }
-        let total_payments =
-            Self::resolve_total_payments(start_time, interval.clone(), end_date, number_of_payments)?;
+        let total_payments = Self::resolve_total_payments(
+            start_time,
+            interval.clone(),
+            end_date,
+            number_of_payments,
+        )?;
         let total_amount = payment_amount
             .checked_mul(i128::from(total_payments))
             .ok_or(EscrowError::AmountMismatch)?;
@@ -1494,7 +1496,12 @@ impl EscrowContract {
         recurring.paused_at = None;
         ContractStorage::save_recurring_config(&env, escrow_id, &recurring);
 
-        events::emit_recurring_schedule_resumed(&env, escrow_id, &caller, recurring.next_payment_at);
+        events::emit_recurring_schedule_resumed(
+            &env,
+            escrow_id,
+            &caller,
+            recurring.next_payment_at,
+        );
         Ok(())
     }
 
@@ -2099,7 +2106,10 @@ mod tests {
         advance(&env, 86_400);
         assert_eq!(client.process_recurring_payments(&escrow_id), 1);
         assert_eq!(token_client.balance(&freelancer), 200_i128);
-        assert_eq!(client.get_escrow(&escrow_id).status, EscrowStatus::Completed);
+        assert_eq!(
+            client.get_escrow(&escrow_id).status,
+            EscrowStatus::Completed
+        );
     }
 
     #[test]
@@ -2176,7 +2186,10 @@ mod tests {
         client.cancel_recurring_escrow(&escrow_client, &escrow_id);
 
         assert_eq!(token_client.balance(&escrow_client), 200_i128);
-        assert_eq!(client.get_escrow(&escrow_id).status, EscrowStatus::Cancelled);
+        assert_eq!(
+            client.get_escrow(&escrow_id).status,
+            EscrowStatus::Cancelled
+        );
         assert!(client.get_recurring_config(&escrow_id).cancelled);
     }
 

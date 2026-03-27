@@ -91,6 +91,10 @@ impl StorageManager {
 
     /// Check if storage migration is needed.
     /// Returns true if current version is less than STORAGE_VERSION.
+    #[expect(
+        dead_code,
+        reason = "kept as a small migration-status helper for future upgrade flows"
+    )]
     pub fn needs_migration(env: &Env) -> bool {
         Self::get_version(env) < STORAGE_VERSION
     }

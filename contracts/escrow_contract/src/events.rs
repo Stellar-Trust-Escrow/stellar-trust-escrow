@@ -155,10 +155,8 @@ pub fn emit_recurring_payments_processed(
 
 /// Emitted when a recurring schedule is paused.
 pub fn emit_recurring_schedule_paused(env: &Env, escrow_id: u64, paused_by: &Address) {
-    env.events().publish(
-        (symbol_short!("rec_pau"), escrow_id),
-        paused_by.clone(),
-    );
+    env.events()
+        .publish((symbol_short!("rec_pau"), escrow_id), paused_by.clone());
 }
 
 /// Emitted when a recurring schedule is resumed.
