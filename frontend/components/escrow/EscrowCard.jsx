@@ -26,18 +26,33 @@ import Badge from '../ui/Badge';
 import CurrencyAmount from '../ui/CurrencyAmount';
 import CopyButton from '../ui/CopyButton';
 import { useI18n } from '../../i18n/index.jsx';
+import { useRef } from 'react';
 
 export default function EscrowCard({ escrow }) {
   const { t } = useI18n();
   const { id, title, status, totalAmount, milestoneProgress, counterparty, role, transactionHash } = escrow;
+  const cardRef = useRef(null);
 
   const [done, total] = milestoneProgress?.split(' / ').map(Number) ?? [0, 0];
   const progressPct = total > 0 ? Math.round((done / total) * 100) : 0;
 
+  const handleKeyDown = (event) => {
+    // Activate on Enter or Space key
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      cardRef.current?.click();
+    }
+  };
+
   return (
     <Link
       href={`/escrow/${id}`}
-      className="card block hover:border-gray-700 transition-colors group"
+      ref={cardRef}
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+      className="card block hover:border-gray-700 transition-colors group focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-950"
+      role="button"
+      aria-label={`View details for escrow: ${title}`}
     >
       {/* Header Row */}
       <div className="flex items-start justify-between gap-3 mb-3">
