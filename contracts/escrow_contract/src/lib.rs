@@ -32,6 +32,7 @@
 mod errors;
 mod event_tests;
 mod events;
+mod oracle;
 mod pause_tests;
 mod types;
 mod upgrade_tests;
@@ -660,6 +661,49 @@ impl EscrowContract {
 
     pub fn initialize(env: Env, admin: Address) -> Result<(), EscrowError> {
         ContractStorage::initialize(&env, &admin)
+    }
+
+    // ── Oracle Configuration ──────────────────────────────────────────────────
+
+    /// Set the primary price oracle contract address. Admin only.
+    pub fn set_oracle(env: Env, caller: Address, oracle: Address) -> Result<(), EscrowError> {
+        ContractStorage::require_admin(&env, &caller)?;
+        caller.require_auth();
+        oracle::set_oracle(&env, &oracle);
+        ContractStorage::bump_instance_ttl(&env);
+        Ok(())
+    }
+
+    /// Set the fallback oracle contract address. Admin only.
+    pub fn set_fallback_oracle(
+        env: Env,
+        caller: Address,
+        oracle: Address,
+    ) -> Result<(), EscrowError> {
+        ContractStorage::require_admin(&env, &caller)?;
+        caller.require_auth();
+        oracle::set_fallback_oracle(&env, &oracle);
+        ContractStorage::bump_instance_ttl(&env);
+        Ok(())
+    }
+
+    /// Fetch the current USD price for `asset` from the configured oracle.
+    /// Returns price with `oracle::PRICE_DECIMALS` decimal places.
+    pub fn get_price(env: Env, asset: Address) -> Result<i128, EscrowError> {
+        ContractStorage::require_initialized(&env)?;
+        oracle::get_price_usd(&env, &asset)
+    }
+
+    /// Convert `amount` of `from_asset` into equivalent units of `to_asset`
+    /// using live oracle prices.
+    pub fn convert_amount(
+        env: Env,
+        amount: i128,
+        from_asset: Address,
+        to_asset: Address,
+    ) -> Result<i128, EscrowError> {
+        ContractStorage::require_initialized(&env)?;
+        oracle::convert_amount(&env, amount, &from_asset, &to_asset)
     }
 
     // ── Escrow Lifecycle ──────────────────────────────────────────────────────
