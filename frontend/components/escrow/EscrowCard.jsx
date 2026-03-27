@@ -25,9 +25,11 @@ import Link from 'next/link';
 import Badge from '../ui/Badge';
 import CurrencyAmount from '../ui/CurrencyAmount';
 import CopyButton from '../ui/CopyButton';
+import EscrowCardSkeleton from '../ui/EscrowCardSkeleton';
 import { useI18n } from '../../i18n/index.jsx';
 
-export default function EscrowCard({ escrow }) {
+export default function EscrowCard({ escrow, isLoading = false }) {
+  if (isLoading) return <EscrowCardSkeleton />;
   const { t } = useI18n();
   const { id, title, status, totalAmount, milestoneProgress, counterparty, role, transactionHash } = escrow;
 
