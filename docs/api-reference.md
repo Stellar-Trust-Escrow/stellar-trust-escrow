@@ -11,7 +11,7 @@ Base URL: `http://localhost:4000` (development)
 
 ## Authentication
 
-Most endpoints require a JWT Bearer token.
+Most sensitive endpoints require a JWT Bearer token.
 
 ```
 Authorization: Bearer <access_token>
@@ -20,6 +20,9 @@ Authorization: Bearer <access_token>
 Obtain tokens via `POST /api/auth/login`. Access tokens expire in **15 minutes**; use `POST /api/auth/refresh` to renew.
 
 Admin-only endpoints require the `x-admin-api-key` header instead.
+
+Wallet-scoped endpoints additionally enforce that the wallet address in the JWT
+matches the `:address` path segment or request body.
 
 ---
 
@@ -76,24 +79,26 @@ All errors follow this shape:
 
 ## Endpoints Overview
 
-| Tag           | Base Path            | Auth Required     |
-| ------------- | -------------------- | ----------------- |
-| Auth          | `/api/auth`          | No                |
-| Escrows       | `/api/escrows`       | Bearer JWT        |
-| Users         | `/api/users`         | Bearer JWT        |
-| Reputation    | `/api/reputation`    | No                |
-| Disputes      | `/api/disputes`      | No                |
-| Payments      | `/api/payments`      | No (KYC required) |
-| KYC           | `/api/kyc`           | No                |
-| Events        | `/api/events`        | No                |
-| Search        | `/api/search`        | No                |
-| Notifications | `/api/notifications` | No                |
-| Relayer       | `/api/relayer`       | No                |
-| Audit         | `/api/audit`         | Admin API Key     |
-| Admin         | `/api/admin`         | Admin API Key     |
-| Health        | `/health`            | No                |
+| Tag           | Base Path            | Auth Required |
+| ------------- | -------------------- | ------------- |
+| Auth          | `/api/auth`          | Public except `POST /logout` |
+| Escrows       | `/api/escrows`       | Bearer JWT |
+| Users         | `/api/users`         | Bearer JWT, with wallet ownership on export/import |
+| Reputation    | `/api/reputation`    | Public |
+| Disputes      | `/api/disputes`      | Bearer JWT |
+| Payments      | `/api/payments`      | Bearer JWT, with wallet/payment ownership; webhook signed |
+| KYC           | `/api/kyc`           | Bearer JWT for user endpoints; webhook signed; admin uses API key |
+| Events        | `/api/events`        | Public |
+| Search        | `/api/search`        | Public, except admin analytics/reindex |
+| Notifications | `/api/notifications` | Admin API Key for internal queue/event endpoints; unsubscribe/resubscribe token for user email actions |
+| Relayer       | `/api/relayer`       | Bearer JWT for execution and fee estimate |
+| Audit         | `/api/audit`         | Admin API Key |
+| Admin         | `/api/admin`         | Admin API Key |
+| Health        | `/health`            | Public |
 
 For full request/response schemas, parameters, and code samples, see the **[interactive Swagger UI](http://localhost:4000/api/docs)**.
+
+For the full endpoint-by-endpoint audit matrix, see [docs/api-auth-audit.md](/home/json/Desktop/Drips/stellar-trust-escrow/docs/api-auth-audit.md).
 
 ---
 

@@ -99,6 +99,19 @@ async function getBySessionId(sessionId) {
   });
 }
 
+async function getById(paymentId) {
+  return prisma.payment.findUnique({
+    where: { id: paymentId },
+    select: {
+      id: true,
+      address: true,
+      status: true,
+      stripePaymentIntent: true,
+      refundId: true,
+    },
+  });
+}
+
 /**
  * Get payments for a Stellar address — paginated with a safe default limit.
  * Uses the @@index([address, createdAt(sort: Desc)]) composite index.
@@ -220,4 +233,4 @@ async function handleWebhook(rawBody, signature) {
   }
 }
 
-export default { createCheckoutSession, getBySessionId, getByAddress, refund, handleWebhook };
+export default { createCheckoutSession, getById, getBySessionId, getByAddress, refund, handleWebhook };

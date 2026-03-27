@@ -3,16 +3,22 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import prisma from '../../lib/prisma.js';
 
+const STELLAR_ADDRESS_RE = /^G[A-Z2-7]{55}$/;
+
+function normalizeWalletAddress(body = {}) {
+  return body.walletAddress || body.stellarAddress || null;
+}
+
 // Helper to generate tokens
 const generateTokens = (user) => {
   const accessToken = jwt.sign(
-    { userId: user.id, tenantId: user.tenantId },
+    { userId: user.id, tenantId: user.tenantId, address: user.walletAddress ?? null },
     process.env.JWT_ACCESS_SECRET || 'fallback_access_secret',
     { expiresIn: process.env.JWT_ACCESS_EXPIRATION || '15m' },
   );
 
   const refreshToken = jwt.sign(
-    { userId: user.id, tenantId: user.tenantId },
+    { userId: user.id, tenantId: user.tenantId, address: user.walletAddress ?? null },
     process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret',
     { expiresIn: process.env.JWT_REFRESH_EXPIRATION || '7d' },
   );
@@ -23,6 +29,7 @@ const generateTokens = (user) => {
 export const register = async (req, res) => {
   try {
     const { email, password } = req.body;
+    const walletAddress = normalizeWalletAddress(req.body);
     const tenantId = req.tenant?.id;
 
     if (!tenantId) {
@@ -31,6 +38,10 @@ export const register = async (req, res) => {
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    if (walletAddress && !STELLAR_ADDRESS_RE.test(walletAddress)) {
+      return res.status(400).json({ error: 'Invalid Stellar wallet address' });
     }
 
     // Check if user exists
@@ -42,6 +53,17 @@ export const register = async (req, res) => {
       return res.status(400).json({ error: 'User already exists' });
     }
 
+    if (walletAddress) {
+      const existingWalletUser = await prisma.user.findFirst({
+        where: { tenantId, walletAddress },
+        select: { id: true },
+      });
+
+      if (existingWalletUser) {
+        return res.status(400).json({ error: 'Wallet address is already linked to another user' });
+      }
+    }
+
     // Hash password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
@@ -51,6 +73,7 @@ export const register = async (req, res) => {
       data: {
         tenantId,
         email,
+        walletAddress,
         password: hashedPassword,
       },
     });
@@ -58,6 +81,7 @@ export const register = async (req, res) => {
     res.status(201).json({
       message: 'User registered successfully',
       userId: user.id,
+      walletAddress: user.walletAddress,
       tenant: { id: req.tenant.id, slug: req.tenant.slug },
     });
   } catch (error) {
@@ -107,6 +131,7 @@ export const login = async (req, res) => {
       accessToken,
       refreshToken,
       userId: user.id,
+      walletAddress: user.walletAddress,
       tenant: { id: req.tenant.id, slug: req.tenant.slug },
     });
   } catch (error) {
@@ -161,7 +186,7 @@ export const refresh = async (req, res) => {
       data: { refreshToken: tokens.refreshToken },
     });
 
-    res.json(tokens);
+    res.json({ ...tokens, walletAddress: user.walletAddress });
   } catch (error) {
     console.error('[Refresh] Error:', error);
     res.status(500).json({ error: 'Internal server error' });

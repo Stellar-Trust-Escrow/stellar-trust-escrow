@@ -1,8 +1,10 @@
 import express from 'express';
 import escrowController from '../controllers/escrowController.js';
 import { cacheResponse, invalidateOn, TTL } from '../middleware/cache.js';
+import authMiddleware from '../middleware/auth.js';
 
 const router = express.Router();
+router.use(authMiddleware);
 
 /**
  * @route  GET /api/escrows

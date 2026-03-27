@@ -13,7 +13,7 @@ const authMiddleware = (req, res, next) => {
     if (req.tenant?.id && decoded.tenantId && decoded.tenantId !== req.tenant.id) {
       return res.status(403).json({ error: 'Token does not belong to this tenant.' });
     }
-    req.user = decoded; // Contains { userId: user.id }
+    req.user = decoded; // Contains { userId, tenantId, address? }
     next();
   } catch (err) {
     if (err.name === 'TokenExpiredError') {

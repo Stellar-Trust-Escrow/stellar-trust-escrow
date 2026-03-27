@@ -28,7 +28,6 @@ import auditRoutes from './api/routes/auditRoutes.js';
 import authRoutes from './api/routes/authRoutes.js';
 import complianceRoutes from './api/routes/complianceRoutes.js';
 import incidentRoutes from './api/routes/incidentRoutes.js';
-import authMiddleware from './api/middleware/auth.js';
 import tenantMiddleware from './api/middleware/tenant.js';
 import auditMiddleware from './api/middleware/audit.js';
 import _apiV1Routes from './api/v1/index.js';
@@ -162,11 +161,11 @@ app.use('/api/health', healthRoutes);
 app.use('/api', tenantMiddleware);
 app.use('/api/auth', authRoutes);
 app.use('/api/tenant', tenantRoutes);
-app.use('/api/escrows', authMiddleware, escrowRoutes);
+app.use('/api/escrows', escrowRoutes);
 
 // ── API Documentation ─────────────────────────────────────────────────────────
 setupSwagger(app);
-app.use('/api/users', authMiddleware, userRoutes);
+app.use('/api/users', userRoutes);
 app.use('/api/reputation', reputationRoutes);
 app.use('/api/disputes', disputeRoutes);
 app.use('/api/notifications', notificationRoutes);
