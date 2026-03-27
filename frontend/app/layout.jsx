@@ -22,6 +22,8 @@ import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
 import { ThemeProvider } from '../contexts/ThemeContext';
 import ServiceWorkerRegistrar from '../components/ServiceWorkerRegistrar';
+import OfflineBanner from '../components/ui/offlineBanner';
+import ErrorBoundary from '../components/ui/ErrorBoundary';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' });
@@ -68,6 +70,8 @@ export default function RootLayout({ children }) {
             </SWRConfig>
           </WalletProvider>
         */}
+        <OfflineBanner />
+        <ErrorBoundary />
         <Header />
         <main className="flex-1 container mx-auto px-4 py-8 max-w-7xl">{children}</main>
         <Footer />
