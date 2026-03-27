@@ -12,13 +12,13 @@ function normalizeWalletAddress(body = {}) {
 // Helper to generate tokens
 const generateTokens = (user) => {
   const accessToken = jwt.sign(
-    { userId: user.id, tenantId: user.tenantId, address: user.walletAddress ?? null },
+    { userId: user.id, tenantId: user.tenantId },
     process.env.JWT_ACCESS_SECRET || 'fallback_access_secret',
     { expiresIn: process.env.JWT_ACCESS_EXPIRATION || '15m' },
   );
 
   const refreshToken = jwt.sign(
-    { userId: user.id, tenantId: user.tenantId, address: user.walletAddress ?? null },
+    { userId: user.id, tenantId: user.tenantId },
     process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret',
     { expiresIn: process.env.JWT_REFRESH_EXPIRATION || '7d' },
   );
@@ -29,7 +29,6 @@ const generateTokens = (user) => {
 export const register = async (req, res) => {
   try {
     const { email, password } = req.body;
-    const walletAddress = normalizeWalletAddress(req.body);
     const tenantId = req.tenant?.id;
 
     if (!tenantId) {
@@ -81,7 +80,6 @@ export const register = async (req, res) => {
     res.status(201).json({
       message: 'User registered successfully',
       userId: user.id,
-      walletAddress: user.walletAddress,
       tenant: { id: req.tenant.id, slug: req.tenant.slug },
     });
   } catch (error) {
@@ -131,7 +129,6 @@ export const login = async (req, res) => {
       accessToken,
       refreshToken,
       userId: user.id,
-      walletAddress: user.walletAddress,
       tenant: { id: req.tenant.id, slug: req.tenant.slug },
     });
   } catch (error) {

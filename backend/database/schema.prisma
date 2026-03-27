@@ -52,19 +52,17 @@ model Tenant {
 // ── Users ─────────────────────────────────────────────────────────────────────
 
 model User {
-  id            Int      @id @default(autoincrement())
-  tenantId      String   @map("tenant_id")
-  email         String   @unique
-  walletAddress String?  @map("wallet_address")
-  password      String
-  refreshToken  String?  @map("refresh_token")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id           Int      @id @default(autoincrement())
+  tenantId     String   @map("tenant_id")
+  email        String   @unique
+  password     String
+  refreshToken String?  @map("refresh_token")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, createdAt(sort: Desc)])
-  @@unique([tenantId, walletAddress])
   @@map("users")
 }
 
