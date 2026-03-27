@@ -31,6 +31,7 @@ import Button from '../../../components/ui/Button';
 import ReputationBadge from '../../../components/ui/ReputationBadge';
 import CurrencyAmount from '../../../components/ui/CurrencyAmount';
 import TransactionHash from '../../../components/ui/TransactionHash';
+import Avatar from '../../../components/ui/Avatar';
 
 // Fallback data used while the API integration (Issue #34) is pending.
 const PLACEHOLDER_ESCROW = {
@@ -261,9 +262,7 @@ function PartyCard({ role, address, score, isYou }) {
     <div className="space-y-2">
       <p className="text-xs text-gray-500 uppercase tracking-wider">{role}</p>
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full bg-indigo-600/30 flex items-center justify-center text-indigo-400 font-bold text-sm">
-          {address.slice(0, 2)}
-        </div>
+        <Avatar address={address} size="md" className="rounded-full" />
         <div>
           <p className="text-white text-sm font-mono">
             {address}
