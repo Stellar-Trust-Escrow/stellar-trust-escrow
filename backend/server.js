@@ -52,6 +52,7 @@ import wsHealthRoutes from './api/routes/wsHealth.js';
 import prisma, { startConnectionMonitoring } from './lib/prisma.js';
 import { errorsTotal } from './lib/metrics.js';
 import { apiRateLimit, leaderboardRateLimit } from './middleware/rateLimit.js';
+import { publicRateLimit } from './middleware/publicRateLimit.js';
 import metricsMiddleware from './middleware/metricsMiddleware.js';
 import responseTime from './middleware/responseTime.js';
 import emailService from './services/emailService.js';
@@ -95,32 +96,13 @@ app.use(auditMiddleware);
 // ── Sentry tracing handler — after body parsers, before routes ────────────────
 app.use(Sentry.expressTracingHandler());
 
+// ── Rate limiting ─────────────────────────────────────────────────────────────
+// Public routes: IP (100/min) + wallet (50/min), Redis-backed, whitelist-aware
+app.use('/api/', publicRateLimit);
+// Authenticated routes: per-user tier-aware limit
 app.use('/api/', apiRateLimit);
+// Tighter limit for the leaderboard endpoint
 app.use('/api/reputation/leaderboard', leaderboardRateLimit);
-
-// ── Deprecation registry ───────────────────────────────────────────────────────
-// Register policies for all endpoints that are queued for removal.
-registerDeprecation('unversioned-api', {
-  deprecatedAt: new Date('2025-01-01'),
-  sunsetAt: new Date('2026-07-01'),
-  link: '/docs',
-  successor: '/api/v1/',
-});
-
-// Discovery endpoint — lists all registered deprecation policies.
-app.get('/.well-known/api-deprecations', deprecationDiscovery());
-
-// Attach deprecation headers to all unversioned /api/* routes so clients
-// know to migrate to /api/v1/*.
-app.use(
-  '/api/',
-  deprecate({
-    deprecatedAt: new Date('2025-01-01'),
-    sunsetAt: new Date('2026-07-01'),
-    link: '/docs',
-    successor: '/api/v1/',
-  }),
-);
 
 app.get('/health', async (_req, res) => {
   let dbStatus = 'ok';
@@ -177,13 +159,11 @@ app.get('/health', async (_req, res) => {
 app.get('/api/csrf-token', generateCsrfToken);
 
 app.use('/api/escrows', escrowRoutes);
-// ── API Routes with Deprecation Strategy ──────────────────────────────────────
-// Current routes (no deprecation) - these are the active API endpoints
+// ── API Routes ────────────────────────────────────────────────────────────────
 app.use('/api/health', healthRoutes);
 app.use('/api', tenantMiddleware);
 app.use('/api/auth', authRoutes);
 app.use('/api/tenant', tenantRoutes);
-app.use('/api/escrows', authMiddleware, escrowRoutes);
 
 // ── API Documentation ─────────────────────────────────────────────────────────
 setupSwagger(app);
