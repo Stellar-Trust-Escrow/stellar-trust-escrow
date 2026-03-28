@@ -443,6 +443,19 @@ enum MilestoneStatus {
   Rejected
 }
 
+// ── Feature Flags ─────────────────────────────────────────────────────────────
+
+model FeatureFlag {
+  key         String   @id
+  isEnabled   Boolean  @default(false) @map("is_enabled")
+  percentage  Int      @default(0)
+  targetUsers String[] @default([]) @map("target_users")
+  description String   @default("")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("feature_flags")
+}
+
 enum KycStatus {
   Pending
   Init

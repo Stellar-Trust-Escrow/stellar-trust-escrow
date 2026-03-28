@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Page transition keyframe */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 /* Custom base styles */
 @layer base {
   :root {
@@ -65,4 +71,20 @@
   .badge-cancelled {
     @apply bg-red-500/20 text-red-400 border border-red-500/30;
   }
+}
+
+/* Toast animation */
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.3s ease-out;
 }

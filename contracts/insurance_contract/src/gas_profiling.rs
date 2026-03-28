@@ -6,11 +6,12 @@
 /// The `scripts/gas-profile.sh` script collects these lines and writes
 /// `gas-report.json`.
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod gas_profiling {
     extern crate std;
-    use std::println;
     use crate::{InsuranceContract, InsuranceContractClient};
     use soroban_sdk::{testutils::Address as _, token, Env, String};
+    use std::println;
 
     struct Setup {
         env: Env,
@@ -28,7 +29,12 @@ mod gas_profiling {
         let contract_id = env.register_contract(None, InsuranceContract);
         let client = InsuranceContractClient::new(&env, &contract_id);
         client.initialize(&admin, &token_id, &10_i128, &10_000_i128, &2_u32);
-        Setup { env, admin, token_id, client }
+        Setup {
+            env,
+            admin,
+            token_id,
+            client,
+        }
     }
 
     fn mint(env: &Env, token_id: &soroban_sdk::Address, to: &soroban_sdk::Address, amount: i128) {
@@ -54,7 +60,11 @@ mod gas_profiling {
 
         env.budget().reset_default();
         client.initialize(&admin, &token_id, &10_i128, &10_000_i128, &2_u32);
-        print("initialize", env.budget().cpu_instruction_cost(), env.budget().memory_bytes_cost());
+        print(
+            "initialize",
+            env.budget().cpu_instruction_cost(),
+            env.budget().memory_bytes_cost(),
+        );
     }
 
     #[test]
@@ -65,7 +75,11 @@ mod gas_profiling {
 
         s.env.budget().reset_default();
         s.client.contribute(&contributor, &500_i128);
-        print("contribute", s.env.budget().cpu_instruction_cost(), s.env.budget().memory_bytes_cost());
+        print(
+            "contribute",
+            s.env.budget().cpu_instruction_cost(),
+            s.env.budget().memory_bytes_cost(),
+        );
     }
 
     #[test]
@@ -76,7 +90,11 @@ mod gas_profiling {
 
         s.env.budget().reset_default();
         s.client.submit_claim(&claimant, &desc, &1_000_i128);
-        print("submit_claim", s.env.budget().cpu_instruction_cost(), s.env.budget().memory_bytes_cost());
+        print(
+            "submit_claim",
+            s.env.budget().cpu_instruction_cost(),
+            s.env.budget().memory_bytes_cost(),
+        );
     }
 
     #[test]
@@ -88,7 +106,11 @@ mod gas_profiling {
 
         s.env.budget().reset_default();
         s.client.withdraw_claim(&claimant, &claim_id);
-        print("withdraw_claim", s.env.budget().cpu_instruction_cost(), s.env.budget().memory_bytes_cost());
+        print(
+            "withdraw_claim",
+            s.env.budget().cpu_instruction_cost(),
+            s.env.budget().memory_bytes_cost(),
+        );
     }
 
     #[test]
@@ -102,7 +124,11 @@ mod gas_profiling {
 
         s.env.budget().reset_default();
         s.client.vote(&governor, &claim_id, &true);
-        print("vote", s.env.budget().cpu_instruction_cost(), s.env.budget().memory_bytes_cost());
+        print(
+            "vote",
+            s.env.budget().cpu_instruction_cost(),
+            s.env.budget().memory_bytes_cost(),
+        );
     }
 
     #[test]
@@ -125,7 +151,11 @@ mod gas_profiling {
 
         s.env.budget().reset_default();
         s.client.execute_payout(&claim_id);
-        print("execute_payout", s.env.budget().cpu_instruction_cost(), s.env.budget().memory_bytes_cost());
+        print(
+            "execute_payout",
+            s.env.budget().cpu_instruction_cost(),
+            s.env.budget().memory_bytes_cost(),
+        );
     }
 
     #[test]
@@ -135,7 +165,11 @@ mod gas_profiling {
 
         s.env.budget().reset_default();
         s.client.add_governor(&s.admin, &governor);
-        print("add_governor", s.env.budget().cpu_instruction_cost(), s.env.budget().memory_bytes_cost());
+        print(
+            "add_governor",
+            s.env.budget().cpu_instruction_cost(),
+            s.env.budget().memory_bytes_cost(),
+        );
     }
 
     #[test]
@@ -146,7 +180,11 @@ mod gas_profiling {
 
         s.env.budget().reset_default();
         s.client.remove_governor(&s.admin, &governor);
-        print("remove_governor", s.env.budget().cpu_instruction_cost(), s.env.budget().memory_bytes_cost());
+        print(
+            "remove_governor",
+            s.env.budget().cpu_instruction_cost(),
+            s.env.budget().memory_bytes_cost(),
+        );
     }
 
     #[test]
@@ -155,7 +193,11 @@ mod gas_profiling {
 
         s.env.budget().reset_default();
         s.client.set_claim_cap(&s.admin, &20_000_i128);
-        print("set_claim_cap", s.env.budget().cpu_instruction_cost(), s.env.budget().memory_bytes_cost());
+        print(
+            "set_claim_cap",
+            s.env.budget().cpu_instruction_cost(),
+            s.env.budget().memory_bytes_cost(),
+        );
     }
 
     #[test]
@@ -164,7 +206,11 @@ mod gas_profiling {
 
         s.env.budget().reset_default();
         s.client.set_quorum(&s.admin, &3_u32);
-        print("set_quorum", s.env.budget().cpu_instruction_cost(), s.env.budget().memory_bytes_cost());
+        print(
+            "set_quorum",
+            s.env.budget().cpu_instruction_cost(),
+            s.env.budget().memory_bytes_cost(),
+        );
     }
 
     #[test]
@@ -173,7 +219,11 @@ mod gas_profiling {
 
         s.env.budget().reset_default();
         s.client.get_fund_info();
-        print("get_fund_info", s.env.budget().cpu_instruction_cost(), s.env.budget().memory_bytes_cost());
+        print(
+            "get_fund_info",
+            s.env.budget().cpu_instruction_cost(),
+            s.env.budget().memory_bytes_cost(),
+        );
     }
 
     #[test]
@@ -185,7 +235,11 @@ mod gas_profiling {
 
         s.env.budget().reset_default();
         s.client.get_claim(&claim_id);
-        print("get_claim", s.env.budget().cpu_instruction_cost(), s.env.budget().memory_bytes_cost());
+        print(
+            "get_claim",
+            s.env.budget().cpu_instruction_cost(),
+            s.env.budget().memory_bytes_cost(),
+        );
     }
 
     #[test]
@@ -195,7 +249,11 @@ mod gas_profiling {
 
         s.env.budget().reset_default();
         s.client.get_contribution(&contributor);
-        print("get_contribution", s.env.budget().cpu_instruction_cost(), s.env.budget().memory_bytes_cost());
+        print(
+            "get_contribution",
+            s.env.budget().cpu_instruction_cost(),
+            s.env.budget().memory_bytes_cost(),
+        );
     }
 
     #[test]
@@ -205,6 +263,10 @@ mod gas_profiling {
 
         s.env.budget().reset_default();
         s.client.is_governor(&addr);
-        print("is_governor", s.env.budget().cpu_instruction_cost(), s.env.budget().memory_bytes_cost());
+        print(
+            "is_governor",
+            s.env.budget().cpu_instruction_cost(),
+            s.env.budget().memory_bytes_cost(),
+        );
     }
 }
