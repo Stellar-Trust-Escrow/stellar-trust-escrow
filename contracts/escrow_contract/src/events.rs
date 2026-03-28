@@ -270,19 +270,6 @@ pub fn emit_timelock_released(env: &Env, escrow_id: u64, released_ledger: u64) {
     );
 }
 
-pub fn emit_milestone_release_approval(
-    env: &Env,
-    escrow_id: u64,
-    milestone_id: u32,
-    signer: &Address,
-    approved_at: u64,
-) {
-    env.events().publish(
-        (symbol_short!("mil_app"), escrow_id),
-        (milestone_id, signer.clone(), approved_at),
-    );
-}
-
 pub fn emit_lock_time_extended(
     env: &Env,
     escrow_id: u64,
