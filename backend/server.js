@@ -37,12 +37,9 @@ import authRoutes from './api/routes/authRoutes.js';
 import complianceRoutes from './api/routes/complianceRoutes.js';
 import incidentRoutes from './api/routes/incidentRoutes.js';
 import batchRoutes from './api/routes/batchRoutes.js';
-import authMiddleware from './api/middleware/auth.js';
 import tenantMiddleware from './api/middleware/tenant.js';
 import auditMiddleware from './api/middleware/audit.js';
-import _apiV1Routes from './api/v1/index.js';
-import { deprecatedRoute as _deprecatedRoute } from './api/middleware/version.js';
-import { deprecationPresets, deprecateVersion } from './api/middleware/deprecation.js';
+import { deprecateVersion } from './api/middleware/deprecation.js';
 import { createWebSocketServer, pool } from './api/websocket/handlers.js';
 import cache from './lib/cache.js';
 import { attachPrismaMetrics } from './lib/prismaMetrics.js';
@@ -51,7 +48,7 @@ import tenantRoutes from './api/routes/tenantRoutes.js';
 import wsHealthRoutes from './api/routes/wsHealth.js';
 import prisma, { startConnectionMonitoring } from './lib/prisma.js';
 import { errorsTotal } from './lib/metrics.js';
-import { apiRateLimit, leaderboardRateLimit } from './middleware/rateLimit.js';
+import { leaderboardRateLimit } from './middleware/rateLimit.js';
 import metricsMiddleware from './middleware/metricsMiddleware.js';
 import responseTime from './middleware/responseTime.js';
 import emailService from './services/emailService.js';
@@ -59,6 +56,7 @@ import complianceService from './services/complianceService.js';
 import { startIndexer } from './services/eventIndexer.js';
 import { setupSwagger } from './api/docs/swagger.js';
 import { getBackupStatus } from './services/backupMonitor.js';
+import { createGateway } from './gateway/index.js';
 
 // Attach Prisma query instrumentation and monitoring
 attachPrismaMetrics(prisma);
@@ -95,32 +93,11 @@ app.use(auditMiddleware);
 // ── Sentry tracing handler — after body parsers, before routes ────────────────
 app.use(Sentry.expressTracingHandler());
 
-app.use('/api/', apiRateLimit);
+// ── API Gateway — centralized auth, rate limiting, logging, metrics ───────────
+app.use('/api', ...createGateway());
+
+// Leaderboard gets a tighter dedicated limit on top of the gateway limit
 app.use('/api/reputation/leaderboard', leaderboardRateLimit);
-
-// ── Deprecation registry ───────────────────────────────────────────────────────
-// Register policies for all endpoints that are queued for removal.
-registerDeprecation('unversioned-api', {
-  deprecatedAt: new Date('2025-01-01'),
-  sunsetAt: new Date('2026-07-01'),
-  link: '/docs',
-  successor: '/api/v1/',
-});
-
-// Discovery endpoint — lists all registered deprecation policies.
-app.get('/.well-known/api-deprecations', deprecationDiscovery());
-
-// Attach deprecation headers to all unversioned /api/* routes so clients
-// know to migrate to /api/v1/*.
-app.use(
-  '/api/',
-  deprecate({
-    deprecatedAt: new Date('2025-01-01'),
-    sunsetAt: new Date('2026-07-01'),
-    link: '/docs',
-    successor: '/api/v1/',
-  }),
-);
 
 app.get('/health', async (_req, res) => {
   let dbStatus = 'ok';
@@ -176,14 +153,13 @@ app.get('/health', async (_req, res) => {
 
 app.get('/api/csrf-token', generateCsrfToken);
 
-app.use('/api/escrows', escrowRoutes);
-// ── API Routes with Deprecation Strategy ──────────────────────────────────────
-// Current routes (no deprecation) - these are the active API endpoints
+// ── API Routes ────────────────────────────────────────────────────────────────
+// Auth is handled by the gateway above — no per-route authMiddleware needed.
 app.use('/api/health', healthRoutes);
 app.use('/api', tenantMiddleware);
 app.use('/api/auth', authRoutes);
 app.use('/api/tenant', tenantRoutes);
-app.use('/api/escrows', authMiddleware, escrowRoutes);
+app.use('/api/escrows', escrowRoutes);
 
 // ── API Documentation ─────────────────────────────────────────────────────────
 setupSwagger(app);
