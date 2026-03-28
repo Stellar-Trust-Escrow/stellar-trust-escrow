@@ -58,6 +58,8 @@ const CANCELLATION_DISPUTE_PERIOD: u64 = 120_960;
 const SLASH_DISPUTE_PERIOD: u64 = 51_840;
 const SLASH_PERCENTAGE: u64 = 10;
 const RENT_PERIOD_SECONDS: u64 = 86_400;
+const MAX_BUYER_SIGNERS: u32 = 3;
+const REQUIRED_BUYER_APPROVALS: u32 = 2;
 const RENT_RESERVE_PERIODS: u64 = 30;
 const RENT_PER_ENTRY_PER_PERIOD: i128 = 1;
 
@@ -132,6 +134,7 @@ pub(crate) struct EscrowMeta {
     pub(crate) approved_count: u32,
     pub(crate) released_count: u32,
     pub(crate) arbiter: Option<Address>,
+    pub(crate) buyer_signers: soroban_sdk::Vec<Address>,
     pub(crate) created_at: u64,
     pub(crate) deadline: Option<u64>,
     /// Optional lock time (ledger timestamp) - funds locked until this time.
@@ -315,6 +318,7 @@ impl ContractStorage {
             status: meta.status,
             milestones,
             arbiter: meta.arbiter,
+            buyer_signers: meta.buyer_signers,
             created_at: meta.created_at,
             deadline: meta.deadline,
             lock_time: meta.lock_time,
@@ -649,6 +653,73 @@ impl ContractStorage {
         Ok(())
     }
 
+    fn normalize_buyer_signers(
+        env: &Env,
+        client: &Address,
+        candidate: Option<soroban_sdk::Vec<Address>>,
+    ) -> Result<soroban_sdk::Vec<Address>, EscrowError> {
+        let mut signers = match candidate {
+            Some(s) => s,
+            None => {
+                let mut v = soroban_sdk::Vec::new(env);
+                v.push_back(client.clone());
+                v
+            }
+        };
+
+        // Ensure at least one approved signer exists
+        if signers.len() == 0 {
+            signers.push_back(client.clone());
+        }
+
+        if signers.len() > MAX_BUYER_SIGNERS {
+            return Err(EscrowError::InvalidBuyerSigners);
+        }
+
+        // Duplicate check
+        for i in 0..signers.len() {
+            let s = signers.get(i).unwrap();
+            for j in (i + 1)..signers.len() {
+                let s2 = signers.get(j).unwrap();
+                if *s == *s2 {
+                    return Err(EscrowError::DuplicateBuyerSigner);
+                }
+            }
+        }
+
+        Ok(signers)
+    }
+
+    fn is_buyer_signer(meta: &EscrowMeta, caller: &Address) -> bool {
+        for i in 0..meta.buyer_signers.len() {
+            if let Some(s) = meta.buyer_signers.get(i) {
+                if &s == caller {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    fn required_approvals(meta: &EscrowMeta) -> u32 {
+        if meta.buyer_signers.len() >= 2 {
+            REQUIRED_BUYER_APPROVALS
+        } else {
+            1
+        }
+    }
+
+    fn has_already_approved(approvals: &soroban_sdk::Vec<types::ApprovalRecord>, signer: &Address) -> bool {
+        for i in 0..approvals.len() {
+            if let Some(a) = approvals.get(i) {
+                if &a.signer == signer {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
     // ── Pause helpers ──────────────────────────────────────────────────────────
 
     fn is_paused(env: &Env) -> bool {
@@ -748,6 +819,58 @@ impl EscrowContract {
         deadline: Option<u64>,
         lock_time: Option<u64>,
     ) -> Result<u64, EscrowError> {
+        Self::create_escrow_internal(
+            env,
+            client,
+            freelancer,
+            token,
+            total_amount,
+            brief_hash,
+            arbiter,
+            deadline,
+            lock_time,
+            None,
+        )
+    }
+
+    pub fn create_escrow_with_buyer_signers(
+        env: Env,
+        client: Address,
+        freelancer: Address,
+        token: Address,
+        total_amount: i128,
+        brief_hash: BytesN<32>,
+        arbiter: Option<Address>,
+        deadline: Option<u64>,
+        lock_time: Option<u64>,
+        buyer_signers: soroban_sdk::Vec<Address>,
+    ) -> Result<u64, EscrowError> {
+        Self::create_escrow_internal(
+            env,
+            client,
+            freelancer,
+            token,
+            total_amount,
+            brief_hash,
+            arbiter,
+            deadline,
+            lock_time,
+            Some(buyer_signers),
+        )
+    }
+
+    fn create_escrow_internal(
+        env: Env,
+        client: Address,
+        freelancer: Address,
+        token: Address,
+        total_amount: i128,
+        brief_hash: BytesN<32>,
+        arbiter: Option<Address>,
+        deadline: Option<u64>,
+        lock_time: Option<u64>,
+        buyer_signers: Option<soroban_sdk::Vec<Address>>,
+    ) -> Result<u64, EscrowError> {
         // Auth + validation before any storage I/O
         client.require_auth();
         ContractStorage::require_initialized(&env)?;
@@ -771,6 +894,7 @@ impl EscrowContract {
             }
         }
 
+        let buyer_signers = ContractStorage::normalize_buyer_signers(&env, &client, buyer_signers)?;
         let escrow_id = ContractStorage::next_escrow_id(&env)?;
         let rent_reserve = ContractStorage::reserve_for_entries(1);
 
@@ -797,6 +921,7 @@ impl EscrowContract {
                 approved_count: 0,
                 released_count: 0,
                 arbiter,
+                buyer_signers: buyer_signers.clone(),
                 created_at: now,
                 deadline,
                 lock_time,
@@ -856,6 +981,9 @@ impl EscrowContract {
         );
         ContractStorage::charge_rent_reserve(&env, &token, &client, base_rent_reserve)?;
 
+        let mut buyer_signers = soroban_sdk::Vec::new(&env);
+        buyer_signers.push_back(client.clone());
+
         let mut meta = EscrowMeta {
             escrow_id,
             client: client.clone(),
@@ -868,6 +996,7 @@ impl EscrowContract {
             milestone_count: 0,
             approved_count: 0,
             arbiter: None,
+            buyer_signers,
             created_at: now,
             deadline: None,
             lock_time: None,
@@ -963,6 +1092,7 @@ impl EscrowContract {
                 status: MilestoneStatus::Pending,
                 submitted_at: None,
                 resolved_at: None,
+                approvals: soroban_sdk::Vec::new(&env),
             },
         );
         ContractStorage::save_escrow_meta(&env, &meta);
@@ -1031,6 +1161,7 @@ impl EscrowContract {
                     status: MilestoneStatus::Approved,
                     submitted_at: Some(recurring.next_payment_at),
                     resolved_at: Some(now),
+                    approvals: soroban_sdk::Vec::new(&env),
                 },
             );
 
@@ -1136,11 +1267,12 @@ impl EscrowContract {
         caller.require_auth();
 
         let mut meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
-        if caller != meta.client {
-            return Err(EscrowError::ClientOnly);
-        }
         if meta.status != EscrowStatus::Active {
             return Err(EscrowError::EscrowNotActive);
+        }
+
+        if !ContractStorage::is_buyer_signer(&meta, &caller) {
+            return Err(EscrowError::ClientOnly);
         }
 
         // Check if lock time has expired (legacy lock_time behaviour)
@@ -1151,36 +1283,64 @@ impl EscrowContract {
             return Err(EscrowError::InvalidMilestoneState);
         }
 
-        let amount = milestone.amount;
         let now = env.ledger().timestamp();
 
-        milestone.status = MilestoneStatus::Approved;
-        milestone.resolved_at = Some(now);
+        if ContractStorage::has_already_approved(&milestone.approvals, &caller) {
+            return Err(EscrowError::DuplicateApproval);
+        }
+
+        milestone.approvals.push_back(types::ApprovalRecord {
+            signer: caller.clone(),
+            approved_at: now,
+        });
+
+        let threshold = ContractStorage::required_approvals(&meta);
+        if milestone.approvals.len() >= threshold {
+            milestone.status = MilestoneStatus::Approved;
+            milestone.resolved_at = Some(now);
+            meta.approved_count = meta
+                .approved_count
+                .checked_add(1)
+                .ok_or(EscrowError::AmountMismatch)?;
+        }
+
         ContractStorage::save_milestone(&env, escrow_id, &milestone);
 
-        meta.approved_count += 1;
+        events::emit_milestone_release_approval(&env, escrow_id, milestone_id, &caller, now);
 
-        let timelock_expired = ContractStorage::check_timelock_expired(&env, escrow_id, meta.timelock.clone()).is_ok();
+        if milestone.status == MilestoneStatus::Approved {
+            events::emit_milestone_approved(&env, escrow_id, milestone_id, milestone.amount);
 
-        if timelock_expired {
-            // Release funds now if timelock is not active
-            token::Client::new(&env, &meta.token).transfer(
-                &env.current_contract_address(),
-                &meta.freelancer,
-                &amount,
-            );
-            meta.remaining_balance = meta
-                .remaining_balance
-                .checked_sub(amount)
-                .ok_or(EscrowError::AmountMismatch)?;
-            meta.released_count += 1;
-            milestone.status = MilestoneStatus::Released;
-            ContractStorage::save_milestone(&env, escrow_id, &milestone);
-            events::emit_funds_released(&env, escrow_id, &meta.freelancer, amount);
+            let amount = milestone.amount;
+            let timelock_expired = ContractStorage::check_timelock_expired(
+                &env,
+                escrow_id,
+                meta.timelock.clone(),
+            )
+            .is_ok();
+
+            if timelock_expired {
+                // Release funds now if timelock is not active
+                token::Client::new(&env, &meta.token).transfer(
+                    &env.current_contract_address(),
+                    &meta.freelancer,
+                    &amount,
+                );
+                meta.remaining_balance = meta
+                    .remaining_balance
+                    .checked_sub(amount)
+                    .ok_or(EscrowError::AmountMismatch)?;
+                meta.released_count = meta
+                    .released_count
+                    .checked_add(1)
+                    .ok_or(EscrowError::AmountMismatch)?;
+                milestone.status = MilestoneStatus::Released;
+                ContractStorage::save_milestone(&env, escrow_id, &milestone);
+                events::emit_funds_released(&env, escrow_id, &meta.freelancer, amount);
+            }
         }
 
         if meta.approved_count == meta.milestone_count && meta.milestone_count > 0 {
-            // Wait until funds are released for full completion
             if meta.released_count == meta.milestone_count {
                 meta.status = EscrowStatus::Completed;
                 events::emit_escrow_completed(&env, escrow_id);
@@ -1188,7 +1348,6 @@ impl EscrowContract {
         }
 
         ContractStorage::save_escrow_meta(&env, &meta);
-        events::emit_milestone_approved(&env, escrow_id, milestone_id, amount);
         Ok(())
     }
 

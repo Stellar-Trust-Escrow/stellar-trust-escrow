@@ -69,6 +69,12 @@ pub enum EscrowError {
     TimelockNotExpired = 53,
     /// No timelock is set on the escrow.
     TimelockNotSet = 54,
+    /// Invalid multi-sig buyer signer configuration.
+    InvalidBuyerSigners = 55,
+    /// Duplicate buyer signer entry provided.
+    DuplicateBuyerSigner = 56,
+    /// Duplicate approval signature for milestone.
+    DuplicateApproval = 57,
     /// The contract is currently paused.
     ContractPaused = 31,
 

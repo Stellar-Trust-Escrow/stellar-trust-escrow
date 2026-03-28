@@ -61,6 +61,14 @@ pub enum RecurringInterval {
     Monthly,
 }
 
+/// Single approval by a buyer signer, recorded with timestamp.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ApprovalRecord {
+    pub signer: Address,
+    pub approved_at: u64,
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // STRUCTS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -96,6 +104,9 @@ pub struct Milestone {
 
     /// Ledger timestamp when the client approved or rejected.
     pub resolved_at: Option<u64>,
+
+    /// Buyer approvals for this milestone (signer + timestamp).
+    pub approvals: soroban_sdk::Vec<ApprovalRecord>,
 }
 
 /// Configuration for a recurring/subscription escrow.
@@ -176,6 +187,10 @@ pub struct EscrowState {
     /// If None, disputes require both parties to agree on resolution.
     /// TODO (contributor): implement arbiter selection and staking
     pub arbiter: Option<Address>,
+
+    /// Addresses authorised to approve milestone releases (multi-sig).
+    /// The 2-of-N threshold velocity is used for milestone approval.
+    pub buyer_signers: soroban_sdk::Vec<Address>,
 
     /// Ledger timestamp of escrow creation.
     pub created_at: u64,

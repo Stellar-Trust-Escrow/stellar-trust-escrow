@@ -503,6 +503,141 @@ mod event_tests {
     }
 
     #[test]
+    fn test_milestone_approval_multisig_threshold() {
+        let (env, admin, contract_id, client) = setup();
+        let client_addr = Address::generate(&env);
+        let signer2 = Address::generate(&env);
+        let signer3 = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token = register_token(&env, &admin, &client_addr, 500);
+
+        let mut buyer_signers = soroban_sdk::Vec::new(&env);
+        buyer_signers.push_back(client_addr.clone());
+        buyer_signers.push_back(signer2.clone());
+        buyer_signers.push_back(signer3.clone());
+
+        let escrow_id = client
+            .create_escrow_with_buyer_signers(
+                &client_addr,
+                &freelancer,
+                &token,
+                &500_i128,
+                &BytesN::from_array(&env, &[1; 32]),
+                &None,
+                &None,
+                &None,
+                &buyer_signers,
+            );
+
+        let mid = client.add_milestone(
+            &client_addr,
+            &escrow_id,
+            &String::from_str(&env, "Work"),
+            &BytesN::from_array(&env, &[2; 32]),
+            &500_i128,
+        );
+        client.submit_milestone(&freelancer, &escrow_id, &mid);
+
+        // First signer approves; not yet threshold
+        client.approve_milestone(&client_addr, &escrow_id, &mid);
+        let milestone = client.get_milestone(&escrow_id, &mid);
+        assert_eq!(milestone.status, crate::types::MilestoneStatus::Submitted);
+
+        let events = contract_events(&env, &contract_id);
+        assert!(events.iter().any(|(_, topics, _)| {
+            has_topic_symbol(&env, topics, soroban_sdk::symbol_short!("mil_app"))
+        }));
+
+        // Second signer approves; now threshold reached and milestone moves to Approved
+        client.approve_milestone(&signer2, &escrow_id, &mid);
+        let milestone = client.get_milestone(&escrow_id, &mid);
+        assert_eq!(milestone.status, crate::types::MilestoneStatus::Approved);
+
+        let events = contract_events(&env, &contract_id);
+        assert!(events.iter().any(|(_, topics, _)| {
+            has_topic_symbol(&env, topics, soroban_sdk::symbol_short!("mil_apr"))
+        }));
+    }
+
+    #[test]
+    fn test_duplicate_approval_rejected() {
+        let (env, admin, _contract_id, client) = setup();
+        let client_addr = Address::generate(&env);
+        let signer2 = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token = register_token(&env, &admin, &client_addr, 500);
+
+        let mut buyer_signers = soroban_sdk::Vec::new(&env);
+        buyer_signers.push_back(client_addr.clone());
+        buyer_signers.push_back(signer2.clone());
+
+        let escrow_id = client
+            .create_escrow_with_buyer_signers(
+                &client_addr,
+                &freelancer,
+                &token,
+                &500_i128,
+                &BytesN::from_array(&env, &[3; 32]),
+                &None,
+                &None,
+                &None,
+                &buyer_signers,
+            );
+
+        let mid = client.add_milestone(
+            &client_addr,
+            &escrow_id,
+            &String::from_str(&env, "Work"),
+            &BytesN::from_array(&env, &[4; 32]),
+            &500_i128,
+        );
+        client.submit_milestone(&freelancer, &escrow_id, &mid);
+
+        client.approve_milestone(&client_addr, &escrow_id, &mid);
+        let duplicate_err = client.try_approve_milestone(&client_addr, &escrow_id, &mid).unwrap_err();
+        assert!(matches!(duplicate_err, Err(Err(EscrowError::DuplicateApproval))));
+    }
+
+    #[test]
+    fn test_non_signer_cannot_approve_release() {
+        let (env, admin, _contract_id, client) = setup();
+        let client_addr = Address::generate(&env);
+        let signer2 = Address::generate(&env);
+        let non_signer = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token = register_token(&env, &admin, &client_addr, 500);
+
+        let mut buyer_signers = soroban_sdk::Vec::new(&env);
+        buyer_signers.push_back(client_addr.clone());
+        buyer_signers.push_back(signer2.clone());
+
+        let escrow_id = client
+            .create_escrow_with_buyer_signers(
+                &client_addr,
+                &freelancer,
+                &token,
+                &500_i128,
+                &BytesN::from_array(&env, &[5; 32]),
+                &None,
+                &None,
+                &None,
+                &buyer_signers,
+            );
+
+        let mid = client.add_milestone(
+            &client_addr,
+            &escrow_id,
+            &String::from_str(&env, "Work"),
+            &BytesN::from_array(&env, &[6; 32]),
+            &500_i128,
+        );
+        client.submit_milestone(&freelancer, &escrow_id, &mid);
+
+        let auth_err = client.try_approve_milestone(&non_signer, &escrow_id, &mid).unwrap_err();
+        assert!(matches!(auth_err, Err(Err(EscrowError::ClientOnly))));
+    }
+
+    #[test]
     fn test_timelock_workflow_with_release_funds() {
         let (env, admin, contract_id, client) = setup();
         let client_addr = Address::generate(&env);
