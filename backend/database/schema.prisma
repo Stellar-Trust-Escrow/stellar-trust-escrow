@@ -14,8 +14,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ── Tenants ───────────────────────────────────────────────────────────────────
@@ -111,6 +112,7 @@ model Escrow {
   // Composite index for user escrows with status filter + sort (covers getUserEscrows role+status queries)
   @@index([clientAddress, status, createdAt(sort: Desc)])
   @@index([freelancerAddress, status, createdAt(sort: Desc)])
+  @@index([createdAt])
   @@map("escrows")
 }
 
