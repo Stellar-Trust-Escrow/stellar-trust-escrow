@@ -25,19 +25,36 @@ import Link from 'next/link';
 import Badge from '../ui/Badge';
 import CurrencyAmount from '../ui/CurrencyAmount';
 import CopyButton from '../ui/CopyButton';
+import EscrowCardSkeleton from '../ui/EscrowCardSkeleton';
 import { useI18n } from '../../i18n/index.jsx';
+import { useRef } from 'react';
 
-export default function EscrowCard({ escrow }) {
+export default function EscrowCard({ escrow, isLoading = false }) {
+  if (isLoading) return <EscrowCardSkeleton />;
   const { t } = useI18n();
   const { id, title, status, totalAmount, milestoneProgress, counterparty, role, transactionHash } = escrow;
+  const cardRef = useRef(null);
 
   const [done, total] = milestoneProgress?.split(' / ').map(Number) ?? [0, 0];
   const progressPct = total > 0 ? Math.round((done / total) * 100) : 0;
 
+  const handleKeyDown = (event) => {
+    // Activate on Enter or Space key
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      cardRef.current?.click();
+    }
+  };
+
   return (
     <Link
       href={`/escrow/${id}`}
-      className="card block hover:border-gray-700 transition-colors group"
+      ref={cardRef}
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+      className="card block hover:border-gray-700 transition-colors group focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-950"
+      role="button"
+      aria-label={`View details for escrow: ${title}`}
     >
       {/* Header Row */}
       <div className="flex items-start justify-between gap-3 mb-3">
@@ -62,9 +79,9 @@ export default function EscrowCard({ escrow }) {
           <span>{t('escrow.fields.milestones')}</span>
           <span>{milestoneProgress}</span>
         </div>
-        <div className="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden">
+        <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden shadow-inner">
           <div
-            className="h-full bg-indigo-500 rounded-full transition-all"
+            className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500 ease-out"
             style={{ width: `${progressPct}%` }}
           />
         </div>

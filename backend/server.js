@@ -28,6 +28,7 @@ import auditRoutes from './api/routes/auditRoutes.js';
 import authRoutes from './api/routes/authRoutes.js';
 import complianceRoutes from './api/routes/complianceRoutes.js';
 import incidentRoutes from './api/routes/incidentRoutes.js';
+import batchRoutes from './api/routes/batchRoutes.js';
 import authMiddleware from './api/middleware/auth.js';
 import tenantMiddleware from './api/middleware/tenant.js';
 import auditMiddleware from './api/middleware/audit.js';
@@ -48,6 +49,7 @@ import emailService from './services/emailService.js';
 import complianceService from './services/complianceService.js';
 import { startIndexer } from './services/eventIndexer.js';
 import { setupSwagger } from './api/docs/swagger.js';
+import { getBackupStatus } from './services/backupMonitor.js';
 
 // Attach Prisma query instrumentation and monitoring
 attachPrismaMetrics(prisma);
@@ -141,6 +143,7 @@ app.get('/health', async (_req, res) => {
     console.error('[HEALTH] Database check failed:', error.message);
   }
 
+  const backupStatus = await getBackupStatus();
   const status = dbStatus === 'ok' ? 'ok' : 'degraded';
   res.status(dbStatus === 'ok' ? 200 : 503).json({
     status,
@@ -153,6 +156,7 @@ app.get('/health', async (_req, res) => {
       latencyMs: dbLatencyMs,
       pool: dbPoolInfo,
     },
+    backup: backupStatus,
   });
 });
 
@@ -178,6 +182,7 @@ app.use('/api/audit', auditRoutes);
 app.use('/api/compliance', complianceRoutes);
 app.use('/api/incidents', incidentRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/batch', batchRoutes);
 app.use('/docs', docsRouter);
 
 // ── Example: Deprecated API Version ───────────────────────────────────────────

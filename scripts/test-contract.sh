@@ -2,13 +2,14 @@
 # test-contract.sh
 #
 # Runs the Soroban contract test suite with coverage, gas profiling, and optional fuzzing.
-# Usage: bash scripts/test-contract.sh [--fuzz] [--coverage] [--gas] [--ci]
+# Usage: bash scripts/test-contract.sh [--fuzz] [--coverage] [--gas] [--ci] [--build]
 #
 # Flags:
 #   --fuzz      Run cargo-fuzz targets (requires nightly + cargo-fuzz)
 #   --coverage  Generate llvm-cov HTML + lcov report
 #   --gas       Emit per-test instruction counts via SOROBAN_GAS_PROFILE=1
 #   --ci        Write GitHub Actions step summaries and set output variables
+#   --build     Build optimized WASM artifacts (release profile, opt-level=z)
 
 set -euo pipefail
 
@@ -16,6 +17,7 @@ FUZZ=false
 COVERAGE=false
 GAS=false
 CI_MODE=false
+BUILD=false
 
 for arg in "$@"; do
   case $arg in
@@ -23,6 +25,7 @@ for arg in "$@"; do
     --coverage) COVERAGE=true ;;
     --gas)      GAS=true ;;
     --ci)       CI_MODE=true ;;
+    --build)    BUILD=true ;;
   esac
 done
 
@@ -70,6 +73,18 @@ for CONTRACT in "${CONTRACTS[@]}"; do
       cargo llvm-cov --lcov --output-path "../../$ARTIFACTS_DIR/${CONTRACT}-lcov.info" && \
       cargo llvm-cov --html  --output-dir  "../../$ARTIFACTS_DIR/${CONTRACT}-coverage-html")
     echo "   ✅ Coverage written to $ARTIFACTS_DIR/${CONTRACT}-lcov.info"
+
+  fi
+
+  # Optimized WASM build
+  if [ "$BUILD" = true ]; then
+    echo "🔨 Building optimized WASM…"
+    (cd "$CONTRACT_DIR" && cargo build --release --target wasm32-unknown-unknown)
+    WASM_FILE=$(find "$CONTRACT_DIR/target/wasm32-unknown-unknown/release" -maxdepth 1 -name "*.wasm" | head -1)
+    if [ -n "$WASM_FILE" ]; then
+      WASM_SIZE=$(du -sh "$WASM_FILE" | cut -f1)
+      echo "   ✅ WASM built: $(basename "$WASM_FILE") ($WASM_SIZE)"
+    fi
   fi
 
   echo ""

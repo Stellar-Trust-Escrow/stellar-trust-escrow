@@ -23,9 +23,11 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Button from '../../../components/ui/Button';
-import ErrorAlert from '../../../components/ui/ErrorAlert';
 import TemplateSelector from '../../../components/escrow/TemplateSelector';
+import StellarAddressInput from '../../../components/ui/StellarAddressInput';
+import { isValidStellarAddress } from '../../../lib/validation';
 import templatesData from '../../../data/templates.json';
+import { useToast } from '../../../contexts/ToastContext';
 
 const STEPS = [
   { id: 1, label: 'Counterparty' },
@@ -72,6 +74,7 @@ export default function CreateEscrowPage() {
   const [error, setError] = useState(null);
   const [templateNotice, setTemplateNotice] = useState('');
   const [appliedQueryTemplateId, setAppliedQueryTemplateId] = useState(null);
+  const { showToast } = useToast();
 
   useEffect(() => {
     const templateId = searchParams.get('template');
@@ -108,9 +111,14 @@ export default function CreateEscrowPage() {
       throw new Error('Not implemented — see Issue #33');
     } catch (err) {
       setError(err.message);
+      showToast('Failed to create escrow', 'error');
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleSuccess = () => {
+    showToast('Escrow created successfully!', 'success');
   };
 
   const addMilestone = () => {
@@ -159,8 +167,6 @@ export default function CreateEscrowPage() {
         </div>
       )}
 
-      {error && <ErrorAlert message={error} onDismiss={() => setError(null)} />}
-
       {/* Step Indicator */}
       <div className="flex items-center gap-2">
         {STEPS.map((step, i) => (
@@ -197,7 +203,7 @@ export default function CreateEscrowPage() {
         )}
         {currentStep === 3 && <StepReview formData={formData} />}
         {currentStep === 4 && (
-          <StepSign />
+          <StepSign onSubmit={handleSubmit} isSubmitting={isSubmitting} error={error} />
         )}
       </div>
 
@@ -211,12 +217,16 @@ export default function CreateEscrowPage() {
           Back
         </Button>
         {currentStep < 4 ? (
-          <Button variant="primary" onClick={() => setCurrentStep((step) => step + 1)}>
+          <Button
+            variant="primary"
+            onClick={() => setCurrentStep((step) => step + 1)}
+            disabled={currentStep === 1 && !isValidStellarAddress(formData.freelancerAddress)}
+          >
             Next →
           </Button>
         ) : (
-          <Button variant="primary" onClick={handleSubmit} disabled={isSubmitting}>
-            {isSubmitting ? 'Signing…' : 'Sign & Create Escrow'}
+          <Button variant="primary" onClick={handleSubmit} isLoading={isSubmitting}>
+            Sign & Create Escrow
           </Button>
         )}
       </div>
@@ -234,20 +244,14 @@ function StepCounterparty({ formData, setFormData }) {
     <div className="space-y-4">
       <h2 className="text-lg font-semibold text-white">Counterparty & Funds</h2>
 
-      <div>
-        <label className="block text-sm text-gray-400 mb-1">Freelancer Stellar Address</label>
-        <input
-          type="text"
-          placeholder="GABCD1234..."
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5
-                     text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
-          value={formData.freelancerAddress}
-          onChange={(event) =>
-            setFormData((data) => ({ ...data, freelancerAddress: event.target.value }))
-          }
-        />
-        {/* TODO (contributor): add validation error display */}
-      </div>
+      <StellarAddressInput
+        id="freelancer-address"
+        label="Freelancer Stellar Address"
+        placeholder="GABCD1234..."
+        value={formData.freelancerAddress}
+        onChange={(val) => setFormData((data) => ({ ...data, freelancerAddress: val }))}
+        required
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
@@ -402,7 +406,7 @@ function StepReview({ formData }) {
  * Step 4: Sign with Freighter.
  * TODO (contributor — Issue #33): build and sign the Soroban transaction
  */
-function StepSign() {
+function StepSign({ error }) {
   return (
     <div className="space-y-4 text-center">
       <h2 className="text-lg font-semibold text-white">Sign & Submit</h2>
@@ -410,6 +414,11 @@ function StepSign() {
         Clicking the button below will open your Freighter wallet to sign the transaction. Your
         funds will be locked on-chain once confirmed.
       </p>
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm">
+          {error}
+        </div>
+      )}
       <p className="text-xs text-amber-400">
         🚧 Freighter integration is not yet implemented — see Issue #33
       </p>

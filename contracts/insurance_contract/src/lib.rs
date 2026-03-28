@@ -31,6 +31,7 @@
 
 mod errors;
 mod events;
+mod gas_profiling;
 mod types;
 
 pub use errors::InsuranceError;

@@ -247,6 +247,7 @@ mod tests {
     fn test_escrow_state_v1_has_required_fields() {
         // Verify EscrowStateV1 struct has all required fields
         // This is a compile-time check only
+        #[allow(dead_code)]
         fn check_v1_fields(_: &EscrowStateV1) {}
         // The function signature verifies the type exists
     }
