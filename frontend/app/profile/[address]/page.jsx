@@ -15,6 +15,7 @@
 
 import ReputationBadge from '../../../components/ui/ReputationBadge';
 import Badge from '../../../components/ui/Badge';
+import TruncatedAddress from '../../../components/ui/TruncatedAddress';
 
 // TODO (contributor): replace with SWR fetch
 const PLACEHOLDER_USER = {
@@ -47,17 +48,16 @@ export default async function ProfilePage({ params }) {
     <div className="space-y-8 max-w-3xl mx-auto">
       {/* Profile Header */}
       <div className="card flex flex-col sm:flex-row gap-6 items-start">
-        {user.avatarUrl ? (
-          <div className="w-16 h-16 rounded-2xl overflow-hidden flex-shrink-0">
-            <img src={user.avatarUrl.startsWith('http') ? user.avatarUrl : `http://localhost:4000${user.avatarUrl}`} alt="Avatar" className="w-full h-full object-cover" />
-          </div>
-        ) : (
-          <div className="w-16 h-16 rounded-2xl bg-indigo-600/30 flex items-center justify-center text-indigo-400 font-bold text-xl flex-shrink-0">
-            {address.slice(1, 3)}
-          </div>
-        )}
+        <Avatar
+          src={user.avatarUrl ? (user.avatarUrl.startsWith('http') ? user.avatarUrl : `http://localhost:4000${user.avatarUrl}`) : undefined}
+          address={address}
+          size="lg"
+          alt="Profile avatar"
+        />
         <div className="flex-1">
           <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-xl font-bold text-white">
+              <TruncatedAddress address={address} />
             <h1 className="text-xl font-bold text-white font-mono">
               {user.displayName || `${address.slice(0, 6)}...${address.slice(-4)}`}
             </h1>

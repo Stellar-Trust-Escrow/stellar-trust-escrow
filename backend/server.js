@@ -12,6 +12,14 @@ import express from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
 
+import cookieParser from 'cookie-parser';
+import {
+  sanitizeInputs,
+  csrfProtection,
+  generateCsrfToken,
+  REQUEST_SIZE_LIMIT,
+} from './middleware/validation.js';
+
 import docsRouter from './docs/index.js';
 import disputeRoutes from './api/routes/disputeRoutes.js';
 import searchRoutes from './api/routes/searchRoutes.js';
@@ -28,6 +36,7 @@ import auditRoutes from './api/routes/auditRoutes.js';
 import authRoutes from './api/routes/authRoutes.js';
 import complianceRoutes from './api/routes/complianceRoutes.js';
 import incidentRoutes from './api/routes/incidentRoutes.js';
+import batchRoutes from './api/routes/batchRoutes.js';
 import authMiddleware from './api/middleware/auth.js';
 import tenantMiddleware from './api/middleware/tenant.js';
 import auditMiddleware from './api/middleware/audit.js';
@@ -73,6 +82,11 @@ app.use(
   }),
 );
 app.use(morgan('combined'));
+app.use(express.json({ limit: REQUEST_SIZE_LIMIT }));
+app.use(express.urlencoded({ extended: true, limit: REQUEST_SIZE_LIMIT }));
+app.use(cookieParser());
+app.use(sanitizeInputs);
+app.use(csrfProtection);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static('uploads'));
@@ -160,9 +174,9 @@ app.get('/health', async (_req, res) => {
   });
 });
 
-// ── WebSocket health — no auth required ───────────────────────────────────────
-app.use('/ws/health', wsHealthRoutes);
+app.get('/api/csrf-token', generateCsrfToken);
 
+app.use('/api/escrows', escrowRoutes);
 // ── API Routes with Deprecation Strategy ──────────────────────────────────────
 // Current routes (no deprecation) - these are the active API endpoints
 app.use('/api/health', healthRoutes);
@@ -185,6 +199,7 @@ app.use('/api/audit', auditRoutes);
 app.use('/api/compliance', complianceRoutes);
 app.use('/api/incidents', incidentRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/batch', batchRoutes);
 app.use('/docs', docsRouter);
 
 // ── Example: Deprecated API Version ───────────────────────────────────────────

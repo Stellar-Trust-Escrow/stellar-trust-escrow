@@ -1,10 +1,11 @@
 import { randomUUID } from 'crypto';
-import { WebSocketServer, WebSocket } from 'ws';
-import jwt from 'jsonwebtoken';
-import prisma from '../../lib/prisma.js';
+import { EventEmitter } from 'events';
+import { WebSocketServer } from 'ws';
 
 const HEARTBEAT_INTERVAL_MS = parseInt(process.env.WS_HEARTBEAT_INTERVAL_MS || '30000', 10);
 const MAX_CONNECTIONS = parseInt(process.env.WS_MAX_CONNECTIONS || '100', 10);
+
+export const metricsEmitter = new EventEmitter();
 
 class WebSocketPool {
   constructor() {
@@ -13,6 +14,7 @@ class WebSocketPool {
     this.peakConnections = 0;
     this.totalConnected = 0;
     this.totalDisconnected = 0;
+    this.totalTerminatedByTimeout = 0;
     this.heartbeatInterval = null;
   }
 
@@ -24,10 +26,11 @@ class WebSocketPool {
     }
 
     const id = randomUUID();
+    ws.isAlive = true;
+
     const meta = {
       ws,
       topics: new Set(),
-      isAlive: true,
       connectedAt: Date.now(),
       ip: req.socket.remoteAddress,
       user, // decoded JWT payload: { userId, walletAddress, ...claims }
@@ -39,10 +42,8 @@ class WebSocketPool {
       this.peakConnections = this.connections.size;
     }
 
-    // Ping/pong health checks
     ws.on('pong', () => {
-      const conn = this.connections.get(id);
-      if (conn) conn.isAlive = true;
+      ws.isAlive = true;
     });
 
     ws.on('close', () => {
@@ -51,10 +52,8 @@ class WebSocketPool {
 
     ws.on('error', (err) => {
       console.error(`[WebSocket] ID ${id} error:`, err.message);
-      // 'close' event will usually follow and clean up
     });
 
-    // Handle incoming messages (e.g., subscribing to topics)
     ws.on('message', (data) => {
       let message;
       try {
@@ -74,11 +73,11 @@ class WebSocketPool {
       // unknown types are silently ignored (Requirement 3.7)
     });
 
-    // Start heartbeat if it isn't running
     if (!this.heartbeatInterval) {
       this.startHeartbeat();
     }
 
+    this._emitMetrics();
     return id;
   }
 
@@ -87,57 +86,22 @@ class WebSocketPool {
       this.connections.delete(id);
       this.totalDisconnected++;
 
-      // Stop heartbeat if no connections left
       if (this.connections.size === 0) {
         this.stopHeartbeat();
       }
+
+      this._emitMetrics();
     }
   }
 
   async subscribe(id, topic, prisma) {
     const conn = this.connections.get(id);
-    if (!conn) return;
-
-    if (topic.startsWith('escrow:')) {
-      const escrowId = topic.slice('escrow:'.length);
-
-      let escrow;
-      try {
-        escrow = await prisma.escrow.findUnique({
-          where: { id: BigInt(escrowId) },
-          select: { clientAddress: true, freelancerAddress: true },
-        });
-      } catch {
-        conn.ws.send(JSON.stringify({ type: 'error', message: 'Escrow not found' }));
-        return;
-      }
-
-      if (!escrow) {
-        conn.ws.send(JSON.stringify({ type: 'error', message: 'Escrow not found' }));
-        return;
-      }
-
-      const walletAddress = conn.user?.walletAddress;
-      if (escrow.clientAddress !== walletAddress && escrow.freelancerAddress !== walletAddress) {
-        conn.ws.send(JSON.stringify({ type: 'error', message: 'Forbidden' }));
-        return;
-      }
-    }
-
-    // user:all topics and authorized escrow topics are added directly
-    conn.topics.add(topic);
-
-    // Flush any queued messages now that the client is subscribed and (likely) OPEN
-    if (conn.ws.readyState === WebSocket.OPEN) {
-      this.flushQueue(id);
-    }
+    if (conn) conn.topics.add(topic);
   }
 
   unsubscribe(id, topic) {
     const conn = this.connections.get(id);
-    if (conn) {
-      conn.topics.delete(topic);
-    }
+    if (conn) conn.topics.delete(topic);
   }
 
   broadcast(topic, payload) {
@@ -232,16 +196,19 @@ class WebSocketPool {
   startHeartbeat() {
     this.heartbeatInterval = setInterval(() => {
       for (const [id, conn] of this.connections.entries()) {
-        if (!conn.isAlive) {
+        if (!conn.ws.isAlive) {
           console.log(`[WebSocket] Terminating unresponsive connection ${id}`);
+          this.totalTerminatedByTimeout++;
           conn.ws.terminate();
           this.removeConnection(id);
           continue;
         }
 
-        conn.isAlive = false;
+        conn.ws.isAlive = false;
         conn.ws.ping();
       }
+
+      this._emitMetrics();
     }, HEARTBEAT_INTERVAL_MS);
   }
 
@@ -253,7 +220,6 @@ class WebSocketPool {
   }
 
   getMetrics() {
-    // Topic distribution counts
     const topicCounts = {};
     for (const conn of this.connections.values()) {
       for (const topic of conn.topics) {
@@ -262,16 +228,20 @@ class WebSocketPool {
     }
 
     return {
-      activeConnections: this.connections.size,
+      active_connections: this.connections.size,
+      total_connections_established: this.totalConnected,
+      connections_terminated_by_timeout: this.totalTerminatedByTimeout,
       peakConnections: this.peakConnections,
-      totalConnected: this.totalConnected,
       totalDisconnected: this.totalDisconnected,
       subscriptionsByTopic: topicCounts,
     };
   }
+
+  _emitMetrics() {
+    metricsEmitter.emit('metrics', this.getMetrics());
+  }
 }
 
-// Global pool instance
 export const pool = new WebSocketPool();
 
 /**
@@ -288,35 +258,20 @@ export function broadcastEscrowEvent(escrowId, eventType, status) {
 /**
  * Attaches a WebSocket server to the given HTTP server.
  *
- * @param {import('http').Server} httpServer - The running HTTP server
+ * @param {import('http').Server} httpServer
  * @returns {WebSocketServer}
  */
 export function createWebSocketServer(httpServer) {
   const wss = new WebSocketServer({ noServer: true });
 
-  // Handle HTTP upgrade request integration
   httpServer.on('upgrade', (request, socket, head) => {
-    // Check path
-    const { pathname, searchParams } = new URL(request.url, `http://${request.headers.host}`);
+    const { pathname } = new URL(request.url, `http://${request.headers.host}`);
 
-    if (pathname !== '/ws') {
-      socket.destroy();
-      return;
-    }
-
-    // JWT authentication
-    const token = searchParams.get('token');
-    if (!token) {
-      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
-      socket.destroy();
-      return;
-    }
-
-    let user;
-    try {
-      user = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
-    } catch (err) {
-      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+    if (pathname === '/api/ws') {
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+      });
+    } else {
       socket.destroy();
       return;
     }
@@ -336,13 +291,10 @@ export function createWebSocketServer(httpServer) {
     });
   });
 
-  // Handle actual connection
   wss.on('connection', (ws, request) => {
     const id = pool.addConnection(ws, request, request.user || null);
     if (id) {
       console.log(`[WebSocket] New connection established: ${id}`);
-
-      // Welcome message
       ws.send(
         JSON.stringify({
           type: 'welcome',

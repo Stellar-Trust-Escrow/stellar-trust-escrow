@@ -25,6 +25,9 @@ import dynamic from 'next/dynamic';
 import EscrowCard from '../../components/escrow/EscrowCard';
 import ReputationBadge from '../../components/ui/ReputationBadge';
 import Button from '../../components/ui/Button';
+import StatWidgets from '../../components/dashboard/StatWidgets';
+import ActivityTimeline from '../../components/dashboard/ActivityTimeline';
+import PageTransition from '../../components/layout/PageTransition';
 import ErrorBoundary from '../../../components/error/ErrorBoundary';
 import { usePerformance } from '../../hooks/usePerformance';
 
@@ -111,6 +114,11 @@ export default function DashboardPage() {
     ? Math.min(100, Math.round(Number(reputation.totalScore) / 100))
     : null;
 
+  return (
+    <PageTransition>
+    <div className="space-y-8">
+      {/* Page Header */}
+      <div className="flex items-center justify-between">
 return (
     <ErrorBoundary>
       <div className="space-y-8">
@@ -206,5 +214,6 @@ return (
         )}
       </section>
     </div>
+    </PageTransition>
   );
 }

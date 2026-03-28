@@ -15,10 +15,11 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useWallet } from '../../hooks/useWallet';
 import { useI18n } from '../../i18n/index.jsx';
 import WalletStatus from '../ui/WalletStatus';
+import MobileDrawer from './MobileDrawer';
 import ThemeToggle from './ThemeToggle';
 import CurrencySelector from '../ui/CurrencySelector';
 
@@ -26,6 +27,13 @@ export default function Header() {
   const wallet = useWallet();
   const { t } = useI18n();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 0);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   const networkLabel = wallet.network === 'mainnet' ? t('network.mainnet') : t('network.testnet');
   const networkStyles =
@@ -36,7 +44,7 @@ export default function Header() {
     wallet.network === 'mainnet' ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse';
 
   return (
-    <header className="border-b border-gray-200 bg-white/80 dark:border-gray-800 dark:bg-gray-950/80 backdrop-blur-sm sticky top-0 z-50">
+    <header className={`border-b border-gray-200 bg-white/80 dark:border-gray-800 dark:bg-gray-950/80 backdrop-blur-sm sticky top-0 z-50 transition-shadow duration-200 ${scrolled ? 'shadow-lg shadow-black/20' : ''}`}>
       <div className="container mx-auto px-4 max-w-7xl">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
@@ -80,6 +88,20 @@ export default function Header() {
             {/* Wallet Status */}
             <WalletStatus wallet={wallet} />
 
+            {/* Hamburger — mobile only */}
+            <button
+              className="md:hidden text-gray-400 hover:text-white p-1 rounded transition-colors"
+              aria-label="Open navigation menu"
+              aria-expanded={isMobileMenuOpen}
+              onClick={() => setIsMobileMenuOpen(true)}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
             {/* Currency Selector */}
             <CurrencySelector size="sm" />
 
@@ -108,6 +130,8 @@ export default function Header() {
           </nav>
         )}
       </div>
+
+      <MobileDrawer isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />
     </header>
   );
 }
