@@ -311,3 +311,27 @@ export function createWebSocketServer(httpServer) {
 
   return wss;
 }
+
+export function broadcastToDispute(disputeId, message) {
+  const topic = `dispute:${disputeId}`;
+  const payload = JSON.stringify({
+    ...message,
+    topic,
+    timestamp: new Date().toISOString()
+  });
+
+  let sentCount = 0;
+  for (const [id, conn] of pool.connections) {
+    if (conn.topics.has(topic)) {
+      try {
+        conn.ws.send(payload);
+        sentCount++;
+      } catch (error) {
+        console.error(`[WebSocket] Failed to send to ${id}:`, error.message);
+      }
+    }
+  }
+
+  console.log(`[WebSocket] Broadcast to dispute:${disputeId} sent to ${sentCount} clients`);
+  return sentCount;
+}
