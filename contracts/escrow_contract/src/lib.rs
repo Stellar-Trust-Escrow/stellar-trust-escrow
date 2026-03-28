@@ -1760,7 +1760,7 @@ impl EscrowContract {
             meta.client.clone()
         };
 
-        // Apply slash
+        // Apply slash (records reputation hit + slash record; funds held in contract)
         let reason = String::from_str(&env, "Escrow cancellation");
         Self::apply_slash(
             &env,
@@ -1775,8 +1775,15 @@ impl EscrowContract {
         let token = token::Client::new(&env, &meta.token);
         let contract_addr = env.current_contract_address();
 
-        // Return remaining funds to requester
-        token.transfer(&contract_addr, &request.requester, &client_amount);
+        // NOTE: slash_amount is intentionally held in the contract until the
+        // slash dispute period expires. Call `finalize_slash` after
+        // SLASH_DISPUTE_PERIOD to release it to the recipient, or
+        // `dispute_slash` + `resolve_slash_dispute` to reverse it.
+
+        // Return remaining funds (after slash) to requester
+        if client_amount > 0 {
+            token.transfer(&contract_addr, &request.requester, &client_amount);
+        }
 
         // Update escrow status
         meta.status = EscrowStatus::Cancelled;
@@ -1836,6 +1843,44 @@ impl EscrowContract {
     }
 
     // ── Slash Dispute Functions ───────────────────────────────────────────────────
+
+    /// Releases a held slash to the recipient after the dispute period expires.
+    ///
+    /// Can be called by anyone once `SLASH_DISPUTE_PERIOD` has passed without a dispute.
+    pub fn finalize_slash(env: Env, escrow_id: u64) -> Result<(), EscrowError> {
+        ContractStorage::require_initialized(&env)?;
+
+        let slash_record = ContractStorage::load_slash_record(&env, escrow_id)?;
+
+        if slash_record.disputed {
+            return Err(EscrowError::SlashAlreadyDisputed);
+        }
+
+        let now = env.ledger().timestamp();
+        let dispute_deadline = slash_record.slashed_at + SLASH_DISPUTE_PERIOD;
+        if now < dispute_deadline {
+            return Err(EscrowError::SlashDisputeDeadlineExpired); // reuse: period still active
+        }
+
+        let meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
+        token::Client::new(&env, &meta.token).transfer(
+            &env.current_contract_address(),
+            &slash_record.recipient,
+            &slash_record.amount,
+        );
+
+        ContractStorage::remove_slash_record(&env, escrow_id);
+
+        events::emit_slash_applied(
+            &env,
+            escrow_id,
+            &slash_record.slashed_user,
+            &slash_record.recipient,
+            slash_record.amount,
+            &slash_record.reason,
+        );
+        Ok(())
+    }
 
     /// Disputes a slash applied to a user.
     ///
@@ -1902,24 +1947,24 @@ impl EscrowContract {
         let contract_addr = env.current_contract_address();
 
         if upheld {
-            // Slash is upheld - no changes needed
-            events::emit_dispute_resolved(&env, escrow_id, slash_record.amount, 0);
+            // Slash stands — funds already with recipient, nothing to move
+            events::emit_slash_dispute_resolved(&env, escrow_id, true, slash_record.amount);
         } else {
-            // Reverse the slash - return funds to slashed user
+            // Reverse: claw back from recipient and return to slashed user
             token.transfer(
                 &contract_addr,
                 &slash_record.slashed_user,
                 &slash_record.amount,
             );
 
-            // Update reputation - restore points
+            // Restore reputation
             let mut reputation = ContractStorage::load_reputation(&env, &slash_record.slashed_user);
             reputation.slash_count = reputation.slash_count.saturating_sub(1);
-            reputation.total_slashed -= slash_record.amount;
-            reputation.total_score += 10; // Restore 10 points
+            reputation.total_slashed = reputation.total_slashed.saturating_sub(slash_record.amount);
+            reputation.total_score = reputation.total_score.saturating_add(10);
             ContractStorage::save_reputation(&env, &reputation);
 
-            events::emit_dispute_resolved(&env, escrow_id, 0, 0);
+            events::emit_slash_dispute_resolved(&env, escrow_id, false, slash_record.amount);
         }
 
         // Clean up slash record
@@ -2663,4 +2708,204 @@ mod tests {
     #[test]
     #[ignore = "implement dispute flow — Issues #9–#10"]
     fn test_dispute_resolution() {}
+
+    // ── Cancellation + Slash tests ────────────────────────────────────────────
+
+    fn setup_funded_escrow(
+        env: &Env,
+        admin: &Address,
+        client: &EscrowContractClient,
+        amount: i128,
+    ) -> (Address, Address, Address, u64) {
+        let escrow_client = Address::generate(env);
+        let freelancer = Address::generate(env);
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_id = token_contract.address();
+        let token_admin = token::StellarAssetClient::new(env, &token_id);
+        token_admin.mint(
+            &escrow_client,
+            &(amount + (2 * ContractStorage::reserve_for_entries(1))),
+        );
+        let escrow_id = client.create_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &amount,
+            &BytesN::from_array(env, &[99; 32]),
+            &None,
+            &None,
+            &None,
+        );
+        (escrow_client, freelancer, token_id, escrow_id)
+    }
+
+    #[test]
+    fn test_execute_cancellation_slashes_requester_and_distributes() {
+        let (env, admin, _, client) = setup();
+        client.initialize(&admin);
+
+        let (escrow_client, freelancer, token_id, escrow_id) =
+            setup_funded_escrow(&env, &admin, &client, 100_i128);
+        let token_client = token::Client::new(&env, &token_id);
+
+        client.request_cancellation(
+            &escrow_client,
+            &escrow_id,
+            &String::from_str(&env, "Changed my mind"),
+        );
+
+        // Advance past dispute period
+        advance(&env, CANCELLATION_DISPUTE_PERIOD + 1);
+        client.execute_cancellation(&escrow_id);
+
+        // 10% of 100 = 10 held in contract (slash), 90 back to client
+        // Slash is held until finalize_slash is called
+        assert_eq!(token_client.balance(&escrow_client), 90_i128);
+        assert_eq!(token_client.balance(&freelancer), 0_i128);
+
+        // Finalize slash after dispute period — releases 10 to freelancer
+        advance(&env, SLASH_DISPUTE_PERIOD + 1);
+        client.finalize_slash(&escrow_id);
+        assert_eq!(token_client.balance(&freelancer), 10_i128);
+
+        let state = client.get_escrow(&escrow_id);
+        assert_eq!(state.status, EscrowStatus::Cancelled);
+        assert_eq!(state.remaining_balance, 0);
+    }
+
+    #[test]
+    fn test_execute_cancellation_freelancer_requester_slashes_to_client() {
+        let (env, admin, _, client) = setup();
+        client.initialize(&admin);
+
+        let (escrow_client, freelancer, token_id, escrow_id) =
+            setup_funded_escrow(&env, &admin, &client, 200_i128);
+        let token_client = token::Client::new(&env, &token_id);
+
+        // Mint rent reserve for the freelancer so they can pay the cancellation entry rent
+        let token_admin = token::StellarAssetClient::new(&env, &token_id);
+        token_admin.mint(&freelancer, &ContractStorage::reserve_for_entries(1));
+
+        client.request_cancellation(
+            &freelancer,
+            &escrow_id,
+            &String::from_str(&env, "Cannot deliver"),
+        );
+
+        advance(&env, CANCELLATION_DISPUTE_PERIOD + 1);
+        client.execute_cancellation(&escrow_id);
+
+        // 10% of 200 = 20 held in contract (slash), 180 back to freelancer
+        // escrow_client: 30 leftover after funding (minted 260, paid 230) + 0 slash yet = 30
+        assert_eq!(token_client.balance(&freelancer), 180_i128);
+        assert_eq!(token_client.balance(&escrow_client), 30_i128);
+
+        // Finalize slash — releases 20 to escrow_client
+        advance(&env, SLASH_DISPUTE_PERIOD + 1);
+        client.finalize_slash(&escrow_id);
+        assert_eq!(token_client.balance(&escrow_client), 50_i128);
+    }
+
+    #[test]
+    fn test_execute_cancellation_fails_during_dispute_period() {
+        let (env, admin, _, client) = setup();
+        client.initialize(&admin);
+
+        let (escrow_client, _, _, escrow_id) =
+            setup_funded_escrow(&env, &admin, &client, 100_i128);
+
+        client.request_cancellation(
+            &escrow_client,
+            &escrow_id,
+            &String::from_str(&env, "reason"),
+        );
+
+        let result = client.try_execute_cancellation(&escrow_id);
+        assert!(matches!(
+            result,
+            Err(Ok(EscrowError::CancellationDisputePeriodActive))
+        ));
+    }
+
+    #[test]
+    fn test_dispute_cancellation_blocks_execution() {
+        let (env, admin, _, client) = setup();
+        client.initialize(&admin);
+
+        let (escrow_client, freelancer, _, escrow_id) =
+            setup_funded_escrow(&env, &admin, &client, 100_i128);
+
+        client.request_cancellation(
+            &escrow_client,
+            &escrow_id,
+            &String::from_str(&env, "reason"),
+        );
+
+        client.dispute_cancellation(&freelancer, &escrow_id);
+
+        advance(&env, CANCELLATION_DISPUTE_PERIOD + 1);
+
+        let result = client.try_execute_cancellation(&escrow_id);
+        assert!(matches!(result, Err(Ok(EscrowError::CancellationDisputed))));
+
+        let state = client.get_escrow(&escrow_id);
+        assert_eq!(state.status, EscrowStatus::Disputed);
+    }
+
+    #[test]
+    fn test_slash_reputation_updated_on_cancellation() {
+        let (env, admin, _, client) = setup();
+        client.initialize(&admin);
+
+        let (escrow_client, _, _, escrow_id) =
+            setup_funded_escrow(&env, &admin, &client, 100_i128);
+
+        client.request_cancellation(
+            &escrow_client,
+            &escrow_id,
+            &String::from_str(&env, "reason"),
+        );
+
+        advance(&env, CANCELLATION_DISPUTE_PERIOD + 1);
+        client.execute_cancellation(&escrow_id);
+
+        let rep = client.get_reputation(&escrow_client);
+        assert_eq!(rep.slash_count, 1);
+        assert_eq!(rep.total_slashed, 10_i128);
+    }
+
+    #[test]
+    fn test_dispute_slash_reversal_restores_funds_and_reputation() {
+        let (env, admin, _, client) = setup();
+        client.initialize(&admin);
+
+        let (escrow_client, freelancer, token_id, escrow_id) =
+            setup_funded_escrow(&env, &admin, &client, 100_i128);
+        let token_client = token::Client::new(&env, &token_id);
+
+        client.request_cancellation(
+            &escrow_client,
+            &escrow_id,
+            &String::from_str(&env, "reason"),
+        );
+
+        advance(&env, CANCELLATION_DISPUTE_PERIOD + 1);
+        client.execute_cancellation(&escrow_id);
+
+        // Slash of 10 is held in contract (not yet sent to freelancer)
+        assert_eq!(token_client.balance(&freelancer), 0_i128);
+
+        // escrow_client disputes the slash within the slash dispute period
+        client.dispute_slash(&escrow_client, &escrow_id);
+
+        // Admin reverses the slash — funds returned to slashed user from contract
+        client.resolve_slash_dispute(&admin, &escrow_id, &false);
+
+        // Funds returned to slashed user (escrow_client had 90 refund + 10 slash returned = 100)
+        assert_eq!(token_client.balance(&escrow_client), 100_i128);
+
+        let rep = client.get_reputation(&escrow_client);
+        assert_eq!(rep.slash_count, 0);
+        assert_eq!(rep.total_slashed, 0_i128);
+    }
 }
