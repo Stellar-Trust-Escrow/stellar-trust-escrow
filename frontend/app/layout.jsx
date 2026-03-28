@@ -21,17 +21,13 @@ import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
 import { ThemeProvider } from '../contexts/ThemeContext';
 import { CurrencyProvider } from '../contexts/CurrencyContext';
+import { ToastProvider } from '../contexts/ToastContext';
 import ServiceWorkerRegistrar from '../components/ServiceWorkerRegistrar';
 import ErrorBoundary from '../components/error/ErrorBoundary';
-import PerformanceMonitor from '../components/performance/PerformanceMonitor';
 import PerformanceMonitor from '../components/performance/PerformanceMonitor';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' });
-
-const API_ORIGIN = process.env.NEXT_PUBLIC_API_URL
-  ? new URL(process.env.NEXT_PUBLIC_API_URL).origin
-  : '';
 
 const API_ORIGIN = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -75,11 +71,13 @@ export default function RootLayout({ children }) {
         */}
         <ThemeProvider>
           <CurrencyProvider>
-            <Header />
-            <ErrorBoundary>
-              <main className="flex-1 container mx-auto px-4 py-8 max-w-7xl">{children}</main>
-            </ErrorBoundary>
-            <Footer />
+            <ToastProvider>
+              <Header />
+              <ErrorBoundary>
+                <main className="flex-1 container mx-auto px-4 py-8 max-w-7xl">{children}</main>
+              </ErrorBoundary>
+              <Footer />
+            </ToastProvider>
           </CurrencyProvider>
         </ThemeProvider>
 
