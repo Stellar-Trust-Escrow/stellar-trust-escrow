@@ -4,13 +4,14 @@ import './lib/sentry.js';
 import * as Sentry from '@sentry/node';
 
 import 'dotenv/config';
+import { randomUUID } from 'crypto';
 import { initSecrets } from './lib/secrets.js';
 import http from 'http';
 import compressionMiddleware from './middleware/compression.js';
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
-import morgan from 'morgan';
+import { logger, requestLogger } from './lib/logger.js';
 
 import cookieParser from 'cookie-parser';
 import {
@@ -37,12 +38,9 @@ import authRoutes from './api/routes/authRoutes.js';
 import complianceRoutes from './api/routes/complianceRoutes.js';
 import incidentRoutes from './api/routes/incidentRoutes.js';
 import batchRoutes from './api/routes/batchRoutes.js';
-import authMiddleware from './api/middleware/auth.js';
 import tenantMiddleware from './api/middleware/tenant.js';
 import auditMiddleware from './api/middleware/audit.js';
-import _apiV1Routes from './api/v1/index.js';
-import { deprecatedRoute as _deprecatedRoute } from './api/middleware/version.js';
-import { deprecationPresets, deprecateVersion } from './api/middleware/deprecation.js';
+import { deprecateVersion } from './api/middleware/deprecation.js';
 import { createWebSocketServer, pool } from './api/websocket/handlers.js';
 import cache from './lib/cache.js';
 import { attachPrismaMetrics } from './lib/prismaMetrics.js';
@@ -51,8 +49,7 @@ import tenantRoutes from './api/routes/tenantRoutes.js';
 import wsHealthRoutes from './api/routes/wsHealth.js';
 import prisma, { startConnectionMonitoring } from './lib/prisma.js';
 import { errorsTotal } from './lib/metrics.js';
-import { apiRateLimit, leaderboardRateLimit } from './middleware/rateLimit.js';
-import { publicRateLimit } from './middleware/publicRateLimit.js';
+import { leaderboardRateLimit } from './middleware/rateLimit.js';
 import metricsMiddleware from './middleware/metricsMiddleware.js';
 import responseTime from './middleware/responseTime.js';
 import emailService from './services/emailService.js';
@@ -60,6 +57,7 @@ import complianceService from './services/complianceService.js';
 import { startIndexer } from './services/eventIndexer.js';
 import { setupSwagger } from './api/docs/swagger.js';
 import { getBackupStatus } from './services/backupMonitor.js';
+import { createGateway } from './gateway/index.js';
 
 // Attach Prisma query instrumentation and monitoring
 attachPrismaMetrics(prisma);
@@ -76,13 +74,19 @@ app.use(helmet());
 app.use(compressionMiddleware);
 app.use(metricsMiddleware);
 app.use(responseTime);
+app.use(requestLogger);
+app.use((req, res, next) => {
+  const requestId = req.id || req.headers['x-request-id'] || req.headers['x-correlation-id'] || randomUUID();
+  req.id = requestId;
+  res.setHeader('X-Request-Id', requestId);
+  next();
+});
 app.use(
   cors({
     origin: process.env.ALLOWED_ORIGINS?.split(',') || 'http://localhost:3000',
     credentials: true,
   }),
 );
-app.use(morgan('combined'));
 app.use(express.json({ limit: REQUEST_SIZE_LIMIT }));
 app.use(express.urlencoded({ extended: true, limit: REQUEST_SIZE_LIMIT }));
 app.use(cookieParser());
@@ -96,12 +100,10 @@ app.use(auditMiddleware);
 // ── Sentry tracing handler — after body parsers, before routes ────────────────
 app.use(Sentry.expressTracingHandler());
 
-// ── Rate limiting ─────────────────────────────────────────────────────────────
-// Public routes: IP (100/min) + wallet (50/min), Redis-backed, whitelist-aware
-app.use('/api/', publicRateLimit);
-// Authenticated routes: per-user tier-aware limit
-app.use('/api/', apiRateLimit);
-// Tighter limit for the leaderboard endpoint
+// ── API Gateway — centralized auth, rate limiting, logging, metrics ───────────
+app.use('/api', ...createGateway());
+
+// Leaderboard gets a tighter dedicated limit on top of the gateway limit
 app.use('/api/reputation/leaderboard', leaderboardRateLimit);
 
 app.get('/health', async (_req, res) => {
@@ -158,12 +160,13 @@ app.get('/health', async (_req, res) => {
 
 app.get('/api/csrf-token', generateCsrfToken);
 
-app.use('/api/escrows', escrowRoutes);
 // ── API Routes ────────────────────────────────────────────────────────────────
+// Auth is handled by the gateway above — no per-route authMiddleware needed.
 app.use('/api/health', healthRoutes);
 app.use('/api', tenantMiddleware);
 app.use('/api/auth', authRoutes);
 app.use('/api/tenant', tenantRoutes);
+app.use('/api/escrows', escrowRoutes);
 
 // ── API Documentation ─────────────────────────────────────────────────────────
 setupSwagger(app);
@@ -204,7 +207,7 @@ app.use(
 
 // ── Generic error handler ─────────────────────────────────────────────────────
 
-app.use((err, _req, res, _next) => {
+app.use((err, req, res, _next) => {
   const statusCode = err.statusCode || 500;
 
   // Attach Sentry event ID to response so support can correlate reports
@@ -212,11 +215,23 @@ app.use((err, _req, res, _next) => {
   const body = { error: err.message || 'Internal server error' };
   if (sentryId) body.errorId = sentryId;
 
+  const log = req?.log || logger;
+  log.error(
+    {
+      err,
+      statusCode,
+      requestId: req?.id,
+      route: req?.path || 'unknown',
+      userId: req?.user?.userId,
+    },
+    'Unhandled error',
+  );
+
   if (statusCode >= 500) {
-    console.error(err.stack);
+    Sentry.captureException(err);
   }
 
-  errorsTotal.inc({ type: err.name || 'Error', route: _req?.path || 'unknown' });
+  errorsTotal.inc({ type: err.name || 'Error', route: req?.path || 'unknown' });
   res.status(statusCode).json(body);
 });
 
@@ -226,16 +241,15 @@ createWebSocketServer(server);
 server.listen(PORT, async () => {
   // Load secrets first — merges vault/env secrets into process.env
   await initSecrets();
-  console.log(`[Secrets] Backend: ${process.env.SECRETS_BACKEND || 'env'}`);
-  console.log(`API running on port ${PORT}`);
-  console.log(`Network: ${process.env.STELLAR_NETWORK}`);
+  logger.info({ secretsBackend: process.env.SECRETS_BACKEND || 'env' }, 'Secrets backend loaded');
+  logger.info({ port: PORT, network: process.env.STELLAR_NETWORK }, 'API server started');
   await emailService.start();
-  console.log('[EmailService] Queue processor started');
+  logger.info('[EmailService] Queue processor started');
   complianceService.startScheduler();
-  console.log('[ComplianceService] Scheduler started');
-  console.log('[WebSocket] Server attached');
+  logger.info('[ComplianceService] Scheduler started');
+  logger.info('[WebSocket] Server attached');
   startIndexer().catch((err) => {
-    console.error('[Indexer] Failed to start:', err.message);
+    logger.error({ err, component: 'indexer' }, 'Indexer failed to start');
     Sentry.captureException(err, { tags: { component: 'indexer' } });
   });
 });

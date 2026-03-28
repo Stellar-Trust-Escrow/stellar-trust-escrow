@@ -6,7 +6,7 @@ mod event_tests {
         token, Address, BytesN, Env, String, Symbol, TryFromVal, Val,
     };
 
-    use crate::{EscrowContract, EscrowContractClient};
+    use crate::{EscrowContract, EscrowContractClient, EscrowError};
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
@@ -500,6 +500,101 @@ mod event_tests {
         assert_eq!(topic_u64(&env, &topics, 1), escrow_id);
         let emitted_lock_time: u64 = soroban_sdk::FromVal::from_val(&env, &data);
         assert_eq!(emitted_lock_time, lock_time);
+    }
+
+    #[test]
+    fn test_timelock_workflow_with_release_funds() {
+        let (env, admin, contract_id, client) = setup();
+        let client_addr = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token = register_token(&env, &admin, &client_addr, 500);
+
+        let escrow_id = client.create_escrow(
+            &client_addr,
+            &freelancer,
+            &token,
+            &500_i128,
+            &BytesN::from_array(&env, &[3; 32]),
+            &None,
+            &None,
+            &None,
+        );
+
+        let mid = client.add_milestone(
+            &client_addr,
+            &escrow_id,
+            &String::from_str(&env, "Work"),
+            &BytesN::from_array(&env, &[4; 32]),
+            &500_i128,
+        );
+
+        client.start_timelock(&client_addr, &escrow_id, &10);
+
+        let events = contract_events(&env, &contract_id);
+        let (_, topics, _) = events
+            .iter()
+            .find(|(_, t, _)| has_topic_symbol(&env, t, soroban_sdk::symbol_short!("tl_started")))
+            .expect("tl_started event not emitted");
+        assert_eq!(topic_u64(&env, &topics, 1), escrow_id);
+
+        client.submit_milestone(&freelancer, &escrow_id, &mid);
+        client.approve_milestone(&client_addr, &escrow_id, &mid);
+
+        // Not yet released due to active timelock
+        let freelancer_balance_before = token::Client::new(&env, &token).balance(&freelancer);
+        assert_eq!(freelancer_balance_before, 0);
+
+        // Client cannot release before expiry
+        let release_err = client
+            .try_release_funds(&client_addr, &escrow_id, &mid)
+            .unwrap_err();
+        assert!(matches!(release_err, Err(Err(EscrowError::TimelockNotExpired))));
+
+        env.ledger().set_timestamp(env.ledger().timestamp() + 20);
+
+        client.release_funds(&client_addr, &escrow_id, &mid);
+        let freelancer_balance_after = token::Client::new(&env, &token).balance(&freelancer);
+        assert_eq!(freelancer_balance_after, 500);
+
+        let events = contract_events(&env, &contract_id);
+        assert!(events.iter().any(|(_, t, _)|
+            has_topic_symbol(&env, t, soroban_sdk::symbol_short!("tl_released"))
+        ));
+    }
+
+    #[test]
+    fn test_admin_override_release_funds_before_timelock_expires() {
+        let (env, admin, contract_id, client) = setup();
+        let client_addr = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token = register_token(&env, &admin, &client_addr, 500);
+
+        let escrow_id = client.create_escrow(
+            &client_addr,
+            &freelancer,
+            &token,
+            &500_i128,
+            &BytesN::from_array(&env, &[5; 32]),
+            &None,
+            &None,
+            &None,
+        );
+
+        let mid = client.add_milestone(
+            &client_addr,
+            &escrow_id,
+            &String::from_str(&env, "Work"),
+            &BytesN::from_array(&env, &[6; 32]),
+            &500_i128,
+        );
+
+        client.start_timelock(&client_addr, &escrow_id, &10);
+        client.submit_milestone(&freelancer, &escrow_id, &mid);
+        client.approve_milestone(&client_addr, &escrow_id, &mid);
+
+        client.release_funds(&admin, &escrow_id, &mid);
+        let freelancer_balance_after = token::Client::new(&env, &token).balance(&freelancer);
+        assert_eq!(freelancer_balance_after, 500);
     }
 
     // ── cancellation_requested ────────────────────────────────────────────────

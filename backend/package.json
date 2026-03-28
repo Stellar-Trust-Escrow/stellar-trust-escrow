@@ -45,13 +45,20 @@
     "ioredis": "^5.10.1",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
+    "pino": "^8.23.1",
+    "pino-http": "^8.8.0",
+    "rotating-file-stream": "^2.1.5",
     "multer": "^2.1.1",
     "node-cron": "^3.0.3",
     "prom-client": "^15.1.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
     "winston": "^3.11.0",
-    "yaml": "^2.4.2"
+    "yaml": "^2.4.2",
+    "ipfs-http-client": "^60.0.1",
+    "sharp": "^0.33.2",
+    "clamscan": "^2.1.2",
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
     "fast-check": "^4.6.0",

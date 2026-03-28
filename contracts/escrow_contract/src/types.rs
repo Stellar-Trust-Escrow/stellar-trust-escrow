@@ -32,12 +32,24 @@ pub enum MilestoneStatus {
     Pending,
     /// Freelancer has submitted work for this milestone.
     Submitted,
-    /// Client has approved the milestone. Funds have been released.
+    /// Client has approved the milestone and funds are pending release.
     Approved,
+    /// Funds have been released for this milestone.
+    Released,
     /// Client rejected the submission. Freelancer should resubmit.
     Rejected,
     /// A dispute has been raised on this milestone. Funds are frozen.
     Disputed,
+}
+
+/// Timelock metadata for protecting buyers: no release until expiry.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Timelock {
+    /// Duration in ledger timestamps (seconds) to wait after start.
+    pub duration_ledger: u64,
+    /// Ledger timestamp when timelock started.
+    pub start_ledger: u64,
 }
 
 /// Supported recurring payment intervals.
@@ -47,6 +59,14 @@ pub enum RecurringInterval {
     Daily,
     Weekly,
     Monthly,
+}
+
+/// Single approval by a buyer signer, recorded with timestamp.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ApprovalRecord {
+    pub signer: Address,
+    pub approved_at: u64,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -84,6 +104,9 @@ pub struct Milestone {
 
     /// Ledger timestamp when the client approved or rejected.
     pub resolved_at: Option<u64>,
+
+    /// Buyer approvals for this milestone (signer + timestamp).
+    pub approvals: soroban_sdk::Vec<ApprovalRecord>,
 }
 
 /// Configuration for a recurring/subscription escrow.
@@ -165,6 +188,10 @@ pub struct EscrowState {
     /// TODO (contributor): implement arbiter selection and staking
     pub arbiter: Option<Address>,
 
+    /// Addresses authorised to approve milestone releases (multi-sig).
+    /// The 2-of-N threshold velocity is used for milestone approval.
+    pub buyer_signers: soroban_sdk::Vec<Address>,
+
     /// Ledger timestamp of escrow creation.
     pub created_at: u64,
 
@@ -180,6 +207,9 @@ pub struct EscrowState {
     /// Optional extension deadline for the lock time.
     /// Can be used to extend the lock_time if needed.
     pub lock_time_extension: Option<u64>,
+
+    /// Optional timelock payload for buyer remorse protection.
+    pub timelock: Option<Timelock>,
 
     /// IPFS hash of the full project brief / agreement document.
     pub brief_hash: BytesN<32>,

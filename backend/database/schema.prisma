@@ -232,10 +232,24 @@ model DisputeEvidence {
   submittedBy  String   @map("submitted_by")
   /// client | freelancer | arbiter | admin
   role         String
-  /// text | url | hash
+  /// text | url | hash | file | image
   evidenceType String   @map("evidence_type")
   content      String
   description  String?
+  /// Original filename
+  filename     String?
+  /// File MIME type
+  mimeType     String?  @map("mime_type")
+  /// File size in bytes
+  fileSize     Int?     @map("file_size")
+  /// IPFS CID for file storage
+  ipfsCid      String?  @map("ipfs_cid")
+  /// IPFS CID for thumbnail (images only)
+  thumbnailCid String?  @map("thumbnail_cid")
+  /// Virus scan status: pending | clean | infected | error
+  scanStatus   String?  @default("pending") @map("scan_status")
+  /// Virus scan result details
+  scanResult   String?  @map("scan_result")
   submittedAt  DateTime @default(now()) @map("submitted_at")
 
   tenant  Tenant  @relation(fields: [tenantId], references: [id])
@@ -245,6 +259,7 @@ model DisputeEvidence {
   @@index([tenantId, submittedBy])
   @@index([disputeId])
   @@index([submittedBy])
+  @@index([ipfsCid])
   @@map("dispute_evidence")
 }
 

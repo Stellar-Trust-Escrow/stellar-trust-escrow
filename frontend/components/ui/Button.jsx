@@ -9,19 +9,6 @@
 import Link from 'next/link';
 import { cn } from '../../lib/utils';
 
-const VARIANTS = {
-  primary:
-    'bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 active:scale-95 text-white ' +
-    'focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950',
-  secondary:
-    'bg-gray-800 hover:bg-gray-700 active:bg-gray-900 active:scale-95 text-gray-300 border border-gray-700 ' +
-    'focus-visible:ring-2 focus-visible:ring-gray-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950',
-  danger:
-    'bg-red-500/10 hover:bg-red-500/20 active:bg-red-500/30 active:scale-95 text-red-400 border border-red-500/30 ' +
-    'focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950',
-  ghost:
-    'hover:bg-gray-800 active:bg-gray-700 active:scale-95 text-gray-400 hover:text-white ' +
-    'focus-visible:ring-2 focus-visible:ring-gray-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950',
 const variantClasses = {
   primary: 'bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500',
   secondary: 'bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700',
