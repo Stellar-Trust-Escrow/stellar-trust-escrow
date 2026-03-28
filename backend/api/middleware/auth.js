@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import * as Sentry from '@sentry/node';
 
 const authMiddleware = (req, res, next) => {
   const authHeader = req.header('Authorization');
@@ -14,6 +15,11 @@ const authMiddleware = (req, res, next) => {
       return res.status(403).json({ error: 'Token does not belong to this tenant.' });
     }
     req.user = decoded; // Contains { userId: user.id }
+    Sentry.configureScope((scope) => {
+      if (req.user?.userId) {
+        scope.setUser({ id: String(req.user.userId) });
+      }
+    });
     next();
   } catch (err) {
     if (err.name === 'TokenExpiredError') {

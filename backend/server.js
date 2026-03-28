@@ -4,13 +4,14 @@ import './lib/sentry.js';
 import * as Sentry from '@sentry/node';
 
 import 'dotenv/config';
+import { randomUUID } from 'crypto';
 import { initSecrets } from './lib/secrets.js';
 import http from 'http';
 import compressionMiddleware from './middleware/compression.js';
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
-import morgan from 'morgan';
+import { logger, requestLogger } from './lib/logger.js';
 
 import cookieParser from 'cookie-parser';
 import {
@@ -74,13 +75,19 @@ app.use(helmet());
 app.use(compressionMiddleware);
 app.use(metricsMiddleware);
 app.use(responseTime);
+app.use(requestLogger);
+app.use((req, res, next) => {
+  const requestId = req.id || req.headers['x-request-id'] || req.headers['x-correlation-id'] || randomUUID();
+  req.id = requestId;
+  res.setHeader('X-Request-Id', requestId);
+  next();
+});
 app.use(
   cors({
     origin: process.env.ALLOWED_ORIGINS?.split(',') || 'http://localhost:3000',
     credentials: true,
   }),
 );
-app.use(morgan('combined'));
 app.use(express.json({ limit: REQUEST_SIZE_LIMIT }));
 app.use(express.urlencoded({ extended: true, limit: REQUEST_SIZE_LIMIT }));
 app.use(cookieParser());
@@ -223,7 +230,7 @@ app.use(
 
 // ── Generic error handler ─────────────────────────────────────────────────────
 
-app.use((err, _req, res, _next) => {
+app.use((err, req, res, _next) => {
   const statusCode = err.statusCode || 500;
 
   // Attach Sentry event ID to response so support can correlate reports
@@ -231,11 +238,23 @@ app.use((err, _req, res, _next) => {
   const body = { error: err.message || 'Internal server error' };
   if (sentryId) body.errorId = sentryId;
 
+  const log = req?.log || logger;
+  log.error(
+    {
+      err,
+      statusCode,
+      requestId: req?.id,
+      route: req?.path || 'unknown',
+      userId: req?.user?.userId,
+    },
+    'Unhandled error',
+  );
+
   if (statusCode >= 500) {
-    console.error(err.stack);
+    Sentry.captureException(err);
   }
 
-  errorsTotal.inc({ type: err.name || 'Error', route: _req?.path || 'unknown' });
+  errorsTotal.inc({ type: err.name || 'Error', route: req?.path || 'unknown' });
   res.status(statusCode).json(body);
 });
 
@@ -245,16 +264,15 @@ createWebSocketServer(server);
 server.listen(PORT, async () => {
   // Load secrets first — merges vault/env secrets into process.env
   await initSecrets();
-  console.log(`[Secrets] Backend: ${process.env.SECRETS_BACKEND || 'env'}`);
-  console.log(`API running on port ${PORT}`);
-  console.log(`Network: ${process.env.STELLAR_NETWORK}`);
+  logger.info({ secretsBackend: process.env.SECRETS_BACKEND || 'env' }, 'Secrets backend loaded');
+  logger.info({ port: PORT, network: process.env.STELLAR_NETWORK }, 'API server started');
   await emailService.start();
-  console.log('[EmailService] Queue processor started');
+  logger.info('[EmailService] Queue processor started');
   complianceService.startScheduler();
-  console.log('[ComplianceService] Scheduler started');
-  console.log('[WebSocket] Server attached');
+  logger.info('[ComplianceService] Scheduler started');
+  logger.info('[WebSocket] Server attached');
   startIndexer().catch((err) => {
-    console.error('[Indexer] Failed to start:', err.message);
+    logger.error({ err, component: 'indexer' }, 'Indexer failed to start');
     Sentry.captureException(err, { tags: { component: 'indexer' } });
   });
 });
