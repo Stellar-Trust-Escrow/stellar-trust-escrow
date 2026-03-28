@@ -25,6 +25,9 @@ import dynamic from 'next/dynamic';
 import EscrowCard from '../../components/escrow/EscrowCard';
 import ReputationBadge from '../../components/ui/ReputationBadge';
 import Button from '../../components/ui/Button';
+import StatWidgets from '../../components/dashboard/StatWidgets';
+import ActivityTimeline from '../../components/dashboard/ActivityTimeline';
+import PageTransition from '../../components/layout/PageTransition';
 import ErrorBoundary from '../../../components/error/ErrorBoundary';
 import { usePerformance } from '../../hooks/usePerformance';
 
@@ -111,6 +114,11 @@ export default function DashboardPage() {
     ? Math.min(100, Math.round(Number(reputation.totalScore) / 100))
     : null;
 
+  return (
+    <PageTransition>
+    <div className="space-y-8">
+      {/* Page Header */}
+      <div className="flex items-center justify-between">
 return (
     <ErrorBoundary>
       <div className="space-y-8">
@@ -139,7 +147,7 @@ return (
         </div>
         <Suspense
           fallback={
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="card animate-pulse">
                   <div className="h-3 w-20 bg-gray-700 rounded mb-3" />
@@ -206,5 +214,6 @@ return (
         )}
       </section>
     </div>
+    </PageTransition>
   );
 }
