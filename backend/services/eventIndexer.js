@@ -27,6 +27,7 @@
 import prisma from '../lib/prisma.js';
 import { scValToNative } from '@stellar/stellar-sdk';
 import { getContractEvents, getLatestLedger } from './stellarService.js';
+import { broadcastEscrowEvent } from '../api/websocket/handlers.js';
 
 const CONTRACT_ID = process.env.ESCROW_CONTRACT_ID || '';
 const POLL_INTERVAL_MS = parseInt(process.env.INDEXER_POLL_INTERVAL_MS || '5000', 10);
@@ -111,6 +112,12 @@ const handleEscrowCreated = async (event, meta) => {
     }),
     buildEventInsert(event, meta, escrowId),
   ]);
+
+  try {
+    broadcastEscrowEvent(escrowId, 'escrow:funded', 'Active');
+  } catch (err) {
+    console.warn('[Indexer] broadcastEscrowEvent failed for handleEscrowCreated:', err.message);
+  }
 };
 
 /**
@@ -235,6 +242,12 @@ const handleFundsReleased = async (event, meta) => {
     `,
     buildEventInsert(event, meta, escrowId),
   ]);
+
+  try {
+    broadcastEscrowEvent(escrowId, 'escrow:funded', 'Active');
+  } catch (err) {
+    console.warn('[Indexer] broadcastEscrowEvent failed for handleFundsReleased:', err.message);
+  }
 };
 
 /**
@@ -279,6 +292,12 @@ const handleDisputeRaised = async (event, meta) => {
     }),
     buildEventInsert(event, meta, escrowId),
   ]);
+
+  try {
+    broadcastEscrowEvent(escrowId, 'escrow:disputed', 'Disputed');
+  } catch (err) {
+    console.warn('[Indexer] broadcastEscrowEvent failed for handleDisputeRaised:', err.message);
+  }
 };
 
 /**
@@ -305,6 +324,12 @@ const handleDisputeResolved = async (event, meta) => {
     }),
     buildEventInsert(event, meta, escrowId),
   ]);
+
+  try {
+    broadcastEscrowEvent(escrowId, 'escrow:released', 'Completed');
+  } catch (err) {
+    console.warn('[Indexer] broadcastEscrowEvent failed for handleDisputeResolved:', err.message);
+  }
 };
 
 /**
