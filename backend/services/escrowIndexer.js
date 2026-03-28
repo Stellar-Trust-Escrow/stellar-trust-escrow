@@ -24,6 +24,10 @@
  * @module escrowIndexer
  */
 
+import { stellarEventsQueue } from '../lib/queueConfig.js';
+import { setupQueueEventListeners } from '../lib/queueConfig.js';
+import { startMonitoring } from './alertService.js';
+
 // TODO (contributor): uncomment when dependencies are installed
 // const { PrismaClient } = require('@prisma/client');
 
@@ -42,7 +46,7 @@ let lastProcessedLedger = parseInt(process.env.INDEXER_START_LEDGER || '0');
  *
  * Polls at the interval defined by INDEXER_POLL_INTERVAL_MS.
  * Each tick fetches new events since `lastProcessedLedger` and
- * processes them in order.
+ * queues them for processing via BullMQ.
  *
  * TODO (contributor — hard, Issue #27):
  * 1. Initialize Soroban RPC client
@@ -53,7 +57,11 @@ let lastProcessedLedger = parseInt(process.env.INDEXER_START_LEDGER || '0');
  */
 const startIndexer = async () => {
   console.log(`[Indexer] Starting from ledger ${lastProcessedLedger}`);
-
+  
+  // Setup queue event listeners and monitoring
+  setupQueueEventListeners();
+  startMonitoring();
+  
   // TODO: implement polling loop
   // const server = new SorobanRpc.Server(process.env.SOROBAN_RPC_URL);
   // setInterval(async () => {
@@ -69,23 +77,93 @@ const startIndexer = async () => {
 
 /**
  * Fetches contract events from Stellar since `lastProcessedLedger`
- * and dispatches each to the appropriate handler.
+ * and queues each event for processing via BullMQ.
  *
  * @param {SorobanRpc.Server} server — initialized Soroban RPC client
  *
  * TODO (contributor — hard, Issue #27):
  * 1. Call server.getEvents({ startLedger, filters: [{ contractIds: [CONTRACT_ADDRESS] }] })
- * 2. For each event, call dispatchEvent(event)
+ * 2. For each event, queue it via BullMQ instead of direct processing
  * 3. Update lastProcessedLedger = latestLedger
  * 4. Persist lastProcessedLedger to DB
  */
 const fetchAndProcessEvents = async (_server) => {
   // TODO: implement
   throw new Error('fetchAndProcessEvents not implemented — see Issue #27');
+  
+  // Example implementation when ready:
+  // const events = await server.getEvents({
+  //   startLedger: lastProcessedLedger,
+  //   filters: [{ contractIds: [process.env.ESCORROW_CONTRACT_ADDRESS] }]
+  // });
+  // 
+  // for (const event of events.events) {
+  //   await stellarEventsQueue.add('process-stellar-event', {
+  //     event,
+  //     ledger: event.ledger
+  //   }, {
+  //     // Optional: customize job options per event type
+  //     priority: getEventPriority(event),
+  //     delay: getEventDelay(event)
+  //   });
+  // }
+};
+
+/**
+ * Get processing priority for an event
+ * @param {Object} event - Stellar event
+ * @returns {number} Priority (higher = more important)
+ */
+const getEventPriority = (event) => {
+  // High priority for critical events
+  const highPriorityEvents = ['DisputeRaised', 'DisputeResolved'];
+  const eventName = parseEventName(event);
+  
+  if (highPriorityEvents.includes(eventName)) {
+    return 10;
+  }
+  return 1;
+};
+
+/**
+ * Get processing delay for an event (if any)
+ * @param {Object} event - Stellar event
+ * @returns {number} Delay in milliseconds
+ */
+const getEventDelay = (event) => {
+  // No delay by default, but could be used for throttling
+  return 0;
+};
+
+/**
+ * Parse event name from Stellar event topic
+ * @param {Object} event - Stellar event
+ * @returns {string} Event name
+ */
+const parseEventName = (event) => {
+  if (!event.topic || !event.topic[0]) {
+    return 'Unknown';
+  }
+  
+  const topicHex = event.topic[0];
+  const eventMap = {
+    '6573635f637274': 'EscrowCreated',
+    '6d696c5f616464': 'MilestoneAdded',
+    '6d696c5f737562': 'MilestoneSubmitted',
+    '6d696c5f617070': 'MilestoneApproved',
+    '66756e645f726c': 'FundsReleased',
+    '6573635f63616e': 'EscrowCancelled',
+    '6469735f726169': 'DisputeRaised',
+    '6469735f726573': 'DisputeResolved',
+    '7265705f757064': 'ReputationUpdated',
+  };
+  
+  return eventMap[topicHex] || 'Unknown';
 };
 
 /**
  * Routes a contract event to the correct handler based on its topic.
+ * NOTE: This function is now called by the event worker, not directly.
  *
  * @param {object} event — raw Soroban event object from RPC
  *
@@ -128,6 +206,15 @@ const handleEscrowCreated = async (_event) => {
  * TODO (contributor — medium, Issue #27)
  */
 const handleMilestoneAdded = async (_event) => {
+  // TODO: implement
+};
+
+/**
+ * Handles a MilestoneSubmitted event — updates milestone status in DB.
+ *
+ * TODO (contributor — medium, Issue #27)
+ */
+const handleMilestoneSubmitted = async (_event) => {
   // TODO: implement
 };
 
@@ -192,6 +279,7 @@ export {
   // Export handlers for unit testing
   handleEscrowCreated,
   handleMilestoneAdded,
+  handleMilestoneSubmitted,
   handleMilestoneApproved,
   handleFundsReleased,
   handleDisputeRaised,
