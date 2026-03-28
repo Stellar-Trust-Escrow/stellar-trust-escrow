@@ -40,7 +40,7 @@ mod upgrade_tests;
 pub use errors::EscrowError;
 use storage::StorageManager;
 use types::{CancellationRequest, RecurringInterval, RecurringPaymentConfig, SlashRecord};
-pub use types::{DataKey, EscrowState, EscrowStatus, Milestone, MilestoneStatus, ReputationRecord};
+pub use types::{DataKey, EscrowState, EscrowStatus, Milestone, MilestoneStatus, ReputationRecord, Timelock};
 
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, token, Address, BytesN, Env, String, Vec,
@@ -130,6 +130,7 @@ pub(crate) struct EscrowMeta {
     pub(crate) milestone_count: u32,
     /// Number of milestones in Approved state — avoids full scan on completion check.
     pub(crate) approved_count: u32,
+    pub(crate) released_count: u32,
     pub(crate) arbiter: Option<Address>,
     pub(crate) created_at: u64,
     pub(crate) deadline: Option<u64>,
@@ -137,6 +138,8 @@ pub(crate) struct EscrowMeta {
     pub(crate) lock_time: Option<u64>,
     /// Optional extension deadline for the lock time.
     pub(crate) lock_time_extension: Option<u64>,
+    /// Optional timelock controls release window after approval.
+    pub(crate) timelock: Option<types::Timelock>,
     pub(crate) brief_hash: BytesN<32>,
     /// Prepaid storage rent reserve held by the contract in the escrow token.
     pub(crate) rent_balance: i128,
@@ -316,6 +319,7 @@ impl ContractStorage {
             deadline: meta.deadline,
             lock_time: meta.lock_time,
             lock_time_extension: meta.lock_time_extension,
+            timelock: meta.timelock,
             brief_hash: meta.brief_hash,
         })
     }
@@ -626,6 +630,25 @@ impl ContractStorage {
         Ok(())
     }
 
+    fn check_timelock_expired(
+        env: &Env,
+        escrow_id: u64,
+        timelock: Option<types::Timelock>,
+    ) -> Result<(), EscrowError> {
+        if let Some(tl) = timelock {
+            let now = env.ledger().timestamp();
+            let expiry = tl
+                .start_ledger
+                .checked_add(tl.duration_ledger)
+                .ok_or(EscrowError::InvalidTimelockDuration)?;
+            if now < expiry {
+                return Err(EscrowError::TimelockNotExpired);
+            }
+            events::emit_timelock_released(env, escrow_id, now);
+        }
+        Ok(())
+    }
+
     // ── Pause helpers ──────────────────────────────────────────────────────────
 
     fn is_paused(env: &Env) -> bool {
@@ -772,11 +795,13 @@ impl EscrowContract {
                 status: EscrowStatus::Active,
                 milestone_count: 0,
                 approved_count: 0,
+                released_count: 0,
                 arbiter,
                 created_at: now,
                 deadline,
                 lock_time,
                 lock_time_extension: None,
+                timelock: None,
                 brief_hash,
                 rent_balance: rent_reserve,
                 last_rent_collection_at: now,
@@ -1118,7 +1143,7 @@ impl EscrowContract {
             return Err(EscrowError::EscrowNotActive);
         }
 
-        // Check if lock time has expired
+        // Check if lock time has expired (legacy lock_time behaviour)
         ContractStorage::check_lock_time_expired(&env, escrow_id, meta.lock_time)?;
 
         let mut milestone = ContractStorage::load_milestone(&env, escrow_id, milestone_id)?;
@@ -1133,30 +1158,37 @@ impl EscrowContract {
         milestone.resolved_at = Some(now);
         ContractStorage::save_milestone(&env, escrow_id, &milestone);
 
-        // Release funds — single cross-contract call
-        token::Client::new(&env, &meta.token).transfer(
-            &env.current_contract_address(),
-            &meta.freelancer,
-            &amount,
-        );
-
-        // STE-04 fix: checked_sub instead of silent underflow
-        meta.remaining_balance = meta
-            .remaining_balance
-            .checked_sub(amount)
-            .ok_or(EscrowError::AmountMismatch)?;
-
-        // O(1) completion check via approved_count (main branch optimization)
         meta.approved_count += 1;
-        if meta.approved_count == meta.milestone_count && meta.milestone_count > 0 {
-            meta.status = EscrowStatus::Completed;
-            // STE-03 fix: emit completion event so the indexer can update DB
-            events::emit_escrow_completed(&env, escrow_id);
-        }
-        ContractStorage::save_escrow_meta(&env, &meta);
 
+        let timelock_expired = ContractStorage::check_timelock_expired(&env, escrow_id, meta.timelock.clone()).is_ok();
+
+        if timelock_expired {
+            // Release funds now if timelock is not active
+            token::Client::new(&env, &meta.token).transfer(
+                &env.current_contract_address(),
+                &meta.freelancer,
+                &amount,
+            );
+            meta.remaining_balance = meta
+                .remaining_balance
+                .checked_sub(amount)
+                .ok_or(EscrowError::AmountMismatch)?;
+            meta.released_count += 1;
+            milestone.status = MilestoneStatus::Released;
+            ContractStorage::save_milestone(&env, escrow_id, &milestone);
+            events::emit_funds_released(&env, escrow_id, &meta.freelancer, amount);
+        }
+
+        if meta.approved_count == meta.milestone_count && meta.milestone_count > 0 {
+            // Wait until funds are released for full completion
+            if meta.released_count == meta.milestone_count {
+                meta.status = EscrowStatus::Completed;
+                events::emit_escrow_completed(&env, escrow_id);
+            }
+        }
+
+        ContractStorage::save_escrow_meta(&env, &meta);
         events::emit_milestone_approved(&env, escrow_id, milestone_id, amount);
-        events::emit_funds_released(&env, escrow_id, &meta.freelancer, amount);
         Ok(())
     }
 
@@ -1204,44 +1236,64 @@ impl EscrowContract {
         escrow_id: u64,
         milestone_id: u32,
     ) -> Result<(), EscrowError> {
-        // STE-01 fix: admin-only auth
         ContractStorage::require_initialized(&env)?;
+        caller.require_auth();
+
         let admin: Address = env
             .storage()
             .instance()
             .get(&DataKey::Admin)
             .ok_or(EscrowError::NotInitialized)?;
-        caller.require_auth();
-        if caller != admin {
-            return Err(EscrowError::AdminOnly);
-        }
 
-        // Load milestone first — cheaper than meta if it fails
-        let milestone = ContractStorage::load_milestone(&env, escrow_id, milestone_id)?;
+        let mut milestone = ContractStorage::load_milestone(&env, escrow_id, milestone_id)?;
         if milestone.status != MilestoneStatus::Approved {
             return Err(EscrowError::InvalidMilestoneState);
         }
 
-        // Load meta to check lock time
         let mut meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
 
-        // Check if lock time has expired
+        let is_admin = caller == admin;
+        let timelock_ok = ContractStorage::check_timelock_expired(&env, escrow_id, meta.timelock.clone()).is_ok();
+
+        if !is_admin && !timelock_ok {
+            return Err(EscrowError::TimelockNotExpired);
+        }
+
+        // Legacy lock_time also required if present.
         ContractStorage::check_lock_time_expired(&env, escrow_id, meta.lock_time)?;
 
         let amount = milestone.amount;
-        meta.remaining_balance = meta
-            .remaining_balance
-            .checked_sub(amount)
-            .ok_or(EscrowError::AmountMismatch)?;
 
         token::Client::new(&env, &meta.token).transfer(
             &env.current_contract_address(),
             &meta.freelancer,
             &amount,
         );
+
+        milestone.status = MilestoneStatus::Released;
+        ContractStorage::save_milestone(&env, escrow_id, &milestone);
+
+        meta.remaining_balance = meta
+            .remaining_balance
+            .checked_sub(amount)
+            .ok_or(EscrowError::AmountMismatch)?;
+        meta.released_count = meta
+            .released_count
+            .checked_add(1)
+            .ok_or(EscrowError::AmountMismatch)?;
+
+        if meta.released_count == meta.milestone_count && meta.milestone_count > 0 {
+            meta.status = EscrowStatus::Completed;
+            events::emit_escrow_completed(&env, escrow_id);
+        }
+
         ContractStorage::save_escrow_meta(&env, &meta);
 
         events::emit_funds_released(&env, escrow_id, &meta.freelancer, amount);
+        if timelock_ok && !is_admin {
+            events::emit_timelock_released(&env, escrow_id, env.ledger().timestamp());
+        }
+
         Ok(())
     }
 
@@ -1277,6 +1329,45 @@ impl EscrowContract {
         ContractStorage::save_escrow_meta(&env, &meta);
 
         events::emit_escrow_cancelled(&env, escrow_id, returned);
+        Ok(())
+    }
+
+    /// Starts a timed release window for the escrow.
+    ///
+    /// `duration_ledger` is the number of ledger seconds to wait before release.
+    /// Valid values are 1 to 30 days (inclusive).
+    pub fn start_timelock(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+        duration_ledger: u64,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_initialized(&env)?;
+
+        if duration_ledger == 0 || duration_ledger > 30 * 24 * 60 * 60 {
+            return Err(EscrowError::InvalidTimelockDuration);
+        }
+
+        let mut meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
+        if caller != meta.client && caller != meta.freelancer {
+            return Err(EscrowError::Unauthorized);
+        }
+        if meta.status != EscrowStatus::Active {
+            return Err(EscrowError::EscrowNotActive);
+        }
+        if meta.timelock.is_some() {
+            return Err(EscrowError::TimelockAlreadyActive);
+        }
+
+        let now = env.ledger().timestamp();
+        meta.timelock = Some(types::Timelock {
+            duration_ledger,
+            start_ledger: now,
+        });
+        ContractStorage::save_escrow_meta(&env, &meta);
+
+        events::emit_timelock_started(&env, escrow_id, duration_ledger, now);
         Ok(())
     }
 

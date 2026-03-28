@@ -61,6 +61,14 @@ pub enum EscrowError {
     LockTimeExpired = 29,
     /// Cannot extend lock time to the past.
     InvalidLockTimeExtension = 30,
+    /// The specified timelock duration is invalid.
+    InvalidTimelockDuration = 51,
+    /// The timelock is already active.
+    TimelockAlreadyActive = 52,
+    /// The timelock has not yet expired.
+    TimelockNotExpired = 53,
+    /// No timelock is set on the escrow.
+    TimelockNotSet = 54,
     /// The contract is currently paused.
     ContractPaused = 31,
 
