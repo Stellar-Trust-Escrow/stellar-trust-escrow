@@ -39,6 +39,7 @@ import cache from './lib/cache.js';
 import { attachPrismaMetrics } from './lib/prismaMetrics.js';
 import healthRoutes from './api/routes/healthRoutes.js';
 import tenantRoutes from './api/routes/tenantRoutes.js';
+import wsHealthRoutes from './api/routes/wsHealth.js';
 import prisma, { startConnectionMonitoring } from './lib/prisma.js';
 import { errorsTotal } from './lib/metrics.js';
 import { apiRateLimit, leaderboardRateLimit } from './middleware/rateLimit.js';
@@ -158,6 +159,9 @@ app.get('/health', async (_req, res) => {
     backup: backupStatus,
   });
 });
+
+// ── WebSocket health — no auth required ───────────────────────────────────────
+app.use('/ws/health', wsHealthRoutes);
 
 // ── API Routes with Deprecation Strategy ──────────────────────────────────────
 // Current routes (no deprecation) - these are the active API endpoints
