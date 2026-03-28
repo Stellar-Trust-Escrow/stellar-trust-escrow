@@ -57,6 +57,7 @@ import complianceService from './services/complianceService.js';
 import { startIndexer } from './services/eventIndexer.js';
 import { setupSwagger } from './api/docs/swagger.js';
 import { getBackupStatus } from './services/backupMonitor.js';
+import { syncFromPrisma, ensureIndex } from './services/reputationSearchService.js';
 import { createGateway } from './gateway/index.js';
 
 // Attach Prisma query instrumentation and monitoring
@@ -252,6 +253,18 @@ server.listen(PORT, async () => {
     logger.error({ err, component: 'indexer' }, 'Indexer failed to start');
     Sentry.captureException(err, { tags: { component: 'indexer' } });
   });
+
+  // Reputation ES sync — initial + daily re-sync
+  ensureIndex().then(() =>
+    syncFromPrisma().catch((err) =>
+      logger.warn({ err }, '[ReputationSearch] Initial sync failed'),
+    ),
+  );
+  const MS_PER_DAY = 86_400_000;
+  setInterval(
+    () => syncFromPrisma().catch((err) => logger.warn({ err }, '[ReputationSearch] Daily sync failed')),
+    MS_PER_DAY,
+  );
 });
 
 export default app;

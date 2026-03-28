@@ -28,6 +28,7 @@ import prisma from '../lib/prisma.js';
 import { scValToNative } from '@stellar/stellar-sdk';
 import { getContractEvents, getLatestLedger } from './stellarService.js';
 import { broadcastEscrowEvent } from '../api/websocket/handlers.js';
+import { indexRecord } from './reputationSearchService.js';
 
 const CONTRACT_ID = process.env.ESCROW_CONTRACT_ID || '';
 const POLL_INTERVAL_MS = parseInt(process.env.INDEXER_POLL_INTERVAL_MS || '5000', 10);
@@ -357,6 +358,9 @@ const handleReputationUpdated = async (event, meta) => {
     }),
     buildEventInsert(event, meta, null),
   ]);
+
+  // Keep ES in sync — fire-and-forget, non-blocking
+  indexRecord({ address: addr, totalScore: score, lastUpdated: meta.ledgerAt }).catch(() => {});
 };
 
 // ─── Dispatch ─────────────────────────────────────────────────────────────────
