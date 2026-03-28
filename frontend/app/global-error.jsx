@@ -9,15 +9,14 @@
 
 import * as Sentry from '@sentry/nextjs';
 import { useEffect } from 'react';
+import Button from '../components/ui/Button';
 
 export default function GlobalError({ error, reset }) {
   useEffect(() => {
     Sentry.captureException(error);
   }, [error]);
 
-  return (
-    <html lang="en">
-      <body className="bg-gray-950 text-gray-100 min-h-screen flex items-center justify-center">
+
         <div className="text-center space-y-4 p-8">
           <h1 className="text-2xl font-bold text-red-400">Something went wrong</h1>
           <p className="text-gray-400 text-sm">

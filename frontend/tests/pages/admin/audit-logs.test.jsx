@@ -1,13 +1,20 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import AdminAuditLogsPage from '../../../app/admin/audit-logs/page';
+import { renderWithStore } from '../../../store/test-utils';
 
 const localStorageMock = (() => {
   let store = {};
   return {
     getItem: (key) => store[key] || null,
-    setItem: (key, value) => { store[key] = value; },
-    removeItem: (key) => { delete store[key]; },
-    clear: () => { store = {}; },
+    setItem: (key, value) => {
+      store[key] = value;
+    },
+    removeItem: (key) => {
+      delete store[key];
+    },
+    clear: () => {
+      store = {};
+    },
   };
 })();
 Object.defineProperty(window, 'localStorage', { value: localStorageMock });
@@ -25,7 +32,7 @@ describe('AdminAuditLogsPage', () => {
       ok: true,
       json: async () => ({ logs: [], pagination: { page: 1, total: 0, pages: 1 } }),
     });
-    render(<AdminAuditLogsPage />);
+    renderWithStore(<AdminAuditLogsPage />);
     expect(screen.getByText('Audit Logs')).toBeInTheDocument();
   });
 
@@ -34,7 +41,7 @@ describe('AdminAuditLogsPage', () => {
       ok: true,
       json: async () => ({ logs: [], pagination: { page: 1, total: 0, pages: 1 } }),
     });
-    render(<AdminAuditLogsPage />);
+    renderWithStore(<AdminAuditLogsPage />);
     expect(screen.getByText('Loading…')).toBeInTheDocument();
   });
 
@@ -43,7 +50,7 @@ describe('AdminAuditLogsPage', () => {
       ok: true,
       json: async () => ({ logs: [], pagination: { page: 1, total: 0, pages: 1 } }),
     });
-    render(<AdminAuditLogsPage />);
+    renderWithStore(<AdminAuditLogsPage />);
     await waitFor(() => {
       expect(screen.getByText('No audit entries yet.')).toBeInTheDocument();
     });
@@ -54,12 +61,18 @@ describe('AdminAuditLogsPage', () => {
       ok: true,
       json: async () => ({
         logs: [
-          { id: 1, action: 'BAN_USER', targetAddress: 'GABC123', reason: 'Spam', performedAt: '2025-03-01T10:00:00Z' },
+          {
+            id: 1,
+            action: 'BAN_USER',
+            targetAddress: 'GABC123',
+            reason: 'Spam',
+            performedAt: '2025-03-01T10:00:00Z',
+          },
         ],
         pagination: { page: 1, total: 1, pages: 1 },
       }),
     });
-    render(<AdminAuditLogsPage />);
+    renderWithStore(<AdminAuditLogsPage />);
     await waitFor(() => {
       expect(screen.getByText('BAN_USER')).toBeInTheDocument();
     });
@@ -70,7 +83,7 @@ describe('AdminAuditLogsPage', () => {
       ok: false,
       json: async () => ({ error: 'Unauthorized' }),
     });
-    render(<AdminAuditLogsPage />);
+    renderWithStore(<AdminAuditLogsPage />);
     await waitFor(() => {
       expect(screen.getByText(/Unauthorized/)).toBeInTheDocument();
     });
@@ -81,7 +94,7 @@ describe('AdminAuditLogsPage', () => {
       ok: true,
       json: async () => ({ logs: [], pagination: { page: 1, total: 0, pages: 1 } }),
     });
-    render(<AdminAuditLogsPage />);
+    renderWithStore(<AdminAuditLogsPage />);
     expect(screen.getByText('Action')).toBeInTheDocument();
   });
 
@@ -90,7 +103,7 @@ describe('AdminAuditLogsPage', () => {
       ok: true,
       json: async () => ({ logs: [], pagination: { page: 1, total: 0, pages: 1 } }),
     });
-    render(<AdminAuditLogsPage />);
+    renderWithStore(<AdminAuditLogsPage />);
     expect(screen.getByText('← Dashboard')).toBeInTheDocument();
   });
 });

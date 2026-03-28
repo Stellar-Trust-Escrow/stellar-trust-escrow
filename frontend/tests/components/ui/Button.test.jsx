@@ -33,7 +33,11 @@ describe('Button', () => {
 
   it('does not call onClick when disabled', () => {
     const onClick = jest.fn();
-    render(<Button disabled onClick={onClick}>Click</Button>);
+    render(
+      <Button disabled onClick={onClick}>
+        Click
+      </Button>,
+    );
     fireEvent.click(screen.getByRole('button'));
     expect(onClick).not.toHaveBeenCalled();
   });
@@ -58,7 +62,11 @@ describe('Button', () => {
   });
 
   it('renders as button (not link) when href is provided but disabled', () => {
-    render(<Button href="/test" disabled>Disabled Link</Button>);
+    render(
+      <Button href="/test" disabled>
+        Disabled Link
+      </Button>,
+    );
     expect(screen.getByRole('button')).toBeInTheDocument();
   });
 });

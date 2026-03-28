@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { EventEmitter } from 'events';
 import { WebSocketServer } from 'ws';
 import prisma from '../../lib/prisma.js';
 
@@ -78,16 +79,20 @@ function sendJson(ws, obj) {
   }
 }
 
+export const metricsEmitter = new EventEmitter();
+
 class WebSocketPool {
   constructor() {
-    this.connections = new Map(); // id -> { ws, topics: Set, isAlive: boolean }
+    this.connections = new Map(); // id -> { ws, topics: Set, isAlive: boolean, user: { userId, walletAddress, ...claims } }
+    this.messageQueues = new Map(); // userId -> QueuedMessage[]
     this.peakConnections = 0;
     this.totalConnected = 0;
     this.totalDisconnected = 0;
+    this.totalTerminatedByTimeout = 0;
     this.heartbeatInterval = null;
   }
 
-  addConnection(ws, req) {
+  addConnection(ws, req, user = null) {
     if (this.connections.size >= MAX_CONNECTIONS) {
       console.warn(`[WebSocket] Connection rejected: Max capacity reached (${MAX_CONNECTIONS})`);
       ws.close(1013, 'Try again later. Max capacity reached.');
@@ -95,12 +100,14 @@ class WebSocketPool {
     }
 
     const id = randomUUID();
+    ws.isAlive = true;
+
     const meta = {
       ws,
       topics: new Set(),
-      isAlive: true,
       connectedAt: Date.now(),
       ip: req.socket.remoteAddress,
+      user, // decoded JWT payload: { userId, walletAddress, ...claims }
     };
 
     this.connections.set(id, meta);
@@ -110,8 +117,7 @@ class WebSocketPool {
     }
 
     ws.on('pong', () => {
-      const conn = this.connections.get(id);
-      if (conn) conn.isAlive = true;
+      ws.isAlive = true;
     });
 
     ws.on('close', () => {
@@ -123,13 +129,29 @@ class WebSocketPool {
     });
 
     ws.on('message', (data) => {
-      void this.handleIncomingMessage(id, ws, data);
+      let message;
+      try {
+        message = JSON.parse(data.toString());
+      } catch {
+        console.warn(`[WebSocket] Invalid message from ${id}:`, data.toString());
+        return;
+      }
+
+      if (message.type === 'subscribe' && message.topic) {
+        this.subscribe(id, message.topic, prisma).catch((err) => {
+          console.error(`[WebSocket] subscribe error for ${id}:`, err.message);
+        });
+      } else if (message.type === 'unsubscribe' && message.topic) {
+        this.unsubscribe(id, message.topic);
+      }
+      // unknown types are silently ignored (Requirement 3.7)
     });
 
     if (!this.heartbeatInterval) {
       this.startHeartbeat();
     }
 
+    this._emitMetrics();
     return id;
   }
 
@@ -183,21 +205,19 @@ class WebSocketPool {
       if (this.connections.size === 0) {
         this.stopHeartbeat();
       }
+
+      this._emitMetrics();
     }
   }
 
-  subscribe(id, topic) {
+  async subscribe(id, topic, prisma) {
     const conn = this.connections.get(id);
-    if (conn) {
-      conn.topics.add(topic);
-    }
+    if (conn) conn.topics.add(topic);
   }
 
   unsubscribe(id, topic) {
     const conn = this.connections.get(id);
-    if (conn) {
-      conn.topics.delete(topic);
-    }
+    if (conn) conn.topics.delete(topic);
   }
 
   broadcast(topic, payload) {
@@ -205,7 +225,7 @@ class WebSocketPool {
     const messageStr = JSON.stringify({ topic, payload });
 
     for (const [_id, conn] of this.connections.entries()) {
-      if (conn.topics.has(topic) && conn.ws.readyState === 1 /* OPEN */) {
+      if (conn.topics.has(topic) && conn.ws.readyState === WebSocket.OPEN) {
         conn.ws.send(messageStr);
         sentCount++;
       }
@@ -213,25 +233,99 @@ class WebSocketPool {
     return sentCount;
   }
 
+  /**
+   * Broadcast an escrow lifecycle event to all relevant subscribers.
+   * Connections that are OPEN receive the message immediately; others have it enqueued.
+   *
+   * @param {bigint|number|string} escrowId
+   * @param {string} eventType  e.g. 'escrow:funded'
+   * @param {string} status     EscrowStatus value e.g. 'Active'
+   */
+  broadcastEscrowEvent(escrowId, eventType, status) {
+    const topic = `escrow:${escrowId}`;
+    const bigIntReplacer = (_k, v) => (typeof v === 'bigint' ? v.toString() : v);
+
+    const message = {
+      topic,
+      payload: {
+        event: eventType,
+        escrowId: String(escrowId),
+        status,
+        timestamp: new Date().toISOString(),
+      },
+    };
+    const messageStr = JSON.stringify(message, bigIntReplacer);
+
+    for (const [_id, conn] of this.connections.entries()) {
+      const subscribedToEscrow = conn.topics.has(topic);
+      const subscribedToAll = conn.topics.has('user:all');
+
+      if (!subscribedToEscrow && !subscribedToAll) continue;
+
+      if (conn.ws.readyState === WebSocket.OPEN) {
+        conn.ws.send(messageStr);
+      } else {
+        // Enqueue for disconnected user
+        const userId = conn.user?.userId;
+        if (userId == null) continue;
+
+        if (!this.messageQueues.has(userId)) {
+          this.messageQueues.set(userId, []);
+        }
+        const queue = this.messageQueues.get(userId);
+        if (queue.length >= 50) {
+          queue.shift(); // discard oldest
+        }
+        queue.push({ ...message, queuedAt: Date.now() });
+      }
+    }
+  }
+
+  /**
+   * Flush queued messages for the user associated with connection `id`.
+   * Messages are sent in chronological order; the queue is cleared afterwards.
+   *
+   * @param {string} id  Connection UUID
+   */
+  flushQueue(id) {
+    const conn = this.connections.get(id);
+    if (!conn || conn.ws.readyState !== WebSocket.OPEN) return;
+
+    const userId = conn.user?.userId;
+    if (userId == null) return;
+
+    const queue = this.messageQueues.get(userId);
+    if (!queue || queue.length === 0) return;
+
+    // Sort by queuedAt to ensure chronological order
+    queue.sort((a, b) => a.queuedAt - b.queuedAt);
+
+    const bigIntReplacer = (_k, v) => (typeof v === 'bigint' ? v.toString() : v);
+    for (const msg of queue) {
+      const { queuedAt: _dropped, ...wireMsg } = msg;
+      conn.ws.send(JSON.stringify(wireMsg, bigIntReplacer));
+    }
+
+    this.messageQueues.delete(userId);
+  }
+
   startHeartbeat() {
     this.heartbeatInterval = setInterval(() => {
       const toTerminate = [];
       for (const [id, conn] of this.connections.entries()) {
-        if (!conn.isAlive) {
-          toTerminate.push(id);
-          continue;
-        }
-        conn.isAlive = false;
-        conn.ws.ping();
-      }
-      for (const id of toTerminate) {
-        const conn = this.connections.get(id);
-        if (conn) {
+        if (!conn.ws.isAlive) {
           console.log(`[WebSocket] Terminating unresponsive connection ${id}`);
+          this.totalTerminatedByTimeout++;
           conn.ws.terminate();
           this.removeConnection(id);
+          continue;
         }
+
+        conn.ws.isAlive = false;
+        conn.ws.ping();
       }
+
+      this._emitMetrics();
     }, HEARTBEAT_INTERVAL_MS);
   }
 
@@ -251,21 +345,37 @@ class WebSocketPool {
     }
 
     return {
-      activeConnections: this.connections.size,
+      active_connections: this.connections.size,
+      total_connections_established: this.totalConnected,
+      connections_terminated_by_timeout: this.totalTerminatedByTimeout,
       peakConnections: this.peakConnections,
-      totalConnected: this.totalConnected,
       totalDisconnected: this.totalDisconnected,
       subscriptionsByTopic: topicCounts,
     };
+  }
+
+  _emitMetrics() {
+    metricsEmitter.emit('metrics', this.getMetrics());
   }
 }
 
 export const pool = new WebSocketPool();
 
 /**
+ * Module-level wrapper — called by eventIndexer.js after status-changing transactions.
+ *
+ * @param {bigint|number|string} escrowId
+ * @param {string} eventType  e.g. 'escrow:funded'
+ * @param {string} status     EscrowStatus value e.g. 'Active'
+ */
+export function broadcastEscrowEvent(escrowId, eventType, status) {
+  pool.broadcastEscrowEvent(escrowId, eventType, status);
+}
+
+/**
  * Attaches a WebSocket server to the given HTTP server.
  *
- * @param {import('http').Server} httpServer - The running HTTP server
+ * @param {import('http').Server} httpServer
  * @returns {WebSocketServer}
  */
 export function createWebSocketServer(httpServer) {
@@ -274,14 +384,24 @@ export function createWebSocketServer(httpServer) {
   httpServer.on('upgrade', (request, socket, head) => {
     const { pathname } = new URL(request.url, `http://${request.headers.host}`);
 
-    if (pathname !== '/api/ws') {
+    if (pathname === '/api/ws') {
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+      });
+    } else {
       socket.destroy();
       return;
     }
 
-    if (!assertWebSocketUpgradeAllowed(request, socket)) {
+    // Reject before handshake if pool is at capacity
+    if (pool.connections.size >= MAX_CONNECTIONS) {
+      socket.write('HTTP/1.1 503 Service Unavailable\r\n\r\n');
+      socket.destroy();
       return;
     }
+
+    // Attach decoded user to request for use in connection handler
+    request.user = user;
 
     wss.handleUpgrade(request, socket, head, (ws) => {
       wss.emit('connection', ws, request);
@@ -289,15 +409,16 @@ export function createWebSocketServer(httpServer) {
   });
 
   wss.on('connection', (ws, request) => {
-    const id = pool.addConnection(ws, request);
+    const id = pool.addConnection(ws, request, request.user || null);
     if (id) {
       console.log(`[WebSocket] New connection established: ${id}`);
-
-      sendJson(ws, {
-        type: 'welcome',
-        id,
-        message: 'Connected to Stellar Trust Escrow WebSocket Server',
-      });
+      ws.send(
+        JSON.stringify({
+          type: 'welcome',
+          id,
+          message: 'Connected to Stellar Trust Escrow WebSocket Server',
+        }),
+      );
     }
   });
 
@@ -306,4 +427,28 @@ export function createWebSocketServer(httpServer) {
   });
 
   return wss;
+}
+
+export function broadcastToDispute(disputeId, message) {
+  const topic = `dispute:${disputeId}`;
+  const payload = JSON.stringify({
+    ...message,
+    topic,
+    timestamp: new Date().toISOString()
+  });
+
+  let sentCount = 0;
+  for (const [id, conn] of pool.connections) {
+    if (conn.topics.has(topic)) {
+      try {
+        conn.ws.send(payload);
+        sentCount++;
+      } catch (error) {
+        console.error(`[WebSocket] Failed to send to ${id}:`, error.message);
+      }
+    }
+  }
+
+  console.log(`[WebSocket] Broadcast to dispute:${disputeId} sent to ${sentCount} clients`);
+  return sentCount;
 }

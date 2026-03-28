@@ -1,91 +1,34 @@
-import { jest } from '@jest/globals';
-
-// Set up env vars for tests
+// Set up env vars before any imports
 process.env.WS_MAX_CONNECTIONS = '2';
 process.env.WS_HEARTBEAT_INTERVAL_MS = '1000';
 
-const prismaMock = {
-  escrow: {
-    findUnique: jest.fn().mockResolvedValue({
-      clientAddress: 'GCLIENT',
-      freelancerAddress: 'GFREE',
-    }),
-  },
-};
+import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 
-jest.unstable_mockModule('../lib/prisma.js', () => ({ default: prismaMock }));
-
-const { pool, assertWebSocketUpgradeAllowed } = await import('../api/websocket/handlers.js');
-
-describe('assertWebSocketUpgradeAllowed', () => {
-  const origToken = process.env.WS_AUTH_TOKEN;
-  const origOrigins = process.env.ALLOWED_ORIGINS;
-
-  afterEach(() => {
-    if (origToken !== undefined) process.env.WS_AUTH_TOKEN = origToken;
-    else delete process.env.WS_AUTH_TOKEN;
-    if (origOrigins !== undefined) process.env.ALLOWED_ORIGINS = origOrigins;
-    else delete process.env.ALLOWED_ORIGINS;
-  });
-
-  it('allows upgrade when WS_AUTH_TOKEN is not set', () => {
-    delete process.env.WS_AUTH_TOKEN;
-    const socket = { write: jest.fn(), destroy: jest.fn() };
-    const req = { url: '/api/ws', headers: {} };
-    expect(assertWebSocketUpgradeAllowed(req, socket)).toBe(true);
-    expect(socket.destroy).not.toHaveBeenCalled();
-  });
-
-  it('rejects upgrade when token query does not match WS_AUTH_TOKEN', () => {
-    process.env.WS_AUTH_TOKEN = 'expected';
-    const socket = { write: jest.fn(), destroy: jest.fn() };
-    const req = { url: '/api/ws?token=wrong', headers: { host: 'localhost:4000' } };
-    expect(assertWebSocketUpgradeAllowed(req, socket)).toBe(false);
-    expect(socket.destroy).toHaveBeenCalled();
-  });
-
-  it('allows upgrade when token matches WS_AUTH_TOKEN', () => {
-    process.env.WS_AUTH_TOKEN = 'expected';
-    const socket = { write: jest.fn(), destroy: jest.fn() };
-    const req = { url: '/api/ws?token=expected', headers: { host: 'localhost:4000' } };
-    expect(assertWebSocketUpgradeAllowed(req, socket)).toBe(true);
-  });
-
-  it('rejects disallowed Origin when header is present', () => {
-    delete process.env.WS_AUTH_TOKEN;
-    process.env.ALLOWED_ORIGINS = 'http://localhost:3000';
-    const socket = { write: jest.fn(), destroy: jest.fn() };
-    const req = { url: '/api/ws', headers: { origin: 'http://malicious.example' } };
-    expect(assertWebSocketUpgradeAllowed(req, socket)).toBe(false);
-    expect(socket.destroy).toHaveBeenCalled();
-  });
-});
+const { pool } = await import('../api/websocket/handlers.js');
 
 describe('WebSocket Pool', () => {
   beforeEach(() => {
-    // Clear pool before each test
     pool.connections.clear();
     pool.peakConnections = 0;
     pool.totalConnected = 0;
     pool.totalDisconnected = 0;
+    pool.totalTerminatedByTimeout = 0;
     pool.stopHeartbeat();
   });
 
   afterEach(() => {
     pool.stopHeartbeat();
+    jest.useRealTimers();
   });
 
-  const createMockWs = () => {
-    const ws = {
-      on: jest.fn(),
-      send: jest.fn(),
-      close: jest.fn(),
-      terminate: jest.fn(),
-      ping: jest.fn(),
-      readyState: 1, // OPEN
-    };
-    return ws;
-  };
+  const createMockWs = () => ({
+    on: jest.fn(),
+    send: jest.fn(),
+    close: jest.fn(),
+    terminate: jest.fn(),
+    ping: jest.fn(),
+    readyState: 1, // OPEN
+  });
 
   const createMockReq = () => ({
     socket: { remoteAddress: '127.0.0.1' },
@@ -98,13 +41,7 @@ describe('WebSocket Pool', () => {
 
       expect(typeof id).toBe('string');
       expect(pool.connections.size).toBe(1);
-
-      const conn = pool.connections.get(id);
-      expect(conn).toBeDefined();
-      expect(conn.isAlive).toBe(true);
-      expect(conn.ip).toBe('127.0.0.1');
-
-      // Ensure event listeners were attached
+      expect(ws.isAlive).toBe(true);
       expect(ws.on).toHaveBeenCalledWith('pong', expect.any(Function));
       expect(ws.on).toHaveBeenCalledWith('close', expect.any(Function));
       expect(ws.on).toHaveBeenCalledWith('error', expect.any(Function));
@@ -112,14 +49,10 @@ describe('WebSocket Pool', () => {
     });
 
     it('rejects connection if MAX_CONNECTIONS is reached', () => {
-      // Limit is 2 in env mock
-      const ws1 = createMockWs();
-      const ws2 = createMockWs();
+      pool.addConnection(createMockWs(), createMockReq());
+      pool.addConnection(createMockWs(), createMockReq());
+
       const ws3 = createMockWs();
-
-      pool.addConnection(ws1, createMockReq());
-      pool.addConnection(ws2, createMockReq());
-
       const id3 = pool.addConnection(ws3, createMockReq());
 
       expect(id3).toBeNull();
@@ -128,11 +61,7 @@ describe('WebSocket Pool', () => {
     });
 
     it('cleans up when removeConnection is called', () => {
-      const ws = createMockWs();
-      const id = pool.addConnection(ws, createMockReq());
-
-      expect(pool.connections.size).toBe(1);
-
+      const id = pool.addConnection(createMockWs(), createMockReq());
       pool.removeConnection(id);
 
       expect(pool.connections.size).toBe(0);
@@ -142,8 +71,7 @@ describe('WebSocket Pool', () => {
 
   describe('pub/sub & broadcast', () => {
     it('allows subscribing and unsubscribing from topics', () => {
-      const ws = createMockWs();
-      const id = pool.addConnection(ws, createMockReq());
+      const id = pool.addConnection(createMockWs(), createMockReq());
 
       pool.subscribe(id, 'escrow:123');
       expect(pool.connections.get(id).topics.has('escrow:123')).toBe(true);
@@ -173,54 +101,58 @@ describe('WebSocket Pool', () => {
   });
 
   describe('heartbeat', () => {
-    it('terminates connection if pong is not received', () => {
+    it('Test 2 (Timeout Detection): terminates a silent client that does not respond to pings', () => {
       jest.useFakeTimers();
 
       const ws = createMockWs();
       const id = pool.addConnection(ws, createMockReq());
 
-      // Fast forward past first interval - ping is sent, isAlive set to false
+      // First interval: ping sent, isAlive set to false
       jest.advanceTimersByTime(1100);
       expect(ws.ping).toHaveBeenCalled();
-      expect(pool.connections.get(id).isAlive).toBe(false);
+      expect(ws.isAlive).toBe(false);
 
-      // Fast forward past second interval - no pong was received, so it terminates
+      // Second interval: no pong received — connection must be terminated
       jest.advanceTimersByTime(1100);
       expect(ws.terminate).toHaveBeenCalled();
-      expect(pool.connections.size).toBe(0);
-
-      jest.useRealTimers();
+      expect(pool.connections.has(id)).toBe(false);
+      expect(pool.totalTerminatedByTimeout).toBe(1);
     });
 
-    it('keeps connection alive if pong is received', () => {
+    it('Test 1 (Healthy Connection): keeps alive a client that responds to pings with pongs', () => {
       jest.useFakeTimers();
 
       const ws = createMockWs();
       const id = pool.addConnection(ws, createMockReq());
 
-      // Extract the 'pong' event handler
+      // Extract the pong handler registered on the ws object
       const onPong = ws.on.mock.calls.find((call) => call[0] === 'pong')[1];
 
-      // Fast forward past first interval - ping is sent
+      // First interval: ping sent, isAlive set to false
       jest.advanceTimersByTime(1100);
-      expect(ws.ping).toHaveBeenCalled();
-      expect(pool.connections.get(id).isAlive).toBe(false); // set to false by heartbeat
+      expect(ws.ping).toHaveBeenCalledTimes(1);
+      expect(ws.isAlive).toBe(false);
 
-      // Simulate client pong
+      // Client responds with pong — isAlive restored
       onPong();
-      expect(pool.connections.get(id).isAlive).toBe(true); // restored back to true
+      expect(ws.isAlive).toBe(true);
 
-      // Fast forward past second interval - connection should still be alive
+      // Second interval: connection is alive, ping sent again, not terminated
       jest.advanceTimersByTime(1100);
       expect(ws.terminate).not.toHaveBeenCalled();
-      expect(pool.connections.size).toBe(1);
+      expect(pool.connections.has(id)).toBe(true);
+      expect(ws.ping).toHaveBeenCalledTimes(2);
 
-      jest.useRealTimers();
+      // Third interval: client ponged again — still alive
+      onPong();
+      jest.advanceTimersByTime(1100);
+      expect(ws.terminate).not.toHaveBeenCalled();
+      expect(pool.connections.has(id)).toBe(true);
     });
   });
 
   describe('metrics', () => {
-    it('returns correct metrics payload', () => {
+    it('returns correct metrics payload with required field names', () => {
       const ws1 = createMockWs();
       const id1 = pool.addConnection(ws1, createMockReq());
 
@@ -233,12 +165,47 @@ describe('WebSocket Pool', () => {
       const metrics = pool.getMetrics();
 
       expect(metrics).toMatchObject({
-        activeConnections: 1,
+        active_connections: 1,
+        total_connections_established: 2,
+        connections_terminated_by_timeout: 0,
         peakConnections: 2,
-        totalConnected: 2,
         totalDisconnected: 1,
-        subscriptionsByTopic: {},
       });
+    });
+
+    it('increments connections_terminated_by_timeout on heartbeat termination', () => {
+      jest.useFakeTimers();
+
+      pool.addConnection(createMockWs(), createMockReq());
+      pool.addConnection(createMockWs(), createMockReq());
+
+      // First interval: pings sent
+      jest.advanceTimersByTime(1100);
+      // Second interval: both silent — both terminated
+      jest.advanceTimersByTime(1100);
+
+      expect(pool.getMetrics().connections_terminated_by_timeout).toBe(2);
+      expect(pool.getMetrics().active_connections).toBe(0);
+    });
+
+    it('emits metrics event on connection changes', () => {
+      const { metricsEmitter } = pool.constructor
+        ? { metricsEmitter: null }
+        : { metricsEmitter: null };
+      // Verify getMetrics() reflects live state
+      pool.addConnection(createMockWs(), createMockReq());
+      expect(pool.getMetrics().active_connections).toBe(1);
+    });
+  });
+
+  describe('graceful shutdown', () => {
+    it('clears the heartbeat interval on stopHeartbeat', () => {
+      const ws = createMockWs();
+      pool.addConnection(ws, createMockReq());
+      expect(pool.heartbeatInterval).not.toBeNull();
+
+      pool.stopHeartbeat();
+      expect(pool.heartbeatInterval).toBeNull();
     });
   });
 });

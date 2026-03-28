@@ -25,8 +25,10 @@
  */
 
 import prisma from '../lib/prisma.js';
-import { broadcastEscrowUpdate } from './escrowRealtime.js';
+import { scValToNative } from '@stellar/stellar-sdk';
 import { getContractEvents, getLatestLedger } from './stellarService.js';
+import { broadcastEscrowEvent } from '../api/websocket/handlers.js';
+import { indexRecord } from './reputationSearchService.js';
 
 const CONTRACT_ID = process.env.ESCROW_CONTRACT_ID || '';
 const POLL_INTERVAL_MS = parseInt(process.env.INDEXER_POLL_INTERVAL_MS || '5000', 10);
@@ -40,11 +42,8 @@ const POLL_INTERVAL_MS = parseInt(process.env.INDEXER_POLL_INTERVAL_MS || '5000'
 const _scValToJs = (scVal) => {
   if (scVal == null) return null;
   try {
-    // SDK v12 exposes scValToNative
-    const { scValToNative } = require('@stellar/stellar-sdk');
     return scValToNative(scVal);
   } catch {
-    // Fallback: return raw string representation
     return String(scVal);
   }
 };
@@ -114,6 +113,12 @@ const handleEscrowCreated = async (event, meta) => {
     }),
     buildEventInsert(event, meta, escrowId),
   ]);
+
+  try {
+    broadcastEscrowEvent(escrowId, 'escrow:funded', 'Active');
+  } catch (err) {
+    console.warn('[Indexer] broadcastEscrowEvent failed for handleEscrowCreated:', err.message);
+  }
 };
 
 /**
@@ -238,6 +243,12 @@ const handleFundsReleased = async (event, meta) => {
     `,
     buildEventInsert(event, meta, escrowId),
   ]);
+
+  try {
+    broadcastEscrowEvent(escrowId, 'escrow:funded', 'Active');
+  } catch (err) {
+    console.warn('[Indexer] broadcastEscrowEvent failed for handleFundsReleased:', err.message);
+  }
 };
 
 /**
@@ -282,6 +293,12 @@ const handleDisputeRaised = async (event, meta) => {
     }),
     buildEventInsert(event, meta, escrowId),
   ]);
+
+  try {
+    broadcastEscrowEvent(escrowId, 'escrow:disputed', 'Disputed');
+  } catch (err) {
+    console.warn('[Indexer] broadcastEscrowEvent failed for handleDisputeRaised:', err.message);
+  }
 };
 
 /**
@@ -308,6 +325,12 @@ const handleDisputeResolved = async (event, meta) => {
     }),
     buildEventInsert(event, meta, escrowId),
   ]);
+
+  try {
+    broadcastEscrowEvent(escrowId, 'escrow:released', 'Completed');
+  } catch (err) {
+    console.warn('[Indexer] broadcastEscrowEvent failed for handleDisputeResolved:', err.message);
+  }
 };
 
 /**
@@ -335,6 +358,9 @@ const handleReputationUpdated = async (event, meta) => {
     }),
     buildEventInsert(event, meta, null),
   ]);
+
+  // Keep ES in sync — fire-and-forget, non-blocking
+  indexRecord({ address: addr, totalScore: score, lastUpdated: meta.ledgerAt }).catch(() => {});
 };
 
 // ─── Dispatch ─────────────────────────────────────────────────────────────────
