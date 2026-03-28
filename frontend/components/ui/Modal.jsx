@@ -85,11 +85,15 @@ export default function Modal({
               {title}
             </h2>
           )}
+          {/* Accessibility: aria-label describes action; focus-visible ring for keyboard users */}
           <button
             onClick={onClose}
             className="ml-auto text-gray-500 hover:text-white transition-colors p-1 rounded-lg
-                       hover:bg-gray-800"
-            aria-label="Close modal"
+                       hover:bg-gray-800 focus:outline-none focus-visible:ring-2
+                       focus-visible:ring-indigo-500 focus-visible:ring-offset-2
+                       focus-visible:ring-offset-gray-900"
+            aria-label={title ? `Close ${title} modal` : 'Close modal'}
+            type="button"
           >
             ✕
           </button>

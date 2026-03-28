@@ -41,14 +41,20 @@ export default function MilestoneList({ milestones = [], role, onApprove, onReje
   return (
     <div className="space-y-3">
       {/* Summary bar */}
-      {/*
-        TODO (contributor — Issue #40): replace with richer progress visualization
-      */}
-      <div className="flex items-center justify-between text-sm mb-4">
-        <span className="text-gray-400">
-          {approvedCount} of {totalCount} milestones complete
-        </span>
-        <span className="text-gray-500">{Math.round((approvedCount / totalCount) * 100)}%</span>
+      <div className="mb-6">
+        <div className="flex items-center justify-between text-sm mb-2">
+          <span className="text-gray-400 font-medium">
+            {approvedCount} of {totalCount} milestones complete
+          </span>
+          <span className="text-white font-bold">{Math.round((approvedCount / totalCount) * 100)}%</span>
+        </div>
+        {/* Progress bar with gradient and animation */}
+        <div className="relative w-full h-3 bg-gray-800 rounded-full overflow-hidden shadow-inner">
+          <div
+            className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-full transition-all duration-700 ease-out shadow-lg"
+            style={{ width: `${(approvedCount / totalCount) * 100}%` }}
+          />
+        </div>
       </div>
 
       {/* Milestone Items */}

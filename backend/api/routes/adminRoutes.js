@@ -11,6 +11,7 @@ const router = express.Router();
 import adminAuth from '../middleware/adminAuth.js';
 import adminController from '../controllers/adminController.js';
 import tenantController from '../controllers/tenantController.js';
+import * as featureFlagController from '../controllers/featureFlagController.js';
 import { getAuditLog, rotateSecrets } from '../../lib/secrets.js';
 import cache from '../../lib/cache.js';
 
@@ -115,6 +116,12 @@ router.post('/tenants', tenantController.createTenant);
 router.get('/tenants/:tenantId', tenantController.getTenant);
 router.patch('/tenants/:tenantId', tenantController.updateTenant);
 router.get('/tenants/:tenantId/metrics', tenantController.getTenantMetrics);
+
+// ── Feature Flags ─────────────────────────────────────────────────────────────
+router.get('/flags', featureFlagController.index);
+router.post('/flags', featureFlagController.create);
+router.patch('/flags/:key', featureFlagController.update);
+router.delete('/flags/:key', featureFlagController.destroy);
 
 /**
  * @route  GET /api/admin/secrets/audit

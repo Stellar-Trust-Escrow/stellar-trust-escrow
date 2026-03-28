@@ -88,4 +88,9 @@ pub enum EscrowError {
     NoRecurringPaymentDue = 45,
     RecurringSchedulePaused = 46,
     RecurringScheduleCancelled = 47,
+
+    // ── Oracle ───────────────────────────────────────────────────────────────
+    OracleNotConfigured = 48,
+    OraclePriceStale = 49,
+    OracleInvalidPrice = 50,
 }
