@@ -340,4 +340,8 @@ pub enum DataKey {
     SlashRecord(u64),
     /// Recurring payment config by escrow ID — key: u64, value: RecurringPaymentConfig
     RecurringConfig(u64),
+    /// Primary oracle contract address — value: Address
+    OracleAddress,
+    /// Fallback oracle contract address — value: Address
+    FallbackOracleAddress,
 }

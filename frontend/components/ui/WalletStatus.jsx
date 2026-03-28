@@ -18,6 +18,7 @@
 import { useState } from 'react';
 import Button from './Button';
 import Spinner from './Spinner';
+import { truncateAddress } from '../../lib/truncateAddress';
 import { useI18n } from '../../i18n/index.jsx';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

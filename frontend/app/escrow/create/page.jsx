@@ -24,7 +24,10 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Button from '../../../components/ui/Button';
 import TemplateSelector from '../../../components/escrow/TemplateSelector';
+import StellarAddressInput from '../../../components/ui/StellarAddressInput';
+import { isValidStellarAddress } from '../../../lib/validation';
 import templatesData from '../../../data/templates.json';
+import { useToast } from '../../../contexts/ToastContext';
 
 const STEPS = [
   { id: 1, label: 'Counterparty' },
@@ -71,6 +74,7 @@ export default function CreateEscrowPage() {
   const [error, setError] = useState(null);
   const [templateNotice, setTemplateNotice] = useState('');
   const [appliedQueryTemplateId, setAppliedQueryTemplateId] = useState(null);
+  const { showToast } = useToast();
 
   useEffect(() => {
     const templateId = searchParams.get('template');
@@ -107,9 +111,14 @@ export default function CreateEscrowPage() {
       throw new Error('Not implemented — see Issue #33');
     } catch (err) {
       setError(err.message);
+      showToast('Failed to create escrow', 'error');
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleSuccess = () => {
+    showToast('Escrow created successfully!', 'success');
   };
 
   const addMilestone = () => {
@@ -208,7 +217,11 @@ export default function CreateEscrowPage() {
           Back
         </Button>
         {currentStep < 4 ? (
-          <Button variant="primary" onClick={() => setCurrentStep((step) => step + 1)}>
+          <Button
+            variant="primary"
+            onClick={() => setCurrentStep((step) => step + 1)}
+            disabled={currentStep === 1 && !isValidStellarAddress(formData.freelancerAddress)}
+          >
             Next →
           </Button>
         ) : (
@@ -231,20 +244,14 @@ function StepCounterparty({ formData, setFormData }) {
     <div className="space-y-4">
       <h2 className="text-lg font-semibold text-white">Counterparty & Funds</h2>
 
-      <div>
-        <label className="block text-sm text-gray-400 mb-1">Freelancer Stellar Address</label>
-        <input
-          type="text"
-          placeholder="GABCD1234..."
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5
-                     text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
-          value={formData.freelancerAddress}
-          onChange={(event) =>
-            setFormData((data) => ({ ...data, freelancerAddress: event.target.value }))
-          }
-        />
-        {/* TODO (contributor): add validation error display */}
-      </div>
+      <StellarAddressInput
+        id="freelancer-address"
+        label="Freelancer Stellar Address"
+        placeholder="GABCD1234..."
+        value={formData.freelancerAddress}
+        onChange={(val) => setFormData((data) => ({ ...data, freelancerAddress: val }))}
+        required
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
@@ -263,11 +270,7 @@ function StepCounterparty({ formData, setFormData }) {
         </div>
         <div>
           <label className="block text-sm text-gray-400 mb-1">Total Amount</label>
-          <input
-            type="number"
-            placeholder="0.00"
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5
-                       text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
+          <XLMAmountInput
             value={formData.totalAmount}
             onChange={(event) => setFormData((data) => ({ ...data, totalAmount: event.target.value }))}
           />
@@ -338,16 +341,14 @@ function StepMilestones({ formData, onAdd, onRemove, onUpdate }) {
             value={milestone.description}
             onChange={(event) => onUpdate(index, 'description', event.target.value)}
           />
-          <div className="flex gap-2">
-            <input
-              type="number"
-              placeholder="Amount"
-              className="w-32 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2
-                         text-white placeholder-gray-500 text-sm focus:outline-none focus:border-indigo-500"
+          <div className="flex gap-2 items-center">
+            <XLMAmountInput
               value={milestone.amount}
               onChange={(event) => onUpdate(index, 'amount', event.target.value)}
+              inputClassName="w-32"
+              className="w-32"
             />
-            <span className="text-gray-500 text-sm self-center">
+            <span className="text-gray-500 text-sm">
               {String(formData.tokenAddress || 'USDC').toUpperCase()}
             </span>
           </div>

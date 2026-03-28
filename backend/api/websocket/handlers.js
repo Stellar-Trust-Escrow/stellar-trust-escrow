@@ -1,8 +1,11 @@
 import { randomUUID } from 'crypto';
+import { EventEmitter } from 'events';
 import { WebSocketServer } from 'ws';
 
 const HEARTBEAT_INTERVAL_MS = parseInt(process.env.WS_HEARTBEAT_INTERVAL_MS || '30000', 10);
 const MAX_CONNECTIONS = parseInt(process.env.WS_MAX_CONNECTIONS || '100', 10);
+
+export const metricsEmitter = new EventEmitter();
 
 class WebSocketPool {
   constructor() {
@@ -10,6 +13,7 @@ class WebSocketPool {
     this.peakConnections = 0;
     this.totalConnected = 0;
     this.totalDisconnected = 0;
+    this.totalTerminatedByTimeout = 0;
     this.heartbeatInterval = null;
   }
 
@@ -21,10 +25,11 @@ class WebSocketPool {
     }
 
     const id = randomUUID();
+    ws.isAlive = true;
+
     const meta = {
       ws,
       topics: new Set(),
-      isAlive: true,
       connectedAt: Date.now(),
       ip: req.socket.remoteAddress,
     };
@@ -35,10 +40,8 @@ class WebSocketPool {
       this.peakConnections = this.connections.size;
     }
 
-    // Ping/pong health checks
     ws.on('pong', () => {
-      const conn = this.connections.get(id);
-      if (conn) conn.isAlive = true;
+      ws.isAlive = true;
     });
 
     ws.on('close', () => {
@@ -47,10 +50,8 @@ class WebSocketPool {
 
     ws.on('error', (err) => {
       console.error(`[WebSocket] ID ${id} error:`, err.message);
-      // 'close' event will usually follow and clean up
     });
 
-    // Handle incoming messages (e.g., subscribing to topics)
     ws.on('message', (data) => {
       try {
         const message = JSON.parse(data.toString());
@@ -64,11 +65,11 @@ class WebSocketPool {
       }
     });
 
-    // Start heartbeat if it isn't running
     if (!this.heartbeatInterval) {
       this.startHeartbeat();
     }
 
+    this._emitMetrics();
     return id;
   }
 
@@ -77,25 +78,22 @@ class WebSocketPool {
       this.connections.delete(id);
       this.totalDisconnected++;
 
-      // Stop heartbeat if no connections left
       if (this.connections.size === 0) {
         this.stopHeartbeat();
       }
+
+      this._emitMetrics();
     }
   }
 
   subscribe(id, topic) {
     const conn = this.connections.get(id);
-    if (conn) {
-      conn.topics.add(topic);
-    }
+    if (conn) conn.topics.add(topic);
   }
 
   unsubscribe(id, topic) {
     const conn = this.connections.get(id);
-    if (conn) {
-      conn.topics.delete(topic);
-    }
+    if (conn) conn.topics.delete(topic);
   }
 
   broadcast(topic, payload) {
@@ -114,16 +112,19 @@ class WebSocketPool {
   startHeartbeat() {
     this.heartbeatInterval = setInterval(() => {
       for (const [id, conn] of this.connections.entries()) {
-        if (!conn.isAlive) {
+        if (!conn.ws.isAlive) {
           console.log(`[WebSocket] Terminating unresponsive connection ${id}`);
+          this.totalTerminatedByTimeout++;
           conn.ws.terminate();
           this.removeConnection(id);
           continue;
         }
 
-        conn.isAlive = false;
+        conn.ws.isAlive = false;
         conn.ws.ping();
       }
+
+      this._emitMetrics();
     }, HEARTBEAT_INTERVAL_MS);
   }
 
@@ -135,7 +136,6 @@ class WebSocketPool {
   }
 
   getMetrics() {
-    // Topic distribution counts
     const topicCounts = {};
     for (const conn of this.connections.values()) {
       for (const topic of conn.topics) {
@@ -144,35 +144,35 @@ class WebSocketPool {
     }
 
     return {
-      activeConnections: this.connections.size,
+      active_connections: this.connections.size,
+      total_connections_established: this.totalConnected,
+      connections_terminated_by_timeout: this.totalTerminatedByTimeout,
       peakConnections: this.peakConnections,
-      totalConnected: this.totalConnected,
       totalDisconnected: this.totalDisconnected,
       subscriptionsByTopic: topicCounts,
     };
   }
+
+  _emitMetrics() {
+    metricsEmitter.emit('metrics', this.getMetrics());
+  }
 }
 
-// Global pool instance
 export const pool = new WebSocketPool();
 
 /**
  * Attaches a WebSocket server to the given HTTP server.
  *
- * @param {import('http').Server} httpServer - The running HTTP server
+ * @param {import('http').Server} httpServer
  * @returns {WebSocketServer}
  */
 export function createWebSocketServer(httpServer) {
   const wss = new WebSocketServer({ noServer: true });
 
-  // Handle HTTTP upgrade request integration
   httpServer.on('upgrade', (request, socket, head) => {
-    // Check path
     const { pathname } = new URL(request.url, `http://${request.headers.host}`);
 
     if (pathname === '/api/ws') {
-      // Future: add Authentication check here
-
       wss.handleUpgrade(request, socket, head, (ws) => {
         wss.emit('connection', ws, request);
       });
@@ -181,13 +181,10 @@ export function createWebSocketServer(httpServer) {
     }
   });
 
-  // Handle actual connection
   wss.on('connection', (ws, request) => {
     const id = pool.addConnection(ws, request);
     if (id) {
       console.log(`[WebSocket] New connection established: ${id}`);
-
-      // Welcome message
       ws.send(
         JSON.stringify({
           type: 'welcome',
