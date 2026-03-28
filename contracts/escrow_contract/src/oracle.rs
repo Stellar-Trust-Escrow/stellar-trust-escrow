@@ -33,7 +33,9 @@ pub trait OracleInterface {
 // ── Storage helpers ───────────────────────────────────────────────────────────
 
 pub fn set_oracle(env: &Env, oracle: &Address) {
-    env.storage().instance().set(&DataKey::OracleAddress, oracle);
+    env.storage()
+        .instance()
+        .set(&DataKey::OracleAddress, oracle);
 }
 
 pub fn get_oracle(env: &Env) -> Result<Address, EscrowError> {
