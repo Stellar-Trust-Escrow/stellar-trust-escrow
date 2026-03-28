@@ -31,6 +31,7 @@
 
 mod errors;
 mod events;
+mod gas_profiling;
 mod types;
 
 pub use errors::InsuranceError;
@@ -138,9 +139,11 @@ impl Storage {
     where
         K: soroban_sdk::IntoVal<Env, soroban_sdk::Val>,
     {
-        env.storage()
-            .persistent()
-            .extend_ttl(key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        env.storage().persistent().extend_ttl(
+            key,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
     }
 
     fn load_claim(env: &Env, claim_id: u32) -> Result<Claim, InsuranceError> {
@@ -484,7 +487,11 @@ impl InsuranceContract {
     // ── Governance management ─────────────────────────────────────────────────
 
     /// Admin registers a new governor.
-    pub fn add_governor(env: Env, caller: Address, governor: Address) -> Result<(), InsuranceError> {
+    pub fn add_governor(
+        env: Env,
+        caller: Address,
+        governor: Address,
+    ) -> Result<(), InsuranceError> {
         caller.require_auth();
         Storage::require_admin(&env, &caller)?;
 
@@ -544,9 +551,7 @@ impl InsuranceContract {
         if new_quorum == 0 {
             return Err(InsuranceError::InvalidAmount);
         }
-        env.storage()
-            .instance()
-            .set(&DataKey::Quorum, &new_quorum);
+        env.storage().instance().set(&DataKey::Quorum, &new_quorum);
         Storage::bump_instance(&env);
         Ok(())
     }
@@ -617,7 +622,13 @@ mod tests {
 
         client.initialize(&admin, &token_id, &10_i128, &10_000_i128, &2_u32);
 
-        Setup { env, admin, token_id, contract_id, client }
+        Setup {
+            env,
+            admin,
+            token_id,
+            contract_id,
+            client,
+        }
     }
 
     fn mint(env: &Env, _admin: &Address, token_id: &Address, to: &Address, amount: i128) {
@@ -638,9 +649,9 @@ mod tests {
     #[test]
     fn test_double_initialize_fails() {
         let s = setup();
-        let result = s.client.try_initialize(
-            &s.admin, &s.token_id, &10_i128, &10_000_i128, &2_u32,
-        );
+        let result = s
+            .client
+            .try_initialize(&s.admin, &s.token_id, &10_i128, &10_000_i128, &2_u32);
         assert!(result.is_err());
     }
 

@@ -1,5 +1,7 @@
 import express from 'express';
 import adminAuth from '../middleware/adminAuth.js';
+import authMiddleware from '../middleware/auth.js';
+import { authorizeBodyAddress, authorizeParamAddress } from '../middleware/authorization.js';
 import kycController from '../controllers/kycController.js';
 
 const router = express.Router();
@@ -21,13 +23,18 @@ const captureRawBody = (req, _res, next) => {
  * @desc   Generate a Sumsub SDK access token for the frontend widget.
  * @body   { address: string }
  */
-router.post('/token', kycController.getToken);
+router.post('/token', authMiddleware, authorizeBodyAddress('address'), kycController.getToken);
 
 /**
  * @route  GET /api/kyc/status/:address
  * @desc   Get KYC verification status for a Stellar address.
  */
-router.get('/status/:address', kycController.getStatus);
+router.get(
+  '/status/:address',
+  authMiddleware,
+  authorizeParamAddress('address'),
+  kycController.getStatus,
+);
 
 /**
  * @route  POST /api/kyc/webhook

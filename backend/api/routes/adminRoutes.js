@@ -10,6 +10,9 @@ import express from 'express';
 const router = express.Router();
 import adminAuth from '../middleware/adminAuth.js';
 import adminController from '../controllers/adminController.js';
+import tenantController from '../controllers/tenantController.js';
+import { getAuditLog, rotateSecrets } from '../../lib/secrets.js';
+import cache from '../../lib/cache.js';
 
 // Apply admin authentication to all routes in this file
 router.use(adminAuth);
@@ -85,5 +88,90 @@ router.patch('/settings', adminController.updateSettings);
  * @query  page, limit
  */
 router.get('/audit-logs', adminController.getAuditLogs);
+
+// ── Rate Limits ────────────────────────────────────────────────────────────────
+/**
+ * @route  GET /api/admin/rate-limits
+ * @desc   List all tier rate limit configurations
+ */
+router.get('/rate-limits', adminController.getRateLimits);
+
+/**
+ * @route  PATCH /api/admin/rate-limits/:tier
+ * @desc   Update rate limit max for a specific tier
+ * @body   { max: number }
+ */
+router.patch('/rate-limits/:tier', adminController.updateRateLimit);
+
+/**
+ * @route  GET /api/admin/rate-limits/usage/:userId
+ * @desc   Get current usage analytics for a specific user
+ */
+router.get('/rate-limits/usage/:userId', adminController.getUserRateLimitUsage);
+
+// ── Tenants ───────────────────────────────────────────────────────────────────
+router.get('/tenants', tenantController.listTenants);
+router.post('/tenants', tenantController.createTenant);
+router.get('/tenants/:tenantId', tenantController.getTenant);
+router.patch('/tenants/:tenantId', tenantController.updateTenant);
+router.get('/tenants/:tenantId/metrics', tenantController.getTenantMetrics);
+
+/**
+ * @route  GET /api/admin/secrets/audit
+ * @desc   Returns the in-process secrets access audit log.
+ *         Wire to a SIEM or persistent store in production.
+ */
+router.get('/secrets/audit', (_req, res) => {
+  res.json({ data: getAuditLog() });
+});
+
+/**
+ * @route  POST /api/admin/secrets/rotate
+ * @desc   Forces an immediate cache invalidation and re-fetch from the
+ *         secrets backend. Use after rotating credentials in Vault.
+ */
+router.post('/secrets/rotate', async (_req, res) => {
+  try {
+    await rotateSecrets();
+    res.json({ ok: true, message: 'Secrets rotated successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * @route  GET /api/admin/cache/stats
+ * @desc   Returns cache hit/miss analytics.
+ */
+router.get('/cache/stats', (_req, res) => {
+  res.json(cache.analytics());
+});
+
+/**
+ * @route  DELETE /api/admin/cache
+ * @desc   Flush the entire cache (all tags and keys).
+ * @body   { tag?: string, prefix?: string } — optional scope
+ */
+router.delete('/cache', async (req, res) => {
+  try {
+    const { tag, prefix } = req.body ?? {};
+    if (tag) {
+      await cache.invalidateTag(tag);
+      return res.json({ ok: true, invalidated: `tag:${tag}` });
+    }
+    if (prefix) {
+      await cache.invalidatePrefix(prefix);
+      return res.json({ ok: true, invalidated: `prefix:${prefix}` });
+    }
+    // Full flush — invalidate all known top-level tags
+    await cache.invalidateTags([
+      'escrows', 'disputes', 'reputation', 'reputation:leaderboard',
+      'events', 'events:stats', 'events:types', 'milestones',
+    ]);
+    res.json({ ok: true, invalidated: 'all' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 export default router;

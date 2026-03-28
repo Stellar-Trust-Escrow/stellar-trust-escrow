@@ -20,10 +20,12 @@
  */
 
 import { useState, useEffect, Suspense } from 'react';
+import CardSkeleton from '../../components/ui/CardSkeleton';
 import dynamic from 'next/dynamic';
 import EscrowCard from '../../components/escrow/EscrowCard';
 import ReputationBadge from '../../components/ui/ReputationBadge';
 import Button from '../../components/ui/Button';
+import ErrorBoundary from '../../../components/error/ErrorBoundary';
 import { usePerformance } from '../../hooks/usePerformance';
 
 // ── Dynamic imports for heavy components ──────────────────────────────────────
@@ -67,19 +69,12 @@ const PLACEHOLDER_ADDRESS = 'GABCD1234';
 
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 
-function EscrowCardSkeleton() {
-  return (
-    <div className="card animate-pulse">
-      <div className="h-4 w-40 bg-gray-700 rounded mb-3" />
-      <div className="h-3 w-28 bg-gray-800 rounded mb-2" />
-      <div className="h-3 w-20 bg-gray-800 rounded" />
-    </div>
-  );
-}
+
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
+  const { t } = useI18n();
   const [escrows, setEscrows] = useState([]);
   const [escrowsLoading, setEscrowsLoading] = useState(true);
   const [reputation, setReputation] = useState(null);
@@ -116,12 +111,13 @@ export default function DashboardPage() {
     ? Math.min(100, Math.round(Number(reputation.totalScore) / 100))
     : null;
 
-  return (
-    <div className="space-y-8">
-      {/* Page Header */}
+return (
+    <ErrorBoundary>
+      <div className="space-y-8">
+        {/* Page Header */
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+          <h1 className="text-2xl font-bold text-white">{t('nav.dashboard')}</h1>
           <p className="text-gray-400 mt-1">
             Welcome back,{' '}
             <span className="text-indigo-400 font-mono">{PLACEHOLDER_ADDRESS.slice(0, 8)}…</span>
@@ -130,7 +126,7 @@ export default function DashboardPage() {
         <div className="flex items-center gap-3">
           {reputationScore !== null && <ReputationBadge score={reputationScore} />}
           <Button href="/escrow/create" variant="primary">
-            + New Escrow
+            + {t('escrow.create')}
           </Button>
         </div>
       </div>
@@ -143,7 +139,7 @@ export default function DashboardPage() {
         </div>
         <Suspense
           fallback={
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="card animate-pulse">
                   <div className="h-3 w-20 bg-gray-700 rounded mb-3" />
@@ -184,19 +180,20 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {escrowsLoading ? (
-          <div className="grid gap-4 md:grid-cols-2">
-            <EscrowCardSkeleton />
-            <EscrowCardSkeleton />
-          </div>
-        ) : escrows.length === 0 ? (
+{escrowsLoading ? (
+  <div className="grid gap-4 md:grid-cols-2">
+    <CardSkeleton />
+    <CardSkeleton />
+    <CardSkeleton />
+  </div>
+) : escrows.length === 0 ? (
           <div className="card text-center py-10">
             <p className="text-3xl mb-2">📭</p>
-            <p className="text-gray-400 font-medium">No active escrows</p>
-            <p className="text-gray-600 text-sm mt-1">Create your first escrow to get started.</p>
+            <p className="text-gray-400 font-medium">{t('common.noResults')}</p>
+            <p className="text-gray-600 text-sm mt-1">{t('escrow.create')}.</p>
             <div className="mt-4">
               <Button href="/escrow/create" variant="primary">
-                + New Escrow
+                + {t('escrow.create')}
               </Button>
             </div>
           </div>

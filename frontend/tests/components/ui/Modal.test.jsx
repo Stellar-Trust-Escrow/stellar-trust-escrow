@@ -93,4 +93,64 @@ describe('Modal', () => {
     );
     expect(screen.getByRole('dialog')).toHaveAttribute('aria-modal', 'true');
   });
+
+  describe('Confirmation Modal', () => {
+    it('does not show confirmation buttons when isConfirmation is false', () => {
+      render(
+        <Modal isOpen={true} onClose={jest.fn()} title="Test">
+          <p>Content</p>
+        </Modal>,
+      );
+      expect(screen.queryByText('Confirm')).not.toBeInTheDocument();
+      expect(screen.queryByText('Cancel')).not.toBeInTheDocument();
+    });
+
+    it('shows confirmation buttons when isConfirmation is true', () => {
+      render(
+        <Modal isOpen={true} onClose={jest.fn()} isConfirmation={true}>
+          <p>Content</p>
+        </Modal>,
+      );
+      expect(screen.getByText('Confirm')).toBeInTheDocument();
+      expect(screen.getByText('Cancel')).toBeInTheDocument();
+    });
+
+    it('calls onClose when cancel button is clicked', () => {
+      const onClose = jest.fn();
+      render(
+        <Modal isOpen={true} onClose={onClose} isConfirmation={true}>
+          <p>Content</p>
+        </Modal>,
+      );
+      fireEvent.click(screen.getByText('Cancel'));
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('calls onConfirm when confirm button is clicked', () => {
+      const onConfirm = jest.fn();
+      render(
+        <Modal isOpen={true} onClose={jest.fn()} isConfirmation={true} onConfirm={onConfirm}>
+          <p>Content</p>
+        </Modal>,
+      );
+      fireEvent.click(screen.getByText('Confirm'));
+      expect(onConfirm).toHaveBeenCalledTimes(1);
+    });
+
+    it('uses custom button labels', () => {
+      render(
+        <Modal
+          isOpen={true}
+          onClose={jest.fn()}
+          isConfirmation={true}
+          confirmLabel="Delete"
+          cancelLabel="Keep"
+        >
+          <p>Content</p>
+        </Modal>,
+      );
+      expect(screen.getByText('Delete')).toBeInTheDocument();
+      expect(screen.getByText('Keep')).toBeInTheDocument();
+    });
+  });
 });

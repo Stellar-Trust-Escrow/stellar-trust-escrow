@@ -23,17 +23,38 @@
 
 import Link from 'next/link';
 import Badge from '../ui/Badge';
+import CurrencyAmount from '../ui/CurrencyAmount';
+import CopyButton from '../ui/CopyButton';
+import EscrowCardSkeleton from '../ui/EscrowCardSkeleton';
+import { useI18n } from '../../i18n/index.jsx';
+import { useRef } from 'react';
 
-export default function EscrowCard({ escrow }) {
-  const { id, title, status, totalAmount, milestoneProgress, counterparty, role } = escrow;
+export default function EscrowCard({ escrow, isLoading = false }) {
+  if (isLoading) return <EscrowCardSkeleton />;
+  const { t } = useI18n();
+  const { id, title, status, totalAmount, milestoneProgress, counterparty, role, transactionHash } = escrow;
+  const cardRef = useRef(null);
 
   const [done, total] = milestoneProgress?.split(' / ').map(Number) ?? [0, 0];
   const progressPct = total > 0 ? Math.round((done / total) * 100) : 0;
 
+  const handleKeyDown = (event) => {
+    // Activate on Enter or Space key
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      cardRef.current?.click();
+    }
+  };
+
   return (
     <Link
       href={`/escrow/${id}`}
-      className="card block hover:border-gray-700 transition-colors group"
+      ref={cardRef}
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+      className="card block hover:border-gray-700 transition-colors group focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-950"
+      role="button"
+      aria-label={`View details for escrow: ${title}`}
     >
       {/* Header Row */}
       <div className="flex items-start justify-between gap-3 mb-3">
@@ -42,34 +63,42 @@ export default function EscrowCard({ escrow }) {
             {title}
           </h3>
           <p className="text-xs text-gray-500 mt-0.5">
-            {role === 'client' ? 'Freelancer:' : 'Client:'}{' '}
+            {role === 'client' ? `${t('escrow.fields.freelancer')}:` : `${t('escrow.fields.client')}:`}{' '}
             <span className="font-mono">{counterparty}</span>
           </p>
         </div>
         <Badge status={status} size="sm" />
       </div>
 
-      {/* Amount */}
-      <p className="text-lg font-bold text-white mb-3">{totalAmount}</p>
+      {/* Amount — converted to user's selected currency */}
+      <CurrencyAmount amount={totalAmount} showUsdc size="md" className="mb-3" />
 
       {/* Milestone Progress Bar */}
-      {/*
-        TODO (contributor — Issue #39):
-        Replace this simple bar with individual milestone status dots
-        (one circle per milestone, colored by MilestoneStatus)
-      */}
       <div>
         <div className="flex justify-between text-xs text-gray-500 mb-1">
-          <span>Milestones</span>
+          <span>{t('escrow.fields.milestones')}</span>
           <span>{milestoneProgress}</span>
         </div>
-        <div className="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden">
+        <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden shadow-inner">
           <div
-            className="h-full bg-indigo-500 rounded-full transition-all"
+            className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500 ease-out"
             style={{ width: `${progressPct}%` }}
           />
         </div>
       </div>
+
+      {/* Transaction Hash */}
+      {transactionHash && (
+        <div className="mt-3 pt-3 border-t border-gray-800">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-gray-500">TX:</span>
+            <span className="text-xs font-mono text-gray-400 truncate">{transactionHash.slice(0, 16)}...</span>
+            <div onClick={(e) => e.preventDefault()}>
+              <CopyButton text={transactionHash} label="Copy" />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-800">
@@ -79,7 +108,7 @@ export default function EscrowCard({ escrow }) {
             role === 'client' ? 'text-blue-400' : 'text-emerald-400'
           }`}
         >
-          You are {role}
+          You are {role === 'client' ? t('escrow.fields.client') : t('escrow.fields.freelancer')}
         </span>
       </div>
     </Link>

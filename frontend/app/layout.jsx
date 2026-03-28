@@ -17,10 +17,19 @@
  */
 
 import './globals.css';
-import { Inter, JetBrains_Mono } from 'next/font/google';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
+import { ThemeProvider } from '../contexts/ThemeContext';
+import { CurrencyProvider } from '../contexts/CurrencyContext';
+import { ToastProvider } from '../contexts/ToastContext';
 import ServiceWorkerRegistrar from '../components/ServiceWorkerRegistrar';
+import ErrorBoundary from '../components/error/ErrorBoundary';
+import PerformanceMonitor from '../components/performance/PerformanceMonitor';
+
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
+const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' });
+
+const API_ORIGIN = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 export const metadata = {
   title: 'StellarTrustEscrow — Decentralized Milestone Escrow',
@@ -43,14 +52,14 @@ export const viewport = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
+    <html lang="en">
       <head>
         {/* DNS prefetch + preconnect for API to reduce latency on first fetch */}
         <link rel="dns-prefetch" href={API_ORIGIN} />
         <link rel="preconnect" href={API_ORIGIN} crossOrigin="anonymous" />
       </head>
       <body className="bg-gray-950 text-gray-100 min-h-screen flex flex-col font-sans">
-        {/*
+        {/* 
           TODO (contributor — Issue #30):
           Wrap with <WalletProvider> and <SWRConfig> here.
           Example:
@@ -60,9 +69,20 @@ export default function RootLayout({ children }) {
             </SWRConfig>
           </WalletProvider>
         */}
-        <Header />
-        <main className="flex-1 container mx-auto px-4 py-8 max-w-7xl">{children}</main>
-        <Footer />
+        <ThemeProvider>
+          <CurrencyProvider>
+            <ToastProvider>
+              <Header />
+              <ErrorBoundary>
+                <main className="flex-1 container mx-auto px-4 py-8 max-w-7xl">{children}</main>
+              </ErrorBoundary>
+              <Footer />
+            </ToastProvider>
+          </CurrencyProvider>
+        </ThemeProvider>
+
+        {/* Core Web Vitals monitoring — renders nothing to DOM */}
+        <PerformanceMonitor />
         <ServiceWorkerRegistrar />
       </body>
     </html>

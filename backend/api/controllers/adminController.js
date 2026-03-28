@@ -8,6 +8,35 @@
  */
 
 import prisma from '../../lib/prisma.js';
+import { TIER_LIMITS } from '../../config/rateLimits.js';
+import { getUserUsage } from '../middleware/rateLimiter.js';
+
+// Mutable runtime overrides (resets on server restart)
+const runtimeTierLimits = { ...TIER_LIMITS };
+
+const getRateLimits = (_req, res) => {
+  res.json({ tiers: runtimeTierLimits });
+};
+
+const updateRateLimit = (req, res) => {
+  const { tier } = req.params;
+  const { max } = req.body;
+  if (!(tier in runtimeTierLimits)) {
+    return res.status(404).json({ error: `Unknown tier: ${tier}` });
+  }
+  const parsed = parseInt(max, 10);
+  if (isNaN(parsed) || parsed < 1) {
+    return res.status(400).json({ error: 'max must be a positive integer' });
+  }
+  runtimeTierLimits[tier] = parsed;
+  res.json({ tier, max: parsed });
+};
+
+const getUserRateLimitUsage = (req, res) => {
+  const { userId } = req.params;
+  const usage = getUserUsage(userId);
+  res.json({ userId, ...usage });
+};
 import cache from '../../lib/cache.js';
 import { buildPaginatedResponse, parsePagination } from '../../lib/pagination.js';
 
@@ -233,6 +262,7 @@ const resolveDispute = async (req, res) => {
   try {
     const { id } = req.params;
     const { clientAmount, freelancerAmount, notes = '' } = req.body;
+    const tenantId = req.tenant?.id;
 
     if (clientAmount === undefined || freelancerAmount === undefined) {
       return res.status(400).json({ error: 'clientAmount and freelancerAmount are required.' });
@@ -242,17 +272,17 @@ const resolveDispute = async (req, res) => {
 
     // Single transaction: read → validate → update → audit log
     const result = await prisma.$transaction(async (tx) => {
-      const dispute = await tx.dispute.findUnique({
-        where: { id: disputeId },
+      const dispute = await tx.dispute.findFirst({
+        where: { id: disputeId, ...(tenantId ? { tenantId } : {}) },
         select: { id: true, escrowId: true, resolvedAt: true },
       });
 
       if (!dispute) return { error: 'Dispute not found.', status: 404 };
       if (dispute.resolvedAt) return { error: 'Dispute already resolved.', status: 409 };
 
-      const [updated] = await Promise.all([
-        tx.dispute.update({
-          where: { id: disputeId },
+      await Promise.all([
+        tx.dispute.updateMany({
+          where: { id: disputeId, ...(tenantId ? { tenantId } : {}) },
           data: {
             resolvedAt: new Date(),
             clientAmount: String(clientAmount),
@@ -270,6 +300,10 @@ const resolveDispute = async (req, res) => {
           },
         }),
       ]);
+
+      const updated = await tx.dispute.findFirst({
+        where: { id: disputeId, ...(tenantId ? { tenantId } : {}) },
+      });
 
       return { dispute: updated };
     });
@@ -427,4 +461,7 @@ export default {
   getAuditLogs,
   getSettings,
   updateSettings,
+  getRateLimits,
+  updateRateLimit,
+  getUserRateLimitUsage,
 };

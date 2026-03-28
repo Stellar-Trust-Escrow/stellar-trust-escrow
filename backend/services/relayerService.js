@@ -13,7 +13,7 @@
 
 import * as StellarSdk from '@stellar/stellar-sdk';
 import { Contract, Keypair, Networks } from '@stellar/stellar-sdk';
-import { dbConnectionsTotal } from './lib/metrics.js';
+import { dbConnectionsTotal } from '../lib/metrics.js';
 
 const RELAYER_FEE_BUFFER = 1000; // Additional stroops for fee estimation buffer
 

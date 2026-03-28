@@ -6,13 +6,14 @@
  * Shows platform statistics: total escrows, users, open disputes.
  * Links to sub-sections: users, disputes, audit logs, settings.
  *
- * Access requires the admin API key to be set in localStorage as
- * `adminApiKey`. The key is sent with every admin API call via the
- * `x-admin-api-key` header.
+ * Access uses the shared frontend store, which persists the admin API key
+ * for subsequent sessions and injects it into the `x-admin-api-key` header.
  */
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useAdminStore } from '../../store/app-store';
+import { buildAdminHeaders } from '../../store/admin';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -30,25 +31,22 @@ function StatCard({ label, value, sub, icon, color }) {
 }
 
 export default function AdminDashboard() {
-  const [apiKey, setApiKey] = useState('');
+  const { apiKey, setApiKey, clearApiKey } = useAdminStore();
   const [inputKey, setInputKey] = useState('');
   const [stats, setStats] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Persist key in localStorage
   useEffect(() => {
-    const stored = localStorage.getItem('adminApiKey') || '';
-    setApiKey(stored);
-    setInputKey(stored);
-  }, []);
+    setInputKey(apiKey);
+  }, [apiKey]);
 
   const fetchStats = useCallback(async (key) => {
     setLoading(true);
     setError('');
     try {
       const res = await fetch(`${API_BASE}/api/admin/stats`, {
-        headers: { 'x-admin-api-key': key },
+        headers: buildAdminHeaders(key, {}),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -65,7 +63,6 @@ export default function AdminDashboard() {
 
   const handleLogin = (e) => {
     e.preventDefault();
-    localStorage.setItem('adminApiKey', inputKey);
     setApiKey(inputKey);
     fetchStats(inputKey);
   };
@@ -147,8 +144,7 @@ export default function AdminDashboard() {
             </span>
             <button
               onClick={() => {
-                localStorage.removeItem('adminApiKey');
-                setApiKey('');
+                clearApiKey();
                 setInputKey('');
                 setStats(null);
               }}
