@@ -30,6 +30,7 @@ const PLACEHOLDER_ESCROW = {
   id: 1,
   title: 'Smart Contract Audit',
   status: 'Active',
+  txHash: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2', // TODO: replace with real tx hash
   clientAddress: 'GABCD...1234',
   freelancerAddress: 'GXYZ...5678',
   totalAmount: '2,000 USDC',
@@ -101,6 +102,7 @@ export default function EscrowDetailPage({ params }) {
             <Badge status={escrow.status} />
           </div>
           <p className="text-gray-400 text-sm">Escrow #{id}</p>
+          <StellarExpertLink txHash={escrow.txHash} network={process.env.NEXT_PUBLIC_STELLAR_NETWORK} />
         </div>
         <div className="flex gap-2 flex-shrink-0">
           {escrow.status === 'Active' && (
@@ -184,5 +186,29 @@ function PartyCard({ role, address, score, isYou }) {
         <ReputationBadge score={score} size="sm" />
       </div>
     </div>
+  );
+}
+
+function StellarExpertLink({ txHash, network }) {
+  if (!txHash) return null;
+
+  const isMainnet = network === 'mainnet';
+  const baseUrl = isMainnet
+    ? 'https://stellar.expert/explorer/public/tx'
+    : 'https://stellar.expert/explorer/testnet/tx';
+
+  return (
+    <a
+      href={`${baseUrl}/${txHash}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 transition-colors mt-1"
+    >
+      View on Stellar Expert
+      {/* External link icon */}
+      <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+      </svg>
+    </a>
   );
 }
