@@ -29,25 +29,45 @@ const PLACEHOLDER_USER = {
   completionRate: 92,
 };
 
-export default function ProfilePage({ params }) {
+async function getProfile(address) {
+  try {
+    const res = await fetch(`http://localhost:4000/api/users/${address}`, { next: { revalidate: 10 } });
+    if (!res.ok) return null;
+    return res.json();
+  } catch (err) {
+    return null;
+  }
+}
+
+export default async function ProfilePage({ params }) {
   const { address } = params;
-  const user = PLACEHOLDER_USER;
+  const dbUser = await getProfile(address) || {};
+  const user = { ...PLACEHOLDER_USER, ...dbUser };
 
   return (
     <div className="space-y-8 max-w-3xl mx-auto">
       {/* Profile Header */}
       <div className="card flex flex-col sm:flex-row gap-6 items-start">
-        <div className="w-16 h-16 rounded-2xl bg-indigo-600/30 flex items-center justify-center text-indigo-400 font-bold text-xl flex-shrink-0">
-          {address.slice(1, 3)}
-        </div>
+        {user.avatarUrl ? (
+          <div className="w-16 h-16 rounded-2xl overflow-hidden flex-shrink-0">
+            <img src={user.avatarUrl.startsWith('http') ? user.avatarUrl : `http://localhost:4000${user.avatarUrl}`} alt="Avatar" className="w-full h-full object-cover" />
+          </div>
+        ) : (
+          <div className="w-16 h-16 rounded-2xl bg-indigo-600/30 flex items-center justify-center text-indigo-400 font-bold text-xl flex-shrink-0">
+            {address.slice(1, 3)}
+          </div>
+        )}
         <div className="flex-1">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-xl font-bold text-white">
               <TruncatedAddress address={address} />
+            <h1 className="text-xl font-bold text-white font-mono">
+              {user.displayName || `${address.slice(0, 6)}...${address.slice(-4)}`}
             </h1>
-            <Badge status={user.badge} />
+            <Badge status={user.badge || PLACEHOLDER_USER.badge} />
           </div>
-          <p className="text-gray-500 text-sm mt-1">Member since {user.memberSince}</p>
+          {user.bio && <p className="text-gray-300 mt-2">{user.bio}</p>}
+          <p className="text-gray-500 text-sm mt-1">Member since {user.memberSince || 'January 2025'}</p>
 
           {/* Stats Row */}
           <div className="flex gap-6 mt-4 text-sm">

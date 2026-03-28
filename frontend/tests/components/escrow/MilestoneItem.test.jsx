@@ -38,7 +38,12 @@ describe('MilestoneItem', () => {
   });
 
   it('renders submittedAt when present', () => {
-    render(<MilestoneItem {...defaultProps} milestone={{ ...baseMilestone, submittedAt: '2025-03-10' }} />);
+    render(
+      <MilestoneItem
+        {...defaultProps}
+        milestone={{ ...baseMilestone, submittedAt: '2025-03-10' }}
+      />,
+    );
     expect(screen.getByText(/Submitted: 2025-03-10/)).toBeInTheDocument();
   });
 
@@ -48,18 +53,32 @@ describe('MilestoneItem', () => {
   });
 
   it('shows Submit Work button for freelancer with Rejected status', () => {
-    render(<MilestoneItem {...defaultProps} role="freelancer" milestone={{ ...baseMilestone, status: 'Rejected' }} />);
+    render(
+      <MilestoneItem
+        {...defaultProps}
+        role="freelancer"
+        milestone={{ ...baseMilestone, status: 'Rejected' }}
+      />,
+    );
     expect(screen.getByText(/Submit Work/)).toBeInTheDocument();
   });
 
   it('shows Approve and Reject buttons for client with Submitted status', () => {
-    render(<MilestoneItem {...defaultProps} role="client" milestone={{ ...baseMilestone, status: 'Submitted' }} />);
+    render(
+      <MilestoneItem
+        {...defaultProps}
+        role="client"
+        milestone={{ ...baseMilestone, status: 'Submitted' }}
+      />,
+    );
     expect(screen.getByText(/Approve/)).toBeInTheDocument();
     expect(screen.getByText(/Reject/)).toBeInTheDocument();
   });
 
   it('shows funds released message for Approved status', () => {
-    render(<MilestoneItem {...defaultProps} milestone={{ ...baseMilestone, status: 'Approved' }} />);
+    render(
+      <MilestoneItem {...defaultProps} milestone={{ ...baseMilestone, status: 'Approved' }} />,
+    );
     expect(screen.getByText(/Funds released/)).toBeInTheDocument();
   });
 
@@ -72,21 +91,40 @@ describe('MilestoneItem', () => {
 
   it('calls onApprove when client clicks Approve', async () => {
     const onApprove = jest.fn().mockResolvedValue(undefined);
-    render(<MilestoneItem {...defaultProps} role="client" milestone={{ ...baseMilestone, status: 'Submitted' }} onApprove={onApprove} />);
+    render(
+      <MilestoneItem
+        {...defaultProps}
+        role="client"
+        milestone={{ ...baseMilestone, status: 'Submitted' }}
+        onApprove={onApprove}
+      />,
+    );
     fireEvent.click(screen.getByText(/Approve/));
     await waitFor(() => expect(onApprove).toHaveBeenCalledWith(1));
   });
 
   it('calls onReject when client clicks Reject', async () => {
     const onReject = jest.fn().mockResolvedValue(undefined);
-    render(<MilestoneItem {...defaultProps} role="client" milestone={{ ...baseMilestone, status: 'Submitted' }} onReject={onReject} />);
+    render(
+      <MilestoneItem
+        {...defaultProps}
+        role="client"
+        milestone={{ ...baseMilestone, status: 'Submitted' }}
+        onReject={onReject}
+      />,
+    );
     fireEvent.click(screen.getByText(/Reject/));
     await waitFor(() => expect(onReject).toHaveBeenCalledWith(1));
   });
 
   it('shows waiting message while action is in progress', async () => {
     let resolveAction;
-    const onSubmit = jest.fn(() => new Promise((res) => { resolveAction = res; }));
+    const onSubmit = jest.fn(
+      () =>
+        new Promise((res) => {
+          resolveAction = res;
+        }),
+    );
     render(<MilestoneItem {...defaultProps} role="freelancer" onSubmit={onSubmit} />);
     fireEvent.click(screen.getByText(/Submit Work/));
     expect(await screen.findByText(/Waiting for wallet/)).toBeInTheDocument();

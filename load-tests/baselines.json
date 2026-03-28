@@ -1,0 +1,22 @@
+{
+  "health": {
+    "maxErrorRate": 0,
+    "maxTailLatencyMs": 300,
+    "minRequestsPerSecond": 100
+  },
+  "escrow-list": {
+    "maxErrorRate": 0,
+    "maxTailLatencyMs": 400,
+    "minRequestsPerSecond": 100
+  },
+  "escrow-details": {
+    "maxErrorRate": 0,
+    "maxTailLatencyMs": 400,
+    "minRequestsPerSecond": 80
+  },
+  "user-profile": {
+    "maxErrorRate": 0,
+    "maxTailLatencyMs": 400,
+    "minRequestsPerSecond": 60
+  }
+}

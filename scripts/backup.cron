@@ -1,0 +1,13 @@
+# backup.cron — Install with:
+#   crontab scripts/backup.cron
+#
+# Or append to system cron:
+#   sudo cp scripts/backup.cron /etc/cron.d/stellar-trust-backup
+#
+# Adjust paths and user as needed.
+
+# Daily full backup at 02:00 UTC
+0 2 * * * root /path/to/stellar-trust-escrow/scripts/backup.sh >> /var/log/stellar-trust-backup.log 2>&1
+
+# Weekly restore test on Sunday at 03:00 UTC
+0 3 * * 0 root /path/to/stellar-trust-escrow/scripts/backup.sh --restore-test >> /var/log/stellar-trust-backup.log 2>&1

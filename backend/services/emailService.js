@@ -42,7 +42,9 @@ function nowIso() {
 }
 
 function sanitizeEmail(email) {
-  return String(email || '').trim().toLowerCase();
+  return String(email || '')
+    .trim()
+    .toLowerCase();
 }
 
 function assertEmail(email) {
@@ -55,7 +57,10 @@ function assertEmail(email) {
 
 function createUnsubscribeToken(email) {
   return crypto
-    .createHmac('sha256', process.env.EMAIL_UNSUBSCRIBE_SECRET || 'stellar-trust-escrow-email-secret')
+    .createHmac(
+      'sha256',
+      process.env.EMAIL_UNSUBSCRIBE_SECRET || 'stellar-trust-escrow-email-secret',
+    )
     .update(email)
     .digest('hex');
 }
@@ -221,7 +226,10 @@ async function processQueue() {
 
     const readyJobs = state.queue
       .filter((job) => job.status === 'queued' && new Date(job.availableAt).getTime() <= Date.now())
-      .sort((left, right) => new Date(left.availableAt).getTime() - new Date(right.availableAt).getTime());
+      .sort(
+        (left, right) =>
+          new Date(left.availableAt).getTime() - new Date(right.availableAt).getTime(),
+      );
 
     for (const job of readyJobs) {
       pruneSentTimestamps();

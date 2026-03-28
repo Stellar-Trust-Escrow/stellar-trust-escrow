@@ -25,6 +25,7 @@
  */
 
 import prisma from '../lib/prisma.js';
+import { scValToNative } from '@stellar/stellar-sdk';
 import { getContractEvents, getLatestLedger } from './stellarService.js';
 
 const CONTRACT_ID = process.env.ESCROW_CONTRACT_ID || '';
@@ -39,11 +40,8 @@ const POLL_INTERVAL_MS = parseInt(process.env.INDEXER_POLL_INTERVAL_MS || '5000'
 const _scValToJs = (scVal) => {
   if (scVal == null) return null;
   try {
-    // SDK v12 exposes scValToNative
-    const { scValToNative } = require('@stellar/stellar-sdk');
     return scValToNative(scVal);
   } catch {
-    // Fallback: return raw string representation
     return String(scVal);
   }
 };

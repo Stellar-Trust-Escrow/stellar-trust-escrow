@@ -19,14 +19,26 @@ import { useState } from 'react';
 import Button from './Button';
 import Spinner from './Spinner';
 import { truncateAddress } from '../../lib/truncateAddress';
+import { useI18n } from '../../i18n/index.jsx';
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Truncate a Stellar address to first 6 + last 4 chars.
+ * e.g. GABCDEF...XY12
+ */
+function truncateAddress(address) {
+  if (!address) return '';
+  return `${address.slice(0, 6)}…${address.slice(-4)}`;
+}
 
 // ── Status Dot ────────────────────────────────────────────────────────────────
 
 function StatusDot({ status }) {
   const styles = {
-    connected:    'bg-emerald-400 shadow-[0_0_6px_1px_rgba(52,211,153,0.7)]',
+    connected: 'bg-emerald-400 shadow-[0_0_6px_1px_rgba(52,211,153,0.7)]',
     disconnected: 'bg-gray-500',
-    connecting:   'bg-amber-400 animate-pulse',
+    connecting: 'bg-amber-400 animate-pulse',
   };
   return (
     <span
@@ -46,7 +58,9 @@ function AddressWithTooltip({ address }) {
       await navigator.clipboard.writeText(address);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   };
 
   return (
@@ -99,15 +113,9 @@ function FreighterNotInstalled() {
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function WalletStatus({ wallet }) {
-  const {
-    isConnected,
-    isConnecting,
-    isFreighterInstalled,
-    address,
-    connect,
-    disconnect,
-    error,
-  } = wallet;
+  const { isConnected, isConnecting, isFreighterInstalled, address, connect, disconnect, error } =
+    wallet;
+  const { t } = useI18n();
 
   // Not installed — prompt installation
   if (!isFreighterInstalled) {
@@ -131,7 +139,7 @@ export default function WalletStatus({ wallet }) {
                      text-gray-400 px-3 py-1.5 rounded-lg opacity-80 cursor-not-allowed"
         >
           <Spinner className="w-3.5 h-3.5" />
-          Connecting…
+          {t('wallet.connecting')}
         </button>
       </div>
     );
@@ -143,13 +151,8 @@ export default function WalletStatus({ wallet }) {
       <div className="flex items-center gap-2">
         <StatusDot status="connected" />
         <AddressWithTooltip address={address} />
-        <Button
-          id="wallet-disconnect-btn"
-          variant="secondary"
-          size="sm"
-          onClick={disconnect}
-        >
-          Disconnect
+        <Button id="wallet-disconnect-btn" variant="secondary" size="sm" onClick={disconnect}>
+          {t('wallet.disconnect')}
         </Button>
       </div>
     );
@@ -160,13 +163,8 @@ export default function WalletStatus({ wallet }) {
     <div className="flex flex-col items-end gap-1">
       <div className="flex items-center gap-2">
         <StatusDot status="disconnected" />
-        <Button
-          id="wallet-connect-btn"
-          variant="primary"
-          size="sm"
-          onClick={connect}
-        >
-          Connect Wallet
+        <Button id="wallet-connect-btn" variant="primary" size="sm" onClick={connect}>
+          {t('wallet.connect')}
         </Button>
       </div>
       {error && (

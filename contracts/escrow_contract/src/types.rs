@@ -20,6 +20,8 @@ pub enum EscrowStatus {
     Disputed,
     /// Escrow was cancelled before completion. Funds returned to client.
     Cancelled,
+    /// Cancellation requested - pending dispute resolution or deadline.
+    CancellationPending,
 }
 
 /// The lifecycle state of an individual milestone.
@@ -38,6 +40,15 @@ pub enum MilestoneStatus {
     Disputed,
 }
 
+/// Supported recurring payment intervals.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RecurringInterval {
+    Daily,
+    Weekly,
+    Monthly,
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // STRUCTS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -48,7 +59,7 @@ pub enum MilestoneStatus {
 /// payment amount. Funds for a milestone are released only after
 /// the client approves the submission.
 #[contracttype]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Milestone {
     /// Sequential ID within this escrow (starts at 0).
     pub id: u32,
@@ -73,6 +84,47 @@ pub struct Milestone {
 
     /// Ledger timestamp when the client approved or rejected.
     pub resolved_at: Option<u64>,
+}
+
+/// Configuration for a recurring/subscription escrow.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RecurringPaymentConfig {
+    /// Payment interval cadence.
+    pub interval: RecurringInterval,
+
+    /// Amount released each time a payment becomes due.
+    pub payment_amount: i128,
+
+    /// Timestamp of the first scheduled payment.
+    pub start_time: u64,
+
+    /// Timestamp when the next payment becomes due.
+    pub next_payment_at: u64,
+
+    /// Optional schedule end date.
+    pub end_date: Option<u64>,
+
+    /// Total number of scheduled payments for this escrow.
+    pub total_payments: u32,
+
+    /// Remaining scheduled payments not yet released.
+    pub payments_remaining: u32,
+
+    /// Number of payments already processed.
+    pub processed_payments: u32,
+
+    /// Whether scheduled releases are currently paused.
+    pub paused: bool,
+
+    /// Whether the recurring schedule has been cancelled.
+    pub cancelled: bool,
+
+    /// Optional timestamp when the schedule was paused.
+    pub paused_at: Option<u64>,
+
+    /// Optional timestamp of the most recent processed payment.
+    pub last_payment_at: Option<u64>,
 }
 
 /// The main escrow agreement.
@@ -158,8 +210,109 @@ pub struct ReputationRecord {
     /// Total value transacted through escrows (in base token units).
     pub total_volume: i128,
 
+    /// Number of times this user has been slashed.
+    pub slash_count: u32,
+
+    /// Total amount slashed from this user (in base token units).
+    pub total_slashed: i128,
+
     /// Ledger timestamp of the last reputation update.
     pub last_updated: u64,
+}
+
+/// A cancellation request for an escrow.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct CancellationRequest {
+    /// The escrow ID this request belongs to.
+    pub escrow_id: u64,
+
+    /// Address of the party requesting cancellation.
+    pub requester: Address,
+
+    /// Reason for cancellation.
+    pub reason: String,
+
+    /// When the cancellation was requested (ledger timestamp).
+    pub requested_at: u64,
+
+    /// Deadline for disputes (ledger timestamp).
+    pub dispute_deadline: u64,
+
+    /// Whether this cancellation has been disputed.
+    pub disputed: bool,
+}
+
+/// A slash record for tracking penalties.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct SlashRecord {
+    /// The escrow ID this slash belongs to.
+    pub escrow_id: u64,
+
+    /// Address of the user being slashed.
+    pub slashed_user: Address,
+
+    /// Address of the user receiving the slash.
+    pub recipient: Address,
+
+    /// Amount being slashed.
+    pub amount: i128,
+
+    /// Reason for the slash.
+    pub reason: String,
+
+    /// When the slash was applied (ledger timestamp).
+    pub slashed_at: u64,
+
+    /// Whether this slash has been disputed.
+    pub disputed: bool,
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// META-TRANSACTIONS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Meta-transaction data structure.
+///
+/// Allows users to sign transaction intents off-chain and have them
+/// executed by a relayer without the user paying transaction fees.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct MetaTransaction {
+    /// The address of the user who signed this transaction
+    pub signer: Address,
+
+    /// Unique nonce to prevent replay attacks
+    pub nonce: u64,
+
+    /// Maximum timestamp when this meta-tx is valid (Unix timestamp)
+    pub deadline: u64,
+
+    /// The function name to call (e.g., "create_escrow")
+    pub function_name: String,
+
+    /// Serialized function arguments as JSON
+    pub function_args: String,
+
+    /// Ed25519 signature of the transaction data
+    pub signature: BytesN<64>,
+}
+
+/// Fee delegation information for meta-transactions.
+///
+/// Specifies how fees should be paid when executing meta-transactions.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct FeeDelegation {
+    /// Address that will pay the transaction fees
+    pub fee_payer: Address,
+
+    /// Maximum fee amount the fee_payer is willing to pay
+    pub max_fee: i128,
+
+    /// Token contract address for fee payment (typically XLM)
+    pub fee_token: Address,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -179,4 +332,16 @@ pub enum DataKey {
     Reputation(Address),
     /// Contract admin address — value: Address
     Admin,
+    /// Contract pause state — value: bool
+    Paused,
+    /// Cancellation request by escrow ID — key: u64, value: CancellationRequest
+    CancellationRequest(u64),
+    /// Slash record by escrow ID — key: u64, value: SlashRecord
+    SlashRecord(u64),
+    /// Recurring payment config by escrow ID — key: u64, value: RecurringPaymentConfig
+    RecurringConfig(u64),
+    /// Primary oracle contract address — value: Address
+    OracleAddress,
+    /// Fallback oracle contract address — value: Address
+    FallbackOracleAddress,
 }
