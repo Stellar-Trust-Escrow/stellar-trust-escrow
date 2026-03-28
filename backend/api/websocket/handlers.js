@@ -9,7 +9,8 @@ export const metricsEmitter = new EventEmitter();
 
 class WebSocketPool {
   constructor() {
-    this.connections = new Map(); // id -> { ws, topics: Set, isAlive: boolean }
+    this.connections = new Map(); // id -> { ws, topics: Set, isAlive: boolean, user: { userId, walletAddress, ...claims } }
+    this.messageQueues = new Map(); // userId -> QueuedMessage[]
     this.peakConnections = 0;
     this.totalConnected = 0;
     this.totalDisconnected = 0;
@@ -17,7 +18,7 @@ class WebSocketPool {
     this.heartbeatInterval = null;
   }
 
-  addConnection(ws, req) {
+  addConnection(ws, req, user = null) {
     if (this.connections.size >= MAX_CONNECTIONS) {
       console.warn(`[WebSocket] Connection rejected: Max capacity reached (${MAX_CONNECTIONS})`);
       ws.close(1013, 'Try again later. Max capacity reached.');
@@ -32,6 +33,7 @@ class WebSocketPool {
       topics: new Set(),
       connectedAt: Date.now(),
       ip: req.socket.remoteAddress,
+      user, // decoded JWT payload: { userId, walletAddress, ...claims }
     };
 
     this.connections.set(id, meta);
@@ -53,16 +55,22 @@ class WebSocketPool {
     });
 
     ws.on('message', (data) => {
+      let message;
       try {
-        const message = JSON.parse(data.toString());
-        if (message.type === 'subscribe' && message.topic) {
-          this.subscribe(id, message.topic);
-        } else if (message.type === 'unsubscribe' && message.topic) {
-          this.unsubscribe(id, message.topic);
-        }
+        message = JSON.parse(data.toString());
       } catch {
         console.warn(`[WebSocket] Invalid message from ${id}:`, data.toString());
+        return;
       }
+
+      if (message.type === 'subscribe' && message.topic) {
+        this.subscribe(id, message.topic, prisma).catch((err) => {
+          console.error(`[WebSocket] subscribe error for ${id}:`, err.message);
+        });
+      } else if (message.type === 'unsubscribe' && message.topic) {
+        this.unsubscribe(id, message.topic);
+      }
+      // unknown types are silently ignored (Requirement 3.7)
     });
 
     if (!this.heartbeatInterval) {
@@ -86,7 +94,7 @@ class WebSocketPool {
     }
   }
 
-  subscribe(id, topic) {
+  async subscribe(id, topic, prisma) {
     const conn = this.connections.get(id);
     if (conn) conn.topics.add(topic);
   }
@@ -101,12 +109,88 @@ class WebSocketPool {
     const messageStr = JSON.stringify({ topic, payload });
 
     for (const [_id, conn] of this.connections.entries()) {
-      if (conn.topics.has(topic) && conn.ws.readyState === 1 /* OPEN */) {
+      if (conn.topics.has(topic) && conn.ws.readyState === WebSocket.OPEN) {
         conn.ws.send(messageStr);
         sentCount++;
       }
     }
     return sentCount;
+  }
+
+  /**
+   * Broadcast an escrow lifecycle event to all relevant subscribers.
+   * Connections that are OPEN receive the message immediately; others have it enqueued.
+   *
+   * @param {bigint|number|string} escrowId
+   * @param {string} eventType  e.g. 'escrow:funded'
+   * @param {string} status     EscrowStatus value e.g. 'Active'
+   */
+  broadcastEscrowEvent(escrowId, eventType, status) {
+    const topic = `escrow:${escrowId}`;
+    const bigIntReplacer = (_k, v) => (typeof v === 'bigint' ? v.toString() : v);
+
+    const message = {
+      topic,
+      payload: {
+        event: eventType,
+        escrowId: String(escrowId),
+        status,
+        timestamp: new Date().toISOString(),
+      },
+    };
+    const messageStr = JSON.stringify(message, bigIntReplacer);
+
+    for (const [_id, conn] of this.connections.entries()) {
+      const subscribedToEscrow = conn.topics.has(topic);
+      const subscribedToAll = conn.topics.has('user:all');
+
+      if (!subscribedToEscrow && !subscribedToAll) continue;
+
+      if (conn.ws.readyState === WebSocket.OPEN) {
+        conn.ws.send(messageStr);
+      } else {
+        // Enqueue for disconnected user
+        const userId = conn.user?.userId;
+        if (userId == null) continue;
+
+        if (!this.messageQueues.has(userId)) {
+          this.messageQueues.set(userId, []);
+        }
+        const queue = this.messageQueues.get(userId);
+        if (queue.length >= 50) {
+          queue.shift(); // discard oldest
+        }
+        queue.push({ ...message, queuedAt: Date.now() });
+      }
+    }
+  }
+
+  /**
+   * Flush queued messages for the user associated with connection `id`.
+   * Messages are sent in chronological order; the queue is cleared afterwards.
+   *
+   * @param {string} id  Connection UUID
+   */
+  flushQueue(id) {
+    const conn = this.connections.get(id);
+    if (!conn || conn.ws.readyState !== WebSocket.OPEN) return;
+
+    const userId = conn.user?.userId;
+    if (userId == null) return;
+
+    const queue = this.messageQueues.get(userId);
+    if (!queue || queue.length === 0) return;
+
+    // Sort by queuedAt to ensure chronological order
+    queue.sort((a, b) => a.queuedAt - b.queuedAt);
+
+    const bigIntReplacer = (_k, v) => (typeof v === 'bigint' ? v.toString() : v);
+    for (const msg of queue) {
+      const { queuedAt: _dropped, ...wireMsg } = msg;
+      conn.ws.send(JSON.stringify(wireMsg, bigIntReplacer));
+    }
+
+    this.messageQueues.delete(userId);
   }
 
   startHeartbeat() {
@@ -161,6 +245,17 @@ class WebSocketPool {
 export const pool = new WebSocketPool();
 
 /**
+ * Module-level wrapper — called by eventIndexer.js after status-changing transactions.
+ *
+ * @param {bigint|number|string} escrowId
+ * @param {string} eventType  e.g. 'escrow:funded'
+ * @param {string} status     EscrowStatus value e.g. 'Active'
+ */
+export function broadcastEscrowEvent(escrowId, eventType, status) {
+  pool.broadcastEscrowEvent(escrowId, eventType, status);
+}
+
+/**
  * Attaches a WebSocket server to the given HTTP server.
  *
  * @param {import('http').Server} httpServer
@@ -178,11 +273,26 @@ export function createWebSocketServer(httpServer) {
       });
     } else {
       socket.destroy();
+      return;
     }
+
+    // Reject before handshake if pool is at capacity
+    if (pool.connections.size >= MAX_CONNECTIONS) {
+      socket.write('HTTP/1.1 503 Service Unavailable\r\n\r\n');
+      socket.destroy();
+      return;
+    }
+
+    // Attach decoded user to request for use in connection handler
+    request.user = user;
+
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.emit('connection', ws, request);
+    });
   });
 
   wss.on('connection', (ws, request) => {
-    const id = pool.addConnection(ws, request);
+    const id = pool.addConnection(ws, request, request.user || null);
     if (id) {
       console.log(`[WebSocket] New connection established: ${id}`);
       ws.send(
