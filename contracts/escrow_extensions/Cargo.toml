@@ -1,0 +1,15 @@
+[package]
+name = "stellar-trust-escrow-extensions"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Extension contracts: batch creation, protocol fees, on-chain dispute arbitration, proxy upgradeability"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+soroban-sdk = { version = "21.0.0", features = [] }
+
+[dev-dependencies]
+soroban-sdk = { version = "21.0.0", features = ["testutils"] }
