@@ -155,25 +155,29 @@ mod upgrade_tests {
         let token = register_token(&env, &admin, &client_addr, 1_000_000);
 
         contract.create_escrow(
-            &client_addr,
-            &freelancer,
-            &token,
-            &500_000,
-            &hash32(&env, 1),
-            &None,
-            &None,
-            &None,
-        );
+                    &client_addr,
+                    &freelancer,
+                    &token,
+                    &500_000,
+                    &hash32(&env, 1),
+                    &None,
+                    &None,
+                    &None,
+                    &None,
+                    &no_multisig(&env),
+                );
         contract.create_escrow(
-            &client_addr,
-            &freelancer,
-            &token,
-            &500_000,
-            &hash32(&env, 2),
-            &None,
-            &None,
-            &None,
-        );
+                    &client_addr,
+                    &freelancer,
+                    &token,
+                    &500_000,
+                    &hash32(&env, 2),
+                    &None,
+                    &None,
+                    &None,
+                    &None,
+                    &no_multisig(&env),
+                );
 
         assert_eq!(
             contract.escrow_count(),
@@ -200,15 +204,17 @@ mod upgrade_tests {
         let brief = hash32(&env, 42);
 
         let escrow_id = contract.create_escrow(
-            &client_addr,
-            &freelancer,
-            &token,
-            &1_000_000,
-            &brief,
-            &None,
-            &None,
-            &None,
-        );
+                    &client_addr,
+                    &freelancer,
+                    &token,
+                    &1_000_000,
+                    &brief,
+                    &None,
+                    &None,
+                    &None,
+                    &None,
+                    &no_multisig(&env),
+                );
 
         let pre = contract.get_escrow(&escrow_id);
 
@@ -240,15 +246,17 @@ mod upgrade_tests {
         let token = register_token(&env, &admin, &client_addr, 1_000_000);
 
         let escrow_id = contract.create_escrow(
-            &client_addr,
-            &freelancer,
-            &token,
-            &1_000_000,
-            &hash32(&env, 1),
-            &None,
-            &None,
-            &None,
-        );
+                    &client_addr,
+                    &freelancer,
+                    &token,
+                    &1_000_000,
+                    &hash32(&env, 1),
+                    &None,
+                    &None,
+                    &None,
+                    &None,
+                    &no_multisig(&env),
+                );
 
         let title = String::from_str(&env, "Design phase");
         let m_id = contract.add_milestone(
@@ -305,15 +313,17 @@ mod upgrade_tests {
         let token = register_token(&env, &admin, &client_addr, 1_000_000);
 
         let escrow_id = contract.create_escrow(
-            &client_addr,
-            &freelancer,
-            &token,
-            &1_000_000,
-            &hash32(&env, 5),
-            &None,
-            &None,
-            &None,
-        );
+                    &client_addr,
+                    &freelancer,
+                    &token,
+                    &1_000_000,
+                    &hash32(&env, 5),
+                    &None,
+                    &None,
+                    &None,
+                    &None,
+                    &no_multisig(&env),
+                );
         let m_id = contract.add_milestone(
             &client_addr,
             &escrow_id,
@@ -349,15 +359,17 @@ mod upgrade_tests {
         let arbiter = Address::generate(&env);
 
         let escrow_id = contract.create_escrow(
-            &client_addr,
-            &freelancer,
-            &token,
-            &1_000_000,
-            &hash32(&env, 7),
-            &Some(arbiter.clone()),
-            &None,
-            &None,
-        );
+                    &client_addr,
+                    &freelancer,
+                    &token,
+                    &1_000_000,
+                    &hash32(&env, 7),
+                    &Some(arbiter.clone()),
+                    &None,
+                    &None,
+                    &None,
+                    &no_multisig(&env),
+                );
 
         contract.raise_dispute(&client_addr, &escrow_id, &None);
 
@@ -391,15 +403,17 @@ mod upgrade_tests {
         let token = register_token(&env, &admin, &client_addr, 500_000);
 
         let escrow_id = contract.create_escrow(
-            &client_addr,
-            &freelancer,
-            &token,
-            &500_000,
-            &hash32(&env, 99),
-            &None,
-            &None,
-            &None,
-        );
+                    &client_addr,
+                    &freelancer,
+                    &token,
+                    &500_000,
+                    &hash32(&env, 99),
+                    &None,
+                    &None,
+                    &None,
+                    &None,
+                    &no_multisig(&env),
+                );
 
         // Upload two distinct WASM blobs to simulate v1 → v2 → rollback to v1.
         let v1_hash = upload_dummy_wasm(&env);
@@ -432,15 +446,17 @@ mod upgrade_tests {
 
         for i in 0u8..3 {
             contract.create_escrow(
-                &client_addr,
-                &freelancer,
-                &token,
-                &1_000_000,
-                &hash32(&env, i),
-                &None,
-                &None,
-                &None,
-            );
+                        &client_addr,
+                        &freelancer,
+                        &token,
+                        &1_000_000,
+                        &hash32(&env, i),
+                        &None,
+                        &None,
+                        &None,
+                        &None,
+                        &no_multisig(&env),
+                    );
         }
         assert_eq!(contract.escrow_count(), 3u64);
 

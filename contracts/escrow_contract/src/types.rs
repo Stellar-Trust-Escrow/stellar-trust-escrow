@@ -52,6 +52,33 @@ pub struct Timelock {
     pub start_ledger: u64,
 }
 
+/// Optional timelock wrapper — used in `EscrowState` to avoid `Option<Timelock>`
+/// which does not satisfy `ScVal: TryFrom<&Option<Timelock>>` in test mode.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum OptionalTimelock {
+    None,
+    Some(Timelock),
+}
+
+impl From<Option<Timelock>> for OptionalTimelock {
+    fn from(opt: Option<Timelock>) -> Self {
+        match opt {
+            Some(t) => OptionalTimelock::Some(t),
+            None => OptionalTimelock::None,
+        }
+    }
+}
+
+impl From<OptionalTimelock> for Option<Timelock> {
+    fn from(opt: OptionalTimelock) -> Self {
+        match opt {
+            OptionalTimelock::Some(t) => Some(t),
+            OptionalTimelock::None => None,
+        }
+    }
+}
+
 /// Supported recurring payment intervals.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -219,7 +246,7 @@ pub struct EscrowState {
     pub lock_time_extension: Option<u64>,
 
     /// Optional timelock payload for buyer remorse protection.
-    pub timelock: Option<Timelock>,
+    pub timelock: OptionalTimelock,
 
     /// IPFS hash of the full project brief / agreement document.
     pub brief_hash: BytesN<32>,

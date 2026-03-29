@@ -37,13 +37,14 @@ mod pause_tests;
 mod types;
 mod upgrade_tests;
 mod bridge;
+mod bridge_tests;
 
 pub use errors::EscrowError;
 use storage::StorageManager;
 use types::{CancellationRequest, RecurringInterval, RecurringPaymentConfig, SlashRecord};
 pub use types::{
     DataKey, EscrowState, EscrowStatus, Milestone, MilestoneStatus, MultisigConfig,
-    ReputationRecord, Timelock,
+    OptionalTimelock, ReputationRecord, Timelock,
 };
 
 use soroban_sdk::{
@@ -144,7 +145,7 @@ pub(crate) struct EscrowMeta {
     /// Optional extension deadline for the lock time.
     pub(crate) lock_time_extension: Option<u64>,
     /// Optional timelock controls release window after approval.
-    pub(crate) timelock: Option<types::Timelock>,
+    pub(crate) timelock: OptionalTimelock,
     pub(crate) brief_hash: BytesN<32>,
     /// Prepaid storage rent reserve held by the contract in the escrow token.
     pub(crate) rent_balance: i128,
@@ -325,7 +326,7 @@ impl ContractStorage {
             deadline: meta.deadline,
             lock_time: meta.lock_time,
             lock_time_extension: meta.lock_time_extension,
-            timelock: meta.timelock,
+            timelock: meta.timelock.into(),
             brief_hash: meta.brief_hash,
             // EscrowMeta uses buyer_signers for multisig; expose via EscrowState view fields
             multisig_approvers: meta.buyer_signers.clone(),
@@ -643,9 +644,9 @@ impl ContractStorage {
     fn check_timelock_expired(
         env: &Env,
         escrow_id: u64,
-        timelock: Option<types::Timelock>,
+        timelock: OptionalTimelock,
     ) -> Result<(), EscrowError> {
-        if let Some(tl) = timelock {
+        if let OptionalTimelock::Some(tl) = timelock {
             let now = env.ledger().timestamp();
             let expiry = tl
                 .start_ledger
@@ -824,6 +825,7 @@ impl EscrowContract {
         arbiter: Option<Address>,
         deadline: Option<u64>,
         lock_time: Option<u64>,
+        _timelock: Option<Timelock>,
         _multisig_config: MultisigConfig,
     ) -> Result<u64, EscrowError> {
         Self::create_escrow_internal(
@@ -942,7 +944,7 @@ impl EscrowContract {
                 deadline,
                 lock_time,
                 lock_time_extension: None,
-                timelock: None,
+                timelock: OptionalTimelock::None,
                 brief_hash,
                 rent_balance: rent_reserve,
                 last_rent_collection_at: now,
@@ -1018,7 +1020,7 @@ impl EscrowContract {
             deadline: None,
             lock_time: None,
             lock_time_extension: None,
-            timelock: None,
+            timelock: OptionalTimelock::None,
             brief_hash,
             rent_balance: base_rent_reserve,
             last_rent_collection_at: now,
@@ -1521,12 +1523,12 @@ impl EscrowContract {
         if meta.status != EscrowStatus::Active {
             return Err(EscrowError::EscrowNotActive);
         }
-        if meta.timelock.is_some() {
+        if meta.timelock != OptionalTimelock::None {
             return Err(EscrowError::TimelockAlreadyActive);
         }
 
         let now = env.ledger().timestamp();
-        meta.timelock = Some(types::Timelock {
+        meta.timelock = OptionalTimelock::Some(types::Timelock {
             duration_ledger,
             start_ledger: now,
         });
@@ -2389,6 +2391,14 @@ mod tests {
         (env, admin, contract_id, client)
     }
 
+    fn no_multisig(env: &Env) -> MultisigConfig {
+        MultisigConfig {
+            approvers: soroban_sdk::Vec::new(env),
+            weights: soroban_sdk::Vec::new(env),
+            threshold: 0,
+        }
+    }
+
     fn advance(env: &Env, seconds: u64) {
         env.ledger().with_mut(|ledger| ledger.timestamp += seconds);
     }
@@ -2588,6 +2598,8 @@ mod tests {
             &None,
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
 
         assert_eq!(escrow_id, 0);
@@ -2636,6 +2648,8 @@ mod tests {
             &None,
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
 
         let milestone_id = client.add_milestone(
@@ -2693,6 +2707,8 @@ mod tests {
             &None,
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
 
         let mid = client.add_milestone(
@@ -2748,6 +2764,8 @@ mod tests {
             &None,
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
 
         client.cancel_escrow(&escrow_client, &escrow_id);
@@ -3013,6 +3031,8 @@ mod tests {
             &None,
             &None,
             &None,
+            &None,
+            &no_multisig(env),
         );
         (escrow_client, freelancer, token_id, escrow_id)
     }
@@ -3220,6 +3240,7 @@ mod tests {
             &None,
             &None,
             &None,
+            &None,
             &MultisigConfig {
                 approvers: soroban_sdk::Vec::new(&env),
                 weights: soroban_sdk::Vec::new(&env),
@@ -3302,6 +3323,7 @@ mod tests {
             &token_id,
             &100_i128,
             &BytesN::from_array(&env, &[1u8; 32]),
+            &None,
             &None,
             &None,
             &None,
@@ -3408,16 +3430,14 @@ mod tests {
         assert!(client.is_paused());
 
         // Mutation blocked
-        let result = std::panic::catch_unwind(|| {
-            client.add_milestone(
-                &escrow_client,
-                &escrow_id,
-                &String::from_str(&env, "M1"),
-                &BytesN::from_array(&env, &[0u8; 32]),
-                &50_i128,
-            );
-        });
-        assert!(result.is_err(), "add_milestone should panic while paused");
+        let result = client.try_add_milestone(
+            &escrow_client,
+            &escrow_id,
+            &String::from_str(&env, "M1"),
+            &BytesN::from_array(&env, &[0u8; 32]),
+            &50_i128,
+        );
+        assert!(result.is_err(), "add_milestone should fail while paused");
 
         client.unpause(&admin);
         assert!(!client.is_paused());

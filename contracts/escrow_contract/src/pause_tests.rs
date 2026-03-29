@@ -1,7 +1,15 @@
 #[cfg(test)]
 #[allow(clippy::module_inception)]
 mod pause_tests {
-    use crate::{EscrowContract, EscrowContractClient, EscrowError, EscrowStatus, MilestoneStatus};
+    use crate::{EscrowContract, EscrowContractClient, EscrowError, EscrowStatus, MilestoneStatus, MultisigConfig};
+
+    fn no_multisig(env: &Env) -> MultisigConfig {
+        MultisigConfig {
+            approvers: soroban_sdk::Vec::new(env),
+            weights: soroban_sdk::Vec::new(env),
+            threshold: 0,
+        }
+    }
     use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String};
 
     fn setup() -> (Env, Address, Address, EscrowContractClient<'static>) {
@@ -55,15 +63,17 @@ mod pause_tests {
         client.pause(&admin);
 
         let result = client.try_create_escrow(
-            &client_addr,
-            &freelancer,
-            &token,
-            &500,
-            &BytesN::from_array(&env, &[1; 32]),
-            &None,
-            &None,
-            &None,
-        );
+                    &client_addr,
+                    &freelancer,
+                    &token,
+                    &500,
+                    &BytesN::from_array(&env, &[1; 32]),
+                    &None,
+                    &None,
+                    &None,
+                    &None,
+                    &no_multisig(&env),
+                );
 
         assert!(
             matches!(result, Err(Ok(EscrowError::ContractPaused))),
@@ -79,15 +89,17 @@ mod pause_tests {
         let token = register_token(&env, &admin, &client_addr, 1030);
 
         let escrow_id = client.create_escrow(
-            &client_addr,
-            &freelancer,
-            &token,
-            &1000,
-            &BytesN::from_array(&env, &[1; 32]),
-            &None,
-            &None,
-            &None,
-        );
+                    &client_addr,
+                    &freelancer,
+                    &token,
+                    &1000,
+                    &BytesN::from_array(&env, &[1; 32]),
+                    &None,
+                    &None,
+                    &None,
+                    &None,
+                    &no_multisig(&env),
+                );
 
         client.pause(&admin);
 
@@ -113,15 +125,17 @@ mod pause_tests {
         let token_addr = register_token(&env, &admin, &client_addr, 1060);
 
         let escrow_id = client.create_escrow(
-            &client_addr,
-            &freelancer,
-            &token_addr,
-            &1000,
-            &BytesN::from_array(&env, &[1; 32]),
-            &None,
-            &None,
-            &None,
-        );
+                    &client_addr,
+                    &freelancer,
+                    &token_addr,
+                    &1000,
+                    &BytesN::from_array(&env, &[1; 32]),
+                    &None,
+                    &None,
+                    &None,
+                    &None,
+                    &no_multisig(&env),
+                );
 
         let mid = client.add_milestone(
             &client_addr,
