@@ -188,6 +188,8 @@ impl StorageManager {
                     approved_count,
                     released_count,
                     arbiter: v1_escrow.arbiter,
+                    // v1 had no buyer_signers — default to empty (client-only approval)
+                    buyer_signers: soroban_sdk::Vec::new(env),
                     created_at: v1_escrow.created_at,
                     deadline: v1_escrow.deadline,
                     lock_time: v1_escrow.lock_time,
