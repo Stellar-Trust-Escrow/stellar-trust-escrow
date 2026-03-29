@@ -1,0 +1,9 @@
+{
+  "detectors_to_run": "all",
+  "detectors_to_exclude": "naming-convention,solc-version",
+  "exclude_informational": false,
+  "exclude_low": false,
+  "filter_paths": "node_modules,test",
+  "json": "slither-report.json",
+  "sarif": "slither-report.sarif"
+}

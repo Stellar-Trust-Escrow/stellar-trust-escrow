@@ -533,8 +533,8 @@ mod event_tests {
         let events = contract_events(&env, &contract_id);
         let (_, topics, _) = events
             .iter()
-            .find(|(_, t, _)| has_topic_symbol(&env, t, soroban_sdk::symbol_short!("tl_started")))
-            .expect("tl_started event not emitted");
+            .find(|(_, t, _)| has_topic_symbol(&env, t, soroban_sdk::symbol_short!("tl_start")))
+            .expect("tl_start event not emitted");
         assert_eq!(topic_u64(&env, &topics, 1), escrow_id);
 
         client.submit_milestone(&freelancer, &escrow_id, &mid);
@@ -548,7 +548,10 @@ mod event_tests {
         let release_err = client
             .try_release_funds(&client_addr, &escrow_id, &mid)
             .unwrap_err();
-        assert!(matches!(release_err, Err(Err(EscrowError::TimelockNotExpired))));
+        assert!(matches!(
+            release_err,
+            Err(Err(EscrowError::TimelockNotExpired))
+        ));
 
         env.ledger().set_timestamp(env.ledger().timestamp() + 20);
 
@@ -557,9 +560,11 @@ mod event_tests {
         assert_eq!(freelancer_balance_after, 500);
 
         let events = contract_events(&env, &contract_id);
-        assert!(events.iter().any(|(_, t, _)|
-            has_topic_symbol(&env, t, soroban_sdk::symbol_short!("tl_released"))
-        ));
+        assert!(events.iter().any(|(_, t, _)| has_topic_symbol(
+            &env,
+            t,
+            soroban_sdk::symbol_short!("tl_rel")
+        )));
     }
 
     #[test]

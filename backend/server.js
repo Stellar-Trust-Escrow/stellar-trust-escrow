@@ -195,6 +195,8 @@ app.use('/api/incidents', incidentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/batch', batchRoutes);
 app.use('/docs', docsRouter);
+// Alias — acceptance criteria requires /api-docs
+app.use('/api-docs', docsRouter);
 
 // ── Example: Deprecated API Version ───────────────────────────────────────────
 // Uncomment to deprecate unversioned endpoints in favor of /api/v1

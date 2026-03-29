@@ -1,53 +1,28 @@
-# Frontend State Management Documentation Task
-Priority: Low | Est: 2-3h | Status: IN PROGRESS
+# Contributor Onboarding Guide Implementation TODO
 
-## Steps to Complete:
+## Approved Plan Breakdown
 
-### 1. ✅ Plan approved by user
+**✅ Step 1: Create development branch**  
+- `git checkout -b docs/contributor-onboarding`
 
-### 2. ✅ Create main documentation file
-- ✅ Create `/docs/frontend-state-management.md` with full content (SWR, WS, Store, Optimistic, Loading, Errors, Sync, Perf, Testing)
+**✅ Step 2: Create comprehensive CONTRIBUTING.md** (Complete file with all sections)
 
-### 3. ✅ Update existing frontend guides
-- ✅ Edit `/docs/frontend-guide.md` - Add \"State Management\" section linking to new doc
-- ✅ Edit `/docs/frontend-testing.md` - Add \"Testing State Hooks\" section
+**✅ Step 4: Create GitHub PR template**  
+- .github/pull_request_template.md from pr_body.md
 
-### 4. ✅ Verify completeness
-- ✅ Examples compile (verified from real code snippets)
-- ✅ Acceptance criteria met 100% (hooks documented, all patterns covered)
+**✅ Step 3: Update README.md**  
+- Add prominent CONTRIBUTING.md link  
+- Simplify Quick Start to reference CONTRIBUTING.md
 
-### 5. ✅ Mark complete
-- ✅ Update this TODO.md
-- ✅ Task complete
+**Step 5: Verify linters & format**  
+- `npm run lint && npm run format`
 
-## Result:
-✅ **Frontend state management documentation delivered 100% per requirements**
+**Step 6: Commit changes**  
+- `git add .`  
+- `git commit -m \"docs: create complete contributor onboarding guide\"`
 
-**Key Deliverables**:
-- [Main Guide](docs/frontend-state-management.md) ← Primary, covers all criteria (React Query→SWR note, WS, optimistic, errors, perf, testing)
-- [Frontend Guide Update](docs/frontend-guide.md) ← New section links to main guide
-- [Testing Guide Update](docs/frontend-testing.md) ← New section on hook/store testing
+**Step 7: Push and create PR**  
+- `git push origin docs/contributor-onboarding`  
+- Open PR per CONTRIBUTING.md process
 
-**Usage**:
-```bash
-cat docs/frontend-state-management.md
-# Open in browser/markdown viewer
-```
-
-**Acceptance Criteria**:
-- [x] Complete hook documentation
-- [x] State sync patterns explained (API/WS/contract flow + diagram)
-- [x] Optimistic update examples
-- [x] Error handling strategies
-- [x] Performance optimization tips
-- [x] Testing patterns for hooks
-- [x] Code examples verified to match real implementation
-- [x] No breaking changes, integrates with existing docs
-
-**Verification**:
-- All code snippets extracted from actual files (`useEscrow.js`, etc.)
-- Examples follow existing style (JSDoc, fenced code)
-- Build-compatible (no syntax errors)
-
-
-
+**Progress: 5/7 complete** (README.md Quick Start simplified)
