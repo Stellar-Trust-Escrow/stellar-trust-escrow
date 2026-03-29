@@ -93,4 +93,8 @@ pub enum EscrowError {
     TimelockAlreadyActive = 52,
     /// The timelock has not yet expired.
     TimelockNotExpired = 53,
+
+    // ── Bridge / Cross-Chain ─────────────────────────────────────────────────
+    /// Wrapped token not approved, transfer not found, or bridge not yet finalized.
+    BridgeError = 54,
 }

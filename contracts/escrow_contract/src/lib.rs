@@ -36,6 +36,7 @@ mod oracle;
 mod pause_tests;
 mod types;
 mod upgrade_tests;
+mod bridge;
 
 pub use errors::EscrowError;
 use storage::StorageManager;
@@ -738,6 +739,73 @@ impl EscrowContract {
         oracle::convert_amount(&env, amount, &from_asset, &to_asset)
     }
 
+    // ── Bridge / Cross-Chain ──────────────────────────────────────────────────
+
+    /// Set the Wormhole bridge contract address. Admin only.
+    pub fn set_wormhole_bridge(
+        env: Env,
+        caller: Address,
+        bridge_addr: Address,
+    ) -> Result<(), EscrowError> {
+        ContractStorage::require_admin(&env, &caller)?;
+        caller.require_auth();
+        bridge::set_wormhole_bridge(&env, &bridge_addr);
+        ContractStorage::bump_instance_ttl(&env);
+        Ok(())
+    }
+
+    /// Register a wrapped (bridged) token so it can be used in escrows.
+    /// Admin only. `info.is_approved` controls whether the token is usable.
+    pub fn register_wrapped_token(
+        env: Env,
+        caller: Address,
+        info: bridge::WrappedTokenInfo,
+    ) -> Result<(), EscrowError> {
+        ContractStorage::require_admin(&env, &caller)?;
+        caller.require_auth();
+        bridge::register_wrapped_token(&env, &info);
+        bridge::emit_wrapped_token_registered(&env, &info.stellar_address, &info.origin_chain);
+        Ok(())
+    }
+
+    /// Return canonical metadata for a wrapped token, or None if not registered.
+    pub fn get_wrapped_token_info(
+        env: Env,
+        token: Address,
+    ) -> Option<bridge::WrappedTokenInfo> {
+        bridge::get_wrapped_token_info(&env, &token)
+    }
+
+    /// Record or update bridge confirmation state for a cross-chain transfer.
+    /// Anyone may call this; finality is determined by `MIN_BRIDGE_CONFIRMATIONS`.
+    pub fn update_bridge_confirmation(
+        env: Env,
+        transfer_id: String,
+        bridge_protocol: bridge::BridgeProtocol,
+        confirmations: u32,
+    ) -> Result<(), EscrowError> {
+        ContractStorage::require_initialized(&env)?;
+        let is_finalized = confirmations >= bridge::MIN_BRIDGE_CONFIRMATIONS;
+        let conf = bridge::BridgeConfirmation {
+            transfer_id: transfer_id.clone(),
+            bridge: bridge_protocol,
+            confirmations,
+            is_finalized,
+            updated_at: env.ledger().timestamp(),
+        };
+        bridge::record_bridge_confirmation(&env, &conf);
+        bridge::emit_bridge_confirmation_updated(&env, &transfer_id, confirmations, is_finalized);
+        Ok(())
+    }
+
+    /// Return bridge confirmation state for a transfer ID.
+    pub fn get_bridge_confirmation(
+        env: Env,
+        transfer_id: String,
+    ) -> Option<bridge::BridgeConfirmation> {
+        bridge::get_bridge_confirmation(&env, &transfer_id)
+    }
+
     // ── Escrow Lifecycle ──────────────────────────────────────────────────────
 
     /// Creates a new escrow and locks funds in the contract.
@@ -832,6 +900,9 @@ impl EscrowContract {
                 return Err(EscrowError::InvalidLockTime);
             }
         }
+
+        // Reject unapproved wrapped/bridged tokens
+        bridge::validate_escrow_token(&env, &token)?;
 
         let buyer_signers = {
             let mut signers = buyer_signers.unwrap_or_else(|| soroban_sdk::Vec::new(&env));

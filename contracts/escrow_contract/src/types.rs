@@ -393,4 +393,6 @@ pub enum DataKey {
     OracleAddress,
     /// Fallback oracle contract address — value: Address
     FallbackOracleAddress,
+    /// Wormhole token bridge contract address — value: Address
+    WormholeBridge,
 }
