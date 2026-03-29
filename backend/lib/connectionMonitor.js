@@ -5,11 +5,14 @@
  * Integrates with Prisma client to track connection health and pool status.
  */
 
+import { createModuleLogger } from '../config/logger.js';
 import {
   dbConnectionsActive,
   dbConnectionErrorsTotal,
   dbConnectionPoolExhaustionTotal,
 } from './metrics.js';
+
+const log = createModuleLogger('lib.connectionMonitor');
 
 const MONITORING_INTERVAL_MS = 30000; // Check every 30 seconds
 let monitoringInterval;
@@ -39,19 +42,23 @@ export function startConnectionMonitoring(prisma) {
 
       // If latency is very high, it might indicate pool issues
       if (latency > 5000) {
-        console.warn(`[DB MONITOR] High connection latency: ${latency}ms`);
+        log.warn({ message: 'db_monitor_high_latency', latencyMs: latency });
       }
 
       // Update active connections gauge (approximated)
       // This is a simplified approach - in production, integrate with pg pool events
       dbConnectionsActive.set(1); // At minimum, we have 1 active during health check
     } catch (error) {
-      console.error('[DB MONITOR] Connection check failed:', error.message);
+      log.error({
+        message: 'db_monitor_check_failed',
+        error: error.message,
+        stack: error.stack,
+      });
       dbConnectionErrorsTotal.inc({ error_type: error.code || 'unknown' });
     }
   }, MONITORING_INTERVAL_MS);
 
-  console.log('[DB MONITOR] Connection monitoring started');
+  log.info({ message: 'db_monitor_started' });
 }
 
 /**
@@ -61,7 +68,7 @@ export function stopConnectionMonitoring() {
   if (monitoringInterval) {
     clearInterval(monitoringInterval);
     monitoringInterval = null;
-    console.log('[DB MONITOR] Connection monitoring stopped');
+    log.info({ message: 'db_monitor_stopped' });
   }
 }
 
@@ -79,7 +86,7 @@ export function attachConnectionMonitoring(prisma) {
     // If we have many pending queries, pool might be exhausted
     if (pendingQueries > 5) {
       dbConnectionPoolExhaustionTotal.inc();
-      console.warn(`[DB MONITOR] High pending queries: ${pendingQueries}`);
+      log.warn({ message: 'db_monitor_high_pending_queries', pendingQueries });
     }
 
     try {

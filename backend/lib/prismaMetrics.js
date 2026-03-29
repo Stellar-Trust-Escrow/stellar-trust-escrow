@@ -9,7 +9,10 @@
  *   attachPrismaMetrics(prisma);
  */
 
+import { createModuleLogger } from '../config/logger.js';
 import { dbQueryDuration, dbQueryTotal, dbSlowQueryTotal } from './metrics.js';
+
+const log = createModuleLogger('lib.prismaMetrics');
 
 const SLOW_QUERY_THRESHOLD_MS = parseInt(process.env.SLOW_QUERY_THRESHOLD_MS || '200');
 
@@ -33,14 +36,18 @@ export function attachPrismaMetrics(prisma) {
 
       // Enhanced slow query logging with optimization hints
       const queryInfo = getQueryOptimizationHints(params, durationMs);
-      console.warn(
-        `[SLOW QUERY] ${model}.${operation} — ${durationMs}ms (threshold: ${SLOW_QUERY_THRESHOLD_MS}ms)`,
-        queryInfo,
-      );
+      log.warn({
+        message: 'slow_prisma_query',
+        model,
+        operation,
+        durationMs,
+        thresholdMs: SLOW_QUERY_THRESHOLD_MS,
+        ...queryInfo,
+      });
 
-      // Log full query details in development for debugging
       if (process.env.NODE_ENV === 'development') {
-        console.warn('[SLOW QUERY DETAILS]', {
+        log.debug({
+          message: 'slow_prisma_query_details',
           model,
           operation,
           args: params.args,

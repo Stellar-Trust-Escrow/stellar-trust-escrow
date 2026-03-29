@@ -1,4 +1,9 @@
 import express from 'express';
+import escrowController, {
+  validateBroadcast,
+  validateEscrowId,
+  validatePagination,
+} from '../controllers/escrowController.js';
 import escrowController from '../controllers/escrowController.js';
 import { cacheResponse, invalidateOn } from '../middleware/cache.js';
 import authMiddleware from '../middleware/auth.js';
@@ -6,10 +11,11 @@ import authMiddleware from '../middleware/auth.js';
 const router = express.Router();
 router.use(authMiddleware);
 
-// TTLs per spec: 5 min for lists, 15 min for individual escrows
-const LIST_TTL   = parseInt(process.env.CACHE_TTL_ESCROW_LIST   || '300',  10);
-const DETAIL_TTL = parseInt(process.env.CACHE_TTL_ESCROW_DETAIL || '900',  10);
-
+router.get('/', validatePagination, escrowController.listEscrows);
+router.post('/broadcast', validateBroadcast, escrowController.broadcastCreateEscrow);
+router.get('/:id/milestones', validateEscrowId, validatePagination, escrowController.getMilestones);
+router.get('/:id/milestones/:milestoneId', validateEscrowId, escrowController.getMilestone);
+router.get('/:id', validateEscrowId, escrowController.getEscrow);
 /**
  * @route  GET /api/escrows
  * Cache key pattern: escrow:list:{page} (via tag-based invalidation)

@@ -18,9 +18,19 @@
 #[cfg(test)]
 #[allow(clippy::module_inception)]
 mod upgrade_tests {
-    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String};
+    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
 
-    use crate::{EscrowContract, EscrowContractClient, EscrowStatus, MilestoneStatus};
+    use crate::{
+        EscrowContract, EscrowContractClient, EscrowStatus, MilestoneStatus, MultisigConfig,
+    };
+
+    fn no_multisig(env: &Env) -> MultisigConfig {
+        MultisigConfig {
+            approvers: Vec::new(env),
+            weights: Vec::new(env),
+            threshold: 0,
+        }
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Helpers
@@ -217,6 +227,9 @@ mod upgrade_tests {
         assert_eq!(post.brief_hash, pre.brief_hash);
         assert_eq!(post.created_at, pre.created_at);
         assert_eq!(post.deadline, pre.deadline);
+        assert_eq!(post.multisig_threshold, pre.multisig_threshold);
+        assert_eq!(post.multisig_approvers.len(), pre.multisig_approvers.len());
+        assert_eq!(post.multisig_weights.len(), pre.multisig_weights.len());
     }
 
     /// Milestones attached to an escrow must survive an upgrade intact.

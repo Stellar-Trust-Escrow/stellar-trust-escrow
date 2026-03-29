@@ -1,11 +1,15 @@
 import express from 'express';
 import paymentController from '../controllers/paymentController.js';
+import {
+  stellarAddressParam,
+  stellarAddressBody,
+  handleValidationErrors,
+} from '../../middleware/validation.js';
 import authMiddleware from '../middleware/auth.js';
 import { authorizeBodyAddress, authorizeParamAddress } from '../middleware/authorization.js';
 
 const router = express.Router();
 
-/** Capture raw body for Stripe webhook signature verification. */
 const captureRawBody = (req, _res, next) => {
   let data = '';
   req.on('data', (chunk) => (data += chunk));
@@ -15,11 +19,21 @@ const captureRawBody = (req, _res, next) => {
   });
 };
 
-/**
- * @route  POST /api/payments/webhook
- * @desc   Stripe webhook — must be registered before express.json() parses the body.
- */
 router.post('/webhook', captureRawBody, express.json(), paymentController.webhook);
+router.post(
+  '/checkout',
+  stellarAddressBody('address'),
+  handleValidationErrors,
+  paymentController.createCheckout,
+);
+router.get('/status/:sessionId', paymentController.getStatus);
+router.get(
+  '/:address',
+  stellarAddressParam('address'),
+  handleValidationErrors,
+  paymentController.listByAddress,
+);
+router.post('/:paymentId/refund', paymentController.refund);
 
 /**
  * @route  POST /api/payments/checkout

@@ -20,6 +20,7 @@ import { useRouter } from 'next/navigation';
 import Button from './Button';
 import Modal from './Modal';
 import Spinner from './Spinner';
+import { truncateAddress } from '../../lib/truncateAddress';
 import { useI18n } from '../../i18n/index.jsx';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -157,36 +158,13 @@ export default function WalletStatus({ wallet }) {
   // Connected
   if (isConnected && address) {
     return (
-      <>
-        <div className="flex items-center gap-2">
-          <StatusDot status="connected" />
-          <AddressWithTooltip address={address} />
-          <Button
-            id="wallet-disconnect-btn"
-            variant="secondary"
-            size="sm"
-            onClick={() => setShowConfirm(true)}
-          >
-            {t('wallet.disconnect')}
-          </Button>
-        </div>
-
-        <Modal
-          isOpen={showConfirm}
-          onClose={() => setShowConfirm(false)}
-          title="Disconnect Wallet"
-          size="sm"
-          isConfirmation
-          confirmLabel="Disconnect"
-          confirmVariant="danger"
-          onConfirm={handleDisconnect}
-        >
-          <p className="text-gray-300 text-sm">
-            Are you sure you want to disconnect your wallet? You will be redirected to the home
-            page.
-          </p>
-        </Modal>
-      </>
+      <div className="flex items-center gap-2">
+        <Avatar address={address} size="sm" className="rounded-full" />
+        <AddressWithTooltip address={address} />
+        <Button id="wallet-disconnect-btn" variant="secondary" size="sm" onClick={disconnect}>
+          {t('wallet.disconnect')}
+        </Button>
+      </div>
     );
   }
 

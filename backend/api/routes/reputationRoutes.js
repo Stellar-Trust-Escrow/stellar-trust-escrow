@@ -5,6 +5,12 @@ import { cacheResponse, TTL } from '../middleware/cache.js';
 const router = express.Router();
 
 /**
+ * @route  GET /api/reputation/search?q=<prefix>
+ * ES-backed address autocomplete + full-text search. Prisma fallback on outage.
+ */
+router.get('/search', reputationController.search);
+
+/**
  * @route  GET /api/reputation/leaderboard
  */
 router.get(

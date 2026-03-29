@@ -20,10 +20,20 @@ const globalForPrisma = globalThis;
 const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
-    log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
+    log: process.env.NODE_ENV === 'development'
+      ? [{ emit: 'event', level: 'query' }, 'warn', 'error']
+      : ['error'],
     // Additional options for better error handling and performance
     errorFormat: 'minimal',
   });
+
+if (process.env.NODE_ENV === 'development' && !globalForPrisma.prisma) {
+  prisma.$on('query', (e) => {
+    if (e.duration > 500) {
+      console.warn(`[Prisma] Slow query (${e.duration}ms): ${e.query}`);
+    }
+  });
+}
 
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;

@@ -34,6 +34,7 @@ router.get(
 router.post(
   '/:id/evidence',
   invalidateOn({ tags: (req) => [`dispute:${req.params.id}`, 'disputes'] }),
+  disputeController.uploadEvidence,
   disputeController.postEvidence,
 );
 
