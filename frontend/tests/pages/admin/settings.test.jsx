@@ -1,13 +1,20 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import AdminSettingsPage from '../../../app/admin/settings/page';
+import { renderWithStore } from '../../../store/test-utils';
 
 const localStorageMock = (() => {
   let store = {};
   return {
     getItem: (key) => store[key] || null,
-    setItem: (key, value) => { store[key] = value; },
-    removeItem: (key) => { delete store[key]; },
-    clear: () => { store = {}; },
+    setItem: (key, value) => {
+      store[key] = value;
+    },
+    removeItem: (key) => {
+      delete store[key];
+    },
+    clear: () => {
+      store = {};
+    },
   };
 })();
 Object.defineProperty(window, 'localStorage', { value: localStorageMock });
@@ -31,7 +38,7 @@ describe('AdminSettingsPage', () => {
       ok: true,
       json: async () => mockSettings,
     });
-    render(<AdminSettingsPage />);
+    renderWithStore(<AdminSettingsPage />);
     expect(screen.getByText('Platform Settings')).toBeInTheDocument();
   });
 
@@ -40,7 +47,7 @@ describe('AdminSettingsPage', () => {
       ok: true,
       json: async () => mockSettings,
     });
-    render(<AdminSettingsPage />);
+    renderWithStore(<AdminSettingsPage />);
     expect(screen.getByText('Loading settings…')).toBeInTheDocument();
   });
 
@@ -49,7 +56,7 @@ describe('AdminSettingsPage', () => {
       ok: true,
       json: async () => mockSettings,
     });
-    render(<AdminSettingsPage />);
+    renderWithStore(<AdminSettingsPage />);
     await waitFor(() => {
       expect(screen.getByText('testnet')).toBeInTheDocument();
     });
@@ -60,7 +67,7 @@ describe('AdminSettingsPage', () => {
       ok: true,
       json: async () => mockSettings,
     });
-    render(<AdminSettingsPage />);
+    renderWithStore(<AdminSettingsPage />);
     await waitFor(() => {
       expect(screen.getByLabelText(/Platform Fee/)).toHaveValue(2.5);
     });
@@ -71,7 +78,7 @@ describe('AdminSettingsPage', () => {
       ok: true,
       json: async () => mockSettings,
     });
-    render(<AdminSettingsPage />);
+    renderWithStore(<AdminSettingsPage />);
     await waitFor(() => screen.getByLabelText(/Platform Fee/));
     fireEvent.change(screen.getByLabelText(/Platform Fee/), { target: { value: '3.0' } });
     expect(screen.getByLabelText(/Platform Fee/)).toHaveValue(3);
@@ -82,7 +89,7 @@ describe('AdminSettingsPage', () => {
       ok: true,
       json: async () => mockSettings,
     });
-    render(<AdminSettingsPage />);
+    renderWithStore(<AdminSettingsPage />);
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Save Changes' })).toBeInTheDocument();
     });
@@ -93,7 +100,7 @@ describe('AdminSettingsPage', () => {
       ok: false,
       json: async () => ({ error: 'Unauthorized' }),
     });
-    render(<AdminSettingsPage />);
+    renderWithStore(<AdminSettingsPage />);
     await waitFor(() => {
       expect(screen.getByText(/Unauthorized/)).toBeInTheDocument();
     });
@@ -103,7 +110,7 @@ describe('AdminSettingsPage', () => {
     global.fetch
       .mockResolvedValueOnce({ ok: true, json: async () => mockSettings })
       .mockResolvedValueOnce({ ok: true, json: async () => mockSettings });
-    render(<AdminSettingsPage />);
+    renderWithStore(<AdminSettingsPage />);
     await waitFor(() => screen.getByRole('button', { name: 'Save Changes' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
     await waitFor(() => {

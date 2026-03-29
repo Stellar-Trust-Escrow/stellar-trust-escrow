@@ -7,13 +7,18 @@
 
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Search, SlidersHorizontal, X, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { Search, SlidersHorizontal, X, ChevronLeft, ChevronRight, Loader2, Loader2 as SpinnerIcon } from 'lucide-react';
+import Progress from '../../components/ui/Progress';
+import CardSkeleton from '../../components/ui/CardSkeleton';
+import Skeleton from '../../components/ui/Skeleton';
+
 import EscrowCard from '../../components/escrow/EscrowCard';
 import SearchFilters from '../../components/explorer/SearchFilters';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
+import EmptyState from '../../components/ui/EmptyState';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -79,7 +84,7 @@ function filtersFromUrl(sp) {
 
 const PAGE_SIZE = 12;
 
-export default function ExplorerPage() {
+function ExplorerContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -91,7 +96,12 @@ export default function ExplorerPage() {
   const [showFilters, setShowFilters] = useState(false);
 
   const [escrows, setEscrows] = useState([]);
-  const [meta, setMeta] = useState({ total: 0, totalPages: 0, hasNextPage: false, hasPreviousPage: false });
+  const [meta, setMeta] = useState({
+    total: 0,
+    totalPages: 0,
+    hasNextPage: false,
+    hasPreviousPage: false,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -148,7 +158,9 @@ export default function ExplorerPage() {
         if (!cancelled) setLoading(false);
       });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [debouncedSearch, filters, page]);
 
   // ── Handlers ───────────────────────────────────────────────────────────────
@@ -262,7 +274,12 @@ export default function ExplorerPage() {
             >
               <Badge status={s} size="sm" />
               <button
-                onClick={() => handleFilterChange('statuses', filters.statuses.filter((x) => x !== s))}
+                onClick={() =>
+                  handleFilterChange(
+                    'statuses',
+                    filters.statuses.filter((x) => x !== s),
+                  )
+                }
                 className="text-gray-500 hover:text-white ml-0.5"
               >
                 <X size={11} />
@@ -275,7 +292,10 @@ export default function ExplorerPage() {
               {filters.minAmount && filters.maxAmount && ' – '}
               {filters.maxAmount && `≤ ${filters.maxAmount}`} USDC
               <button
-                onClick={() => { handleFilterChange('minAmount', ''); handleFilterChange('maxAmount', ''); }}
+                onClick={() => {
+                  handleFilterChange('minAmount', '');
+                  handleFilterChange('maxAmount', '');
+                }}
                 className="text-gray-500 hover:text-white ml-0.5"
               >
                 <X size={11} />
@@ -286,7 +306,10 @@ export default function ExplorerPage() {
             <span className="flex items-center gap-1.5 bg-gray-800 border border-gray-700 rounded-full px-3 py-1 text-xs text-gray-300">
               {filters.dateFrom || '…'} → {filters.dateTo || '…'}
               <button
-                onClick={() => { handleFilterChange('dateFrom', ''); handleFilterChange('dateTo', ''); }}
+                onClick={() => {
+                  handleFilterChange('dateFrom', '');
+                  handleFilterChange('dateTo', '');
+                }}
                 className="text-gray-500 hover:text-white ml-0.5"
               >
                 <X size={11} />
@@ -313,10 +336,16 @@ export default function ExplorerPage() {
 
         {/* Results */}
         <div className="flex-1 min-w-0">
-          {loading ? (
-            <div className="flex items-center justify-center py-20 text-gray-500">
-              <Loader2 size={24} className="animate-spin mr-2" />
-              Loading escrows…
+{loading ? (
+            <div className="flex flex-col items-center justify-center py-20 gap-8 text-gray-500">
+              <Progress indeterminate size="lg" />
+              <div className="space-y-2 text-center">
+                <Skeleton variant="heading" />
+                <Skeleton variant="text" />
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-w-4xl">
+                {Array(6).fill().map((_, i) => <CardSkeleton key={i} className="col-span-1" />)}
+              </div>
             </div>
           ) : error ? (
             <div className="text-center py-16">
@@ -324,20 +353,21 @@ export default function ExplorerPage() {
               <p className="text-gray-500 text-sm">{error}</p>
             </div>
           ) : escrows.length === 0 ? (
-            <div className="text-center py-16 text-gray-500">
-              <p className="text-lg mb-2">No escrows found</p>
-              <p className="text-sm">Try adjusting your search or filters.</p>
-              {activeFilterCount > 0 && (
-                <button
-                  onClick={handleReset}
-                  className="mt-4 text-indigo-400 hover:text-indigo-300 text-sm transition-colors"
-                >
-                  Clear all filters
-                </button>
-              )}
-            </div>
+            <EmptyState
+              title="No escrows found"
+              description={
+                activeFilterCount > 0
+                  ? 'No escrows match your current filters. Try adjusting or clearing them.'
+                  : 'There are no escrows to display yet. Create one to get started.'
+              }
+              actionLabel={activeFilterCount > 0 ? 'Clear all filters' : 'Create Escrow'}
+              onAction={activeFilterCount > 0 ? handleReset : undefined}
+              actionHref={activeFilterCount > 0 ? undefined : '/escrow/create'}
+            />
           ) : (
-            <div className={`grid gap-4 ${showFilters ? 'md:grid-cols-2' : 'md:grid-cols-2 lg:grid-cols-3'}`}>
+            <div
+              className={`grid gap-4 ${showFilters ? 'md:grid-cols-2' : 'md:grid-cols-2 lg:grid-cols-3'}`}
+            >
               {escrows.map((escrow) => (
                 <EscrowCard key={escrow.id} escrow={escrow} />
               ))}
@@ -376,8 +406,7 @@ export default function ExplorerPage() {
                 pageNum = offsets[i];
               }
               const isEllipsis =
-                total > 7 &&
-                ((i === 1 && pageNum > 2) || (i === 5 && pageNum < total - 1));
+                total > 7 && ((i === 1 && pageNum > 2) || (i === 5 && pageNum < total - 1));
 
               if (isEllipsis) {
                 return (
@@ -416,5 +445,24 @@ export default function ExplorerPage() {
         </div>
       )}
     </div>
+  );
+}
+
+
+export default function ExplorerPage() {
+  return (
+        <Suspense
+          fallback={
+            <div className="flex flex-col items-center justify-center py-20 gap-8 text-gray-500">
+              <Progress indeterminate size="lg" />
+              <div className="space-y-2 text-center">
+                <Skeleton variant="heading" className="mx-auto" />
+                <Skeleton variant="text" className="mx-auto w-64" />
+              </div>
+            </div>
+          }
+        >
+      <ExplorerContent />
+    </Suspense>
   );
 }

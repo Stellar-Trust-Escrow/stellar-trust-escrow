@@ -1,0 +1,15 @@
+[package]
+name = "stellar-trust-governance"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Decentralized governance contract for StellarTrustEscrow protocol"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+soroban-sdk = { version = "21.0.0", features = [] }
+
+[dev-dependencies]
+soroban-sdk = { version = "21.0.0", features = ["testutils"] }

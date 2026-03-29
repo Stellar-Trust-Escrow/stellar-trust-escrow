@@ -16,6 +16,7 @@
 //! implemented. Remove the attribute as each issue is resolved.
 
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod upgrade_tests {
     use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String};
 
@@ -151,6 +152,7 @@ mod upgrade_tests {
             &hash32(&env, 1),
             &None,
             &None,
+            &None,
         );
         contract.create_escrow(
             &client_addr,
@@ -158,6 +160,7 @@ mod upgrade_tests {
             &token,
             &500_000,
             &hash32(&env, 2),
+            &None,
             &None,
             &None,
         );
@@ -194,6 +197,7 @@ mod upgrade_tests {
             &brief,
             &None,
             &None,
+            &None,
         );
 
         let pre = contract.get_escrow(&escrow_id);
@@ -228,6 +232,7 @@ mod upgrade_tests {
             &token,
             &1_000_000,
             &hash32(&env, 1),
+            &None,
             &None,
             &None,
         );
@@ -294,6 +299,7 @@ mod upgrade_tests {
             &hash32(&env, 5),
             &None,
             &None,
+            &None,
         );
         let m_id = contract.add_milestone(
             &client_addr,
@@ -337,6 +343,7 @@ mod upgrade_tests {
             &hash32(&env, 7),
             &Some(arbiter.clone()),
             &None,
+            &None,
         );
 
         contract.raise_dispute(&client_addr, &escrow_id, &None);
@@ -378,6 +385,7 @@ mod upgrade_tests {
             &hash32(&env, 99),
             &None,
             &None,
+            &None,
         );
 
         // Upload two distinct WASM blobs to simulate v1 → v2 → rollback to v1.
@@ -416,6 +424,7 @@ mod upgrade_tests {
                 &token,
                 &1_000_000,
                 &hash32(&env, i),
+                &None,
                 &None,
                 &None,
             );
