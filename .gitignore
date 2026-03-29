@@ -1,46 +1,71 @@
-# Rust / Cargo
-target/
-Cargo.lock
-*.wasm
-
-# Node.js
+# ── Dependencies ──────────────────────────────────────────────────────────────
 node_modules/
-npm-debug.log*
-.npm
+**/node_modules/
 
-# Next.js
+# ── Rust / Cargo ───────────────────────────────────────────────────────────────
+target/
+**/*.wasm
+
+# ── Next.js ────────────────────────────────────────────────────────────────────
 .next/
 out/
 
-# Environment files — never commit secrets
+# ── Build outputs ──────────────────────────────────────────────────────────────
+dist/
+build/
+
+# ── Environment files — never commit secrets ──────────────────────────────────
 .env
 .env.local
-.env.production
 .env.development
-backend/.env
-frontend/.env.local
+.env.production
+.env.test
+**/.env
+**/.env.local
+**/.env.development
+**/.env.production
+**/.env.test
 
-# Prisma
-backend/database/migrations/*.sql
+# ── Logs ───────────────────────────────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# OS
+# ── OS ─────────────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 *.swp
+*.swo
+*~
 
-# IDE
+# ── IDE ────────────────────────────────────────────────────────────────────────
 .vscode/settings.json
 .idea/
 *.iml
 
-# Logs
-logs/
-*.log
-
-# Test coverage
+# ── Test & coverage ────────────────────────────────────────────────────────────
 coverage/
+.nyc_output/
+**/test_snapshots/
 
-# Bundle analysis — history managed by CI cache, not committed
+# ── Prisma generated ───────────────────────────────────────────────────────────
+backend/database/migrations/*.sql
+
+# ── Generated / large data files ──────────────────────────────────────────────
+load-tests/data/generated.json
+load-tests/results/*.json
+!load-tests/results/.gitkeep
 bundle-stats.json
 
+# ── Runtime state ─────────────────────────────────────────────────────────────
+backend/data/
+
+# ── Husky internal ────────────────────────────────────────────────────────────
+.husky/_/
+
+# ── Misc ───────────────────────────────────────────────────────────────────────
+.npm
 /ISSUES.md
+REEDME.md

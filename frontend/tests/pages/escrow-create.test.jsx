@@ -1,7 +1,13 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import CreateEscrowPage from '../../app/escrow/create/page';
+import { useSearchParams } from 'next/navigation';
 
 describe('CreateEscrowPage', () => {
+  beforeEach(() => {
+    useSearchParams.mockReturnValue(new URLSearchParams());
+    localStorage.clear();
+  });
+
   it('renders page heading', () => {
     render(<CreateEscrowPage />);
     expect(screen.getByRole('heading', { name: 'Create New Escrow' })).toBeInTheDocument();
@@ -69,5 +75,23 @@ describe('CreateEscrowPage', () => {
       fireEvent.click(screen.getByRole('button', { name: /Next/ }));
     }
     expect(screen.getByRole('button', { name: /Sign & Create Escrow/ })).toBeInTheDocument();
+  });
+
+  it('applies a selected template to pre-fill form fields', () => {
+    render(<CreateEscrowPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Use This Template' }));
+
+    expect(screen.getByDisplayValue('4800')).toBeInTheDocument();
+    expect(screen.getByText('Applied template: Freelance Website Launch')).toBeInTheDocument();
+  });
+
+  it('auto-applies quick-start template from query params', () => {
+    useSearchParams.mockReturnValue(new URLSearchParams('template=retainer-monthly-support'));
+
+    render(<CreateEscrowPage />);
+
+    expect(screen.getByDisplayValue('5000')).toBeInTheDocument();
+    expect(screen.getByText('Applied template: Monthly Retainer Support')).toBeInTheDocument();
   });
 });
