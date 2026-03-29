@@ -1,20 +1,34 @@
 import express from 'express';
 import reputationController from '../controllers/reputationController.js';
+import { cacheResponse, TTL } from '../middleware/cache.js';
 
 const router = express.Router();
 
 /**
- * @route  GET /api/reputation/leaderboard
- * @desc   Top users by reputation score with the standard pagination envelope.
- * @query  page (default 1), limit (default 20, max 100)
- * @returns { data, page, limit, total, totalPages, hasNextPage, hasPreviousPage }
+ * @route  GET /api/reputation/search?q=<prefix>
+ * ES-backed address autocomplete + full-text search. Prisma fallback on outage.
  */
-router.get('/leaderboard', reputationController.getLeaderboard);
+router.get('/search', reputationController.search);
+
+/**
+ * @route  GET /api/reputation/leaderboard
+ */
+router.get(
+  '/leaderboard',
+  cacheResponse({ ttl: TTL.LEADERBOARD, tags: ['reputation:leaderboard'] }),
+  reputationController.getLeaderboard,
+);
 
 /**
  * @route  GET /api/reputation/:address
- * @desc   Get the full reputation record for an address.
  */
-router.get('/:address', reputationController.getReputation);
+router.get(
+  '/:address',
+  cacheResponse({
+    ttl: TTL.REPUTATION,
+    tags: (req) => ['reputation', `reputation:${req.params.address}`],
+  }),
+  reputationController.getReputation,
+);
 
 export default router;

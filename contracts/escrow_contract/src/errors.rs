@@ -10,93 +10,95 @@ use soroban_sdk::contracterror;
 #[repr(u32)]
 pub enum EscrowError {
     // ── Initialization ────────────────────────────────────────────────────────
-    /// Contract has already been initialized.
     AlreadyInitialized = 1,
-    /// Contract has not been initialized yet.
     NotInitialized = 2,
 
     // ── Authorization ─────────────────────────────────────────────────────────
-    /// Caller is not authorized to perform this action.
     Unauthorized = 3,
-    /// Only the contract admin can perform this action.
     AdminOnly = 4,
-    /// Only the client of this escrow can perform this action.
     ClientOnly = 5,
-    /// Only the freelancer of this escrow can perform this action.
     FreelancerOnly = 6,
-    /// Only the designated arbiter can perform this action.
     ArbiterOnly = 7,
 
     // ── Escrow State ──────────────────────────────────────────────────────────
-    /// The escrow ID does not exist.
     EscrowNotFound = 8,
-    /// The escrow is not in the Active state required for this operation.
     EscrowNotActive = 9,
-    /// The escrow is not in a Disputed state.
     EscrowNotDisputed = 10,
-    /// The escrow has already been completed or cancelled.
     EscrowFinalized = 11,
-    /// Cannot cancel escrow with unreleased approved milestones.
     CannotCancelWithPendingFunds = 12,
 
     // ── Milestone ─────────────────────────────────────────────────────────────
-    /// The milestone ID does not exist in this escrow.
     MilestoneNotFound = 13,
-    /// The milestone is not in the correct state for this operation.
     InvalidMilestoneState = 14,
-    /// Total milestone amounts exceed the escrow's total amount.
     MilestoneAmountExceedsEscrow = 15,
-    /// Cannot add more milestones; maximum limit reached.
-    /// TODO (contributor): define and enforce max milestone count
     TooManyMilestones = 16,
-    /// Milestone amount must be greater than zero.
     InvalidMilestoneAmount = 17,
 
     // ── Funds ─────────────────────────────────────────────────────────────────
-    /// Token transfer failed.
     TransferFailed = 18,
-    /// Escrow amount must be greater than zero.
     InvalidEscrowAmount = 19,
-    /// The deposited amount does not match the sum of milestone amounts.
-    /// TODO (contributor): decide whether to enforce strict matching
     AmountMismatch = 20,
+    /// The escrow is not in a valid state for this operation.
+    InvalidEscrowState = 21,
 
     // ── Reputation ────────────────────────────────────────────────────────────
-    /// Reputation record not found for this address.
-    ReputationNotFound = 21,
+    ReputationNotFound = 22,
 
     // ── Dispute ───────────────────────────────────────────────────────────────
-    /// A dispute has already been raised on this escrow.
-    DisputeAlreadyExists = 22,
-    /// Cannot raise a dispute on an escrow with no active milestones.
-    NoActiveDisputableMilestone = 23,
+    DisputeAlreadyExists = 23,
+    NoActiveDisputableMilestone = 24,
 
     // ── Deadline ──────────────────────────────────────────────────────────────
-    /// The specified deadline is in the past.
-    InvalidDeadline = 24,
-    /// The escrow deadline has passed.
-    /// TODO (contributor): implement deadline enforcement
-    DeadlineExpired = 25,
+    InvalidDeadline = 25,
+    DeadlineExpired = 26,
 
-    // ── Time Lock ───────────────────────────────────────────────────────────────
+    // ── Time Lock ─────────────────────────────────────────────────────────────
     /// The specified lock time is in the past.
-    InvalidLockTime = 26,
+    InvalidLockTime = 27,
     /// Funds are still locked until the lock time expires.
-    LockTimeNotExpired = 27,
+    LockTimeNotExpired = 28,
     /// The lock time has expired.
-    LockTimeExpired = 28,
+    LockTimeExpired = 29,
     /// Cannot extend lock time to the past.
-    InvalidLockTimeExtension = 29,
+    InvalidLockTimeExtension = 30,
+    /// The specified timelock duration is invalid.
+    InvalidTimelockDuration = 51,
+    /// The timelock is already active.
+    TimelockAlreadyActive = 52,
+    /// The timelock has not yet expired.
+    TimelockNotExpired = 53,
+    /// No timelock is set on the escrow.
+    TimelockNotSet = 54,
+    /// The contract is currently paused.
+    ContractPaused = 31,
 
-    // ── Multisig ──────────────────────────────────────────────────────────────
-    /// Multisig approver list, weights, and threshold are inconsistent.
-    InvalidMultisigConfig = 30,
-    /// Caller is not a configured multisig approver for this escrow.
-    NotMultisigSigner = 31,
-    /// This signer already recorded an approval for this milestone submission.
-    MultisigApprovalAlreadyRecorded = 32,
-    /// Too many multisig signers (contract limit).
-    TooManyMultisigSigners = 33,
-    /// Accumulated multisig weights overflowed.
-    MultisigWeightOverflow = 34,
+    // ── Cancellation ──────────────────────────────────────────────────────────
+    CancellationNotFound = 32,
+    CancellationAlreadyExists = 33,
+    CancellationAlreadyDisputed = 34,
+    CancellationDisputePeriodActive = 35,
+    CancellationDisputeDeadlineExpired = 36,
+    CancellationDisputed = 37,
+
+    // ── Slashing ─────────────────────────────────────────────────────────────
+    SlashNotFound = 38,
+    SlashAlreadyDisputed = 39,
+    SlashDisputeDeadlineExpired = 40,
+    InvalidSlashAmount = 41,
+
+    // ── Storage Migration ───────────────────────────────────────────────────────
+    /// Storage migration failed - possibly due to incompatible data format.
+    StorageMigrationFailed = 42,
+
+    // ── Recurring Payments ───────────────────────────────────────────────────
+    RecurringConfigNotFound = 43,
+    InvalidRecurringSchedule = 44,
+    NoRecurringPaymentDue = 45,
+    RecurringSchedulePaused = 46,
+    RecurringScheduleCancelled = 47,
+
+    // ── Oracle ───────────────────────────────────────────────────────────────
+    OracleNotConfigured = 48,
+    OraclePriceStale = 49,
+    OracleInvalidPrice = 50,
 }

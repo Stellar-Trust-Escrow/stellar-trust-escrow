@@ -8,23 +8,8 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-
-function getAdminKey() {
-  return typeof window !== 'undefined' ? localStorage.getItem('adminApiKey') || '' : '';
-}
-
-function adminFetch(path, options = {}) {
-  return fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      'x-admin-api-key': getAdminKey(),
-      ...(options.headers || {}),
-    },
-  });
-}
+import { useAdminStore } from '../../../store/app-store';
+import { adminFetch } from '../../../store/admin';
 
 function ResolveModal({ dispute, onClose, onConfirm }) {
   const [clientAmount, setClientAmount] = useState('');
@@ -39,12 +24,18 @@ function ResolveModal({ dispute, onClose, onConfirm }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="card w-full max-w-lg mx-4">
         <h3 className="text-lg font-semibold text-white mb-1">Resolve Dispute #{dispute.id}</h3>
-        <p className="text-sm text-gray-400 mb-1">Escrow ID: <span className="font-mono">{dispute.escrowId?.toString()}</span></p>
-        <p className="text-sm text-gray-400 mb-4">Total amount: <span className="text-white">{totalAmount}</span></p>
+        <p className="text-sm text-gray-400 mb-1">
+          Escrow ID: <span className="font-mono">{dispute.escrowId?.toString()}</span>
+        </p>
+        <p className="text-sm text-gray-400 mb-4">
+          Total amount: <span className="text-white">{totalAmount}</span>
+        </p>
 
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div>
-            <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Client Amount</label>
+            <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">
+              Client Amount
+            </label>
             <input
               type="text"
               value={clientAmount}
@@ -54,7 +45,9 @@ function ResolveModal({ dispute, onClose, onConfirm }) {
             />
           </div>
           <div>
-            <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Freelancer Amount</label>
+            <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">
+              Freelancer Amount
+            </label>
             <input
               type="text"
               value={freelancerAmount}
@@ -74,7 +67,10 @@ function ResolveModal({ dispute, onClose, onConfirm }) {
         />
 
         <div className="flex gap-2 justify-end">
-          <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white transition-colors">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white transition-colors"
+          >
             Cancel
           </button>
           <button
@@ -99,6 +95,7 @@ function StatusBadge({ resolved }) {
 }
 
 export default function AdminDisputesPage() {
+  const { apiKey } = useAdminStore();
   const [disputes, setDisputes] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, total: 0, pages: 1 });
   const [filter, setFilter] = useState('false'); // 'false'=open, 'true'=resolved, ''=all
@@ -113,7 +110,7 @@ export default function AdminDisputesPage() {
     try {
       const params = new URLSearchParams({ page, limit: 20 });
       if (resolved !== '') params.set('resolved', resolved);
-      const res = await adminFetch(`/api/admin/disputes?${params}`);
+      const res = await adminFetch(`/api/admin/disputes?${params}`, apiKey);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to fetch disputes');
       setDisputes(data.disputes);
@@ -123,9 +120,11 @@ export default function AdminDisputesPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [apiKey]);
 
-  useEffect(() => { fetchDisputes(1, filter); }, [filter, fetchDisputes]);
+  useEffect(() => {
+    fetchDisputes(1, filter);
+  }, [apiKey, filter, fetchDisputes]);
 
   const showToast = (msg) => {
     setToast(msg);
@@ -136,10 +135,14 @@ export default function AdminDisputesPage() {
     const id = selectedDispute.id;
     setSelectedDispute(null);
     try {
-      const res = await adminFetch(`/api/admin/disputes/${id}/resolve`, {
-        method: 'POST',
-        body: JSON.stringify({ clientAmount, freelancerAmount, notes }),
-      });
+      const res = await adminFetch(
+        `/api/admin/disputes/${id}/resolve`,
+        apiKey,
+        {
+          method: 'POST',
+          body: JSON.stringify({ clientAmount, freelancerAmount, notes }),
+        },
+      );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to resolve dispute');
       showToast('Dispute resolved successfully.');
@@ -173,7 +176,12 @@ export default function AdminDisputesPage() {
           <h1 className="text-2xl font-bold text-white">Dispute Resolution</h1>
           <p className="text-gray-400 text-sm mt-1">{pagination.total} disputes found</p>
         </div>
-        <a href="/admin" className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors">← Dashboard</a>
+        <a
+          href="/admin"
+          className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors"
+        >
+          ← Dashboard
+        </a>
       </div>
 
       {/* Filter tabs */}
@@ -189,49 +197,78 @@ export default function AdminDisputesPage() {
         ))}
       </div>
 
-      {error && <div className="bg-red-900/20 border border-red-500/30 text-red-400 text-sm rounded-lg px-4 py-3 mb-4">⚠️ {error}</div>}
+      {error && (
+        <div className="bg-red-900/20 border border-red-500/30 text-red-400 text-sm rounded-lg px-4 py-3 mb-4">
+          ⚠️ {error}
+        </div>
+      )}
 
       <div className="flex flex-col gap-3">
         {loading ? (
           <div className="text-center py-12 text-gray-500">Loading…</div>
         ) : disputes.length === 0 ? (
           <div className="card text-center py-12 text-gray-500">No disputes found.</div>
-        ) : disputes.map((d) => (
-          <div key={d.id} className="card">
-            <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-white font-semibold">Dispute #{d.id}</span>
-                  <StatusBadge resolved={!!d.resolvedAt} />
+        ) : (
+          disputes.map((d) => (
+            <div key={d.id} className="card">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-white font-semibold">Dispute #{d.id}</span>
+                    <StatusBadge resolved={!!d.resolvedAt} />
+                  </div>
+                  <p className="text-xs text-gray-500 mb-2">
+                    Escrow:{' '}
+                    <span className="font-mono text-gray-400">{d.escrowId?.toString()}</span>
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1 text-xs text-gray-400">
+                    <span>
+                      Client:{' '}
+                      <span className="font-mono text-gray-300">
+                        {d.escrow?.clientAddress?.slice(0, 12)}…
+                      </span>
+                    </span>
+                    <span>
+                      Freelancer:{' '}
+                      <span className="font-mono text-gray-300">
+                        {d.escrow?.freelancerAddress?.slice(0, 12)}…
+                      </span>
+                    </span>
+                    <span>
+                      Total: <span className="text-white">{d.escrow?.totalAmount}</span>
+                    </span>
+                    <span>
+                      Raised:{' '}
+                      <span className="text-gray-300">
+                        {new Date(d.raisedAt).toLocaleDateString()}
+                      </span>
+                    </span>
+                    {d.resolvedAt && (
+                      <>
+                        <span>
+                          Client payout: <span className="text-emerald-400">{d.clientAmount}</span>
+                        </span>
+                        <span>
+                          Freelancer payout:{' '}
+                          <span className="text-emerald-400">{d.freelancerAmount}</span>
+                        </span>
+                      </>
+                    )}
+                  </div>
                 </div>
-                <p className="text-xs text-gray-500 mb-2">
-                  Escrow: <span className="font-mono text-gray-400">{d.escrowId?.toString()}</span>
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1 text-xs text-gray-400">
-                  <span>Client: <span className="font-mono text-gray-300">{d.escrow?.clientAddress?.slice(0, 12)}…</span></span>
-                  <span>Freelancer: <span className="font-mono text-gray-300">{d.escrow?.freelancerAddress?.slice(0, 12)}…</span></span>
-                  <span>Total: <span className="text-white">{d.escrow?.totalAmount}</span></span>
-                  <span>Raised: <span className="text-gray-300">{new Date(d.raisedAt).toLocaleDateString()}</span></span>
-                  {d.resolvedAt && (
-                    <>
-                      <span>Client payout: <span className="text-emerald-400">{d.clientAmount}</span></span>
-                      <span>Freelancer payout: <span className="text-emerald-400">{d.freelancerAmount}</span></span>
-                    </>
-                  )}
-                </div>
+                {!d.resolvedAt && (
+                  <button
+                    id={`resolve-dispute-${d.id}`}
+                    onClick={() => setSelectedDispute(d)}
+                    className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors shrink-0"
+                  >
+                    Resolve
+                  </button>
+                )}
               </div>
-              {!d.resolvedAt && (
-                <button
-                  id={`resolve-dispute-${d.id}`}
-                  onClick={() => setSelectedDispute(d)}
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors shrink-0"
-                >
-                  Resolve
-                </button>
-              )}
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
       {/* Pagination */}
@@ -244,7 +281,9 @@ export default function AdminDisputesPage() {
           >
             ← Prev
           </button>
-          <span className="text-sm text-gray-500 px-2 py-1.5">{pagination.page} / {pagination.pages}</span>
+          <span className="text-sm text-gray-500 px-2 py-1.5">
+            {pagination.page} / {pagination.pages}
+          </span>
           <button
             onClick={() => fetchDisputes(pagination.page + 1, filter)}
             disabled={pagination.page >= pagination.pages}

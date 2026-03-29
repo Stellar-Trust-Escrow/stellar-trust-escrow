@@ -16,6 +16,7 @@
 //! implemented. Remove the attribute as each issue is resolved.
 
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod upgrade_tests {
     use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
 
@@ -162,7 +163,6 @@ mod upgrade_tests {
             &None,
             &None,
             &None,
-            &no_multisig(&env),
         );
         contract.create_escrow(
             &client_addr,
@@ -173,7 +173,6 @@ mod upgrade_tests {
             &None,
             &None,
             &None,
-            &no_multisig(&env),
         );
 
         assert_eq!(
@@ -209,7 +208,6 @@ mod upgrade_tests {
             &None,
             &None,
             &None,
-            &no_multisig(&env),
         );
 
         let pre = contract.get_escrow(&escrow_id);
@@ -250,7 +248,6 @@ mod upgrade_tests {
             &None,
             &None,
             &None,
-            &no_multisig(&env),
         );
 
         let title = String::from_str(&env, "Design phase");
@@ -316,7 +313,6 @@ mod upgrade_tests {
             &None,
             &None,
             &None,
-            &no_multisig(&env),
         );
         let m_id = contract.add_milestone(
             &client_addr,
@@ -361,7 +357,6 @@ mod upgrade_tests {
             &Some(arbiter.clone()),
             &None,
             &None,
-            &no_multisig(&env),
         );
 
         contract.raise_dispute(&client_addr, &escrow_id, &None);
@@ -404,7 +399,6 @@ mod upgrade_tests {
             &None,
             &None,
             &None,
-            &no_multisig(&env),
         );
 
         // Upload two distinct WASM blobs to simulate v1 → v2 → rollback to v1.
@@ -446,7 +440,6 @@ mod upgrade_tests {
                 &None,
                 &None,
                 &None,
-                &no_multisig(&env),
             );
         }
         assert_eq!(contract.escrow_count(), 3u64);
