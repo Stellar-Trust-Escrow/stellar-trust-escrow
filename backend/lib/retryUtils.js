@@ -6,8 +6,15 @@
  * confirmed unhealthy, preventing cascading failures.
  */
 
+import { createModuleLogger } from '../config/logger.js';
 import { dbConnectionErrorsTotal } from './metrics.js';
 import { getBreaker, CircuitOpenError } from './circuitBreaker.js';
+
+const log = createModuleLogger('lib.retryUtils');
+
+const log = createModuleLogger('lib.retryUtils');
+
+const log = createModuleLogger('lib.retryUtils');
 
 const RETRY_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 1000;
@@ -98,9 +105,13 @@ export async function retryDatabaseOperation(operation, config = retryConfig) {
       // Calculate delay with exponential backoff
       const delay = config.delay * Math.pow(config.backoff, attempt - 1);
 
-      console.warn(
-        `[DB RETRY] Attempt ${attempt}/${config.attempts} failed: ${error.message}. Retrying in ${delay}ms...`,
-      );
+      log.warn({
+        message: 'db_retry_attempt',
+        attempt,
+        maxAttempts: config.attempts,
+        error: error.message,
+        retryInMs: delay,
+      });
 
       await new Promise((resolve) => setTimeout(resolve, delay));
     }

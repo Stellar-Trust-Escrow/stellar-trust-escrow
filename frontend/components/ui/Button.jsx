@@ -64,6 +64,9 @@ export default function Button({
   onClick,
   ...rest
 }) {
+  const base = `inline-flex items-center justify-center gap-2 font-medium
+                transition-all duration-150 focus:outline-none
+                disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100`;
   const isDisabled = disabled || isLoading;
 
   const classes = cn(

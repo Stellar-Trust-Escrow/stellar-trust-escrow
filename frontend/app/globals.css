@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Page transition keyframe */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 /* Custom base styles */
 @layer base {
   :root {
@@ -47,7 +53,9 @@
 @layer components {
   /* Reusable card style */
   .card {
-    @apply bg-gray-100 border border-gray-200 rounded-xl p-6 dark:bg-gray-900 dark:border-gray-800;
+    @apply bg-gray-100 border border-gray-200 rounded-xl p-6 dark:bg-gray-900 dark:border-gray-800
+           transition-[transform,box-shadow] duration-200 ease-out
+           hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20;
   }
 
   /* Status badge styles — TODO (contributor): ensure these match EscrowStatus enum */

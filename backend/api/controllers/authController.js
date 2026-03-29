@@ -2,6 +2,10 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import prisma from '../../lib/prisma.js';
+import refreshTokenService from '../../services/refreshTokenService.js';
+import tokenBlacklistService from '../../services/tokenBlacklistService.js';
+import tokenMetricsService from '../../services/tokenMetricsService.js';
+import cookieUtils from '../../lib/cookieUtils.js';
 
 const STELLAR_ADDRESS_RE = /^G[A-Z2-7]{55}$/;
 
@@ -9,26 +13,22 @@ function normalizeWalletAddress(body = {}) {
   return body.walletAddress || body.stellarAddress || null;
 }
 
-// Helper to generate tokens
-const generateTokens = (user) => {
-  const accessToken = jwt.sign(
-    { userId: user.id, tenantId: user.tenantId },
+// Helper to generate access token
+const generateAccessToken = (user) => {
+  return jwt.sign(
+    { 
+      userId: user.id, 
+      tenantId: user.tenantId,
+      type: 'access'
+    },
     process.env.JWT_ACCESS_SECRET || 'fallback_access_secret',
-    { expiresIn: process.env.JWT_ACCESS_EXPIRATION || '15m' },
+    { expiresIn: process.env.JWT_ACCESS_EXPIRATION || '15m' }
   );
-
-  const refreshToken = jwt.sign(
-    { userId: user.id, tenantId: user.tenantId },
-    process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret',
-    { expiresIn: process.env.JWT_REFRESH_EXPIRATION || '7d' },
-  );
-
-  return { accessToken, refreshToken };
 };
 
 export const register = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, walletAddress } = req.body;
     const tenantId = req.tenant?.id;
 
     if (!tenantId) {
@@ -116,18 +116,39 @@ export const login = async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    // Generate tokens
-    const { accessToken, refreshToken } = generateTokens(user);
+    // Generate access token
+    const accessToken = generateAccessToken(user);
 
-    // Save refresh token to user in DB
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { refreshToken },
-    });
+    // Create refresh token with rotation support
+    const deviceInfo = {
+      type: 'web',
+      trustLevel: 'trusted'
+    };
+    
+    const refreshTokenData = await refreshTokenService.createRefreshToken(
+      user,
+      deviceInfo,
+      req.ip,
+      req.get('User-Agent')
+    );
+
+    // Record metrics
+    await tokenMetricsService.recordTokenGeneration(
+      user.id,
+      user.tenantId,
+      'access',
+      deviceInfo
+    );
+    await tokenMetricsService.recordTokenGeneration(
+      user.id,
+      user.tenantId,
+      'refresh',
+      deviceInfo
+    );
 
     res.json({
       accessToken,
-      refreshToken,
+      refreshToken: refreshTokenData.refreshToken,
       userId: user.id,
       tenant: { id: req.tenant.id, slug: req.tenant.slug },
     });
@@ -150,42 +171,67 @@ export const refresh = async (req, res) => {
       return res.status(401).json({ error: 'Refresh token is required' });
     }
 
-    // Verify token
-    let decoded;
-    try {
-      decoded = jwt.verify(
-        refreshToken,
-        process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret',
+    // Extract device info from request for rotation tracking
+    const deviceInfo = {
+      type: 'web',
+      trustLevel: 'trusted'
+    };
+
+    // Rotate refresh token and get new access token
+    const tokens = await refreshTokenService.rotateRefreshToken(
+      refreshToken,
+      deviceInfo,
+      req.ip,
+      req.get('User-Agent')
+    );
+
+    // Record successful refresh metrics
+    await tokenMetricsService.recordTokenRefresh(
+      decoded.userId,
+      decoded.tenantId,
+      true,
+      'rotation'
+    );
+    await tokenMetricsService.recordTokenGeneration(
+      decoded.userId,
+      decoded.tenantId,
+      'access',
+      deviceInfo
+    );
+
+    res.json(tokens);
+  } catch (error) {
+    console.error('[Refresh] Error:', error.message);
+    
+    // Record failed refresh attempt
+    if (error.message.includes('blacklisted')) {
+      await tokenMetricsService.recordSuspiciousActivity(
+        'unknown',
+        tenantId,
+        'blacklisted_refresh_token',
+        { error: error.message }
       );
-    } catch (_err) {
+      return res.status(403).json({ error: 'Token has been revoked for security reasons' });
+    }
+    if (error.message.includes('Invalid') || error.message.includes('expired')) {
+      await tokenMetricsService.recordTokenRefresh(
+        'unknown',
+        tenantId,
+        false,
+        error.message
+      );
       return res.status(403).json({ error: 'Invalid or expired refresh token' });
     }
-
-    if (decoded.tenantId && decoded.tenantId !== tenantId) {
-      return res.status(403).json({ error: 'Refresh token does not belong to this tenant' });
+    if (error.message.includes('revoked')) {
+      await tokenMetricsService.recordSuspiciousActivity(
+        'unknown',
+        tenantId,
+        'revoked_token_attempt',
+        { error: error.message }
+      );
+      return res.status(403).json({ error: 'All tokens have been revoked' });
     }
-
-    // Verify against database
-    const user = await prisma.user.findFirst({
-      where: { id: decoded.userId, tenantId },
-    });
-
-    if (!user || user.refreshToken !== refreshToken) {
-      return res.status(403).json({ error: 'Invalid refresh token' });
-    }
-
-    // Generate NEW tokens
-    const tokens = generateTokens(user);
-
-    // Update refresh token in DB
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { refreshToken: tokens.refreshToken },
-    });
-
-    res.json({ ...tokens, walletAddress: user.walletAddress });
-  } catch (error) {
-    console.error('[Refresh] Error:', error);
+    
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -195,40 +241,96 @@ export const logout = async (req, res) => {
     const { refreshToken } = req.body;
     const tenantId = req.tenant?.id;
 
-    // We could extract userId from auth middleware here if this route was protected.
-    // However, logout is often called just with the token to revoke.
-    // If the route is protected, we can just use req.user.userId
-
-    // Attempt to decode the token to find the user
-    let decoded;
-    try {
-      if (refreshToken) {
-        decoded = jwt.verify(
-          refreshToken,
-          process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret',
-          { ignoreExpiration: true }, // allow logout even if expired
-        );
-      }
-    } catch (_err) {
-      // If we can't decode, just move on
+    if (refreshToken) {
+      // Revoke the specific refresh token
+      await refreshTokenService.revokeRefreshToken(refreshToken, 'logout');
+      
+      // Record revocation metrics
+      await tokenMetricsService.recordTokenRevocation(
+        'unknown',
+        tenantId,
+        'logout'
+      );
     }
 
-    if (decoded && decoded.userId) {
-      if (decoded.tenantId && tenantId && decoded.tenantId !== tenantId) {
-        return res.status(403).json({ error: 'Refresh token does not belong to this tenant' });
-      }
-
-      await prisma.user.updateMany({
-        where: { id: decoded.userId, tenantId: tenantId ?? decoded.tenantId },
-        data: { refreshToken: null },
-      });
+    // If user is authenticated, we could also revoke all their tokens
+    // for a complete logout across all devices
+    if (req.user && req.body.logoutAll) {
+      await refreshTokenService.revokeAllUserTokens(
+        req.user.userId, 
+        tenantId,
+        'logout_all'
+      );
+      
+      await tokenMetricsService.recordTokenRevocation(
+        req.user.userId,
+        tenantId,
+        'logout_all'
+      );
     }
 
     res.json({ message: 'Logged out successfully' });
   } catch (error) {
-    console.error('[Logout] Error:', error);
+    console.error('[Logout] Error:', error.message);
     res.status(500).json({ error: 'Internal server error' });
   }
 };
 
-export default { register, login, refresh, logout };
+// New endpoint to revoke all user tokens (emergency logout)
+export const revokeAll = async (req, res) => {
+  try {
+    const tenantId = req.tenant?.id;
+    
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    await refreshTokenService.revokeAllUserTokens(
+      req.user.userId,
+      tenantId,
+      'user_request'
+    );
+
+    await tokenMetricsService.recordTokenRevocation(
+      req.user.userId,
+      tenantId,
+      'user_request'
+    );
+
+    res.json({ message: 'All tokens revoked successfully' });
+  } catch (error) {
+    console.error('[RevokeAll] Error:', error.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+// New endpoint to list active sessions
+export const sessions = async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const activeTokens = await refreshTokenService.getUserActiveTokens(
+      req.user.userId,
+      req.tenant?.id
+    );
+
+    res.json({
+      sessions: activeTokens.map(token => ({
+        id: token.id,
+        deviceInfo: token.deviceInfo,
+        ipAddress: token.ipAddress,
+        userAgent: token.userAgent,
+        createdAt: token.createdAt,
+        lastUsedAt: token.lastUsedAt,
+        expiresAt: token.expiresAt
+      }))
+    });
+  } catch (error) {
+    console.error('[Sessions] Error:', error.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export default { register, login, refresh, logout, revokeAll, sessions };

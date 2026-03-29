@@ -23,6 +23,7 @@
 
 import Link from 'next/link';
 import Badge from '../ui/Badge';
+import TruncatedAddress from '../ui/TruncatedAddress';
 import CurrencyAmount from '../ui/CurrencyAmount';
 import CopyButton from '../ui/CopyButton';
 import EscrowCardSkeleton from '../ui/EscrowCardSkeleton';
@@ -63,6 +64,8 @@ export default function EscrowCard({ escrow, isLoading = false }) {
             {title}
           </h3>
           <p className="text-xs text-gray-500 mt-0.5">
+            {role === 'client' ? 'Freelancer:' : 'Client:'}{' '}
+            <TruncatedAddress address={counterparty} />
             {role === 'client' ? `${t('escrow.fields.freelancer')}:` : `${t('escrow.fields.client')}:`}{' '}
             <span className="font-mono">{counterparty}</span>
           </p>

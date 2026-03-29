@@ -106,7 +106,7 @@ mod pause_tests {
     }
 
     #[test]
-    fn test_existing_operations_work_when_paused() {
+    fn test_mutations_blocked_when_paused() {
         let (env, admin, _, client) = setup();
         let client_addr = Address::generate(&env);
         let freelancer = Address::generate(&env);
@@ -133,17 +133,25 @@ mod pause_tests {
 
         client.pause(&admin);
 
-        // Submit milestone should work
-        client.submit_milestone(&freelancer, &escrow_id, &mid);
-        let milestone = client.get_milestone(&escrow_id, &mid);
-        assert_eq!(milestone.status, MilestoneStatus::Submitted);
+        // submit_milestone must be blocked
+        let result = client.try_submit_milestone(&freelancer, &escrow_id, &mid);
+        assert!(
+            matches!(result, Err(Ok(EscrowError::ContractPaused))),
+            "submit_milestone should fail with ContractPaused"
+        );
 
-        // Approve milestone should work
-        client.approve_milestone(&client_addr, &escrow_id, &mid);
+        // approve_milestone must be blocked
+        let result = client.try_approve_milestone(&client_addr, &escrow_id, &mid);
+        assert!(
+            matches!(result, Err(Ok(EscrowError::ContractPaused))),
+            "approve_milestone should fail with ContractPaused"
+        );
+
+        // View functions must still work
         let milestone = client.get_milestone(&escrow_id, &mid);
-        assert_eq!(milestone.status, MilestoneStatus::Approved);
+        assert_eq!(milestone.status, MilestoneStatus::Pending);
 
         let escrow = client.get_escrow(&escrow_id);
-        assert_eq!(escrow.status, EscrowStatus::Completed);
+        assert_eq!(escrow.status, EscrowStatus::Active);
     }
 }

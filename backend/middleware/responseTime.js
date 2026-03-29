@@ -5,7 +5,7 @@
  * requests (> SLOW_THRESHOLD_MS) so they can be identified and optimized.
  */
 
-const SLOW_THRESHOLD_MS = parseInt(process.env.SLOW_REQUEST_THRESHOLD_MS || '500');
+const SLOW_THRESHOLD_MS = parseInt(process.env.SLOW_REQUEST_THRESHOLD_MS || '500', 10);
 
 export default function responseTimeMiddleware(req, res, next) {
   const start = process.hrtime.bigint();
@@ -14,9 +14,28 @@ export default function responseTimeMiddleware(req, res, next) {
     const durationMs = Number(process.hrtime.bigint() - start) / 1_000_000;
     res.setHeader('X-Response-Time', `${durationMs.toFixed(2)}ms`);
 
+    const log = req.log || console;
+
     if (durationMs > SLOW_THRESHOLD_MS) {
-      console.warn(
-        `[SLOW] ${req.method} ${req.originalUrl} — ${durationMs.toFixed(2)}ms (threshold: ${SLOW_THRESHOLD_MS}ms)`,
+      log.warn(
+        {
+          requestId: req.id,
+          method: req.method,
+          endpoint: req.originalUrl,
+          durationMs: durationMs.toFixed(2),
+          thresholdMs: SLOW_THRESHOLD_MS,
+        },
+        'Slow request detected',
+      );
+    } else {
+      log.debug(
+        {
+          requestId: req.id,
+          method: req.method,
+          endpoint: req.originalUrl,
+          durationMs: durationMs.toFixed(2),
+        },
+        'Request timing',
       );
     }
   });

@@ -5,11 +5,14 @@
 #   bash scripts/backup.sh [--verify] [--restore-test]
 #
 # Environment variables (can be set in .env or exported):
-#   DATABASE_URL        — PostgreSQL connection string (required)
-#   BACKUP_DIR          — Where to store backups (default: /var/backups/stellar-trust)
+#   DATABASE_URL          — PostgreSQL connection string (required)
+#   BACKUP_DIR            — Where to store backups (default: /var/backups/stellar-trust)
 #   BACKUP_RETENTION_DAYS — How many days to keep backups (default: 7)
-#   BACKUP_S3_BUCKET    — Optional: s3://bucket/prefix to upload backups
-#   SLACK_BACKUP_WEBHOOK — Optional: Slack webhook for notifications
+#   BACKUP_S3_BUCKET      — Optional: s3://bucket/prefix to upload backups
+#   WAL_ARCHIVE_S3_BUCKET — Optional: s3://bucket/prefix/wal for WAL archive upload (PITR)
+#   WAL_ARCHIVE_DIR       — Optional local WAL archive directory (default: /var/lib/postgresql/wal_archive)
+#   SLACK_BACKUP_WEBHOOK  — Optional: Slack webhook for notifications
+#   S3_SSE_ALGORITHM      — Server-side encryption, default AES256
 
 set -euo pipefail
 
@@ -17,8 +20,13 @@ set -euo pipefail
 
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/stellar-trust}"
 RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-7}"
+BASEBACKUP_DIR="${BASEBACKUP_DIR:-}"
+WAL_ARCHIVE_DIR="${WAL_ARCHIVE_DIR:-/var/lib/postgresql/wal_archive}"
+WAL_ARCHIVE_S3_BUCKET="${WAL_ARCHIVE_S3_BUCKET:-}"
+S3_SSE_ALGORITHM="${S3_SSE_ALGORITHM:-AES256}"
 TIMESTAMP=$(date -u +"%Y%m%dT%H%M%SZ")
 BACKUP_FILE="${BACKUP_DIR}/backup_${TIMESTAMP}.dump"
+BASEBACKUP_FILE="${BASEBACKUP_DIR}/basebackup_${TIMESTAMP}.tar.gz"
 LOG_FILE="${BACKUP_DIR}/backup.log"
 VERIFY="${1:-}"
 RESTORE_TEST="${2:-}"
@@ -79,7 +87,12 @@ log "=== Backup started: $TIMESTAMP ==="
 log "Database: $DB_NAME @ $DB_HOST:$DB_PORT"
 log "Output:   $BACKUP_FILE"
 
-# ── Step 1: Dump ──────────────────────────────────────────────────────────────
+# ── Step 1: Ensure schema is current (Prisma schema-aware) ─────────────────────
+
+log "Running npx prisma db push for schema-aware migration"
+npx prisma db push --preview-feature || die "prisma db push failed"
+
+# ── Step 2: Dump ──────────────────────────────────────────────────────────────
 
 log "Running pg_dump..."
 pg_dump \
@@ -96,7 +109,29 @@ pg_dump \
 BACKUP_SIZE=$(du -sh "$BACKUP_FILE" | cut -f1)
 log "Dump complete. Size: $BACKUP_SIZE"
 
-# ── Step 2: Verify ────────────────────────────────────────────────────────────
+# ── Optional Step 2: Base backup for PITR (pg_basebackup) ─────────────────────
+
+if [[ -n "${BASEBACKUP_DIR:-}" ]]; then
+  mkdir -p "${BASEBACKUP_DIR}"
+  log "Creating pg_basebackup snapshot: $BASEBACKUP_FILE"
+  pg_basebackup \
+    --host="$DB_HOST" \
+    --port="$DB_PORT" \
+    --username="$DB_USER" \
+    --format=tar \
+    --gzip \
+    --no-password \
+    --checkpoint=fast \
+    --label="stellar-trust-escrow-base-${TIMESTAMP}" \
+    -D - \
+    > "$BASEBACKUP_FILE" \
+    || die "pg_basebackup failed"
+
+  BASEBACKUP_SIZE=$(du -sh "$BASEBACKUP_FILE" | cut -f1)
+  log "Basebackup complete. Size: $BASEBACKUP_SIZE"
+fi
+
+# ── Step 3: Verify ────────────────────────────────────────────────────────────
 
 log "Verifying backup integrity..."
 pg_restore --list "$BACKUP_FILE" > /dev/null \
@@ -113,10 +148,17 @@ log "Checksum written: ${BACKUP_FILE}.sha256"
 if [[ -n "${BACKUP_S3_BUCKET:-}" ]]; then
   log "Uploading to S3: $BACKUP_S3_BUCKET"
   aws s3 cp "$BACKUP_FILE" "${BACKUP_S3_BUCKET}/backup_${TIMESTAMP}.dump" \
-    || die "S3 upload failed"
+    --sse "$S3_SSE_ALGORITHM" || die "S3 upload failed"
   aws s3 cp "${BACKUP_FILE}.sha256" "${BACKUP_S3_BUCKET}/backup_${TIMESTAMP}.dump.sha256" \
-    || die "S3 checksum upload failed"
+    --sse "$S3_SSE_ALGORITHM" || die "S3 checksum upload failed"
   log "S3 upload complete"
+fi
+
+if [[ -n "${WAL_ARCHIVE_S3_BUCKET:-}" && -d "${WAL_ARCHIVE_DIR}" ]]; then
+  log "Uploading WAL archive segments to S3: $WAL_ARCHIVE_S3_BUCKET"
+  aws s3 sync "${WAL_ARCHIVE_DIR}" "${WAL_ARCHIVE_S3_BUCKET}/wal/" \
+    --sse "$S3_SSE_ALGORITHM" --acl bucket-owner-full-control || die "WAL archive upload failed"
+  log "WAL archive upload complete"
 fi
 
 # ── Step 5: Restore test (optional, run with --restore-test) ─────────────────

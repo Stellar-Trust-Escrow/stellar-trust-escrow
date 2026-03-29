@@ -1,5 +1,6 @@
 import prisma from '../../lib/prisma.js';
 import cache from '../../lib/cache.js';
+import { logControllerError } from '../../config/logger.js';
 import { buildPaginatedResponse, parsePagination } from '../../lib/pagination.js';
 
 const STELLAR_ADDRESS_RE = /^G[A-Z2-7]{55}$/;
@@ -68,6 +69,7 @@ const getUserProfile = async (req, res) => {
     await cache.set(cacheKey, profile, 60);
     res.json(profile);
   } catch (err) {
+    logControllerError('users.getUserProfile', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -141,6 +143,7 @@ const getUserEscrows = async (req, res) => {
     await cache.set(cacheKey, result, 15);
     res.json(result);
   } catch (err) {
+    logControllerError('users.getUserEscrows', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -195,6 +198,7 @@ const getUserStats = async (req, res) => {
     await cache.set(cacheKey, stats, 120);
     res.json(stats);
   } catch (err) {
+    logControllerError('users.getUserStats', err, req);
     res.status(500).json({ error: err.message });
   }
 };

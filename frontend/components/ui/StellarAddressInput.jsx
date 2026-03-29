@@ -24,7 +24,7 @@ export default function StellarAddressInput({
   const showError = touched && !isValid;
 
   function handleChange(e) {
-    onChange(e.target.value.trim());
+    onChange(e.target.value);
   }
 
   return (

@@ -1,4 +1,9 @@
 import express from 'express';
+import escrowController, {
+  validateBroadcast,
+  validateEscrowId,
+  validatePagination,
+} from '../controllers/escrowController.js';
 import escrowController from '../controllers/escrowController.js';
 import { cacheResponse, invalidateOn, TTL } from '../middleware/cache.js';
 import authMiddleware from '../middleware/auth.js';
@@ -6,6 +11,11 @@ import authMiddleware from '../middleware/auth.js';
 const router = express.Router();
 router.use(authMiddleware);
 
+router.get('/', validatePagination, escrowController.listEscrows);
+router.post('/broadcast', validateBroadcast, escrowController.broadcastCreateEscrow);
+router.get('/:id/milestones', validateEscrowId, validatePagination, escrowController.getMilestones);
+router.get('/:id/milestones/:milestoneId', validateEscrowId, escrowController.getMilestone);
+router.get('/:id', validateEscrowId, escrowController.getEscrow);
 /**
  * @route  GET /api/escrows
  * @desc   List escrows with the standard pagination envelope.
