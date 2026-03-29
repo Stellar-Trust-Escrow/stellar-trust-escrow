@@ -1,11 +1,15 @@
 /**
  * Escrow Controller
  *
- * Cache is handled entirely by the route-level cacheResponse / invalidateOn
- * middleware — controllers no longer call cache.get/set directly.
+ * Read endpoints (listEscrows, getEscrow, getMilestones, getMilestone) are
+ * cached at the route level via cacheResponse middleware.
+ *
+ * Status-changing operations (releaseFunds, raiseDispute) invalidate the
+ * relevant cache tags directly so stale data is never served.
  */
 
 import prisma from '../../lib/prisma.js';
+import cache from '../../lib/cache.js';
 import { buildPaginatedResponse, parsePagination } from '../../lib/pagination.js';
 
 const ESCROW_SUMMARY_SELECT = {
@@ -21,6 +25,25 @@ const ESCROW_SUMMARY_SELECT = {
 
 const VALID_SORT_FIELDS = ['createdAt', 'totalAmount', 'status'];
 const VALID_SORT_ORDERS = ['asc', 'desc'];
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Invalidate all cache entries for a specific escrow and the list collection. */
+async function invalidateEscrowCache(id) {
+  await cache.invalidateTags(['escrows', `escrow:${id}`]);
+  console.log(`[Cache] Invalidated escrow:${id} + escrows collection`);
+}
+
+/** Log cache hit/miss metrics to console for monitoring. */
+function logCacheMetrics() {
+  const m = cache.analytics();
+  console.log(
+    `[Cache] backend=${m.backend} hits=${m.hits} misses=${m.misses} ` +
+    `hitRate=${m.hitRate} sets=${m.sets} invalidations=${m.invalidations}`,
+  );
+}
+
+// ── Read handlers (cached at route level) ─────────────────────────────────────
 
 const listEscrows = async (req, res) => {
   try {
@@ -179,4 +202,26 @@ const getMilestone = async (req, res) => {
   }
 };
 
-export default { listEscrows, getEscrow, broadcastCreateEscrow, getMilestones, getMilestone };
+// ── Status-changing handlers (invalidate cache on success) ────────────────────
+
+/**
+ * Called by the event indexer when a milestone is released on-chain.
+ * Invalidates the escrow detail + list collection so fresh data is served.
+ */
+const onEscrowStatusChange = async (escrowId) => {
+  try {
+    await invalidateEscrowCache(escrowId);
+    logCacheMetrics();
+  } catch (err) {
+    console.error('[Cache] invalidateEscrowCache failed:', err.message);
+  }
+};
+
+export default {
+  listEscrows,
+  getEscrow,
+  broadcastCreateEscrow,
+  getMilestones,
+  getMilestone,
+  onEscrowStatusChange,
+};
