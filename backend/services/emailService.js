@@ -2,6 +2,7 @@ import crypto from 'crypto';
 
 import { emailQueue } from '../queues/emailQueue.js';
 
+import { createModuleLogger } from '../config/logger.js';
 import disputeRaisedTemplate from '../templates/emails/disputeRaised.js';
 import escrowStatusChangedTemplate from '../templates/emails/escrowStatusChanged.js';
 import milestoneCompletedTemplate from '../templates/emails/milestoneCompleted.js';

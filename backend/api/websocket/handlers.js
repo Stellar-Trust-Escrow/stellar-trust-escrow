@@ -1,7 +1,10 @@
 import { randomUUID } from 'crypto';
 import { EventEmitter } from 'events';
 import { WebSocketServer } from 'ws';
+import { createModuleLogger } from '../../config/logger.js';
 import prisma from '../../lib/prisma.js';
+
+const log = createModuleLogger('websocket');
 
 const HEARTBEAT_INTERVAL_MS = parseInt(process.env.WS_HEARTBEAT_INTERVAL_MS || '30000', 10);
 const MAX_CONNECTIONS = parseInt(process.env.WS_MAX_CONNECTIONS || '100', 10);
@@ -94,7 +97,7 @@ class WebSocketPool {
 
   addConnection(ws, req, user = null) {
     if (this.connections.size >= MAX_CONNECTIONS) {
-      console.warn(`[WebSocket] Connection rejected: Max capacity reached (${MAX_CONNECTIONS})`);
+      log.warn({ message: 'ws_max_connections', max: MAX_CONNECTIONS });
       ws.close(1013, 'Try again later. Max capacity reached.');
       return null;
     }
@@ -160,7 +163,7 @@ class WebSocketPool {
     try {
       message = JSON.parse(data.toString());
     } catch {
-      console.warn(`[WebSocket] Invalid JSON from ${connectionId}`);
+      log.warn({ message: 'ws_invalid_json', connectionId });
       return;
     }
 
@@ -178,7 +181,12 @@ class WebSocketPool {
         this.subscribe(connectionId, message.topic);
         sendJson(ws, { type: 'subscribed', topic: message.topic });
       } catch (err) {
-        console.error(`[WebSocket] subscribe failed for ${connectionId}:`, err.message);
+        log.error({
+          message: 'ws_subscribe_failed',
+          connectionId,
+          error: err.message,
+          stack: err.stack,
+        });
         sendJson(ws, { type: 'error', code: 'subscription_failed', topic: message.topic });
       }
       return;

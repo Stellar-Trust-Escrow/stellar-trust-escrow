@@ -26,6 +26,7 @@ const getReputation = async (req, res) => {
       disputedEscrows: 0, disputesWon: 0, totalVolume: '0', lastUpdated: null,
     });
   } catch (err) {
+    logControllerError('reputation.getReputation', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -76,6 +77,7 @@ const search = async (req, res) => {
     res.set('X-Data-Source', source);
     res.json({ data: hits, total, limit, from });
   } catch (err) {
+    logControllerError('reputation.getLeaderboard', err, req);
     res.status(500).json({ error: err.message });
   }
 };

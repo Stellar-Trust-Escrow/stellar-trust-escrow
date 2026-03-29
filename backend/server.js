@@ -52,6 +52,7 @@ import { errorsTotal } from './lib/metrics.js';
 import { leaderboardRateLimit } from './middleware/rateLimit.js';
 import metricsMiddleware from './middleware/metricsMiddleware.js';
 import responseTime from './middleware/responseTime.js';
+import logger, { getLogger } from './config/logger.js';
 import emailService from './services/emailService.js';
 import complianceService from './services/complianceService.js';
 import { startIndexer } from './services/eventIndexer.js';
@@ -70,6 +71,9 @@ const app = express();
 // ── Sentry request handler — must be first middleware ─────────────────────────
 // Attaches trace context and request data to every event captured downstream.
 app.use(Sentry.expressRequestHandler());
+
+app.use(assignRequestContext);
+app.use(httpRequestLogger);
 
 app.use(helmet());
 app.use(compressionMiddleware);
@@ -134,12 +138,18 @@ app.get('/health', async (_req, res) => {
         timestamp: poolCheck[0].current_time,
       };
     } catch (poolError) {
-      // Pool info not available, that's ok
-      console.warn('[HEALTH] Could not get pool info:', poolError.message);
+      getLogger().warn({
+        message: 'health_db_pool_info_unavailable',
+        error: poolError.message,
+      });
     }
   } catch (error) {
     dbStatus = 'error';
-    console.error('[HEALTH] Database check failed:', error.message);
+    getLogger().error({
+      message: 'health_database_check_failed',
+      error: error.message,
+      stack: error.stack,
+    });
   }
 
   const backupStatus = await getBackupStatus();
@@ -192,6 +202,11 @@ app.use('/docs', docsRouter);
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((req, res) => {
+  getLogger().warn({
+    message: 'http_not_found',
+    method: req.method,
+    path: req.originalUrl?.split('?')[0],
+  });
   res.status(404).json({ error: 'Route not found' });
 });
 

@@ -11,6 +11,11 @@ import { uploadEvidence } from '../middleware/fileUpload.js';
 import ipfsService from '../../services/ipfsService.js';
 import { broadcastToDispute } from '../websocket/handlers.js';
 
+/**
+ * List and get handlers assume query/params are already validated by
+ * `validate(disputeListQueryRules)` and `validate(disputeEscrowIdParamRules)`.
+ */
+
 const listDisputes = async (req, res) => {
   try {
     const { page, limit, skip } = parsePagination(req.query);

@@ -80,6 +80,7 @@ const listUsers = async (req, res) => {
     await cache.set(cacheKey, result, 30);
     res.json(result);
   } catch (err) {
+    logControllerError('admin.listUsers', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -116,6 +117,7 @@ const getUserDetail = async (req, res) => {
     await cache.set(cacheKey, result, 60);
     res.json(result);
   } catch (err) {
+    logControllerError('admin.getUserDetail', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -157,6 +159,7 @@ const suspendUser = async (req, res) => {
     await cache.invalidatePrefix(`admin:user:${address}`);
     res.json({ message: `User ${address} suspended.`, auditEntry: result });
   } catch (err) {
+    logControllerError('admin.suspendUser', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -198,6 +201,7 @@ const banUser = async (req, res) => {
     await cache.invalidatePrefix(`admin:user:${address}`);
     res.json({ message: `User ${address} banned.`, auditEntry: result });
   } catch (err) {
+    logControllerError('admin.banUser', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -248,6 +252,7 @@ const listDisputes = async (req, res) => {
     await cache.set(cacheKey, result, 15);
     res.json(result);
   } catch (err) {
+    logControllerError('admin.listDisputes', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -315,6 +320,7 @@ const resolveDispute = async (req, res) => {
     await cache.invalidatePrefix('admin:disputes');
     res.json({ message: 'Dispute resolved.', dispute: result.dispute });
   } catch (err) {
+    logControllerError('admin.resolveDispute', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -366,6 +372,7 @@ const getStats = async (req, res) => {
     await cache.set(cacheKey, result, 30);
     res.json(result);
   } catch (err) {
+    logControllerError('admin.getStats', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -397,6 +404,7 @@ const getAuditLogs = async (req, res) => {
     await cache.set(cacheKey, result, 15);
     res.json(result);
   } catch (err) {
+    logControllerError('admin.getAuditLogs', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -417,6 +425,7 @@ const getSettings = async (req, res) => {
       allowedOrigins: process.env.ALLOWED_ORIGINS || 'http://localhost:3000',
     });
   } catch (err) {
+    logControllerError('admin.getSettings', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -446,6 +455,7 @@ const updateSettings = async (req, res) => {
       received: req.body,
     });
   } catch (err) {
+    logControllerError('admin.updateSettings', err, req);
     res.status(500).json({ error: err.message });
   }
 };

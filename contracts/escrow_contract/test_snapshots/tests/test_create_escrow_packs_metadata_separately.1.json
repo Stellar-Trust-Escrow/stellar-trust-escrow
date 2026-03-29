@@ -378,6 +378,30 @@
                     },
                     {
                       "key": {
+                        "symbol": "multisig_approvers"
+                      },
+                      "val": {
+                        "vec": []
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "multisig_threshold"
+                      },
+                      "val": {
+                        "u32": 0
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "multisig_weights"
+                      },
+                      "val": {
+                        "vec": []
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "remaining_balance"
                       },
                       "val": {

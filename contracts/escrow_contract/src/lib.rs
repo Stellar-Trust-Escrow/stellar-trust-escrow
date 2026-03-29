@@ -53,6 +53,8 @@ const INSTANCE_TTL_THRESHOLD: u32 = 5_000;
 const INSTANCE_TTL_EXTEND_TO: u32 = 50_000;
 const PERSISTENT_TTL_THRESHOLD: u32 = 5_000;
 const PERSISTENT_TTL_EXTEND_TO: u32 = 50_000;
+/// Maximum multisig signers per escrow (storage / gas bound).
+const MAX_MULTISIG_SIGNERS: u32 = 16;
 
 const CANCELLATION_DISPUTE_PERIOD: u64 = 120_960;
 const SLASH_DISPUTE_PERIOD: u64 = 51_840;
@@ -325,6 +327,9 @@ impl ContractStorage {
             lock_time_extension: meta.lock_time_extension,
             timelock: meta.timelock,
             brief_hash: meta.brief_hash,
+            multisig_approvers: meta.multisig_approvers.clone(),
+            multisig_weights: meta.multisig_weights.clone(),
+            multisig_threshold: meta.multisig_threshold,
         })
     }
 
@@ -751,6 +756,7 @@ impl EscrowContract {
         arbiter: Option<Address>,
         deadline: Option<u64>,
         lock_time: Option<u64>,
+        multisig_config: MultisigConfig,
     ) -> Result<u64, EscrowError> {
         Self::create_escrow_internal(
             env,
@@ -1179,6 +1185,8 @@ impl EscrowContract {
 
         milestone.status = MilestoneStatus::Submitted;
         milestone.submitted_at = Some(env.ledger().timestamp());
+        milestone.approval_weight_accrued = 0;
+        milestone.approval_signers = Vec::new(&env);
         ContractStorage::save_milestone(&env, escrow_id, &milestone);
 
         events::emit_milestone_submitted(&env, escrow_id, milestone_id, &caller);
@@ -1296,6 +1304,8 @@ impl EscrowContract {
 
         milestone.status = MilestoneStatus::Rejected;
         milestone.resolved_at = Some(env.ledger().timestamp());
+        milestone.approval_weight_accrued = 0;
+        milestone.approval_signers = Vec::new(&env);
         ContractStorage::save_milestone(&env, escrow_id, &milestone);
 
         events::emit_milestone_rejected(&env, escrow_id, milestone_id, &caller);
@@ -2682,6 +2692,8 @@ mod tests {
             &None,
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
 
         advance(&env, 3 * RENT_PERIOD_SECONDS);
@@ -2730,6 +2742,8 @@ mod tests {
             &None,
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
         let milestone_id = client.add_milestone(
             &escrow_client,
@@ -2786,6 +2800,8 @@ mod tests {
             &None,
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
 
         let topped_up = client.top_up_rent(&escrow_client, &escrow_id, &5_u64);
@@ -2836,6 +2852,8 @@ mod tests {
             &None,
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
 
         client.request_cancellation(

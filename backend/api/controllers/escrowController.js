@@ -87,6 +87,7 @@ const listEscrows = async (req, res) => {
 
     res.json(buildPaginatedResponse(data, { total, page, limit }));
   } catch (err) {
+    logControllerError('escrow.listEscrows', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -121,6 +122,7 @@ const getEscrow = async (req, res) => {
     if (err.message?.includes('Cannot convert')) {
       return res.status(400).json({ error: 'Invalid escrow id' });
     }
+    logControllerError('escrow.getEscrow', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -133,6 +135,7 @@ const broadcastCreateEscrow = async (req, res) => {
     }
     res.status(501).json({ error: 'Not implemented - see Issue #20' });
   } catch (err) {
+    logControllerError('escrow.broadcastCreateEscrow', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -161,6 +164,7 @@ const getMilestones = async (req, res) => {
     if (err.message?.includes('Cannot convert')) {
       return res.status(400).json({ error: 'Invalid escrow id' });
     }
+    logControllerError('escrow.getMilestones', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -181,6 +185,7 @@ const getMilestone = async (req, res) => {
     if (!milestone) return res.status(404).json({ error: 'Milestone not found' });
     res.json(milestone);
   } catch (err) {
+    logControllerError('escrow.getMilestone', err, req);
     res.status(500).json({ error: err.message });
   }
 };
