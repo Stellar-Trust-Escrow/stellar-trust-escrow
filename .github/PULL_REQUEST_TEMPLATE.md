@@ -1,26 +1,52 @@
+---
+name: Feature / Bugfix
+about: Create a PR for code changes
+---
+
 ## Description
 
-<!-- What does this PR change and why? -->
+Briefly describe what this PR does and why.
 
-## Related Issue
-
-Closes #<!-- issue number -->
+Closes #ISSUE_NUMBER
 
 ## Type of Change
 
-- [ ] 🦀 Smart contract (Rust/Soroban)
-- [ ] 🖥️ Backend (Node.js)
-- [ ] 🎨 Frontend (Next.js/React)
-- [ ] 📚 Documentation
-- [ ] 🧪 Tests
-- [ ] 🐛 Bug fix
+- [ ] Bug fix
+- [ ] New feature  
+- [ ] Enhancement
+- [ ] Documentation
+- [ ] **ADR** (Architecture Decision Record)
+- [ ] Other
 
 ## Checklist
 
-- [ ] Branch is up to date with `main`
-- [ ] Contract: `cargo fmt` + `cargo clippy -- -D warnings` pass
-- [ ] Backend: `npm run lint` passes
-- [ ] Frontend: `npm run lint` passes
-- [ ] Tests added for new functionality
-- [ ] PR description clearly explains the change
-- [ ] Linked the issue with `Closes #N`
+**Code Changes:**
+- [ ] Tests added/updated
+- [ ] Linting passes
+- [ ] No breaking changes (or documented)
+
+**Documentation:**
+- [ ] README updated (if public API changes)
+- [ ] ADR created/updated **[if ADR]**
+
+**ADR Specific (check if applies):**
+- [ ] Uses template from `docs/adrs/template.md`
+- [ ] Tradeoffs analyzed
+- [ ] Status set appropriately
+- [ ] Added to `docs/adrs/README.md` table
+
+## Testing
+
+How did you test these changes?
+
+```bash
+# Example commands
+npm test
+cargo test
+# ...
+```
+
+## Screenshots (if UI changes)
+
+<!--- Insert screenshots here --->
+

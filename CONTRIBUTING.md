@@ -71,6 +71,18 @@ cargo build
 
 ## Workflow
 
+### Architecture Decisions (ADRs)
+For significant technical decisions:
+
+1. Copy `docs/adrs/template.md` → `docs/adrs/ADRs/NNN-short-title.md`
+2. Fill Context/Decision/Tradeoffs
+3. Create PR labeled `adr`
+4. Reference in description: \`ADR: docs/adrs/ADRs/NNN-short-title.md\`
+5. Update status to \`accepted\` on merge
+6. Add to \`docs/adrs/README.md\` table
+
+See [ADRs](docs/adrs/) for process.
+
 ```bash
 # 1. Fork the repo on GitHub, then clone your fork
 git clone https://github.com/YOUR_USERNAME/stellar-trust-escrow
@@ -79,6 +91,7 @@ git clone https://github.com/YOUR_USERNAME/stellar-trust-escrow
 git checkout -b feat/escrow-milestone-approval
 # or: fix/reputation-score-bug
 # or: docs/improve-architecture
+# or: adr/001-use-soroban
 
 # 3. Make your changes
 
