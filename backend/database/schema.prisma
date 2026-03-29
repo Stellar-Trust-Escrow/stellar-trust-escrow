@@ -14,8 +14,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ── Tenants ───────────────────────────────────────────────────────────────────
@@ -56,14 +57,39 @@ model User {
   tenantId     String   @map("tenant_id")
   email        String   @unique
   password     String
-  refreshToken String?  @map("refresh_token")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  tenant Tenant @relation(fields: [tenantId], references: [id])
+  tenant        Tenant        @relation(fields: [tenantId], references: [id])
+  refreshTokens RefreshToken[]
 
   @@index([tenantId, createdAt(sort: Desc)])
   @@map("users")
+}
+
+// ── Refresh Tokens ─────────────────────────────────────────────────────────────
+
+model RefreshToken {
+  id         String   @id @default(cuid())
+  userId     Int      @map("user_id")
+  tenantId   String   @map("tenant_id")
+  tokenHash  String   @unique @map("token_hash")
+  deviceInfo Json?    @map("device_info")
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  isActive   Boolean  @default(true) @map("is_active")
+  expiresAt  DateTime @map("expires_at")
+  lastUsedAt DateTime? @map("last_used_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId, tenantId], references: [id, tenantId], onDelete: Cascade)
+
+  @@index([userId, tenantId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+  @@index([isActive])
+  @@map("refresh_tokens")
 }
 
 // ── Escrows ───────────────────────────────────────────────────────────────────
@@ -111,6 +137,7 @@ model Escrow {
   // Composite index for user escrows with status filter + sort (covers getUserEscrows role+status queries)
   @@index([clientAddress, status, createdAt(sort: Desc)])
   @@index([freelancerAddress, status, createdAt(sort: Desc)])
+  @@index([createdAt])
   @@map("escrows")
 }
 
@@ -205,10 +232,24 @@ model DisputeEvidence {
   submittedBy  String   @map("submitted_by")
   /// client | freelancer | arbiter | admin
   role         String
-  /// text | url | hash
+  /// text | url | hash | file | image
   evidenceType String   @map("evidence_type")
   content      String
   description  String?
+  /// Original filename
+  filename     String?
+  /// File MIME type
+  mimeType     String?  @map("mime_type")
+  /// File size in bytes
+  fileSize     Int?     @map("file_size")
+  /// IPFS CID for file storage
+  ipfsCid      String?  @map("ipfs_cid")
+  /// IPFS CID for thumbnail (images only)
+  thumbnailCid String?  @map("thumbnail_cid")
+  /// Virus scan status: pending | clean | infected | error
+  scanStatus   String?  @default("pending") @map("scan_status")
+  /// Virus scan result details
+  scanResult   String?  @map("scan_result")
   submittedAt  DateTime @default(now()) @map("submitted_at")
 
   tenant  Tenant  @relation(fields: [tenantId], references: [id])
@@ -218,6 +259,7 @@ model DisputeEvidence {
   @@index([tenantId, submittedBy])
   @@index([disputeId])
   @@index([submittedBy])
+  @@index([ipfsCid])
   @@map("dispute_evidence")
 }
 
@@ -441,6 +483,19 @@ enum MilestoneStatus {
   Submitted
   Approved
   Rejected
+}
+
+// ── Feature Flags ─────────────────────────────────────────────────────────────
+
+model FeatureFlag {
+  key         String   @id
+  isEnabled   Boolean  @default(false) @map("is_enabled")
+  percentage  Int      @default(0)
+  targetUsers String[] @default([]) @map("target_users")
+  description String   @default("")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("feature_flags")
 }
 
 enum KycStatus {

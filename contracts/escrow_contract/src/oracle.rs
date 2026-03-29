@@ -1,7 +1,7 @@
 use soroban_sdk::{contractclient, contracttype, Address, Env};
 
-use crate::errors::EscrowError;
 use crate::types::DataKey;
+use crate::EscrowError;
 
 /// Maximum age (in seconds) before a price is considered stale.
 pub const PRICE_STALENESS_THRESHOLD: u64 = 3_600; // 1 hour

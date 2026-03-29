@@ -19,13 +19,19 @@
 import './globals.css';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
+import NavigationProgress from '../components/layout/NavigationProgress';
 import { ThemeProvider } from '../contexts/ThemeContext';
 import { CurrencyProvider } from '../contexts/CurrencyContext';
 import { ToastProvider } from '../contexts/ToastContext';
 import ServiceWorkerRegistrar from '../components/ServiceWorkerRegistrar';
+
+import OfflineBanner from '../components/ui/offlineBanner';
+import ErrorBoundary from '../components/ui/ErrorBoundary';
+
 import ErrorBoundary from '../components/error/ErrorBoundary';
 import PerformanceMonitor from '../components/performance/PerformanceMonitor';
 import BackToTop from '../components/ui/BackToTop';
+
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' });
@@ -70,6 +76,10 @@ export default function RootLayout({ children }) {
             </SWRConfig>
           </WalletProvider>
         */}
+        <Header />
+        <NavigationProgress />
+        <main className="flex-1 container mx-auto px-4 py-8 max-w-7xl">{children}</main>
+        <Footer />
         <ThemeProvider>
           <CurrencyProvider>
             <ToastProvider>
@@ -81,6 +91,7 @@ export default function RootLayout({ children }) {
             </ToastProvider>
           </CurrencyProvider>
         </ThemeProvider>
+
 
         {/* Core Web Vitals monitoring — renders nothing to DOM */}
         <PerformanceMonitor />

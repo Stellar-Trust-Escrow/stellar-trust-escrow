@@ -167,6 +167,11 @@ impl StorageManager {
                     .iter()
                     .filter(|m| m.status == crate::types::MilestoneStatus::Approved)
                     .count() as u32;
+                let released_count = v1_escrow
+                    .milestones
+                    .iter()
+                    .filter(|m| m.status == crate::types::MilestoneStatus::Released)
+                    .count() as u32;
 
                 // Create EscrowMeta from v1 data
                 let meta = crate::EscrowMeta {
@@ -181,11 +186,15 @@ impl StorageManager {
                     status: v1_escrow.status,
                     milestone_count: v1_escrow.milestones.len(),
                     approved_count,
+                    released_count,
                     arbiter: v1_escrow.arbiter,
+                    // v1 had no buyer_signers — default to empty (client-only approval)
+                    buyer_signers: soroban_sdk::Vec::new(env),
                     created_at: v1_escrow.created_at,
                     deadline: v1_escrow.deadline,
                     lock_time: v1_escrow.lock_time,
                     lock_time_extension: v1_escrow.lock_time_extension,
+                    timelock: None,
                     brief_hash: v1_escrow.brief_hash,
                     rent_balance: 0,
                     last_rent_collection_at: v1_escrow.created_at,

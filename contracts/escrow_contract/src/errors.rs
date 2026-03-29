@@ -18,13 +18,11 @@ pub enum EscrowError {
     AdminOnly = 4,
     ClientOnly = 5,
     FreelancerOnly = 6,
-    ArbiterOnly = 7,
 
     // ── Escrow State ──────────────────────────────────────────────────────────
     EscrowNotFound = 8,
     EscrowNotActive = 9,
     EscrowNotDisputed = 10,
-    EscrowFinalized = 11,
     CannotCancelWithPendingFunds = 12,
 
     // ── Milestone ─────────────────────────────────────────────────────────────
@@ -38,15 +36,10 @@ pub enum EscrowError {
     TransferFailed = 18,
     InvalidEscrowAmount = 19,
     AmountMismatch = 20,
-    /// The escrow is not in a valid state for this operation.
     InvalidEscrowState = 21,
-
-    // ── Reputation ────────────────────────────────────────────────────────────
-    ReputationNotFound = 22,
 
     // ── Dispute ───────────────────────────────────────────────────────────────
     DisputeAlreadyExists = 23,
-    NoActiveDisputableMilestone = 24,
 
     // ── Deadline ──────────────────────────────────────────────────────────────
     InvalidDeadline = 25,
@@ -79,7 +72,6 @@ pub enum EscrowError {
     InvalidSlashAmount = 41,
 
     // ── Storage Migration ───────────────────────────────────────────────────────
-    /// Storage migration failed - possibly due to incompatible data format.
     StorageMigrationFailed = 42,
 
     // ── Recurring Payments ───────────────────────────────────────────────────
@@ -93,4 +85,12 @@ pub enum EscrowError {
     OracleNotConfigured = 48,
     OraclePriceStale = 49,
     OracleInvalidPrice = 50,
+
+    // ── Timelock ─────────────────────────────────────────────────────────────
+    /// The specified timelock duration is invalid.
+    InvalidTimelockDuration = 51,
+    /// The timelock is already active.
+    TimelockAlreadyActive = 52,
+    /// The timelock has not yet expired.
+    TimelockNotExpired = 53,
 }
