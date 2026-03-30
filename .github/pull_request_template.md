@@ -1,45 +1,40 @@
----
-name: Feature / Bugfix PR
-about: Standard pull request template
----
+## Summary
 
-## Description
+Briefly describe what changed and why.
 
-Briefly describe what this PR does and why.
-
-**Issue:** Closes #123
+Closes #
 
 ## Changes
 
-### What
-- List key changes bullet-point style
-- Technical decisions made
-
-### Why  
-- Business/technical motivation
-- Alternatives considered
-
-## Tech Stack
-- List main technologies/files changed
+- 
+- 
+- 
 
 ## Testing
 
-### Local Testing
-1. Clone this branch
-2. Follow [CONTRIBUTING.md](docs/CONTRIBUTING.md) quickstart
-3. Run `npm test`
-4. Manual testing steps...
+List the exact commands you ran locally.
 
-### Verification Checklist
-- [ ] `npm run lint && npm run format` passes
-- [ ] All tests pass (`npm test`)
-- [ ] Docker builds (`docker compose up --build`)
-- [ ] No breaking API changes (or documented in CHANGELOG.md)
-- [ ] Updated relevant docs
-- [ ] Screenshots/GIFs for UI changes
+```bash
+# Examples
+cargo test --workspace
+npm run test -w backend
+npm run test -w frontend
+npm run lint
+```
 
-## Additional Context
-- Deployment considerations
-- Performance impact
-- Security review needed?
+## Review Notes
 
+Call out any context reviewers should know:
+
+- areas that need extra attention
+- follow-up work or known limitations
+- deployment or migration considerations
+
+## Checklist
+
+- [ ] Code compiles, or the updated docs reference working commands
+- [ ] Tests were added or updated when behavior changed
+- [ ] Linting and formatting were run
+- [ ] Documentation was updated when needed
+- [ ] No breaking changes, or they are clearly described
+- [ ] Screenshots or recordings are included for UI changes
