@@ -854,4 +854,117 @@ mod tests {
         let result = s.client.try_execute_payout(&id);
         assert!(result.is_err());
     }
+
+    // ── Admin config ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_set_claim_cap_updates_cap() {
+        let s = setup();
+        // New cap should allow a claim that previously would exceed the old cap
+        s.client.set_claim_cap(&s.admin, &50_000_i128);
+
+        let claimant = Address::generate(&s.env);
+        let desc = String::from_str(&s.env, "Large claim");
+        // 20_000 > original cap of 10_000, should now succeed
+        let id = s.client.submit_claim(&claimant, &desc, &20_000_i128);
+        let claim = s.client.get_claim(&id);
+        assert_eq!(claim.amount, 20_000);
+    }
+
+    #[test]
+    fn test_set_claim_cap_zero_fails() {
+        let s = setup();
+        let result = s.client.try_set_claim_cap(&s.admin, &0_i128);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_set_claim_cap_non_admin_fails() {
+        let s = setup();
+        let non_admin = Address::generate(&s.env);
+        let result = s.client.try_set_claim_cap(&non_admin, &5_000_i128);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_set_quorum_updates_quorum() {
+        let s = setup();
+        // Lower quorum to 1 so a single governor vote reaches quorum
+        s.client.set_quorum(&s.admin, &1_u32);
+
+        let gov = Address::generate(&s.env);
+        s.client.add_governor(&s.admin, &gov);
+
+        let claimant = Address::generate(&s.env);
+        let desc = String::from_str(&s.env, "Single vote quorum");
+        let id = s.client.submit_claim(&claimant, &desc, &100_i128);
+
+        s.client.vote(&gov, &id, &true);
+
+        let claim = s.client.get_claim(&id);
+        assert_eq!(claim.status, ClaimStatus::Approved);
+    }
+
+    #[test]
+    fn test_set_quorum_zero_fails() {
+        let s = setup();
+        let result = s.client.try_set_quorum(&s.admin, &0_u32);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_set_quorum_non_admin_fails() {
+        let s = setup();
+        let non_admin = Address::generate(&s.env);
+        let result = s.client.try_set_quorum(&non_admin, &3_u32);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_add_duplicate_governor_fails() {
+        let s = setup();
+        let gov = Address::generate(&s.env);
+        s.client.add_governor(&s.admin, &gov);
+        let result = s.client.try_add_governor(&s.admin, &gov);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_remove_nonexistent_governor_fails() {
+        let s = setup();
+        let gov = Address::generate(&s.env);
+        let result = s.client.try_remove_governor(&s.admin, &gov);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_execute_payout_not_approved_fails() {
+        let s = setup();
+        let claimant = Address::generate(&s.env);
+        let desc = String::from_str(&s.env, "Pending claim");
+        let id = s.client.submit_claim(&claimant, &desc, &100_i128);
+        // No votes cast — claim is still Pending
+        let result = s.client.try_execute_payout(&id);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_vote_on_nonexistent_claim_fails() {
+        let s = setup();
+        let gov = Address::generate(&s.env);
+        s.client.add_governor(&s.admin, &gov);
+        let result = s.client.try_vote(&gov, &999_u32, &true);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_withdraw_claim_non_claimant_fails() {
+        let s = setup();
+        let claimant = Address::generate(&s.env);
+        let other = Address::generate(&s.env);
+        let desc = String::from_str(&s.env, "Claim");
+        let id = s.client.submit_claim(&claimant, &desc, &100_i128);
+        let result = s.client.try_withdraw_claim(&other, &id);
+        assert!(result.is_err());
+    }
 }

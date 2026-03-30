@@ -174,6 +174,7 @@ app.get('/api/csrf-token', generateCsrfToken);
 // ── API Routes ────────────────────────────────────────────────────────────────
 // Auth is handled by the gateway above — no per-route authMiddleware needed.
 app.use('/api/health', healthRoutes);
+app.use('/ws/health', wsHealthRoutes);
 app.use('/api', tenantMiddleware);
 app.use('/api/auth', authRoutes);
 app.use('/api/tenant', tenantRoutes);
@@ -195,6 +196,8 @@ app.use('/api/incidents', incidentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/batch', batchRoutes);
 app.use('/docs', docsRouter);
+// Alias — acceptance criteria requires /api-docs
+app.use('/api-docs', docsRouter);
 
 // ── Example: Deprecated API Version ───────────────────────────────────────────
 // Uncomment to deprecate unversioned endpoints in favor of /api/v1
@@ -269,16 +272,11 @@ server.listen(PORT, async () => {
     Sentry.captureException(err, { tags: { component: 'indexer' } });
   });
 
-  // Reputation ES sync — initial + daily re-sync
+  // Reputation ES sync — ensure index + initial sync on startup
   ensureIndex().then(() =>
     syncFromPrisma().catch((err) =>
       logger.warn({ err }, '[ReputationSearch] Initial sync failed'),
     ),
-  );
-  const MS_PER_DAY = 86_400_000;
-  setInterval(
-    () => syncFromPrisma().catch((err) => logger.warn({ err }, '[ReputationSearch] Daily sync failed')),
-    MS_PER_DAY,
   );
 });
 

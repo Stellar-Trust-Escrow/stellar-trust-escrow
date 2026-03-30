@@ -117,9 +117,13 @@ const handleApprove = async (milestoneId) => {
 };
 ```
 
+### State Management
+See the [comprehensive guide](frontend-state-management.md) covering SWR data fetching, WebSocket real-time updates, global Zustand-like store, optimistic patterns, error boundaries, loading skeletons, sync strategies, performance tips, and testing.
+
 ---
 
 ## Adding a New Component
+
 
 1. Create file in `components/ui/` or `components/escrow/`
 2. Export a default function component

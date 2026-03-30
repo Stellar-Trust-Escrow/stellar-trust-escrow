@@ -9,14 +9,19 @@
   ],
   "scripts": {
     "dev": "npm run dev -w frontend & npm run dev -w backend",
-    "build": "npm run lint-staged && npm run build -w frontend",
-    "install": "npm run -w backend && npm run  -w frontend",
+    "build": "npm run build -w frontend",
     "lint": "eslint .",
     "lint:sol": "solhint \"contracts/**/*.sol\"",
     "lint-staged": "npx lint-staged",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "test": "npm run test -w frontend && npm run test -w backend",
+    "test:backend": "npm run test -w backend",
+    "test:frontend": "npm run test -w frontend",
+    "test:contracts": "cargo test --workspace",
+    "test:all": "npm run test:contracts && npm run test && npm run build",
+    "lint:contracts": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings",
+    "lint:all": "npm run lint && npm run lint:contracts",
     "loadtest:generate": "node load-tests/data/generate.js",
     "loadtest": "node load-tests/run.js",
     "loadtest:ci": "node load-tests/run.js --ci",
@@ -33,6 +38,7 @@
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
+    "cross-env": "^10.1.0",
     "globals": "^17.4.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",
@@ -52,8 +58,8 @@
     ]
   },
   "validate-branch-name": {
-    "pattern": "^(main|develop|live){1}$|^(feature|fix|refactor|hotfix|release|conflict)/NV-[0-9]{1,5}.*$",
-    "errorMsg": "Branch name structure: feature/NV-1234-new-feature\nAllowed prefixes: feature, fix, refactor, hotfix, release, conflict"
+    "pattern": "^(main|develop|live)$|^(feature|fix|refactor|hotfix|release|conflict|docs|chore|test)\\/[A-Za-z0-9._-]+$",
+    "errorMsg": "Branch name structure: docs/contributor-onboarding or feature/my-change\nAllowed prefixes: feature, fix, refactor, hotfix, release, conflict, docs, chore, test"
   },
   "dependencies": {
     "safer-buffer": "^2.1.2",

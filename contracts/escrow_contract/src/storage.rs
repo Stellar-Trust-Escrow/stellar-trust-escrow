@@ -32,7 +32,7 @@
 use soroban_sdk::{contracttype, Address, BytesN, Env, Vec};
 
 use crate::PackedDataKey;
-use crate::{DataKey, Milestone};
+use crate::{DataKey, Milestone, OptionalTimelock};
 
 // Current storage version - increment when storage layout changes
 pub const STORAGE_VERSION: u32 = 2;
@@ -200,7 +200,7 @@ impl StorageManager {
                     deadline: v1_escrow.deadline,
                     lock_time: v1_escrow.lock_time,
                     lock_time_extension: v1_escrow.lock_time_extension,
-                    timelock: None,
+                    timelock: OptionalTimelock::None,
                     brief_hash: v1_escrow.brief_hash,
                     rent_balance: 0,
                     last_rent_collection_at: v1_escrow.created_at,

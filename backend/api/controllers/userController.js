@@ -113,33 +113,20 @@ const getUserEscrows = async (req, res) => {
       freelancerWhere.status = status;
     }
 
-    const [clientCount, freelancerCount] = await Promise.all([
-      prisma.escrow.count({ where: clientWhere }),
-      prisma.escrow.count({ where: freelancerWhere }),
-    ]);
+    const where = { OR: [clientWhere, freelancerWhere] };
 
-    const total = clientCount + freelancerCount;
-
-    const [clientEscrows, freelancerEscrows] = await Promise.all([
+    const [data, total] = await prisma.$transaction([
       prisma.escrow.findMany({
-        where: clientWhere,
+        where,
         select: ESCROW_SUMMARY_SELECT,
         orderBy: { createdAt: 'desc' },
-        take: skip + limit,
+        skip,
+        take: limit,
       }),
-      prisma.escrow.findMany({
-        where: freelancerWhere,
-        select: ESCROW_SUMMARY_SELECT,
-        orderBy: { createdAt: 'desc' },
-        take: skip + limit,
-      }),
+      prisma.escrow.count({ where }),
     ]);
 
-    const merged = [...clientEscrows, ...freelancerEscrows]
-      .sort((a, b) => b.createdAt - a.createdAt)
-      .slice(skip, skip + limit);
-
-    const result = buildPaginatedResponse(merged, { total, page, limit });
+    const result = buildPaginatedResponse(data, { total, page, limit });
     await cache.set(cacheKey, result, 15);
     res.json(result);
   } catch (err) {

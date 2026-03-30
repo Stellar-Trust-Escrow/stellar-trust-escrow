@@ -5,7 +5,7 @@ import escrowController, {
   validatePagination,
 } from '../controllers/escrowController.js';
 import escrowController from '../controllers/escrowController.js';
-import { cacheResponse, invalidateOn, TTL } from '../middleware/cache.js';
+import { cacheResponse, invalidateOn } from '../middleware/cache.js';
 import authMiddleware from '../middleware/auth.js';
 
 const router = express.Router();
@@ -18,18 +18,20 @@ router.get('/:id/milestones/:milestoneId', validateEscrowId, escrowController.ge
 router.get('/:id', validateEscrowId, escrowController.getEscrow);
 /**
  * @route  GET /api/escrows
- * @desc   List escrows with the standard pagination envelope.
+ * Cache key pattern: escrow:list:{page} (via tag-based invalidation)
  */
 router.get(
   '/',
-  cacheResponse({ ttl: TTL.LIST, tags: ['escrows'] }),
+  cacheResponse({
+    ttl: LIST_TTL,
+    tags: (req) => ['escrows', `escrow:list:${req.query.page || '1'}`],
+  }),
   escrowController.listEscrows,
 );
 
 /**
  * @route  POST /api/escrows/broadcast
- * @desc   Broadcast a pre-signed create_escrow transaction.
- * Invalidates the escrow list so the new escrow appears immediately.
+ * Invalidates all list pages on new escrow creation.
  */
 router.post(
   '/broadcast',
@@ -43,7 +45,7 @@ router.post(
 router.get(
   '/:id/milestones',
   cacheResponse({
-    ttl: TTL.DETAIL,
+    ttl: DETAIL_TTL,
     tags: (req) => [`escrow:${req.params.id}`, 'milestones'],
   }),
   escrowController.getMilestones,
@@ -55,19 +57,23 @@ router.get(
 router.get(
   '/:id/milestones/:milestoneId',
   cacheResponse({
-    ttl: TTL.DETAIL,
-    tags: (req) => [`escrow:${req.params.id}`, `milestone:${req.params.id}:${req.params.milestoneId}`],
+    ttl: DETAIL_TTL,
+    tags: (req) => [
+      `escrow:${req.params.id}`,
+      `milestone:${req.params.id}:${req.params.milestoneId}`,
+    ],
   }),
   escrowController.getMilestone,
 );
 
 /**
  * @route  GET /api/escrows/:id
+ * Cache key pattern: escrow:{id}
  */
 router.get(
   '/:id',
   cacheResponse({
-    ttl: TTL.DETAIL,
+    ttl: DETAIL_TTL,
     tags: (req) => ['escrows', `escrow:${req.params.id}`],
   }),
   escrowController.getEscrow,

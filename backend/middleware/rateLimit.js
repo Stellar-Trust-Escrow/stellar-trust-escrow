@@ -90,3 +90,10 @@ export const leaderboardRateLimit = createRateLimitMiddleware({
   prefix: 'leaderboard',
   message: 'Too many leaderboard requests, please try again in a minute.',
 });
+
+export const reputationSearchRateLimit = createRateLimitMiddleware({
+  max: parseInt(process.env.REPUTATION_SEARCH_RATE_LIMIT_MAX || '120', 10),
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  prefix: 'reputation-search',
+  message: 'Too many search requests, please try again in a minute.',
+});
