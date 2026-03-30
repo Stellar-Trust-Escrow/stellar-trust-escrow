@@ -174,6 +174,7 @@ app.get('/api/csrf-token', generateCsrfToken);
 // ── API Routes ────────────────────────────────────────────────────────────────
 // Auth is handled by the gateway above — no per-route authMiddleware needed.
 app.use('/api/health', healthRoutes);
+app.use('/ws/health', wsHealthRoutes);
 app.use('/api', tenantMiddleware);
 app.use('/api/auth', authRoutes);
 app.use('/api/tenant', tenantRoutes);
