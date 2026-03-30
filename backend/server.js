@@ -271,16 +271,11 @@ server.listen(PORT, async () => {
     Sentry.captureException(err, { tags: { component: 'indexer' } });
   });
 
-  // Reputation ES sync — initial + daily re-sync
+  // Reputation ES sync — ensure index + initial sync on startup
   ensureIndex().then(() =>
     syncFromPrisma().catch((err) =>
       logger.warn({ err }, '[ReputationSearch] Initial sync failed'),
     ),
-  );
-  const MS_PER_DAY = 86_400_000;
-  setInterval(
-    () => syncFromPrisma().catch((err) => logger.warn({ err }, '[ReputationSearch] Daily sync failed')),
-    MS_PER_DAY,
   );
 });
 
