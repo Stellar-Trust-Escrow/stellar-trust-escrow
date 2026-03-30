@@ -161,9 +161,8 @@ const getDispute = async (req, res) => {
 
 const postEvidence = async (req, res) => {
   try {
-    const { id } = req.params;
     const { description, role } = req.body;
-    const userAddress = req.user?.address;
+    const userAddress = req.userAddress; // set by validateDisputeAccess in fileUpload middleware
 
     if (!userAddress) {
       return res.status(401).json({ error: 'User not authenticated' });
@@ -372,7 +371,7 @@ const postAppeal = async (req, res) => {
   try {
     const { id } = req.params;
     const { reason } = req.body;
-    const userAddress = req.user?.address;
+    const userAddress = req.user?.walletAddress ?? req.userAddress;
 
     if (!reason || reason.trim().length === 0) {
       return res.status(400).json({ error: 'Appeal reason is required' });
@@ -411,7 +410,7 @@ const patchAppeal = async (req, res) => {
   try {
     const { appealId } = req.params;
     const { status, reviewNotes } = req.body;
-    const userAddress = req.user?.address;
+    const userAddress = req.user?.walletAddress ?? req.userAddress;
 
     const appeal = await prisma.disputeAppeal.findFirst({
       where: {

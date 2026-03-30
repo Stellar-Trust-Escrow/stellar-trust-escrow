@@ -18,6 +18,277 @@ describe('Dispute Evidence Upload', () => {
   let testUser;
 
   beforeEach(async () => {
+    testTenant = { id: 'test-tenant-id', slug: 'test-tenant', name: 'Test Tenant' };
+    testUser = { id: 1, userId: 1, walletAddress: 'GTEST123456789012345678901234567890123456789012345678' };
+
+    testDispute = {
+      id: 1,
+      tenantId: testTenant.id,
+      escrowId: BigInt('12345'),
+      raisedByAddress: testUser.walletAddress,
+      raisedAt: new Date(),
+      escrow: {
+        clientAddress: testUser.walletAddress,
+        freelancerAddress: 'GFREELANCER1234567890123456789012345678901234567890123',
+        totalAmount: '1000',
+        status: 'Disputed',
+      },
+    };
+
+    authToken = 'Bearer valid.jwt.token';
+
+    prisma.tenant.findFirst.mockResolvedValue(testTenant);
+    prisma.dispute.findFirst.mockResolvedValue(testDispute);
+    prisma.userProfile.findFirst.mockResolvedValue({ walletAddress: testUser.walletAddress });
+    prisma.disputeEvidence.create.mockImplementation((data) => ({
+      id: Math.floor(Math.random() * 1000),
+      ...data.data,
+      submittedAt: new Date(),
+    }));
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  describe('POST /api/disputes/:id/evidence', () => {
+    const validFileBuffer = Buffer.from('test file content');
+
+    beforeEach(() => {
+      mockIpfsService.default.pinFile.mockResolvedValue({ cid: 'QmTest123456789', size: 17 });
+      mockIpfsService.default.generateThumbnail.mockResolvedValue(Buffer.from('thumbnail-data'));
+      mockIpfsService.default.getFileUrl.mockReturnValue('https://ipfs.io/ipfs/QmTest123456789');
+      mockIpfsService.default.isImage.mockReturnValue(false);
+      mockIpfsService.default.getFileMetadata.mockResolvedValue({
+        filename: 'test.txt',
+        mimeType: 'text/plain',
+        fileSize: validFileBuffer.length,
+      });
+      mockVirusScanner.default.quickScan.mockResolvedValue({
+        isInfected: false,
+        status: 'clean',
+        reason: 'No threats detected',
+      });
+    });
+
+    it('should upload file evidence successfully', async () => {
+      const response = await request(app)
+        .post('/api/disputes/1/evidence')
+        .set('Authorization', authToken)
+        .set('X-Tenant-ID', testTenant.id)
+        .attach('files', validFileBuffer, 'test.txt')
+        .field('description', 'Test evidence description');
+
+      expect(response.status).toBe(201);
+      expect(response.body.message).toBe('Evidence uploaded successfully');
+      expect(response.body.evidence).toHaveLength(1);
+      expect(response.body.count).toBe(1);
+      expect(mockIpfsService.default.pinFile).toHaveBeenCalled();
+      expect(mockVirusScanner.default.quickScan).toHaveBeenCalled();
+      expect(prisma.disputeEvidence.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            disputeId: 1,
+            filename: 'test.txt',
+            ipfsCid: 'QmTest123456789',
+            scanStatus: 'clean',
+          }),
+        }),
+      );
+    });
+
+    it('should upload image evidence with thumbnail', async () => {
+      mockIpfsService.default.isImage.mockReturnValue(true);
+      mockIpfsService.default.pinFile
+        .mockResolvedValueOnce({ cid: 'QmImage123', size: 100 })
+        .mockResolvedValueOnce({ cid: 'QmThumb456', size: 50 });
+
+      const response = await request(app)
+        .post('/api/disputes/1/evidence')
+        .set('Authorization', authToken)
+        .set('X-Tenant-ID', testTenant.id)
+        .attach('files', validFileBuffer, 'test.jpg');
+
+      expect(response.status).toBe(201);
+      expect(response.body.evidence[0].thumbnailCid).toBe('QmThumb456');
+      expect(mockIpfsService.default.generateThumbnail).toHaveBeenCalled();
+    });
+
+    it('should upload multiple files', async () => {
+      const response = await request(app)
+        .post('/api/disputes/1/evidence')
+        .set('Authorization', authToken)
+        .set('X-Tenant-ID', testTenant.id)
+        .attach('files', validFileBuffer, 'test1.txt')
+        .attach('files', validFileBuffer, 'test2.txt');
+
+      expect(response.status).toBe(201);
+      expect(response.body.count).toBe(2);
+    });
+
+    it('should accept text-only evidence', async () => {
+      const response = await request(app)
+        .post('/api/disputes/1/evidence')
+        .set('Authorization', authToken)
+        .set('X-Tenant-ID', testTenant.id)
+        .field('description', 'Text-only evidence submission');
+
+      expect(response.status).toBe(201);
+      expect(response.body.evidence[0].evidenceType).toBe('text');
+    });
+
+    it('should return 413 for files larger than 10MB', async () => {
+      const largeBuffer = Buffer.alloc(11 * 1024 * 1024);
+
+      const response = await request(app)
+        .post('/api/disputes/1/evidence')
+        .set('Authorization', authToken)
+        .set('X-Tenant-ID', testTenant.id)
+        .attach('files', largeBuffer, 'large.txt');
+
+      expect(response.status).toBe(413);
+      expect(response.body.error).toMatch(/File size/);
+    });
+
+    it('should return 400 for more than 5 files', async () => {
+      const req = request(app)
+        .post('/api/disputes/1/evidence')
+        .set('Authorization', authToken)
+        .set('X-Tenant-ID', testTenant.id);
+
+      for (let i = 1; i <= 6; i++) {
+        req.attach('files', validFileBuffer, `test${i}.txt`);
+      }
+
+      const response = await req;
+      expect(response.status).toBe(400);
+      expect(response.body.error).toMatch(/Too many files/);
+    });
+
+    it('should reject infected files', async () => {
+      mockVirusScanner.default.quickScan.mockResolvedValue({
+        isInfected: true,
+        status: 'infected',
+        viruses: ['EICAR-Test-File'],
+        reason: 'Malicious content detected',
+      });
+
+      const response = await request(app)
+        .post('/api/disputes/1/evidence')
+        .set('Authorization', authToken)
+        .set('X-Tenant-ID', testTenant.id)
+        .attach('files', validFileBuffer, 'infected.txt');
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe('Virus detected');
+      expect(response.body.infectedFiles).toHaveLength(1);
+    });
+
+    it('should reject non-participants', async () => {
+      prisma.userProfile.findFirst.mockResolvedValue({ walletAddress: 'GOTHER123456789012345678901234567890123456789012345678' });
+
+      const response = await request(app)
+        .post('/api/disputes/1/evidence')
+        .set('Authorization', authToken)
+        .set('X-Tenant-ID', testTenant.id)
+        .attach('files', validFileBuffer, 'test.txt');
+
+      expect(response.status).toBe(403);
+      expect(response.body.error).toBe('Access denied');
+    });
+
+    it('should handle IPFS upload failures gracefully', async () => {
+      mockIpfsService.default.pinFile.mockRejectedValue(new Error('IPFS gateway unavailable'));
+
+      const response = await request(app)
+        .post('/api/disputes/1/evidence')
+        .set('Authorization', authToken)
+        .set('X-Tenant-ID', testTenant.id)
+        .attach('files', validFileBuffer, 'test.txt');
+
+      expect(response.status).toBe(500);
+      expect(response.body.error).toBe('IPFS upload failed');
+    });
+  });
+
+  describe('GET /api/disputes/:id/evidence', () => {
+    beforeEach(() => {
+      prisma.disputeEvidence.findMany.mockResolvedValue([
+        { id: 1, disputeId: 1, evidenceType: 'file', ipfsCid: 'QmTest123', thumbnailCid: null, filename: 'test.txt', submittedBy: testUser.walletAddress, submittedAt: new Date() },
+        { id: 2, disputeId: 1, evidenceType: 'image', ipfsCid: 'QmImage456', thumbnailCid: 'QmThumb789', filename: 'test.jpg', submittedBy: testUser.walletAddress, submittedAt: new Date() },
+      ]);
+      prisma.disputeEvidence.count.mockResolvedValue(2);
+      mockIpfsService.default.getFileUrl
+        .mockReturnValueOnce('https://ipfs.io/ipfs/QmTest123')
+        .mockReturnValueOnce('https://ipfs.io/ipfs/QmImage456')
+        .mockReturnValueOnce('https://ipfs.io/ipfs/QmThumb789');
+    });
+
+    it('should list evidence with IPFS URLs', async () => {
+      const response = await request(app)
+        .get('/api/disputes/1/evidence')
+        .set('Authorization', authToken)
+        .set('X-Tenant-ID', testTenant.id);
+
+      expect(response.status).toBe(200);
+      expect(response.body.items).toHaveLength(2);
+      expect(response.body.items[1].thumbnailUrl).toBe('https://ipfs.io/ipfs/QmThumb789');
+    });
+
+    it('should filter by evidence type', async () => {
+      await request(app)
+        .get('/api/disputes/1/evidence?evidenceType=image')
+        .set('Authorization', authToken)
+        .set('X-Tenant-ID', testTenant.id);
+
+      expect(prisma.disputeEvidence.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ evidenceType: 'image' }) }),
+      );
+    });
+  });
+
+  describe('Virus Scanner', () => {
+    it('should block EICAR test file', async () => {
+      const eicarBuffer = Buffer.from('X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*');
+      mockVirusScanner.default.quickScan.mockResolvedValue({
+        isInfected: true,
+        status: 'infected',
+        viruses: ['EICAR-Test-File'],
+        reason: 'EICAR test signature detected',
+      });
+
+      const response = await request(app)
+        .post('/api/disputes/1/evidence')
+        .set('Authorization', authToken)
+        .set('X-Tenant-ID', testTenant.id)
+        .attach('files', eicarBuffer, 'eicar.txt');
+
+      expect(response.status).toBe(400);
+      expect(response.body.infectedFiles[0].viruses).toContain('EICAR-Test-File');
+    });
+
+    it('should allow uploads when scanner is unavailable', async () => {
+      mockVirusScanner.default.quickScan.mockResolvedValue({ isInfected: false, status: 'error', reason: 'Scanner unavailable' });
+
+      const response = await request(app)
+        .post('/api/disputes/1/evidence')
+        .set('Authorization', authToken)
+        .set('X-Tenant-ID', testTenant.id)
+        .attach('files', Buffer.from('test'), 'test.txt');
+
+      expect(response.status).toBe(201);
+      expect(response.body.evidence[0].scanStatus).toBe('error');
+    });
+  });
+});
+
+describe('Dispute Evidence Upload', () => {
+  let authToken;
+  let testTenant;
+  let testDispute;
+  let testUser;
+
+  beforeEach(async () => {
     // Setup test data
     testTenant = {
       id: 'test-tenant-id',
