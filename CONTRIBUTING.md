@@ -6,6 +6,7 @@ Thank you for your interest! This project is designed to be contributor-friendly
 
 ## 📋 Table of Contents
 
+- [Security](#security)
 - [Finding an Issue](#finding-an-issue)
 - [Development Setup](#development-setup)
 - [Workflow](#workflow)
@@ -13,6 +14,15 @@ Thank you for your interest! This project is designed to be contributor-friendly
 - [Commit Messages](#commit-messages)
 - [Pull Request Process](#pull-request-process)
 - [Issue Labels](#issue-labels)
+
+---
+
+## Security
+
+Working on smart contracts? Two resources are required reading before you open a PR:
+
+- **[Security Bounty Programme](docs/security/SECURITY.md)** — responsible disclosure process, reward tiers, and scope. If you discover a vulnerability, follow the instructions there rather than opening a public issue.
+- **[PR Security Checklist](docs/security/security-checklist-template.md)** — copy this checklist into your pull request description and complete it before requesting review on any smart contract change.
 
 ---
 
