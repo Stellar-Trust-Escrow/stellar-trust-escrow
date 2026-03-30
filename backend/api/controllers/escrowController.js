@@ -11,6 +11,7 @@
 import prisma from '../../lib/prisma.js';
 import cache from '../../lib/cache.js';
 import { buildPaginatedResponse, parsePagination } from '../../lib/pagination.js';
+import { logControllerError } from '../../config/logger.js';
 import {
   escrowIdParam,
   signedXdrBody,
