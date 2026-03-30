@@ -11,6 +11,11 @@
 import prisma from '../../lib/prisma.js';
 import { buildPaginatedResponse, parsePagination } from '../../lib/pagination.js';
 import * as reputationSearch from '../../services/reputationSearchService.js';
+import { getLogger } from '../../config/logger.js';
+
+const log = getLogger();
+const logControllerError = (ctx, err, req) =>
+  log.error({ err, ctx, path: req?.path }, 'Controller error');
 
 const STELLAR_ADDRESS_RE = /^G[A-Z2-7]{55}$/;
 

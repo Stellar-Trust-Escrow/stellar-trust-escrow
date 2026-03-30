@@ -452,6 +452,7 @@ export default function ExplorerPage() {
           }
         >
       <ExplorerContent />
-    </Suspense>
+</Suspense>
+    </ErrorBoundary>
   );
 }
