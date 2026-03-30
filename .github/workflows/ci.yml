@@ -102,13 +102,30 @@ jobs:
 
       - name: Run Slither
         run: slither contracts/ --config-file slither.config.json --sarif slither-report.sarif
-        continue-on-error: true
+
+      - name: Check for High/Critical findings
+        run: |
+          if [ -f slither-report.json ]; then
+            HIGH=$(python3 -c "
+          import json, sys
+          data = json.load(open('slither-report.json'))
+          findings = data.get('results', {}).get('detectors', [])
+          high_critical = [f for f in findings if f.get('impact') in ('High', 'Critical')]
+          print(len(high_critical))
+          ")
+            if [ "$HIGH" -gt "0" ]; then
+              echo "::error::Slither found $HIGH High/Critical severity finding(s). Review slither-report.json and fix or suppress with justification."
+              exit 1
+            fi
+            echo "No High/Critical findings detected."
+          else
+            echo "slither-report.json not found — skipping findings gate."
+          fi
 
       - name: Upload Slither SARIF
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: slither-report.sarif
-        continue-on-error: true
 
       - name: Upload Slither JSON report
         if: always()

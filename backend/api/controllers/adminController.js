@@ -317,6 +317,7 @@ const resolveDispute = async (req, res) => {
       return res.status(result.status).json({ error: result.error });
     }
 
+    await cache.invalidateTags(['escrows', `escrow:${result.dispute.escrowId}`]);
     await cache.invalidatePrefix('admin:disputes');
     res.json({ message: 'Dispute resolved.', dispute: result.dispute });
   } catch (err) {

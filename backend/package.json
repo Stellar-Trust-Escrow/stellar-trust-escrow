@@ -8,8 +8,8 @@
     "dev": "nodemon server.js",
     "build": "echo 'No build step required for backend'",
     "start": "node server.js",
-    "test": "NODE_OPTIONS=--experimental-vm-modules npx jest --runInBand",
-    "test:chaos": "NODE_OPTIONS=--experimental-vm-modules npx jest --runInBand --testPathPattern=backend/tests/chaos --config=backend/jest.config.js",
+    "test": "cross-env NODE_OPTIONS=--experimental-vm-modules npx jest --runInBand",
+    "test:chaos": "cross-env NODE_OPTIONS=--experimental-vm-modules npx jest --runInBand --testPathPattern=backend/tests/chaos --config=backend/jest.config.js",
     "lint": "eslint .",
     "format": "prettier --write .",
     "db:migrate": "npx prisma migrate dev --schema=database/schema.prisma",
@@ -55,17 +55,15 @@
     "swagger-ui-express": "^5.0.1",
     "winston": "^3.11.0",
     "yaml": "^2.4.2",
-    "ipfs-http-client": "^60.0.1",
-    "sharp": "^0.33.2",
     "clamscan": "^2.1.2",
-    "uuid": "^9.0.1"
+    "uuid": "^9.0.1",
+    "ws": "^8.20.0"
   },
   "devDependencies": {
     "fast-check": "^4.6.0",
     "jest": "^29.7.0",
     "nodemon": "^3.0.0",
     "prisma": "^5.0.0",
-    "supertest": "^6.3.4",
-    "ws": "^8.20.0"
+    "supertest": "^6.3.4"
   }
 }

@@ -17,7 +17,6 @@ module.exports = {
     ],
   },
   testMatch: ['<rootDir>/tests/**/*.test.[jt]s?(x)'],
-  testPathIgnorePatterns: ['<rootDir>/tests/a11y/'],
   collectCoverageFrom: [
     'components/**/*.{js,jsx}',
     'app/**/*.{js,jsx}',
