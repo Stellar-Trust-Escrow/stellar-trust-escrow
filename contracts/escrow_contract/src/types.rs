@@ -24,23 +24,49 @@ pub enum EscrowStatus {
     CancellationPending,
 }
 
-/// The lifecycle state of an individual milestone.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum MilestoneStatus {
-    /// Milestone defined but work not yet started/submitted.
-    Pending,
-    /// Freelancer has submitted work for this milestone.
-    Submitted,
-    /// Client has approved the milestone and funds are pending release.
-    Approved,
-    /// Funds have been released for this milestone.
-    Released,
-    /// Client rejected the submission. Freelancer should resubmit.
-    Rejected,
-    /// A dispute has been raised on this milestone. Funds are frozen.
-    Disputed,
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// MILESTONE STATUS — compact bitflag encoding
+//
+// Replaces the `#[contracttype]` enum (tagged-union, ~40 bytes serialized) with
+// a plain `u32` constant set (~4 bytes).  Each status maps to a unique power-of-
+// two bit so callers can test membership with a single bitwise AND, and the
+// Soroban host serialises the value as a single 32-bit word.
+//
+// Bit layout (only one bit is ever set at a time):
+//   0x01  Pending   — defined, work not yet submitted
+//   0x02  Submitted — freelancer submitted work
+//   0x04  Approved  — client approved, funds pending release
+//   0x08  Released  — funds transferred to freelancer
+//   0x10  Rejected  — client rejected; freelancer should resubmit
+//   0x20  Disputed  — dispute raised; funds frozen
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Compact bitflag type for milestone lifecycle state.
+///
+/// Use the `MS_*` constants below instead of constructing raw values.
+/// A single bit is set at any given time; the bitflag layout allows
+/// cheap membership tests (`status & MS_TERMINAL != 0`) without
+/// deserialising a tagged-union enum.
+pub type MilestoneStatus = u32;
+
+/// Milestone defined but work not yet started/submitted.
+pub const MS_PENDING: MilestoneStatus = 0x01;
+/// Freelancer has submitted work for this milestone.
+pub const MS_SUBMITTED: MilestoneStatus = 0x02;
+/// Client has approved the milestone and funds are pending release.
+pub const MS_APPROVED: MilestoneStatus = 0x04;
+/// Funds have been released for this milestone.
+pub const MS_RELEASED: MilestoneStatus = 0x08;
+/// Client rejected the submission. Freelancer should resubmit.
+pub const MS_REJECTED: MilestoneStatus = 0x10;
+/// A dispute has been raised on this milestone. Funds are frozen.
+pub const MS_DISPUTED: MilestoneStatus = 0x20;
+
+/// Mask of all terminal states (no further transitions expected).
+pub const MS_TERMINAL: MilestoneStatus = MS_RELEASED | MS_DISPUTED;
+
+/// Mask of states that block escrow cancellation.
+pub const MS_BLOCKS_CANCEL: MilestoneStatus = MS_SUBMITTED | MS_APPROVED;
 
 /// Timelock metadata for protecting buyers: no release until expiry.
 #[contracttype]
@@ -88,6 +114,10 @@ pub struct MultisigConfig {
 /// Each milestone represents a discrete deliverable with a defined
 /// payment amount. Funds for a milestone are released only after
 /// the client approves the submission.
+///
+/// # Storage layout
+/// `status` is stored as a compact `u32` bitflag (see `MS_*` constants)
+/// rather than a tagged-union enum, saving ~36 bytes per milestone entry.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Milestone {
@@ -99,13 +129,12 @@ pub struct Milestone {
     pub title: String,
 
     /// IPFS content hash of the full milestone description/requirements.
-    /// TODO (contributor): implement IPFS hash validation helper
     pub description_hash: BytesN<32>,
 
     /// Token amount allocated to this milestone (in stroops / base units).
     pub amount: i128,
 
-    /// Current state of this milestone.
+    /// Current state of this milestone — one of the `MS_*` bitflag constants.
     pub status: MilestoneStatus,
 
     /// Ledger timestamp when the freelancer submitted work.

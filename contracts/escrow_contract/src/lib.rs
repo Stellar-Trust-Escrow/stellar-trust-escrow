@@ -2,7 +2,9 @@
 //!
 //! Milestone-based escrow with on-chain reputation on the Stellar network.
 //!
-//! ## Gas Optimizations (Issue #65)
+//! ## Gas Optimizations
+//!
+//! ### Issue #65 (original)
 //!
 //! 1. **Storage**: `EscrowMeta` and `Milestone` are stored in separate granular
 //!    persistent entries — only the touched entry is read/written per call.
@@ -25,6 +27,26 @@
 //!
 //! 6. **Events**: Data tuples are kept minimal — addresses are passed by
 //!    reference and cloned only at the `publish` call site.
+//!
+//! ### perf/contract-milestone-gas-optimization (this branch)
+//!
+//! 7. **Bitflag milestone status**: `MilestoneStatus` is now a `u32` type alias
+//!    with `MS_*` constants instead of a `#[contracttype]` tagged-union enum.
+//!    A tagged union serialises as a discriminant + padding (~40 bytes); a `u32`
+//!    is 4 bytes — ~36 bytes saved per milestone entry.
+//!
+//! 8. **Fixed-capacity milestone storage**: `MAX_MILESTONES = 20` cap enforced
+//!    in `add_milestone` and `batch_add_milestones`. Prevents unbounded storage
+//!    growth and makes per-escrow storage cost predictable.
+//!
+//! 9. **`submitted_count` counter**: Added to `EscrowMeta` alongside the
+//!    existing `approved_count`. `cancel_escrow` now does an O(1) counter check
+//!    instead of loading every milestone to scan for Submitted/Approved states.
+//!
+//! 10. **Batch operations**: `batch_add_milestones`, `batch_approve_milestones`,
+//!     and `batch_release_funds` load `EscrowMeta` once, write N milestones, and
+//!     execute a single token transfer — reducing gas from O(2N) to O(N+1) for
+//!     multi-milestone workflows.
 
 #![no_std]
 #![allow(clippy::too_many_arguments)]
@@ -42,7 +64,8 @@ use storage::StorageManager;
 use types::{CancellationRequest, RecurringInterval, RecurringPaymentConfig, SlashRecord};
 pub use types::{
     DataKey, EscrowState, EscrowStatus, Milestone, MilestoneStatus, MultisigConfig,
-    ReputationRecord, Timelock,
+    ReputationRecord, Timelock, MS_APPROVED, MS_BLOCKS_CANCEL, MS_DISPUTED, MS_PENDING,
+    MS_REJECTED, MS_RELEASED, MS_SUBMITTED, MS_TERMINAL,
 };
 
 use soroban_sdk::{
@@ -56,6 +79,13 @@ const INSTANCE_TTL_THRESHOLD: u32 = 5_000;
 const INSTANCE_TTL_EXTEND_TO: u32 = 50_000;
 const PERSISTENT_TTL_THRESHOLD: u32 = 5_000;
 const PERSISTENT_TTL_EXTEND_TO: u32 = 50_000;
+
+/// Maximum number of milestones per escrow.
+///
+/// Fixed capacity avoids unbounded Vec growth and enables O(1) storage
+/// planning. 20 milestones covers the vast majority of real-world projects
+/// while keeping per-escrow storage predictable.
+pub const MAX_MILESTONES: u32 = 20;
 
 const CANCELLATION_DISPUTE_PERIOD: u64 = 120_960;
 const SLASH_DISPUTE_PERIOD: u64 = 51_840;
@@ -118,6 +148,7 @@ struct ApproveMilestoneArgs {
 // ── EscrowMeta ────────────────────────────────────────────────────────────────
 // Lightweight header stored separately from milestones.
 // `approved_count` replaces the O(n) "all approved?" loop in approve_milestone.
+// `submitted_count` replaces the O(n) loop in cancel_escrow.
 #[contracttype]
 #[derive(Clone, Debug)]
 pub(crate) struct EscrowMeta {
@@ -134,6 +165,8 @@ pub(crate) struct EscrowMeta {
     /// Number of milestones in Approved state — avoids full scan on completion check.
     pub(crate) approved_count: u32,
     pub(crate) released_count: u32,
+    /// Number of milestones in Submitted state — avoids O(n) scan in cancel_escrow.
+    pub(crate) submitted_count: u32,
     pub(crate) arbiter: Option<Address>,
     pub(crate) buyer_signers: soroban_sdk::Vec<Address>,
     pub(crate) created_at: u64,
@@ -865,6 +898,7 @@ impl EscrowContract {
                 milestone_count: 0,
                 approved_count: 0,
                 released_count: 0,
+                submitted_count: 0,
                 arbiter,
                 buyer_signers: buyer_signers.clone(),
                 created_at: now,
@@ -941,6 +975,7 @@ impl EscrowContract {
             milestone_count: 0,
             approved_count: 0,
             released_count: 0,
+            submitted_count: 0,
             arbiter: None,
             buyer_signers,
             created_at: now,
@@ -1021,6 +1056,10 @@ impl EscrowContract {
         }
 
         let milestone_id = meta.milestone_count;
+        // Enforce fixed-capacity limit — prevents unbounded storage growth.
+        if milestone_id >= MAX_MILESTONES {
+            return Err(EscrowError::TooManyMilestones);
+        }
         meta.milestone_count = meta
             .milestone_count
             .checked_add(1)
@@ -1036,7 +1075,7 @@ impl EscrowContract {
                 title,
                 description_hash,
                 amount,
-                status: MilestoneStatus::Pending,
+                status: MS_PENDING,
                 submitted_at: None,
                 resolved_at: None,
                 approvals: soroban_sdk::Vec::new(&env),
@@ -1046,6 +1085,284 @@ impl EscrowContract {
 
         events::emit_milestone_added(&env, escrow_id, milestone_id, amount);
         Ok(milestone_id)
+    }
+
+    // ── Batch Operations ──────────────────────────────────────────────────────
+
+    /// Adds multiple milestones in a single transaction.
+    ///
+    /// Loads `EscrowMeta` once, writes N milestone entries, then saves meta
+    /// once — reducing storage round-trips from O(2N) to O(N+1).
+    ///
+    /// # Arguments
+    /// * `titles`            — parallel array of milestone titles
+    /// * `description_hashes`— parallel array of IPFS content hashes
+    /// * `amounts`           — parallel array of token amounts
+    ///
+    /// Returns the first milestone ID assigned (subsequent IDs are sequential).
+    pub fn batch_add_milestones(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+        titles: soroban_sdk::Vec<String>,
+        description_hashes: soroban_sdk::Vec<BytesN<32>>,
+        amounts: soroban_sdk::Vec<i128>,
+    ) -> Result<u32, EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_not_paused(&env)?;
+
+        let n = titles.len();
+        if n == 0 || n != description_hashes.len() || n != amounts.len() {
+            return Err(EscrowError::InvalidMilestoneAmount);
+        }
+
+        let mut meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
+        if caller != meta.client {
+            return Err(EscrowError::ClientOnly);
+        }
+        if meta.status != EscrowStatus::Active {
+            return Err(EscrowError::EscrowNotActive);
+        }
+
+        // Capacity check upfront — fail fast before any writes.
+        if meta.milestone_count.saturating_add(n) > MAX_MILESTONES {
+            return Err(EscrowError::TooManyMilestones);
+        }
+
+        let first_id = meta.milestone_count;
+
+        // Validate all amounts and accumulate total before touching storage.
+        let mut total_new: i128 = 0;
+        for i in 0..n {
+            let amt = amounts.get(i).ok_or(EscrowError::InvalidMilestoneAmount)?;
+            if amt <= 0 {
+                return Err(EscrowError::InvalidMilestoneAmount);
+            }
+            total_new = total_new
+                .checked_add(amt)
+                .ok_or(EscrowError::MilestoneAmountExceedsEscrow)?;
+        }
+        let next_allocated = meta
+            .allocated_amount
+            .checked_add(total_new)
+            .ok_or(EscrowError::MilestoneAmountExceedsEscrow)?;
+        if next_allocated > meta.total_amount {
+            return Err(EscrowError::MilestoneAmountExceedsEscrow);
+        }
+
+        // Charge rent for all new entries in one call.
+        ContractStorage::charge_entry_rent(&env, &mut meta, &caller, i128::from(n))?;
+        meta.allocated_amount = next_allocated;
+
+        // Write milestones — single persistent write per milestone.
+        for i in 0..n {
+            let milestone_id = first_id + i;
+            ContractStorage::save_milestone(
+                &env,
+                escrow_id,
+                &Milestone {
+                    id: milestone_id,
+                    title: titles.get(i).ok_or(EscrowError::InvalidMilestoneAmount)?,
+                    description_hash: description_hashes
+                        .get(i)
+                        .ok_or(EscrowError::InvalidMilestoneAmount)?,
+                    amount: amounts.get(i).ok_or(EscrowError::InvalidMilestoneAmount)?,
+                    status: MS_PENDING,
+                    submitted_at: None,
+                    resolved_at: None,
+                    approvals: soroban_sdk::Vec::new(&env),
+                },
+            );
+            events::emit_milestone_added(
+                &env,
+                escrow_id,
+                milestone_id,
+                amounts.get(i).ok_or(EscrowError::InvalidMilestoneAmount)?,
+            );
+        }
+
+        meta.milestone_count = first_id + n;
+        // Single meta write for all N milestones.
+        ContractStorage::save_escrow_meta(&env, &meta);
+
+        Ok(first_id)
+    }
+
+    /// Approves multiple submitted milestones in a single transaction.
+    ///
+    /// Loads `EscrowMeta` once, processes each milestone, accumulates the
+    /// total release amount, then executes a single token transfer and a
+    /// single meta write — reducing gas from O(2N transfers + 2N writes) to
+    /// O(N writes + 1 transfer + 1 meta write).
+    ///
+    /// All milestone IDs must be in `Submitted` state; the call fails atomically
+    /// if any ID is invalid or in the wrong state.
+    pub fn batch_approve_milestones(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+        milestone_ids: soroban_sdk::Vec<u32>,
+    ) -> Result<i128, EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_not_paused(&env)?;
+
+        if milestone_ids.is_empty() {
+            return Err(EscrowError::InvalidMilestoneAmount);
+        }
+
+        let mut meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
+        if meta.status != EscrowStatus::Active {
+            return Err(EscrowError::EscrowNotActive);
+        }
+        ContractStorage::check_lock_time_expired(&env, escrow_id, meta.lock_time)?;
+        if caller != meta.client && !meta.buyer_signers.contains(&caller) {
+            return Err(EscrowError::Unauthorized);
+        }
+
+        let now = env.ledger().timestamp();
+        let timelock_expired =
+            ContractStorage::check_timelock_expired(&env, escrow_id, meta.timelock.clone()).is_ok();
+
+        let mut total_amount: i128 = 0;
+
+        // Pass 1: validate all milestones and accumulate total — no writes yet.
+        for i in 0..milestone_ids.len() {
+            let mid = milestone_ids.get(i).ok_or(EscrowError::MilestoneNotFound)?;
+            let m = ContractStorage::load_milestone(&env, escrow_id, mid)?;
+            if m.status != MS_SUBMITTED {
+                return Err(EscrowError::InvalidMilestoneState);
+            }
+            total_amount = total_amount
+                .checked_add(m.amount)
+                .ok_or(EscrowError::AmountMismatch)?;
+        }
+
+        // Pass 2: write updated milestones and update counters.
+        for i in 0..milestone_ids.len() {
+            let mid = milestone_ids.get(i).ok_or(EscrowError::MilestoneNotFound)?;
+            let mut m = ContractStorage::load_milestone(&env, escrow_id, mid)?;
+            m.resolved_at = Some(now);
+            m.status = if timelock_expired {
+                MS_RELEASED
+            } else {
+                MS_APPROVED
+            };
+            ContractStorage::save_milestone(&env, escrow_id, &m);
+
+            meta.approved_count = meta
+                .approved_count
+                .checked_add(1)
+                .ok_or(EscrowError::AmountMismatch)?;
+            meta.submitted_count = meta.submitted_count.saturating_sub(1);
+            if timelock_expired {
+                meta.released_count = meta
+                    .released_count
+                    .checked_add(1)
+                    .ok_or(EscrowError::AmountMismatch)?;
+            }
+            events::emit_milestone_approved(&env, escrow_id, mid, m.amount);
+        }
+
+        // Single token transfer for the entire batch.
+        if timelock_expired && total_amount > 0 {
+            meta.remaining_balance = meta
+                .remaining_balance
+                .checked_sub(total_amount)
+                .ok_or(EscrowError::AmountMismatch)?;
+            token::Client::new(&env, &meta.token).transfer(
+                &env.current_contract_address(),
+                &meta.freelancer,
+                &total_amount,
+            );
+            events::emit_funds_released(&env, escrow_id, &meta.freelancer, total_amount);
+        }
+
+        // Completion check — O(1) via counters.
+        if meta.released_count == meta.milestone_count && meta.milestone_count > 0 {
+            meta.status = EscrowStatus::Completed;
+            events::emit_escrow_completed(&env, escrow_id);
+        }
+
+        // Single meta write for the entire batch.
+        ContractStorage::save_escrow_meta(&env, &meta);
+
+        Ok(total_amount)
+    }
+
+    /// Releases funds for multiple approved milestones in a single transaction.
+    ///
+    /// Admin-only. Batches the token transfer into one call instead of N calls.
+    pub fn batch_release_funds(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+        milestone_ids: soroban_sdk::Vec<u32>,
+    ) -> Result<i128, EscrowError> {
+        ContractStorage::require_initialized(&env)?;
+        caller.require_auth();
+        ContractStorage::require_not_paused(&env)?;
+
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(EscrowError::NotInitialized)?;
+        if caller != admin {
+            return Err(EscrowError::AdminOnly);
+        }
+
+        if milestone_ids.is_empty() {
+            return Err(EscrowError::InvalidMilestoneAmount);
+        }
+
+        let mut meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
+        ContractStorage::check_lock_time_expired(&env, escrow_id, meta.lock_time)?;
+
+        let mut total_amount: i128 = 0;
+
+        // Pass 1: validate all milestones.
+        for i in 0..milestone_ids.len() {
+            let mid = milestone_ids.get(i).ok_or(EscrowError::MilestoneNotFound)?;
+            let m = ContractStorage::load_milestone(&env, escrow_id, mid)?;
+            if m.status != MS_APPROVED {
+                return Err(EscrowError::InvalidMilestoneState);
+            }
+            total_amount = total_amount
+                .checked_add(m.amount)
+                .ok_or(EscrowError::AmountMismatch)?;
+        }
+
+        // Pass 2: mark released.
+        for i in 0..milestone_ids.len() {
+            let mid = milestone_ids.get(i).ok_or(EscrowError::MilestoneNotFound)?;
+            let mut m = ContractStorage::load_milestone(&env, escrow_id, mid)?;
+            m.status = MS_RELEASED;
+            ContractStorage::save_milestone(&env, escrow_id, &m);
+            meta.released_count = meta
+                .released_count
+                .checked_add(1)
+                .ok_or(EscrowError::AmountMismatch)?;
+            events::emit_funds_released(&env, escrow_id, &meta.freelancer, m.amount);
+        }
+
+        // Single transfer.
+        meta.remaining_balance = meta
+            .remaining_balance
+            .checked_sub(total_amount)
+            .ok_or(EscrowError::AmountMismatch)?;
+        token::Client::new(&env, &meta.token).transfer(
+            &env.current_contract_address(),
+            &meta.freelancer,
+            &total_amount,
+        );
+
+        if meta.released_count == meta.milestone_count && meta.milestone_count > 0 {
+            meta.status = EscrowStatus::Completed;
+            events::emit_escrow_completed(&env, escrow_id);
+        }
+
+        ContractStorage::save_escrow_meta(&env, &meta);
+        Ok(total_amount)
     }
 
     /// Releases all recurring payments that are due at the current ledger timestamp.
@@ -1106,7 +1423,7 @@ impl EscrowContract {
                     title,
                     description_hash: meta.brief_hash.clone(),
                     amount: recurring.payment_amount,
-                    status: MilestoneStatus::Approved,
+                    status: MS_APPROVED,
                     submitted_at: Some(recurring.next_payment_at),
                     resolved_at: Some(now),
                     approvals: soroban_sdk::Vec::new(&env),
@@ -1180,22 +1497,27 @@ impl EscrowContract {
         caller.require_auth();
         ContractStorage::require_not_paused(&env)?;
 
-        // Load meta only to verify freelancer identity
-        let meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
+        // Load meta only to verify freelancer identity and track submitted_count.
+        let mut meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
         if caller != meta.freelancer {
             return Err(EscrowError::FreelancerOnly);
         }
 
         let mut milestone = ContractStorage::load_milestone(&env, escrow_id, milestone_id)?;
-        if milestone.status != MilestoneStatus::Pending
-            && milestone.status != MilestoneStatus::Rejected
-        {
+        if milestone.status != MS_PENDING && milestone.status != MS_REJECTED {
             return Err(EscrowError::InvalidMilestoneState);
         }
 
-        milestone.status = MilestoneStatus::Submitted;
+        milestone.status = MS_SUBMITTED;
         milestone.submitted_at = Some(env.ledger().timestamp());
         ContractStorage::save_milestone(&env, escrow_id, &milestone);
+
+        // Increment submitted_count on the already-loaded meta — single write.
+        meta.submitted_count = meta
+            .submitted_count
+            .checked_add(1)
+            .ok_or(EscrowError::AmountMismatch)?;
+        ContractStorage::save_escrow_meta(&env, &meta);
 
         events::emit_milestone_submitted(&env, escrow_id, milestone_id, &caller);
         Ok(())
@@ -1230,19 +1552,21 @@ impl EscrowContract {
         }
 
         let mut milestone = ContractStorage::load_milestone(&env, escrow_id, milestone_id)?;
-        if milestone.status != MilestoneStatus::Submitted {
+        if milestone.status != MS_SUBMITTED {
             return Err(EscrowError::InvalidMilestoneState);
         }
 
         let now = env.ledger().timestamp();
         let amount = milestone.amount;
 
-        milestone.status = MilestoneStatus::Approved;
+        milestone.status = MS_APPROVED;
         milestone.resolved_at = Some(now);
         meta.approved_count = meta
             .approved_count
             .checked_add(1)
             .ok_or(EscrowError::AmountMismatch)?;
+        // Decrement submitted_count since this milestone is no longer submitted.
+        meta.submitted_count = meta.submitted_count.saturating_sub(1);
 
         let timelock_expired =
             ContractStorage::check_timelock_expired(&env, escrow_id, meta.timelock.clone()).is_ok();
@@ -1262,7 +1586,7 @@ impl EscrowContract {
                 .released_count
                 .checked_add(1)
                 .ok_or(EscrowError::AmountMismatch)?;
-            milestone.status = MilestoneStatus::Released;
+            milestone.status = MS_RELEASED;
             events::emit_funds_released(&env, escrow_id, &meta.freelancer, amount);
         }
 
@@ -1294,7 +1618,7 @@ impl EscrowContract {
         caller.require_auth();
         ContractStorage::require_not_paused(&env)?;
 
-        let meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
+        let mut meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
         if caller != meta.client {
             return Err(EscrowError::ClientOnly);
         }
@@ -1303,13 +1627,17 @@ impl EscrowContract {
         }
 
         let mut milestone = ContractStorage::load_milestone(&env, escrow_id, milestone_id)?;
-        if milestone.status != MilestoneStatus::Submitted {
+        if milestone.status != MS_SUBMITTED {
             return Err(EscrowError::InvalidMilestoneState);
         }
 
-        milestone.status = MilestoneStatus::Rejected;
+        milestone.status = MS_REJECTED;
         milestone.resolved_at = Some(env.ledger().timestamp());
         ContractStorage::save_milestone(&env, escrow_id, &milestone);
+
+        // Decrement submitted_count on the already-loaded meta — single write.
+        meta.submitted_count = meta.submitted_count.saturating_sub(1);
+        ContractStorage::save_escrow_meta(&env, &meta);
 
         events::emit_milestone_rejected(&env, escrow_id, milestone_id, &caller);
         Ok(())
@@ -1337,7 +1665,7 @@ impl EscrowContract {
             .ok_or(EscrowError::NotInitialized)?;
 
         let mut milestone = ContractStorage::load_milestone(&env, escrow_id, milestone_id)?;
-        if milestone.status != MilestoneStatus::Approved {
+        if milestone.status != MS_APPROVED {
             return Err(EscrowError::InvalidMilestoneState);
         }
 
@@ -1362,7 +1690,7 @@ impl EscrowContract {
             &amount,
         );
 
-        milestone.status = MilestoneStatus::Released;
+        milestone.status = MS_RELEASED;
         ContractStorage::save_milestone(&env, escrow_id, &milestone);
 
         meta.remaining_balance = meta
@@ -1402,12 +1730,11 @@ impl EscrowContract {
             return Err(EscrowError::EscrowNotActive);
         }
 
-        // Reject cancellation if any milestone is Submitted or Approved
-        for mid in 0..meta.milestone_count {
-            let m = ContractStorage::load_milestone(&env, escrow_id, mid)?;
-            if m.status == MilestoneStatus::Submitted || m.status == MilestoneStatus::Approved {
-                return Err(EscrowError::CannotCancelWithPendingFunds);
-            }
+        // O(1) check: if any milestone is Submitted or Approved, block cancellation.
+        // `submitted_count` and `approved_count` are maintained incrementally on
+        // every submit/approve/reject, so no storage iteration is needed here.
+        if meta.submitted_count > 0 || meta.approved_count > meta.released_count {
+            return Err(EscrowError::CannotCancelWithPendingFunds);
         }
 
         let returned = meta.remaining_balance;
@@ -1539,12 +1866,18 @@ impl EscrowContract {
 
         if let Some(mid) = milestone_id {
             let mut milestone = ContractStorage::load_milestone(&env, escrow_id, mid)?;
-            if milestone.status == MilestoneStatus::Submitted
-                || milestone.status == MilestoneStatus::Pending
-            {
-                milestone.status = MilestoneStatus::Disputed;
+            let was_submitted = milestone.status == MS_SUBMITTED;
+            if was_submitted || milestone.status == MS_PENDING {
+                milestone.status = MS_DISPUTED;
                 milestone.resolved_at = Some(env.ledger().timestamp());
                 ContractStorage::save_milestone(&env, escrow_id, &milestone);
+                // Keep submitted_count consistent — meta already saved above,
+                // so reload, decrement, and save again.
+                if was_submitted {
+                    let mut meta2 = ContractStorage::load_escrow_meta(&env, escrow_id)?;
+                    meta2.submitted_count = meta2.submitted_count.saturating_sub(1);
+                    ContractStorage::save_escrow_meta(&env, &meta2);
+                }
                 events::emit_milestone_disputed(&env, escrow_id, mid, &caller);
             }
         }

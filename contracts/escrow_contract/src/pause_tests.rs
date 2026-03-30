@@ -1,7 +1,10 @@
 #[cfg(test)]
 #[allow(clippy::module_inception)]
 mod pause_tests {
-    use crate::{EscrowContract, EscrowContractClient, EscrowError, EscrowStatus, MilestoneStatus};
+    use crate::{
+        EscrowContract, EscrowContractClient, EscrowError, EscrowStatus, MilestoneStatus,
+        MS_PENDING,
+    };
     use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String};
 
     fn setup() -> (Env, Address, Address, EscrowContractClient<'static>) {
@@ -149,7 +152,7 @@ mod pause_tests {
 
         // View functions must still work
         let milestone = client.get_milestone(&escrow_id, &mid);
-        assert_eq!(milestone.status, MilestoneStatus::Pending);
+        assert_eq!(milestone.status, MS_PENDING);
 
         let escrow = client.get_escrow(&escrow_id);
         assert_eq!(escrow.status, EscrowStatus::Active);
