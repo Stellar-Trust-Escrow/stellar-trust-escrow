@@ -10,17 +10,35 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - '9200:9200'
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -sf http://localhost:9200/_cluster/health || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: .
       target: backend
     environment:
       DATABASE_URL: postgresql://user:password@postgres:5432/stellar_escrow
+      ELASTICSEARCH_URL: http://elasticsearch:9200
       PORT: 4000
     ports:
       - '4000:4000'
     depends_on:
       - postgres
+      - elasticsearch
 
   frontend:
     build:
@@ -35,3 +53,4 @@ services:
 
 volumes:
   pgdata:
+  esdata:

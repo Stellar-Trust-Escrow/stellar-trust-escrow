@@ -252,7 +252,7 @@ const handleFundsReleased = async (event, meta) => {
   ]);
 
   try {
-    broadcastEscrowEvent(escrowId, 'escrow:funded', 'Active');
+    broadcastEscrowEvent(escrowId, 'escrow:released', 'Active');
   } catch (err) {
     console.warn('[Indexer] broadcastEscrowEvent failed for handleFundsReleased:', err.message);
   }
