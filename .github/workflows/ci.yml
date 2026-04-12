@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [develop]   # only active development
   pull_request:
-    branches: [main, develop]
+    branches: [develop, main]  # PRs into both branches
 
 permissions:
   contents: read
