@@ -51,6 +51,8 @@
 #![no_std]
 #![allow(clippy::too_many_arguments)]
 
+mod bridge;
+mod bridge_tests;
 mod errors;
 mod event_tests;
 mod events;
@@ -58,15 +60,14 @@ mod oracle;
 mod pause_tests;
 mod types;
 mod upgrade_tests;
-mod bridge;
-mod bridge_tests;
 
 pub use errors::EscrowError;
 use storage::StorageManager;
 use types::{CancellationRequest, RecurringInterval, RecurringPaymentConfig, SlashRecord};
 pub use types::{
     DataKey, EscrowState, EscrowStatus, Milestone, MilestoneStatus, MultisigConfig,
-    OptionalTimelock, ReputationRecord, Timelock,
+    OptionalTimelock, ReputationRecord, Timelock, MS_APPROVED, MS_DISPUTED, MS_PENDING,
+    MS_REJECTED, MS_RELEASED, MS_SUBMITTED,
 };
 
 use soroban_sdk::{
@@ -87,6 +88,7 @@ const SLASH_PERCENTAGE: u64 = 10;
 const RENT_PERIOD_SECONDS: u64 = 86_400;
 const RENT_RESERVE_PERIODS: u64 = 30;
 const RENT_PER_ENTRY_PER_PERIOD: i128 = 1;
+pub const MAX_MILESTONES: u32 = 20;
 
 // ── Granular storage keys ─────────────────────────────────────────────────────
 // Separate keys for meta vs each milestone avoids deserialising the full
@@ -795,10 +797,7 @@ impl EscrowContract {
     }
 
     /// Return canonical metadata for a wrapped token, or None if not registered.
-    pub fn get_wrapped_token_info(
-        env: Env,
-        token: Address,
-    ) -> Option<bridge::WrappedTokenInfo> {
+    pub fn get_wrapped_token_info(env: Env, token: Address) -> Option<bridge::WrappedTokenInfo> {
         bridge::get_wrapped_token_info(&env, &token)
     }
 
@@ -1040,6 +1039,7 @@ impl EscrowContract {
             milestone_count: 0,
             approved_count: 0,
             released_count: 0,
+            submitted_count: 0,
             arbiter: None,
             buyer_signers,
             created_at: now,
@@ -1623,7 +1623,7 @@ impl EscrowContract {
         let now = env.ledger().timestamp();
         let amount = milestone.amount;
 
-        milestone.status = MilestoneStatus::Approved;
+        milestone.status = MS_APPROVED;
         milestone.resolved_at = Some(now);
         meta.approved_count = meta
             .approved_count
@@ -1648,7 +1648,7 @@ impl EscrowContract {
                 .released_count
                 .checked_add(1)
                 .ok_or(EscrowError::AmountMismatch)?;
-            milestone.status = MilestoneStatus::Released;
+            milestone.status = MS_RELEASED;
             events::emit_funds_released(&env, escrow_id, &meta.freelancer, amount);
         }
 

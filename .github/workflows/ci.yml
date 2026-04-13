@@ -2,9 +2,10 @@ name: CI
 
 on:
   push:
-    branches: [develop]   # only active development
+    branches: [develop]          # contributors push here only — never to main
   pull_request:
-    branches: [develop, main]  # PRs into both branches
+    branches: [develop]          # all contributor PRs must target develop
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: read
@@ -147,7 +148,7 @@ jobs:
   contract-fuzz:
     name: Smart Contract Fuzzing
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
+    if: github.event_name == 'push'   # only on direct pushes to develop, not PRs
 
     steps:
       - uses: actions/checkout@v4

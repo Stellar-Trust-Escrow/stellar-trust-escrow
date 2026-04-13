@@ -370,6 +370,18 @@
                     },
                     {
                       "key": {
+                        "symbol": "buyer_signers"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "client"
                       },
                       "val": {
@@ -436,6 +448,14 @@
                     },
                     {
                       "key": {
+                        "symbol": "released_count"
+                      },
+                      "val": {
+                        "u32": 0
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "remaining_balance"
                       },
                       "val": {
@@ -464,6 +484,26 @@
                         "vec": [
                           {
                             "symbol": "Cancelled"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "submitted_count"
+                      },
+                      "val": {
+                        "u32": 0
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "timelock"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "symbol": "None"
                           }
                         ]
                       }
@@ -552,6 +592,14 @@
                     },
                     {
                       "key": {
+                        "symbol": "approvals"
+                      },
+                      "val": {
+                        "vec": []
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "description_hash"
                       },
                       "val": {
@@ -579,11 +627,7 @@
                         "symbol": "status"
                       },
                       "val": {
-                        "vec": [
-                          {
-                            "symbol": "Approved"
-                          }
-                        ]
+                        "u32": 4
                       }
                     },
                     {
@@ -2432,6 +2476,18 @@
                 },
                 {
                   "key": {
+                    "symbol": "buyer_signers"
+                  },
+                  "val": {
+                    "vec": [
+                      {
+                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "key": {
                     "symbol": "client"
                   },
                   "val": {
@@ -2501,6 +2557,14 @@
                           },
                           {
                             "key": {
+                              "symbol": "approvals"
+                            },
+                            "val": {
+                              "vec": []
+                            }
+                          },
+                          {
+                            "key": {
                               "symbol": "description_hash"
                             },
                             "val": {
@@ -2528,11 +2592,7 @@
                               "symbol": "status"
                             },
                             "val": {
-                              "vec": [
-                                {
-                                  "symbol": "Approved"
-                                }
-                              ]
+                              "u32": 4
                             }
                           },
                           {
@@ -2558,6 +2618,34 @@
                 },
                 {
                   "key": {
+                    "symbol": "multisig_approvers"
+                  },
+                  "val": {
+                    "vec": [
+                      {
+                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "multisig_threshold"
+                  },
+                  "val": {
+                    "u32": 0
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "multisig_weights"
+                  },
+                  "val": {
+                    "vec": []
+                  }
+                },
+                {
+                  "key": {
                     "symbol": "remaining_balance"
                   },
                   "val": {
@@ -2575,6 +2663,18 @@
                     "vec": [
                       {
                         "symbol": "Cancelled"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "timelock"
+                  },
+                  "val": {
+                    "vec": [
+                      {
+                        "symbol": "None"
                       }
                     ]
                   }

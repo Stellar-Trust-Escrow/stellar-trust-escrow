@@ -7,11 +7,16 @@
  * Docs: https://stripe.com/docs/api
  */
 
-import Stripe from 'stripe';
 import prisma from '../lib/prisma.js';
 import { getCurrentTenantId, withTenantScopeBypassed } from '../lib/tenantContext.js';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-04-10' });
+let stripeClient;
+async function getStripeClient() {
+  if (stripeClient) return stripeClient;
+  const { default: Stripe } = await import('stripe');
+  stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-04-10' });
+  return stripeClient;
+}
 
 const STELLAR_HORIZON = process.env.STELLAR_HORIZON_URL || 'https://horizon-testnet.stellar.org';
 
@@ -38,6 +43,7 @@ async function getXlmUsdPrice() {
  * @returns {{ sessionId, url, paymentId }}
  */
 async function createCheckoutSession({ address, amountUsd, escrowId }) {
+  const stripe = await getStripeClient();
   const amountCents = Math.round(amountUsd * 100);
   const tenantId = getCurrentTenantId();
 
@@ -139,6 +145,7 @@ async function getByAddress(address, { take = 50, skip = 0 } = {}) {
  * @param {string} paymentId - internal Payment.id
  */
 async function refund(paymentId) {
+  const stripe = await getStripeClient();
   const payment = await prisma.payment.findUniqueOrThrow({
     where: { id: paymentId },
     select: { id: true, status: true, stripePaymentIntent: true },
@@ -163,6 +170,7 @@ async function refund(paymentId) {
  * Returns the updated payment record or null for unhandled events.
  */
 async function handleWebhook(rawBody, signature) {
+  const stripe = await getStripeClient();
   const event = stripe.webhooks.constructEvent(
     rawBody,
     signature,
@@ -233,4 +241,11 @@ async function handleWebhook(rawBody, signature) {
   }
 }
 
-export default { createCheckoutSession, getById, getBySessionId, getByAddress, refund, handleWebhook };
+export default {
+  createCheckoutSession,
+  getById,
+  getBySessionId,
+  getByAddress,
+  refund,
+  handleWebhook,
+};

@@ -297,11 +297,7 @@ impl EscrowExtensions {
         token: Address,
         gross_amount: i128,
     ) -> Result<(i128, i128), ExtError> {
-        let fee_bps: u32 = env
-            .storage()
-            .instance()
-            .get(&DataKey::FeeBps)
-            .unwrap_or(0);
+        let fee_bps: u32 = env.storage().instance().get(&DataKey::FeeBps).unwrap_or(0);
 
         if fee_bps == 0 || gross_amount <= 0 {
             return Ok((gross_amount, 0));
@@ -343,10 +339,7 @@ impl EscrowExtensions {
         let mut distributed: i128 = 0;
 
         for r in recipients.iter() {
-            let share = balance
-                .checked_mul(i128::from(r.share_bps))
-                .unwrap_or(0)
-                / 10_000;
+            let share = balance.checked_mul(i128::from(r.share_bps)).unwrap_or(0) / 10_000;
             if share > 0 {
                 token_client.transfer(&env.current_contract_address(), &r.address, &share);
                 distributed += share;
@@ -378,11 +371,7 @@ impl EscrowExtensions {
             return Err(ExtError::NoFeesAccumulated);
         }
 
-        token::Client::new(&env, &token).transfer(
-            &env.current_contract_address(),
-            &to,
-            &balance,
-        );
+        token::Client::new(&env, &token).transfer(&env.current_contract_address(), &to, &balance);
         env.storage().persistent().set(&key, &0_i128);
         bump_persistent(&env, &key);
 
@@ -392,10 +381,7 @@ impl EscrowExtensions {
 
     /// Returns the current fee in basis points.
     pub fn get_fee_bps(env: Env) -> u32 {
-        env.storage()
-            .instance()
-            .get(&DataKey::FeeBps)
-            .unwrap_or(0)
+        env.storage().instance().get(&DataKey::FeeBps).unwrap_or(0)
     }
 
     /// Returns the accumulated fee balance for a token.
@@ -554,8 +540,7 @@ impl EscrowExtensions {
         }
 
         // 51 % threshold
-        let client_wins =
-            dispute.weight_for_client * 100 / total_weight >= 51;
+        let client_wins = dispute.weight_for_client * 100 / total_weight >= 51;
 
         dispute.resolved = true;
         dispute.client_wins = Some(client_wins);
