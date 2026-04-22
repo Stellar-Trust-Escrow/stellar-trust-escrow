@@ -4,6 +4,7 @@ WORKDIR /app
 ENV CI=true
 ENV HUSKY=0
 COPY package*.json ./
+COPY .husky/install.mjs ./.husky/install.mjs
 COPY backend/package*.json ./backend/
 COPY frontend/package*.json ./frontend/
 RUN npm ci
