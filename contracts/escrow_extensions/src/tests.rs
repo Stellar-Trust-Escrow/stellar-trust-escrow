@@ -3,7 +3,10 @@ mod tests {
     use crate::{
         BatchEscrowParams, EscrowExtensions, EscrowExtensionsClient, ExtError, FeeRecipient,
     };
-    use soroban_sdk::{testutils::{Address as _, Ledger}, token, BytesN, Env, Vec};
+    use soroban_sdk::{
+        testutils::{Address as _, Ledger},
+        token, BytesN, Env, Vec,
+    };
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -27,10 +30,22 @@ mod tests {
         let client = EscrowExtensionsClient::new(&env, &contract_id);
         client.initialize(&admin, &fee_bps);
 
-        Setup { env, admin, token_id, contract_id, client }
+        Setup {
+            env,
+            admin,
+            token_id,
+            contract_id,
+            client,
+        }
     }
 
-    fn mint(env: &Env, _admin: &soroban_sdk::Address, token_id: &soroban_sdk::Address, to: &soroban_sdk::Address, amount: i128) {
+    fn mint(
+        env: &Env,
+        _admin: &soroban_sdk::Address,
+        token_id: &soroban_sdk::Address,
+        to: &soroban_sdk::Address,
+        amount: i128,
+    ) {
         token::StellarAssetClient::new(env, token_id).mint(to, &amount);
     }
 
@@ -154,14 +169,20 @@ mod tests {
         let r2 = soroban_sdk::Address::generate(&s.env);
 
         let mut recipients = Vec::new(&s.env);
-        recipients.push_back(FeeRecipient { address: r1.clone(), share_bps: 7_000 });
-        recipients.push_back(FeeRecipient { address: r2.clone(), share_bps: 3_000 });
+        recipients.push_back(FeeRecipient {
+            address: r1.clone(),
+            share_bps: 7_000,
+        });
+        recipients.push_back(FeeRecipient {
+            address: r2.clone(),
+            share_bps: 3_000,
+        });
         s.client.set_fee_recipients(&s.admin, &recipients);
 
         // Collect fees from two releases
         s.client.collect_fee(&1_u64, &s.token_id, &10_000_i128); // fee = 200
         s.client.collect_fee(&2_u64, &s.token_id, &10_000_i128); // fee = 200
-        // Total accumulated = 400
+                                                                 // Total accumulated = 400
 
         // Fund the contract so it can distribute
         mint(&s.env, &s.admin, &s.token_id, &s.contract_id, 400);
@@ -259,7 +280,9 @@ mod tests {
     fn test_no_votes_quorum_not_reached() {
         let s = setup_with_fee(0);
         s.client.open_dispute(&5_u64);
-        s.env.ledger().with_mut(|l| { l.timestamp += 604_801; });
+        s.env.ledger().with_mut(|l| {
+            l.timestamp += 604_801;
+        });
         let result = s.client.try_resolve_dispute(&5_u64);
         assert_eq!(result.unwrap_err().unwrap(), ExtError::QuorumNotReached);
     }
@@ -287,7 +310,10 @@ mod tests {
         let hash = BytesN::from_array(&s.env, &[0xCD; 32]);
         s.client.queue_upgrade(&s.admin, &hash);
         let result = s.client.try_execute_upgrade(&s.admin);
-        assert_eq!(result.unwrap_err().unwrap(), ExtError::UpgradeDelayNotElapsed);
+        assert_eq!(
+            result.unwrap_err().unwrap(),
+            ExtError::UpgradeDelayNotElapsed
+        );
     }
 
     #[test]
@@ -296,7 +322,10 @@ mod tests {
         let hash = BytesN::from_array(&s.env, &[0xEF; 32]);
         s.client.queue_upgrade(&s.admin, &hash);
         let result = s.client.try_queue_upgrade(&s.admin, &hash);
-        assert_eq!(result.unwrap_err().unwrap(), ExtError::UpgradeAlreadyPending);
+        assert_eq!(
+            result.unwrap_err().unwrap(),
+            ExtError::UpgradeAlreadyPending
+        );
     }
 
     #[test]

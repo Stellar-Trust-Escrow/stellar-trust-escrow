@@ -32,7 +32,7 @@
 use soroban_sdk::{contracttype, Address, BytesN, Env, Vec};
 
 use crate::PackedDataKey;
-use crate::{DataKey, Milestone, OptionalTimelock};
+use crate::{DataKey, Milestone, OptionalTimelock, MS_APPROVED, MS_RELEASED, MS_SUBMITTED};
 
 // Current storage version - increment when storage layout changes
 pub const STORAGE_VERSION: u32 = 2;
@@ -165,17 +165,17 @@ impl StorageManager {
                 let approved_count = v1_escrow
                     .milestones
                     .iter()
-                    .filter(|m| m.status == crate::MS_APPROVED)
+                    .filter(|m| m.status == MS_APPROVED)
                     .count() as u32;
                 let released_count = v1_escrow
                     .milestones
                     .iter()
-                    .filter(|m| m.status == crate::MS_RELEASED)
+                    .filter(|m| m.status == MS_RELEASED)
                     .count() as u32;
                 let submitted_count = v1_escrow
                     .milestones
                     .iter()
-                    .filter(|m| m.status == crate::MS_SUBMITTED)
+                    .filter(|m| m.status == MS_SUBMITTED)
                     .count() as u32;
 
                 // Create EscrowMeta from v1 data

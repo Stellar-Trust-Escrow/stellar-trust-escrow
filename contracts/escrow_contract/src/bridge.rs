@@ -115,10 +115,7 @@ pub fn record_bridge_confirmation(env: &Env, confirmation: &BridgeConfirmation) 
 }
 
 /// Retrieve bridge confirmation state for a transfer ID.
-pub fn get_bridge_confirmation(
-    env: &Env,
-    transfer_id: &String,
-) -> Option<BridgeConfirmation> {
+pub fn get_bridge_confirmation(env: &Env, transfer_id: &String) -> Option<BridgeConfirmation> {
     let key = BridgeDataKey::BridgeConfirmation(transfer_id.clone());
     let conf: Option<BridgeConfirmation> = env.storage().persistent().get(&key);
     if conf.is_some() {
@@ -143,12 +140,8 @@ pub fn validate_escrow_token(env: &Env, token: &Address) -> Result<(), EscrowErr
 }
 
 /// Validate that a bridge transfer is finalized (>= MIN_BRIDGE_CONFIRMATIONS).
-pub fn require_bridge_finalized(
-    env: &Env,
-    transfer_id: &String,
-) -> Result<(), EscrowError> {
-    let conf = get_bridge_confirmation(env, transfer_id)
-        .ok_or(EscrowError::BridgeError)?;
+pub fn require_bridge_finalized(env: &Env, transfer_id: &String) -> Result<(), EscrowError> {
+    let conf = get_bridge_confirmation(env, transfer_id).ok_or(EscrowError::BridgeError)?;
     if !conf.is_finalized {
         return Err(EscrowError::BridgeError);
     }
