@@ -32,7 +32,7 @@
 use soroban_sdk::{contracttype, Address, BytesN, Env, Vec};
 
 use crate::PackedDataKey;
-use crate::{DataKey, Milestone};
+use crate::{DataKey, Milestone, OptionalTimelock};
 
 // Current storage version - increment when storage layout changes
 pub const STORAGE_VERSION: u32 = 2;
@@ -165,12 +165,17 @@ impl StorageManager {
                 let approved_count = v1_escrow
                     .milestones
                     .iter()
-                    .filter(|m| m.status == crate::types::MilestoneStatus::Approved)
+                    .filter(|m| m.status == crate::MS_APPROVED)
                     .count() as u32;
                 let released_count = v1_escrow
                     .milestones
                     .iter()
-                    .filter(|m| m.status == crate::types::MilestoneStatus::Released)
+                    .filter(|m| m.status == crate::MS_RELEASED)
+                    .count() as u32;
+                let submitted_count = v1_escrow
+                    .milestones
+                    .iter()
+                    .filter(|m| m.status == crate::MS_SUBMITTED)
                     .count() as u32;
 
                 // Create EscrowMeta from v1 data
@@ -187,12 +192,15 @@ impl StorageManager {
                     milestone_count: v1_escrow.milestones.len(),
                     approved_count,
                     released_count,
+                    submitted_count,
                     arbiter: v1_escrow.arbiter,
+                    // v1 had no buyer_signers — default to empty (client-only approval)
+                    buyer_signers: soroban_sdk::Vec::new(env),
                     created_at: v1_escrow.created_at,
                     deadline: v1_escrow.deadline,
                     lock_time: v1_escrow.lock_time,
                     lock_time_extension: v1_escrow.lock_time_extension,
-                    timelock: None,
+                    timelock: OptionalTimelock::None,
                     brief_hash: v1_escrow.brief_hash,
                     rent_balance: 0,
                     last_rent_collection_at: v1_escrow.created_at,

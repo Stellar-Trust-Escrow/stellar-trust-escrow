@@ -1,5 +1,7 @@
 import { emailQueue } from './index.js';
 
+export { emailQueue };
+
 export async function notifyEscrowStatusChange(payload) {
   return emailQueue.add('escrow.status_changed', { payload, recipients: payload.recipients });
 }
@@ -22,15 +24,21 @@ export async function enqueueEvent(eventType, payload) {
 }
 
 export async function getQueueSnapshot() {
-  const [waiting, active, failed] = await Promise.all([
+  const [waiting, active] = await Promise.all([
     emailQueue.getWaiting(),
     emailQueue.getActive(),
-    emailQueue.getFailed(),
   ]);
   return {
-    queue: [...waiting, ...active],
+    queue: [...waiting, ...active].map((job) => ({
+      ...job,
+      message: job.data?.payload?.message ?? job.data?.message,
+    })),
     deliveries: [], // Track separately if needed
   };
+}
+
+export function __resetForTests() {
+  emailQueue.__resetForTests?.();
 }
 
 export default {
@@ -39,4 +47,5 @@ export default {
   notifyDisputeRaised,
   enqueueEvent,
   getQueueSnapshot,
+  __resetForTests,
 };

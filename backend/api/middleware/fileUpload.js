@@ -1,86 +1,77 @@
 import multer from 'multer';
-import path from 'path';
 import prisma from '../../lib/prisma.js';
 import virusScanner from '../../services/virusScanner.js';
 import ipfsService from '../../services/ipfsService.js';
+import { broadcastToDispute } from '../websocket/handlers.js';
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const MAX_FILES = 5;
+const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE || String(10 * 1024 * 1024), 10);
+const MAX_FILES = parseInt(process.env.MAX_FILES || '5', 10);
 
 const storage = multer.memoryStorage();
 
-const fileFilter = async (req, file, cb) => {
-  try {
-    if (!file.originalname) {
-      return cb(new Error('Filename is required'), false);
-    }
+const ALLOWED_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'application/pdf',
+  'text/plain',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/csv',
+  'application/zip',
+]);
 
-    const allowedMimeTypes = [
-      'image/jpeg',
-      'image/png',
-      'image/gif',
-      'image/webp',
-      'application/pdf',
-      'text/plain',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/vnd.ms-excel',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'text/csv',
-      'application/zip'
-    ];
-
-    if (!allowedMimeTypes.includes(file.mimetype)) {
-      return cb(new Error(`File type ${file.mimetype} is not allowed`), false);
-    }
-
-    if (file.size > MAX_FILE_SIZE) {
-      return cb(new Error('File size exceeds 10MB limit'), false);
-    }
-
-    cb(null, true);
-  } catch (error) {
-    cb(error, false);
+const fileFilter = (_req, file, cb) => {
+  if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
+    return cb(Object.assign(new Error(`File type ${file.mimetype} is not allowed`), { code: 'LIMIT_FILE_TYPE' }), false);
   }
+  cb(null, true);
 };
 
 const upload = multer({
   storage,
-  limits: {
-    fileSize: MAX_FILE_SIZE,
-    files: MAX_FILES
-  },
-  fileFilter
+  limits: { fileSize: MAX_FILE_SIZE, files: MAX_FILES },
+  fileFilter,
 });
 
-const virusScanMiddleware = async (req, res, next) => {
-  if (!req.files || req.files.length === 0) {
-    return next();
+/**
+ * Express error handler for multer errors.
+ * Must be used as the last middleware in the upload chain.
+ */
+export function handleUploadError(err, _req, res, next) {
+  if (!err) return next();
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(413).json({ error: `File size exceeds ${MAX_FILE_SIZE / (1024 * 1024)}MB limit` });
   }
+  if (err.code === 'LIMIT_FILE_COUNT') {
+    return res.status(400).json({ error: `Too many files. Maximum is ${MAX_FILES}` });
+  }
+  if (err.code === 'LIMIT_FILE_TYPE') {
+    return res.status(400).json({ error: err.message });
+  }
+  next(err);
+}
+
+const virusScanMiddleware = async (req, res, next) => {
+  if (!req.files || req.files.length === 0) return next();
 
   try {
     const scanResults = await Promise.all(
       req.files.map(async (file) => {
         const scanResult = await virusScanner.quickScan(file.buffer, file.originalname);
-        return {
-          fieldname: file.fieldname,
-          originalname: file.originalname,
-          ...scanResult
-        };
+        return { fieldname: file.fieldname, originalname: file.originalname, ...scanResult };
       })
     );
 
-    const infectedFiles = scanResults.filter(result => result.isInfected);
-    
+    const infectedFiles = scanResults.filter((r) => r.isInfected);
     if (infectedFiles.length > 0) {
-      const infectedNames = infectedFiles.map(f => f.originalname).join(', ');
       return res.status(400).json({
         error: 'Virus detected',
-        message: `Malicious content found in: ${infectedNames}`,
-        infectedFiles: infectedFiles.map(f => ({
-          filename: f.originalname,
-          viruses: f.viruses
-        }))
+        message: `Malicious content found in: ${infectedFiles.map((f) => f.originalname).join(', ')}`,
+        infectedFiles: infectedFiles.map((f) => ({ filename: f.originalname, viruses: f.viruses })),
       });
     }
 
@@ -88,28 +79,36 @@ const virusScanMiddleware = async (req, res, next) => {
     next();
   } catch (error) {
     console.error('Virus scan error:', error);
-    res.status(500).json({
-      error: 'Virus scan failed',
-      message: 'Unable to complete virus scan'
-    });
+    res.status(500).json({ error: 'Virus scan failed', message: 'Unable to complete virus scan' });
   }
 };
 
 const ipfsUploadMiddleware = async (req, res, next) => {
-  if (!req.files || req.files.length === 0) {
-    return next();
-  }
+  if (!req.files || req.files.length === 0) return next();
+
+  const disputeId = req.dispute?.id;
 
   try {
     const uploadResults = await Promise.all(
-      req.files.map(async (file) => {
+      req.files.map(async (file, index) => {
+        // Broadcast per-file progress via WebSocket
+        if (disputeId) {
+          broadcastToDispute(disputeId, {
+            type: 'upload_progress',
+            filename: file.originalname,
+            index,
+            total: req.files.length,
+          });
+        }
+
         const ipfsResult = await ipfsService.pinFile(file.buffer);
-        
-        let thumbnailResult = null;
+
+        let thumbnailCid = null;
         if (ipfsService.isImage(file.mimetype)) {
           const thumbnailBuffer = await ipfsService.generateThumbnail(file.buffer, file.mimetype);
           if (thumbnailBuffer) {
-            thumbnailResult = await ipfsService.pinFile(thumbnailBuffer);
+            const thumbResult = await ipfsService.pinFile(thumbnailBuffer);
+            thumbnailCid = thumbResult.cid;
           }
         }
 
@@ -121,8 +120,8 @@ const ipfsUploadMiddleware = async (req, res, next) => {
           mimetype: file.mimetype,
           size: file.size,
           ipfsCid: ipfsResult.cid,
-          thumbnailCid: thumbnailResult?.cid || null,
-          metadata
+          thumbnailCid,
+          metadata,
         };
       })
     );
@@ -131,48 +130,43 @@ const ipfsUploadMiddleware = async (req, res, next) => {
     next();
   } catch (error) {
     console.error('IPFS upload error:', error);
-    res.status(500).json({
-      error: 'IPFS upload failed',
-      message: 'Unable to upload files to IPFS'
-    });
+    res.status(500).json({ error: 'IPFS upload failed', message: 'Unable to upload files to IPFS' });
   }
 };
 
 const validateDisputeAccess = async (req, res, next) => {
   const { id } = req.params;
-  const userAddress = req.user?.address;
+  const userId = req.user?.userId;
 
-  if (!userAddress) {
-    return res.status(401).json({ error: 'User not authenticated' });
-  }
+  if (!userId) return res.status(401).json({ error: 'User not authenticated' });
 
   try {
+    // Resolve wallet address from DB — JWT payload only carries userId
+    const userProfile = await prisma.userProfile.findFirst({
+      where: { userId },
+      select: { walletAddress: true },
+    });
+    const userAddress = userProfile?.walletAddress ?? null;
+
     const dispute = await prisma.dispute.findFirst({
-      where: {
-        id: parseInt(id),
-        tenantId: req.tenant.id
-      },
-      include: {
-        escrow: true
-      }
+      where: { id: parseInt(id), tenantId: req.tenant.id },
+      include: { escrow: true },
     });
 
-    if (!dispute) {
-      return res.status(404).json({ error: 'Dispute not found' });
-    }
+    if (!dispute) return res.status(404).json({ error: 'Dispute not found' });
 
-    const isParticipant = 
-      dispute.raisedByAddress === userAddress ||
-      dispute.escrow.clientAddress === userAddress ||
-      dispute.escrow.freelancerAddress === userAddress;
-
+    const isParticipant =
+      (userAddress && (
+        dispute.raisedByAddress === userAddress ||
+        dispute.escrow.clientAddress === userAddress ||
+        dispute.escrow.freelancerAddress === userAddress
+      ));
     const isAdmin = req.user?.role === 'admin' || req.user?.role === 'arbiter';
 
-    if (!isParticipant && !isAdmin) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
+    if (!isParticipant && !isAdmin) return res.status(403).json({ error: 'Access denied' });
 
     req.dispute = dispute;
+    req.userAddress = userAddress;
     next();
   } catch (error) {
     console.error('Dispute access validation error:', error);
@@ -182,9 +176,10 @@ const validateDisputeAccess = async (req, res, next) => {
 
 export const uploadEvidence = [
   upload.array('files', MAX_FILES),
+  handleUploadError,
+  validateDisputeAccess,
   virusScanMiddleware,
   ipfsUploadMiddleware,
-  validateDisputeAccess
 ];
 
 export const uploadSingleFile = upload.single('file');

@@ -1,4 +1,6 @@
-let isOnline = navigator.onLine;
+const hasBrowserNetworkApi = typeof navigator !== 'undefined' && typeof window !== 'undefined';
+
+let isOnline = hasBrowserNetworkApi ? navigator.onLine : true;
 
 export const setOnlineStatus = (status) => {
   isOnline = status;
@@ -6,5 +8,7 @@ export const setOnlineStatus = (status) => {
 
 export const getOnlineStatus = () => isOnline;
 
-window.addEventListener("online", () => setOnlineStatus(true));
-window.addEventListener("offline", () => setOnlineStatus(false));
+if (hasBrowserNetworkApi) {
+  window.addEventListener('online', () => setOnlineStatus(true));
+  window.addEventListener('offline', () => setOnlineStatus(false));
+}

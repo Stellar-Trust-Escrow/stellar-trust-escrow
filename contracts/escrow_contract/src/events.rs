@@ -75,6 +75,24 @@ pub fn emit_milestone_approved(env: &Env, escrow_id: u64, milestone_id: u32, amo
     );
 }
 
+/// Emitted when a multisig approver records a vote; escrow may still be below threshold.
+///
+/// * `accrued_weight` — running sum of weights after this vote
+/// * `threshold`      — configured threshold for final approval
+pub fn emit_multisig_approval_recorded(
+    env: &Env,
+    escrow_id: u64,
+    milestone_id: u32,
+    signer: &Address,
+    accrued_weight: u32,
+    threshold: u32,
+) {
+    env.events().publish(
+        (symbol_short!("msig_apr"), escrow_id),
+        (milestone_id, signer.clone(), accrued_weight, threshold),
+    );
+}
+
 /// Emitted when a client rejects a milestone submission, returning it to Pending.
 ///
 /// # Arguments
@@ -251,23 +269,16 @@ pub fn emit_lock_time_expired(env: &Env, escrow_id: u64, lock_time: u64) {
 /// * `old_lock_time`  - The previous lock time
 /// * `new_lock_time`  - The new lock time
 /// * `extended_by`     - Address of the party that extended the lock
-pub fn emit_timelock_started(
-    env: &Env,
-    escrow_id: u64,
-    duration_ledger: u64,
-    start_ledger: u64,
-) {
+pub fn emit_timelock_started(env: &Env, escrow_id: u64, duration_ledger: u64, start_ledger: u64) {
     env.events().publish(
-        (symbol_short!("tl_started"), escrow_id),
+        (symbol_short!("tl_start"), escrow_id),
         (duration_ledger, start_ledger),
     );
 }
 
 pub fn emit_timelock_released(env: &Env, escrow_id: u64, released_ledger: u64) {
-    env.events().publish(
-        (symbol_short!("tl_released"), escrow_id),
-        released_ledger,
-    );
+    env.events()
+        .publish((symbol_short!("tl_rel"), escrow_id), released_ledger);
 }
 
 pub fn emit_lock_time_extended(

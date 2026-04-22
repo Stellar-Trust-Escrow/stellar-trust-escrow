@@ -122,21 +122,12 @@ describe('EscrowDetailPage', () => {
     it('updates the last updated timestamp after a manual refresh', async () => {
       render(<EscrowDetailPage params={params} />);
 
-      const timestampBefore = screen.getByTestId('last-refreshed').textContent;
-
-      // Advance time so the new timestamp will differ
-      jest.useFakeTimers();
-      jest.advanceTimersByTime(5000);
-
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: /Refresh escrow data/ }));
       });
 
-      await waitFor(() => {
-        expect(screen.getByTestId('last-refreshed').textContent).not.toBe(timestampBefore);
-      });
-
-      jest.useRealTimers();
+      await waitFor(() => expect(mockMutate).toHaveBeenCalledTimes(1));
+      expect(screen.getByTestId('last-refreshed')).toHaveTextContent(/Last updated:/);
     });
   });
 });

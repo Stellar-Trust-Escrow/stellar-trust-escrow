@@ -1,6 +1,7 @@
 # Common base for all stages
 FROM node:20-alpine AS base
 WORKDIR /app
+ENV CI=true
 COPY package*.json ./
 COPY backend/package*.json ./backend/
 COPY frontend/package*.json ./frontend/

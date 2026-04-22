@@ -1,12 +1,17 @@
 /**
  * Escrow Controller
  *
- * Cache is handled entirely by the route-level cacheResponse / invalidateOn
- * middleware — controllers no longer call cache.get/set directly.
+ * Read endpoints (listEscrows, getEscrow, getMilestones, getMilestone) are
+ * cached at the route level via cacheResponse middleware.
+ *
+ * Status-changing operations (releaseFunds, raiseDispute) invalidate the
+ * relevant cache tags directly so stale data is never served.
  */
 
 import prisma from '../../lib/prisma.js';
+import cache from '../../lib/cache.js';
 import { buildPaginatedResponse, parsePagination } from '../../lib/pagination.js';
+import { logControllerError } from '../../config/logger.js';
 import {
   escrowIdParam,
   signedXdrBody,
@@ -28,6 +33,35 @@ const ESCROW_SUMMARY_SELECT = {
 const VALID_SORT_FIELDS = ['createdAt', 'totalAmount', 'status'];
 const VALID_SORT_ORDERS = ['asc', 'desc'];
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Invalidate all cache entries for a specific escrow and the list collection. */
+async function invalidateEscrowCache(id) {
+  await cache.invalidateTags(['escrows', `escrow:${id}`]);
+  console.log(`[Cache] Invalidated escrow:${id} + escrows collection`);
+}
+
+/** Log cache hit/miss metrics to console for monitoring. */
+function logCacheMetrics() {
+  const m = cache.analytics();
+  console.log(
+    `[Cache] backend=${m.backend} hits=${m.hits} misses=${m.misses} ` +
+      `hitRate=${m.hitRate} sets=${m.sets} invalidations=${m.invalidations}`,
+  );
+}
+
+/** Triggered after any escrow status transition to evict stale cache entries. */
+async function onEscrowStatusChange(id) {
+  try {
+    await invalidateEscrowCache(id);
+    logCacheMetrics();
+  } catch (err) {
+    console.error('[Cache] invalidateEscrowCache failed:', err.message);
+  }
+}
+
+// ── Read handlers (cached at route level) ─────────────────────────────────────
+
 const listEscrows = async (req, res) => {
   try {
     const { page, limit, skip } = parsePagination(req.query);
@@ -47,7 +81,10 @@ const listEscrows = async (req, res) => {
     const where = {};
 
     if (status) {
-      const statuses = status.split(',').map((s) => s.trim()).filter(Boolean);
+      const statuses = status
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
       where.status = statuses.length === 1 ? statuses[0] : { in: statuses };
     }
     if (client) where.clientAddress = client;
@@ -87,6 +124,7 @@ const listEscrows = async (req, res) => {
 
     res.json(buildPaginatedResponse(data, { total, page, limit }));
   } catch (err) {
+    logControllerError('escrow.listEscrows', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -101,15 +139,26 @@ const getEscrow = async (req, res) => {
         milestones: {
           orderBy: { milestoneIndex: 'asc' },
           select: {
-            id: true, milestoneIndex: true, title: true,
-            amount: true, status: true, submittedAt: true, resolvedAt: true,
+            id: true,
+            milestoneIndex: true,
+            title: true,
+            amount: true,
+            status: true,
+            submittedAt: true,
+            resolvedAt: true,
           },
         },
         dispute: {
           select: {
-            id: true, escrowId: true, raisedByAddress: true, raisedAt: true,
-            resolvedAt: true, clientAmount: true, freelancerAmount: true,
-            resolvedBy: true, resolution: true,
+            id: true,
+            escrowId: true,
+            raisedByAddress: true,
+            raisedAt: true,
+            resolvedAt: true,
+            clientAmount: true,
+            freelancerAmount: true,
+            resolvedBy: true,
+            resolution: true,
           },
         },
       },
@@ -121,6 +170,7 @@ const getEscrow = async (req, res) => {
     if (err.message?.includes('Cannot convert')) {
       return res.status(400).json({ error: 'Invalid escrow id' });
     }
+    logControllerError('escrow.getEscrow', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -133,6 +183,7 @@ const broadcastCreateEscrow = async (req, res) => {
     }
     res.status(501).json({ error: 'Not implemented - see Issue #20' });
   } catch (err) {
+    logControllerError('escrow.broadcastCreateEscrow', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -149,8 +200,13 @@ const getMilestones = async (req, res) => {
         take: limit,
         orderBy: { milestoneIndex: 'asc' },
         select: {
-          id: true, milestoneIndex: true, title: true,
-          amount: true, status: true, submittedAt: true, resolvedAt: true,
+          id: true,
+          milestoneIndex: true,
+          title: true,
+          amount: true,
+          status: true,
+          submittedAt: true,
+          resolvedAt: true,
         },
       }),
       prisma.milestone.count({ where: { escrowId } }),
@@ -161,6 +217,7 @@ const getMilestones = async (req, res) => {
     if (err.message?.includes('Cannot convert')) {
       return res.status(400).json({ error: 'Invalid escrow id' });
     }
+    logControllerError('escrow.getMilestones', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -173,19 +230,33 @@ const getMilestone = async (req, res) => {
     const milestone = await prisma.milestone.findUnique({
       where: { escrowId_milestoneIndex: { escrowId, milestoneIndex } },
       select: {
-        id: true, milestoneIndex: true, escrowId: true, title: true,
-        amount: true, status: true, submittedAt: true, resolvedAt: true,
+        id: true,
+        milestoneIndex: true,
+        escrowId: true,
+        title: true,
+        amount: true,
+        status: true,
+        submittedAt: true,
+        resolvedAt: true,
       },
     });
 
     if (!milestone) return res.status(404).json({ error: 'Milestone not found' });
     res.json(milestone);
   } catch (err) {
+    logControllerError('escrow.getMilestone', err, req);
     res.status(500).json({ error: err.message });
   }
 };
 
-export default { listEscrows, getEscrow, broadcastCreateEscrow, getMilestones, getMilestone };
+export default {
+  listEscrows,
+  getEscrow,
+  broadcastCreateEscrow,
+  getMilestones,
+  getMilestone,
+  onEscrowStatusChange,
+};
 
 // ── Validation rule sets (used by escrowRoutes) ───────────────────────────────
 export const validateBroadcast = [signedXdrBody, handleValidationErrors];
