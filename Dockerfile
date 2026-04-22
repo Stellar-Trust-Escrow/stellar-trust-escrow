@@ -2,6 +2,7 @@
 FROM node:20-alpine AS base
 WORKDIR /app
 ENV CI=true
+ENV HUSKY=0
 COPY package*.json ./
 COPY backend/package*.json ./backend/
 COPY frontend/package*.json ./frontend/
