@@ -146,102 +146,35 @@ struct ApproveMilestoneArgs {
 #[contracttype]
 #[derive(Clone, Debug)]
 pub(crate) struct EscrowMeta {
-    /// Unique identifier for this escrow, auto-incremented from `DataKey::EscrowCounter`.
     pub(crate) escrow_id: u64,
-
-    /// Address of the client who created and funded the escrow.
-    /// Only the client may add milestones, approve/reject submissions, and cancel.
     pub(crate) client: Address,
-
-    /// Address of the freelancer who will deliver the work and receive milestone payments.
     pub(crate) freelancer: Address,
-
-    /// Stellar Asset Contract (SAC) address of the token used for all payments.
-    /// Typically USDC or XLM wrapped in a SAC. Set at creation and never changed.
     pub(crate) token: Address,
-
-    /// Total token amount locked at escrow creation (in stroops / base units).
-    /// Invariant: `total_amount == sum of all milestone amounts` once fully allocated.
     pub(crate) total_amount: i128,
-
-    /// Running sum of all milestone amounts added via `add_milestone` (in stroops).
-    /// Used as an allocation guard: `allocated_amount + new_amount <= total_amount`.
-    /// Distinct from `remaining_balance`: this tracks what has been *committed* to
-    /// milestones, not what is still held by the contract.
+    /// Running sum of milestone amounts added so far (allocation guard).
     pub(crate) allocated_amount: i128,
-
-    /// Token amount still held by the contract and not yet released to the freelancer
-    /// (in stroops). Decremented by `approve_milestone` and `release_funds`.
-    /// Invariant: `remaining_balance <= total_amount`.
     pub(crate) remaining_balance: i128,
-
-    /// Current lifecycle state of the escrow (`Active`, `Completed`, `Disputed`,
-    /// `Cancelled`, or `CancellationPending`).
     pub(crate) status: EscrowStatus,
-
-    /// Total number of milestones added via `add_milestone`. Used to iterate
-    /// milestone storage entries and to detect completion (`approved_count == milestone_count`).
     pub(crate) milestone_count: u32,
-
-    /// Number of milestones currently in `Approved` state.
-    /// Incremented by `approve_milestone`; enables O(1) completion check
-    /// (`approved_count == milestone_count`) without scanning all milestones.
+    /// Number of milestones in Approved state — avoids full scan on completion check.
     pub(crate) approved_count: u32,
-
-    /// Number of milestones whose funds have been fully released to the freelancer.
-    /// Incremented by `release_funds`. May differ from `approved_count` if
-    /// `approve_milestone` and `release_funds` are called separately.
     pub(crate) released_count: u32,
-
-    /// Optional address of a trusted arbiter for dispute resolution.
-    /// If `None`, the contract admin acts as the fallback resolver.
-    /// Set at creation and immutable thereafter.
     /// Number of milestones in Submitted state — avoids O(n) scan in cancel_escrow.
     pub(crate) submitted_count: u32,
     pub(crate) arbiter: Option<Address>,
-
-    /// Addresses authorised to co-approve milestone releases (multi-sig buyers).
-    /// Requires `REQUIRED_BUYER_APPROVALS` out of `MAX_BUYER_SIGNERS` signatures.
-    /// Empty vec means single-signer (client only) approval.
     pub(crate) buyer_signers: soroban_sdk::Vec<Address>,
-
-    /// Ledger timestamp (Unix seconds) when the escrow was created.
     pub(crate) created_at: u64,
-
-    /// Optional ledger timestamp (Unix seconds) after which the escrow may be
-    /// auto-cancelled. `None` means no deadline. Enforcement is caller-triggered.
     pub(crate) deadline: Option<u64>,
-
-    /// Optional Unix timestamp before which funds cannot be released.
-    /// When set, `approve_milestone` and `release_funds` revert with
-    /// `LockTimeNotExpired` until `now >= lock_time`.
-    /// Useful for vesting schedules and deferred payment agreements.
+    /// Optional lock time (ledger timestamp) - funds locked until this time.
     pub(crate) lock_time: Option<u64>,
-
-    /// Optional Unix timestamp extending the original `lock_time`.
-    /// Set by the client to push the lock expiry further into the future.
-    /// Must be strictly greater than the current `lock_time`.
+    /// Optional extension deadline for the lock time.
     pub(crate) lock_time_extension: Option<u64>,
-
-    /// Optional buyer-remorse timelock. Prevents fund release until
-    /// `timelock.start_ledger + timelock.duration_ledger` has elapsed.
-    /// Uses ledger sequence numbers, not Unix timestamps.
-    pub(crate) timelock: Option<types::Timelock>,
-
-    /// IPFS content hash of the full project brief / agreement document.
     /// Optional timelock controls release window after approval.
     pub(crate) timelock: OptionalTimelock,
     pub(crate) brief_hash: BytesN<32>,
-
-    /// Prepaid storage rent reserve held by the contract in the escrow token
-    /// (in stroops). Decremented by `collect_rent_due` each period.
-    /// When this reaches zero the escrow is eligible for expiry via `expire_escrow`.
-    /// Relationship: `rent_balance >= active_entries × RENT_PER_ENTRY_PER_PERIOD × remaining_periods`.
+    /// Prepaid storage rent reserve held by the contract in the escrow token.
     pub(crate) rent_balance: i128,
-
-    /// Ledger timestamp of the last successful rent collection checkpoint.
-    /// `collect_rent_due` advances this by `covered_periods × RENT_PERIOD_SECONDS`
-    /// after each collection. Used to calculate elapsed periods since last payment.
+    /// Timestamp of the last successful rent collection checkpoint.
     pub(crate) last_rent_collection_at: u64,
 }
 
