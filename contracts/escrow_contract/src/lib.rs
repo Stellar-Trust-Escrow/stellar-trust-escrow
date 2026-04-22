@@ -1824,11 +1824,7 @@ impl EscrowContract {
         let entries = ContractStorage::active_storage_entries(&env, &meta);
         let min_reserve = ContractStorage::reserve_for_entries(entries);
 
-        let overpayment = meta
-            .rent_balance
-            .checked_sub(min_reserve)
-            .unwrap_or(0)
-            .max(0);
+        let overpayment = meta.rent_balance.checked_sub(min_reserve).unwrap_or(0).max(0);
 
         if amount <= 0 || amount > overpayment {
             return Err(EscrowError::InvalidEscrowAmount);
@@ -4215,8 +4211,7 @@ mod tests {
         // min_reserve  = reserve_for_entries(1) = 30
         // overpayment  = 30
         // Requesting 31 must fail.
-        let result =
-            client.try_withdraw_rent_overpayment(&escrow_client, &escrow_id, &31_i128);
+        let result = client.try_withdraw_rent_overpayment(&escrow_client, &escrow_id, &31_i128);
         assert!(matches!(
             result,
             Err(Ok(EscrowError::InvalidEscrowAmount))
@@ -4254,8 +4249,7 @@ mod tests {
             setup_funded_escrow(&env, &admin, &client, 100_i128);
 
         let long: String = String::from_str(&env, &"b".repeat(257));
-        let result =
-            client.try_request_cancellation(&escrow_client, &escrow_id, &long);
+        let result = client.try_request_cancellation(&escrow_client, &escrow_id, &long);
         assert!(matches!(result, Err(Ok(EscrowError::StringTooLong))));
     }
 }

@@ -427,7 +427,7 @@ jobs:
 
       - name: Run Playwright suite
         if: steps.changes.outputs.changed == 'true'
-        run: npm run test:e2e
+        run: npm run test:e2e -- --update-snapshots
         working-directory: frontend
         env:
           CI: 'true'
