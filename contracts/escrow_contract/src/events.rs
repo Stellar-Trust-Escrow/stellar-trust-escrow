@@ -374,8 +374,7 @@ pub fn emit_slash_dispute_resolved(env: &Env, escrow_id: u64, upheld: bool, amou
 
 /// Emitted when the admin updates the configurable milestone cap.
 pub fn emit_max_milestones_set(env: &Env, new_max: u32) {
-    env.events()
-        .publish((symbol_short!("max_mil"),), new_max);
+    env.events().publish((symbol_short!("max_mil"),), new_max);
 }
 
 /// Emitted when a milestone is rejected with an IPFS reason hash.

@@ -1736,11 +1736,7 @@ impl EscrowContract {
     /// Sets the configurable milestone cap stored in instance storage.
     ///
     /// Requires admin authorization. `new_max` must be in [1, 100].
-    pub fn set_max_milestones(
-        env: Env,
-        caller: Address,
-        new_max: u32,
-    ) -> Result<(), EscrowError> {
+    pub fn set_max_milestones(env: Env, caller: Address, new_max: u32) -> Result<(), EscrowError> {
         caller.require_auth();
         ContractStorage::require_admin(&env, &caller)?;
 
@@ -1824,7 +1820,11 @@ impl EscrowContract {
         let entries = ContractStorage::active_storage_entries(&env, &meta);
         let min_reserve = ContractStorage::reserve_for_entries(entries);
 
-        let overpayment = meta.rent_balance.checked_sub(min_reserve).unwrap_or(0).max(0);
+        let overpayment = meta
+            .rent_balance
+            .checked_sub(min_reserve)
+            .unwrap_or(0)
+            .max(0);
 
         if amount <= 0 || amount > overpayment {
             return Err(EscrowError::InvalidEscrowAmount);
@@ -3936,7 +3936,10 @@ mod tests {
         // Mint enough for escrow + initial reserve + rent for 1 milestone entry.
         let initial_reserve = 2 * ContractStorage::reserve_for_entries(1);
         let milestone_rent = ContractStorage::reserve_for_entries(1);
-        token_admin.mint(&escrow_client, &(200_i128 + initial_reserve + milestone_rent));
+        token_admin.mint(
+            &escrow_client,
+            &(200_i128 + initial_reserve + milestone_rent),
+        );
 
         let escrow_id = client.create_escrow(
             &escrow_client,
@@ -4069,7 +4072,10 @@ mod tests {
 
         let initial_reserve = 2 * ContractStorage::reserve_for_entries(1);
         let milestone_rent = ContractStorage::reserve_for_entries(1);
-        token_admin.mint(&escrow_client, &(200_i128 + initial_reserve + milestone_rent));
+        token_admin.mint(
+            &escrow_client,
+            &(200_i128 + initial_reserve + milestone_rent),
+        );
 
         let escrow_id = client.create_escrow(
             &escrow_client,
@@ -4116,7 +4122,10 @@ mod tests {
 
         let initial_reserve = 2 * ContractStorage::reserve_for_entries(1);
         let milestone_rent = ContractStorage::reserve_for_entries(1);
-        token_admin.mint(&escrow_client, &(200_i128 + initial_reserve + milestone_rent));
+        token_admin.mint(
+            &escrow_client,
+            &(200_i128 + initial_reserve + milestone_rent),
+        );
 
         let escrow_id = client.create_escrow(
             &escrow_client,
@@ -4147,10 +4156,7 @@ mod tests {
             &mid,
             &BytesN::from_array(&env, &[0u8; 32]),
         );
-        assert!(matches!(
-            result,
-            Err(Ok(EscrowError::InvalidEscrowAmount))
-        ));
+        assert!(matches!(result, Err(Ok(EscrowError::InvalidEscrowAmount))));
     }
 
     // ── withdraw_rent_overpayment ─────────────────────────────────────────────
@@ -4204,18 +4210,14 @@ mod tests {
         let (env, admin, _, client) = setup();
         client.initialize(&admin);
 
-        let (escrow_client, _, _, escrow_id) =
-            setup_funded_escrow(&env, &admin, &client, 100_i128);
+        let (escrow_client, _, _, escrow_id) = setup_funded_escrow(&env, &admin, &client, 100_i128);
 
         // rent_balance = 2 * reserve_for_entries(1) = 60
         // min_reserve  = reserve_for_entries(1) = 30
         // overpayment  = 30
         // Requesting 31 must fail.
         let result = client.try_withdraw_rent_overpayment(&escrow_client, &escrow_id, &31_i128);
-        assert!(matches!(
-            result,
-            Err(Ok(EscrowError::InvalidEscrowAmount))
-        ));
+        assert!(matches!(result, Err(Ok(EscrowError::InvalidEscrowAmount))));
     }
 
     // ── MAX_STRING_LEN validation ─────────────────────────────────────────────
@@ -4225,8 +4227,7 @@ mod tests {
         let (env, admin, _, client) = setup();
         client.initialize(&admin);
 
-        let (escrow_client, _, _, escrow_id) =
-            setup_funded_escrow(&env, &admin, &client, 200_i128);
+        let (escrow_client, _, _, escrow_id) = setup_funded_escrow(&env, &admin, &client, 200_i128);
 
         // Build a 257-byte string (MAX_STRING_LEN + 1).
         let long: String = String::from_str(&env, &"a".repeat(257));
@@ -4245,8 +4246,7 @@ mod tests {
         let (env, admin, _, client) = setup();
         client.initialize(&admin);
 
-        let (escrow_client, _, _, escrow_id) =
-            setup_funded_escrow(&env, &admin, &client, 100_i128);
+        let (escrow_client, _, _, escrow_id) = setup_funded_escrow(&env, &admin, &client, 100_i128);
 
         let long: String = String::from_str(&env, &"b".repeat(257));
         let result = client.try_request_cancellation(&escrow_client, &escrow_id, &long);
