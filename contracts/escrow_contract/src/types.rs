@@ -173,6 +173,9 @@ pub struct Milestone {
 
     /// Buyer approvals for this milestone (signer + timestamp).
     pub approvals: soroban_sdk::Vec<ApprovalRecord>,
+
+    /// IPFS hash of the rejection rationale document, set by reject_milestone_with_reason.
+    pub rejection_reason: Option<BytesN<32>>,
 }
 
 /// Configuration for a recurring/subscription escrow.
@@ -451,4 +454,6 @@ pub enum DataKey {
     FallbackOracleAddress,
     /// Wormhole token bridge contract address — value: Address
     WormholeBridge,
+    /// Configurable milestone cap set by admin — value: u32
+    MaxMilestones,
 }

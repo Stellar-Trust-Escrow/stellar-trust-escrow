@@ -9,7 +9,7 @@
 
 #![allow(dead_code)]
 
-use soroban_sdk::{symbol_short, Address, Env};
+use soroban_sdk::{symbol_short, Address, BytesN, Env};
 
 /// Emitted when a new escrow is created and funds are locked.
 ///
@@ -370,4 +370,32 @@ pub fn emit_slash_disputed(env: &Env, escrow_id: u64, disputer: &Address, amount
 pub fn emit_slash_dispute_resolved(env: &Env, escrow_id: u64, upheld: bool, amount: i128) {
     env.events()
         .publish((symbol_short!("slsh_res"), escrow_id), (upheld, amount));
+}
+
+/// Emitted when the admin updates the configurable milestone cap.
+pub fn emit_max_milestones_set(env: &Env, new_max: u32) {
+    env.events()
+        .publish((symbol_short!("max_mil"),), new_max);
+}
+
+/// Emitted when a milestone is rejected with an IPFS reason hash.
+pub fn emit_milestone_rejected_with_reason(
+    env: &Env,
+    escrow_id: u64,
+    milestone_id: u32,
+    client: &Address,
+    reason_hash: &BytesN<32>,
+) {
+    env.events().publish(
+        (symbol_short!("mil_rejr"), escrow_id),
+        (milestone_id, client.clone(), reason_hash.clone()),
+    );
+}
+
+/// Emitted when a client withdraws excess rent from an escrow.
+pub fn emit_rent_withdrawn(env: &Env, escrow_id: u64, client: &Address, amount: i128) {
+    env.events().publish(
+        (symbol_short!("rent_wd"), escrow_id),
+        (client.clone(), amount),
+    );
 }

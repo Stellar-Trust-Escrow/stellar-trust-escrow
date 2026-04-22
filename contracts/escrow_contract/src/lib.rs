@@ -89,6 +89,9 @@ const RENT_PERIOD_SECONDS: u64 = 86_400;
 const RENT_RESERVE_PERIODS: u64 = 30;
 const RENT_PER_ENTRY_PER_PERIOD: i128 = 1;
 pub const MAX_MILESTONES: u32 = 20;
+/// Maximum byte length for on-chain soroban_sdk::String arguments (title, reason).
+/// Prevents gas/rent attacks via arbitrarily large string storage.
+pub const MAX_STRING_LEN: u32 = 256;
 
 // ── Granular storage keys ─────────────────────────────────────────────────────
 // Separate keys for meta vs each milestone avoids deserialising the full
@@ -1102,6 +1105,10 @@ impl EscrowContract {
             return Err(EscrowError::InvalidMilestoneAmount);
         }
 
+        if title.len() > MAX_STRING_LEN {
+            return Err(EscrowError::StringTooLong);
+        }
+
         let mut meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
 
         if caller != meta.client {
@@ -1120,8 +1127,13 @@ impl EscrowContract {
         }
 
         let milestone_id = meta.milestone_count;
-        // Enforce fixed-capacity limit — prevents unbounded storage growth.
-        if milestone_id >= MAX_MILESTONES {
+        // Enforce configurable capacity limit — falls back to compile-time MAX_MILESTONES.
+        let effective_max: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::MaxMilestones)
+            .unwrap_or(MAX_MILESTONES);
+        if milestone_id >= effective_max {
             return Err(EscrowError::TooManyMilestones);
         }
         meta.milestone_count = meta
@@ -1143,6 +1155,7 @@ impl EscrowContract {
                 submitted_at: None,
                 resolved_at: None,
                 approvals: soroban_sdk::Vec::new(&env),
+                rejection_reason: None,
             },
         );
         ContractStorage::save_escrow_meta(&env, &meta);
@@ -1189,7 +1202,12 @@ impl EscrowContract {
         }
 
         // Capacity check upfront — fail fast before any writes.
-        if meta.milestone_count.saturating_add(n) > MAX_MILESTONES {
+        let effective_max: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::MaxMilestones)
+            .unwrap_or(MAX_MILESTONES);
+        if meta.milestone_count.saturating_add(n) > effective_max {
             return Err(EscrowError::TooManyMilestones);
         }
 
@@ -1201,6 +1219,14 @@ impl EscrowContract {
             let amt = amounts.get(i).ok_or(EscrowError::InvalidMilestoneAmount)?;
             if amt <= 0 {
                 return Err(EscrowError::InvalidMilestoneAmount);
+            }
+            if titles
+                .get(i)
+                .ok_or(EscrowError::InvalidMilestoneAmount)?
+                .len()
+                > MAX_STRING_LEN
+            {
+                return Err(EscrowError::StringTooLong);
             }
             total_new = total_new
                 .checked_add(amt)
@@ -1235,6 +1261,7 @@ impl EscrowContract {
                     submitted_at: None,
                     resolved_at: None,
                     approvals: soroban_sdk::Vec::new(&env),
+                    rejection_reason: None,
                 },
             );
             events::emit_milestone_added(
@@ -1491,6 +1518,7 @@ impl EscrowContract {
                     submitted_at: Some(recurring.next_payment_at),
                     resolved_at: Some(now),
                     approvals: soroban_sdk::Vec::new(&env),
+                    rejection_reason: None,
                 },
             );
 
@@ -1702,6 +1730,123 @@ impl EscrowContract {
         ContractStorage::save_escrow_meta(&env, &meta);
 
         events::emit_milestone_rejected(&env, escrow_id, milestone_id, &caller);
+        Ok(())
+    }
+
+    /// Sets the configurable milestone cap stored in instance storage.
+    ///
+    /// Requires admin authorization. `new_max` must be in [1, 100].
+    pub fn set_max_milestones(
+        env: Env,
+        caller: Address,
+        new_max: u32,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_admin(&env, &caller)?;
+
+        if new_max < 1 || new_max > 100 {
+            return Err(EscrowError::InvalidMilestoneAmount);
+        }
+
+        env.storage()
+            .instance()
+            .set(&DataKey::MaxMilestones, &new_max);
+        ContractStorage::bump_instance_ttl(&env);
+
+        events::emit_max_milestones_set(&env, new_max);
+        Ok(())
+    }
+
+    /// Rejects a submitted milestone and stores an IPFS reason hash on-chain.
+    ///
+    /// `reason_hash` must be non-zero (a real IPFS CID).
+    pub fn reject_milestone_with_reason(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+        milestone_id: u32,
+        reason_hash: BytesN<32>,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_not_paused(&env)?;
+
+        if reason_hash == BytesN::from_array(&env, &[0u8; 32]) {
+            return Err(EscrowError::InvalidEscrowAmount);
+        }
+
+        let mut meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
+        if caller != meta.client {
+            return Err(EscrowError::ClientOnly);
+        }
+        if meta.status != EscrowStatus::Active {
+            return Err(EscrowError::EscrowNotActive);
+        }
+
+        let mut milestone = ContractStorage::load_milestone(&env, escrow_id, milestone_id)?;
+        if milestone.status != MS_SUBMITTED {
+            return Err(EscrowError::InvalidMilestoneState);
+        }
+
+        milestone.status = MS_REJECTED;
+        milestone.resolved_at = Some(env.ledger().timestamp());
+        milestone.rejection_reason = Some(reason_hash.clone());
+        ContractStorage::save_milestone(&env, escrow_id, &milestone);
+
+        meta.submitted_count = meta.submitted_count.saturating_sub(1);
+        ContractStorage::save_escrow_meta(&env, &meta);
+
+        events::emit_milestone_rejected_with_reason(
+            &env,
+            escrow_id,
+            milestone_id,
+            &caller,
+            &reason_hash,
+        );
+        Ok(())
+    }
+
+    /// Allows the client to withdraw excess rent above the minimum required reserve.
+    pub fn withdraw_rent_overpayment(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+        amount: i128,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_initialized(&env)?;
+        ContractStorage::require_not_paused(&env)?;
+
+        let mut meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
+        if caller != meta.client {
+            return Err(EscrowError::ClientOnly);
+        }
+
+        let entries = ContractStorage::active_storage_entries(&env, &meta);
+        let min_reserve = ContractStorage::reserve_for_entries(entries);
+
+        let overpayment = meta
+            .rent_balance
+            .checked_sub(min_reserve)
+            .unwrap_or(0)
+            .max(0);
+
+        if amount <= 0 || amount > overpayment {
+            return Err(EscrowError::InvalidEscrowAmount);
+        }
+
+        meta.rent_balance = meta
+            .rent_balance
+            .checked_sub(amount)
+            .ok_or(EscrowError::AmountMismatch)?;
+        ContractStorage::save_escrow_meta(&env, &meta);
+
+        token::Client::new(&env, &meta.token).transfer(
+            &env.current_contract_address(),
+            &caller,
+            &amount,
+        );
+
+        events::emit_rent_withdrawn(&env, escrow_id, &caller, amount);
         Ok(())
     }
 
@@ -2280,6 +2425,10 @@ impl EscrowContract {
         // Only client or freelancer can request cancellation
         if caller != meta.client && caller != meta.freelancer {
             return Err(EscrowError::Unauthorized);
+        }
+
+        if reason.len() > MAX_STRING_LEN {
+            return Err(EscrowError::StringTooLong);
         }
 
         // Check if escrow is in a cancellable state
@@ -3773,5 +3922,340 @@ mod tests {
             &50_i128,
         );
         assert_eq!(mid, 0);
+    }
+
+    // ── set_max_milestones ────────────────────────────────────────────────────
+
+    #[test]
+    fn test_set_max_milestones_enforces_new_limit() {
+        let (env, admin, _, client) = setup();
+        client.initialize(&admin);
+
+        let escrow_client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_id = token_contract.address();
+        let token_admin = token::StellarAssetClient::new(&env, &token_id);
+
+        // Mint enough for escrow + initial reserve + rent for 1 milestone entry.
+        let initial_reserve = 2 * ContractStorage::reserve_for_entries(1);
+        let milestone_rent = ContractStorage::reserve_for_entries(1);
+        token_admin.mint(&escrow_client, &(200_i128 + initial_reserve + milestone_rent));
+
+        let escrow_id = client.create_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &200_i128,
+            &BytesN::from_array(&env, &[99; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
+
+        // Lower the cap to 1.
+        client.set_max_milestones(&admin, &1_u32);
+
+        // First milestone succeeds.
+        client.add_milestone(
+            &escrow_client,
+            &escrow_id,
+            &String::from_str(&env, "M1"),
+            &BytesN::from_array(&env, &[1u8; 32]),
+            &100_i128,
+        );
+
+        // Second milestone must be rejected.
+        let result = client.try_add_milestone(
+            &escrow_client,
+            &escrow_id,
+            &String::from_str(&env, "M2"),
+            &BytesN::from_array(&env, &[2u8; 32]),
+            &100_i128,
+        );
+        assert!(matches!(result, Err(Ok(EscrowError::TooManyMilestones))));
+    }
+
+    #[test]
+    fn test_set_max_milestones_default_used_before_set() {
+        let (env, admin, _, client) = setup();
+        client.initialize(&admin);
+
+        let escrow_client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_id = token_contract.address();
+        let token_admin = token::StellarAssetClient::new(&env, &token_id);
+
+        // Mint enough for escrow + initial reserve + rent for MAX_MILESTONES entries.
+        let initial_reserve = 2 * ContractStorage::reserve_for_entries(1);
+        let milestone_rent = i128::from(MAX_MILESTONES) * ContractStorage::reserve_for_entries(1);
+        token_admin.mint(
+            &escrow_client,
+            &(i128::from(MAX_MILESTONES) + initial_reserve + milestone_rent),
+        );
+
+        let escrow_id = client.create_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &i128::from(MAX_MILESTONES),
+            &BytesN::from_array(&env, &[99; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
+
+        // Without calling set_max_milestones, MAX_MILESTONES (20) should apply.
+        for i in 0..MAX_MILESTONES {
+            client.add_milestone(
+                &escrow_client,
+                &escrow_id,
+                &String::from_str(&env, "M"),
+                &BytesN::from_array(&env, &[i as u8; 32]),
+                &1_i128,
+            );
+        }
+
+        let result = client.try_add_milestone(
+            &escrow_client,
+            &escrow_id,
+            &String::from_str(&env, "overflow"),
+            &BytesN::from_array(&env, &[99u8; 32]),
+            &1_i128,
+        );
+        assert!(matches!(result, Err(Ok(EscrowError::TooManyMilestones))));
+    }
+
+    #[test]
+    fn test_set_max_milestones_rejects_zero_and_over_100() {
+        let (env, admin, _, client) = setup();
+        client.initialize(&admin);
+
+        assert!(matches!(
+            client.try_set_max_milestones(&admin, &0_u32),
+            Err(Ok(EscrowError::InvalidMilestoneAmount))
+        ));
+        assert!(matches!(
+            client.try_set_max_milestones(&admin, &101_u32),
+            Err(Ok(EscrowError::InvalidMilestoneAmount))
+        ));
+    }
+
+    #[test]
+    fn test_set_max_milestones_requires_admin() {
+        let (env, admin, _, client) = setup();
+        client.initialize(&admin);
+
+        let non_admin = Address::generate(&env);
+        assert!(matches!(
+            client.try_set_max_milestones(&non_admin, &5_u32),
+            Err(Ok(EscrowError::AdminOnly))
+        ));
+    }
+
+    // ── reject_milestone_with_reason ─────────────────────────────────────────
+
+    #[test]
+    fn test_reject_milestone_with_reason_stores_hash() {
+        let (env, admin, _, client) = setup();
+        client.initialize(&admin);
+
+        let escrow_client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_id = token_contract.address();
+        let token_admin = token::StellarAssetClient::new(&env, &token_id);
+
+        let initial_reserve = 2 * ContractStorage::reserve_for_entries(1);
+        let milestone_rent = ContractStorage::reserve_for_entries(1);
+        token_admin.mint(&escrow_client, &(200_i128 + initial_reserve + milestone_rent));
+
+        let escrow_id = client.create_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &200_i128,
+            &BytesN::from_array(&env, &[99; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
+
+        let mid = client.add_milestone(
+            &escrow_client,
+            &escrow_id,
+            &String::from_str(&env, "M1"),
+            &BytesN::from_array(&env, &[1u8; 32]),
+            &100_i128,
+        );
+
+        client.submit_milestone(&freelancer, &escrow_id, &mid);
+
+        let reason = BytesN::from_array(&env, &[42u8; 32]);
+        client.reject_milestone_with_reason(&escrow_client, &escrow_id, &mid, &reason);
+
+        let state = client.get_escrow(&escrow_id);
+        let milestone = state.milestones.get(0).unwrap();
+        assert_eq!(milestone.status, MS_REJECTED);
+        assert_eq!(milestone.rejection_reason, Some(reason));
+    }
+
+    #[test]
+    fn test_reject_milestone_with_reason_rejects_zero_hash() {
+        let (env, admin, _, client) = setup();
+        client.initialize(&admin);
+
+        let escrow_client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_id = token_contract.address();
+        let token_admin = token::StellarAssetClient::new(&env, &token_id);
+
+        let initial_reserve = 2 * ContractStorage::reserve_for_entries(1);
+        let milestone_rent = ContractStorage::reserve_for_entries(1);
+        token_admin.mint(&escrow_client, &(200_i128 + initial_reserve + milestone_rent));
+
+        let escrow_id = client.create_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &200_i128,
+            &BytesN::from_array(&env, &[99; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
+
+        let mid = client.add_milestone(
+            &escrow_client,
+            &escrow_id,
+            &String::from_str(&env, "M1"),
+            &BytesN::from_array(&env, &[1u8; 32]),
+            &100_i128,
+        );
+
+        client.submit_milestone(&freelancer, &escrow_id, &mid);
+
+        let result = client.try_reject_milestone_with_reason(
+            &escrow_client,
+            &escrow_id,
+            &mid,
+            &BytesN::from_array(&env, &[0u8; 32]),
+        );
+        assert!(matches!(
+            result,
+            Err(Ok(EscrowError::InvalidEscrowAmount))
+        ));
+    }
+
+    // ── withdraw_rent_overpayment ─────────────────────────────────────────────
+
+    #[test]
+    fn test_withdraw_rent_overpayment_transfers_excess() {
+        let (env, admin, _, client) = setup();
+        client.initialize(&admin);
+
+        let escrow_client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_id = token_contract.address();
+        let token_admin = token::StellarAssetClient::new(&env, &token_id);
+        let token_client = token::Client::new(&env, &token_id);
+
+        // Mint enough for escrow + initial reserve + extra top-up
+        let initial_reserve = 2 * ContractStorage::reserve_for_entries(1);
+        let extra = 50_i128;
+        token_admin.mint(&escrow_client, &(100_i128 + initial_reserve + extra));
+
+        let escrow_id = client.create_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &100_i128,
+            &BytesN::from_array(&env, &[99; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
+
+        // Top up rent by extra periods so there is an overpayment.
+        client.top_up_rent(&escrow_client, &escrow_id, &50_u64);
+
+        let balance_before = token_client.balance(&escrow_client);
+
+        // Withdraw a portion of the overpayment.
+        client.withdraw_rent_overpayment(&escrow_client, &escrow_id, &10_i128);
+
+        assert_eq!(
+            token_client.balance(&escrow_client),
+            balance_before + 10_i128
+        );
+    }
+
+    #[test]
+    fn test_withdraw_rent_overpayment_cannot_exceed_overpayment() {
+        let (env, admin, _, client) = setup();
+        client.initialize(&admin);
+
+        let (escrow_client, _, _, escrow_id) =
+            setup_funded_escrow(&env, &admin, &client, 100_i128);
+
+        // rent_balance = 2 * reserve_for_entries(1) = 60
+        // min_reserve  = reserve_for_entries(1) = 30
+        // overpayment  = 30
+        // Requesting 31 must fail.
+        let result =
+            client.try_withdraw_rent_overpayment(&escrow_client, &escrow_id, &31_i128);
+        assert!(matches!(
+            result,
+            Err(Ok(EscrowError::InvalidEscrowAmount))
+        ));
+    }
+
+    // ── MAX_STRING_LEN validation ─────────────────────────────────────────────
+
+    #[test]
+    fn test_add_milestone_rejects_title_too_long() {
+        let (env, admin, _, client) = setup();
+        client.initialize(&admin);
+
+        let (escrow_client, _, _, escrow_id) =
+            setup_funded_escrow(&env, &admin, &client, 200_i128);
+
+        // Build a 257-byte string (MAX_STRING_LEN + 1).
+        let long: String = String::from_str(&env, &"a".repeat(257));
+        let result = client.try_add_milestone(
+            &escrow_client,
+            &escrow_id,
+            &long,
+            &BytesN::from_array(&env, &[1u8; 32]),
+            &100_i128,
+        );
+        assert!(matches!(result, Err(Ok(EscrowError::StringTooLong))));
+    }
+
+    #[test]
+    fn test_request_cancellation_rejects_reason_too_long() {
+        let (env, admin, _, client) = setup();
+        client.initialize(&admin);
+
+        let (escrow_client, _, _, escrow_id) =
+            setup_funded_escrow(&env, &admin, &client, 100_i128);
+
+        let long: String = String::from_str(&env, &"b".repeat(257));
+        let result =
+            client.try_request_cancellation(&escrow_client, &escrow_id, &long);
+        assert!(matches!(result, Err(Ok(EscrowError::StringTooLong))));
     }
 }
