@@ -11,6 +11,11 @@
 import prisma from '../../lib/prisma.js';
 import { buildPaginatedResponse, parsePagination } from '../../lib/pagination.js';
 import * as reputationSearch from '../../services/reputationSearchService.js';
+import { getLogger } from '../../config/logger.js';
+
+const log = getLogger();
+const logControllerError = (ctx, err, req) =>
+  log.error({ err, ctx, path: req?.path }, 'Controller error');
 
 const STELLAR_ADDRESS_RE = /^G[A-Z2-7]{55}$/;
 
@@ -26,6 +31,7 @@ const getReputation = async (req, res) => {
       disputedEscrows: 0, disputesWon: 0, totalVolume: '0', lastUpdated: null,
     });
   } catch (err) {
+    logControllerError('reputation.getReputation', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -76,6 +82,7 @@ const search = async (req, res) => {
     res.set('X-Data-Source', source);
     res.json({ data: hits, total, limit, from });
   } catch (err) {
+    logControllerError('reputation.getLeaderboard', err, req);
     res.status(500).json({ error: err.message });
   }
 };

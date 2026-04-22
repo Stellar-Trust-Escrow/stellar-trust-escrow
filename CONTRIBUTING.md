@@ -1,162 +1,332 @@
-# 🤝 Contributing to StellarTrustEscrow
+# Contributing to StellarTrustEscrow
 
-Thank you for your interest! This project is designed to be contributor-friendly at all levels — from fixing typos to implementing full contract features.
+This guide is the fastest path from clone to first PR. It covers local setup, testing, linting, the review process, and how to find newcomer-friendly issues.
 
----
+## Table of Contents
 
-## 📋 Table of Contents
-
-- [Finding an Issue](#finding-an-issue)
-- [Development Setup](#development-setup)
-- [Workflow](#workflow)
-- [Code Style](#code-style)
-- [Commit Messages](#commit-messages)
+- [Prerequisites](#prerequisites)
+- [15-Minute Quickstart](#15-minute-quickstart)
+- [Development Workflow](#development-workflow)
+- [Testing All Layers](#testing-all-layers)
+- [Code Style and Linting](#code-style-and-linting)
 - [Pull Request Process](#pull-request-process)
-- [Issue Labels](#issue-labels)
+- [Finding a First Issue](#finding-a-first-issue)
+- [OS Notes](#os-notes)
+- [Troubleshooting](#troubleshooting)
 
----
+## Prerequisites
 
-## Finding an Issue
+Install these before you start:
 
-Browse by difficulty:
+| Tool | Version | Why it is needed |
+| --- | --- | --- |
+| Node.js | 20 LTS recommended, 18+ supported | Frontend, backend, linting, and Jest/Playwright tests |
+| npm | Bundled with Node.js | Workspace installs and scripts |
+| Rust | 1.74+ | Soroban smart contracts |
+| `wasm32-unknown-unknown` target | Latest | Contract builds |
+| Visual Studio Build Tools (Windows only) | Current | Required for native Rust linking on Windows |
+| Soroban CLI | 21+ | Local contract workflows |
+| Docker Desktop or Docker Engine | Latest | Fast local Postgres and full-stack smoke tests |
+| PostgreSQL | 14+ if not using Docker | Backend development and Prisma migrations |
+| Git | Latest | Branching and pull requests |
+| Playwright browsers | Current | Frontend end-to-end tests |
 
-| Label              | Description                                 | Time Estimate |
-| ------------------ | ------------------------------------------- | ------------- |
-| `good-first-issue` | No prior blockchain knowledge needed        | 1–3 hours     |
-| `easy`             | Small, well-defined tasks                   | 2–5 hours     |
-| `medium`           | Feature work, requires reading the codebase | 1–2 days      |
-| `hard`             | Complex features, architecture decisions    | 2–5 days      |
-| `smart-contract`   | Soroban / Rust work                         | Varies        |
-| `backend`          | Node.js / Express / DB work                 | Varies        |
-| `frontend`         | Next.js / React / Tailwind                  | Varies        |
-| `documentation`    | Docs, comments, guides                      | 1–3 hours     |
-| `testing`          | Write or improve tests                      | 2–4 hours     |
-| `security`         | Security review / hardening                 | Varies        |
-
-**New to the project?** Start with [`good-first-issue`](../../issues?q=label%3Agood-first-issue) or [`documentation`](../../issues?q=label%3Adocumentation).
-
-**Before starting:** Comment on the issue to claim it and avoid duplicate work.
-
----
-
-## Development Setup
-
-### Requirements
-
-- Node.js >= 18
-- Rust >= 1.74 + `wasm32-unknown-unknown` target
-- Soroban CLI >= 21.0.0
-- PostgreSQL >= 14
-
-### Setup
+Recommended install commands:
 
 ```bash
-git clone https://github.com/your-org/stellar-trust-escrow
-cd stellar-trust-escrow
-
-# Backend
-cd backend && npm install && cp .env.example .env
-# Edit .env with your local database URL
-
-# Frontend
-cd ../frontend && npm install && cp .env.example .env.local
-
-# Smart contract
-cd ../contracts/escrow_contract
+rustup toolchain install stable
 rustup target add wasm32-unknown-unknown
-cargo build
+cargo install --locked --force soroban-cli
 ```
 
----
+## 15-Minute Quickstart
 
-## Workflow
+This path assumes Node, Rust, Docker, and Git are already installed.
+
+### 1. Fork and clone
 
 ```bash
-# 1. Fork the repo on GitHub, then clone your fork
-git clone https://github.com/YOUR_USERNAME/stellar-trust-escrow
+git clone https://github.com/YOUR_USERNAME/stellar-trust-escrow.git
+cd stellar-trust-escrow
+git remote add upstream https://github.com/barry01-hash/stellar-trust-escrow.git
+```
 
-# 2. Create a branch from main
-git checkout -b feat/escrow-milestone-approval
-# or: fix/reputation-score-bug
-# or: docs/improve-architecture
+### 2. Install workspace dependencies
 
-# 3. Make your changes
+```bash
+npm ci
+```
 
-# 4. Test your changes
-cd contracts/escrow_contract && cargo test
-cd backend && npm test
-cd frontend && npm test
+### 3. Start Postgres
 
-# 5. Commit (see commit style below)
+Use Docker for the database even if you run the app locally:
+
+```bash
+docker compose up -d postgres
+```
+
+### 4. Configure local environment files
+
+```bash
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env.local
+```
+
+PowerShell equivalent:
+
+```powershell
+Copy-Item backend/.env.example backend/.env
+Copy-Item frontend/.env.example frontend/.env.local
+```
+
+Update these values in `backend/.env` for local development:
+
+```env
+DATABASE_URL=postgresql://user:password@localhost:5432/stellar_escrow
+DIRECT_URL=postgresql://user:password@localhost:5432/stellar_escrow
+ALLOWED_ORIGINS=http://localhost:3000
+FRONTEND_URL=http://localhost:3000
+```
+
+`frontend/.env.local` usually only needs:
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:4000
+```
+
+### 5. Prepare the database
+
+```bash
+npm run db:generate -w backend
+npm run db:migrate -w backend
+```
+
+### 6. Start backend and frontend
+
+Run these in separate terminals:
+
+```bash
+npm run dev -w backend
+```
+
+```bash
+npm run dev -w frontend
+```
+
+Open `http://localhost:3000`.
+
+### 7. Optional: build the contracts locally
+
+```bash
+cargo build -p escrow_contract --target wasm32-unknown-unknown
+cargo build -p insurance_contract --target wasm32-unknown-unknown
+```
+
+## Development Workflow
+
+### Branch naming
+
+Use a short descriptive branch name:
+
+- `docs/contributor-onboarding`
+- `feature/add-wallet-retry`
+- `fix/backend-health-route`
+- `test/improve-escrow-coverage`
+
+### Typical flow
+
+```bash
+git checkout -b docs/contributor-onboarding
+```
+
+Make your change, then run the relevant checks from the sections below.
+
+Commit using Conventional Commits:
+
+```bash
 git add .
-git commit -m "feat(contract): implement approve_milestone logic"
-
-# 6. Push and open a PR
-git push origin feat/escrow-milestone-approval
+git commit -m "docs: create contributor onboarding guide"
 ```
 
----
+Push your branch:
 
-## Code Style
-
-### Rust (Smart Contracts)
-
-- Run `cargo fmt` before committing
-- Run `cargo clippy -- -D warnings` and fix all warnings
-- All public functions must have `///` doc comments
-- Use `#[contracterror]` for all error types — no `panic!` in contract code
-
-### JavaScript / TypeScript (Backend & Frontend)
-
-- ESLint config is provided — run `npm run lint` before committing
-- Prettier is configured — run `npm run format`
-- Use `async/await` over `.then()` chains
-- All API routes must have JSDoc comments
-
-### React (Frontend)
-
-- Functional components only
-- Props should be typed with JSDoc `@param` or TypeScript interfaces
-- Keep components small — extract logic into hooks
-
----
-
-## Commit Messages
-
-Use [Conventional Commits](https://www.conventionalcommits.org/):
-
-```
-feat(contract): implement release_funds logic
-fix(backend): handle null reputation score
-docs(readme): add deployment instructions
-test(api): add escrow controller unit tests
-refactor(frontend): extract wallet hook
-style(contract): run cargo fmt
+```bash
+git push -u origin docs/contributor-onboarding
 ```
 
-Scope options: `contract`, `backend`, `frontend`, `api`, `db`, `docs`, `scripts`
+## Testing All Layers
 
----
+Run the checks that match the layer you touched. If your PR crosses multiple layers, run all of them.
+
+### Smart contracts
+
+```bash
+cargo test --workspace
+```
+
+For deeper contract verification on macOS, Linux, or WSL:
+
+```bash
+bash scripts/test-contract.sh --gas --coverage
+```
+
+### Backend
+
+```bash
+npm run test -w backend
+```
+
+Database-related backend changes should also include:
+
+```bash
+npm run db:migrate:status -w backend
+```
+
+### Frontend
+
+```bash
+npm run test:unit -w frontend
+npm run test:integration -w frontend
+npm run test:a11y -w frontend
+```
+
+Install Playwright browsers once before the first end-to-end run:
+
+```bash
+cd frontend
+npx playwright install --with-deps chromium firefox
+```
+
+Then run:
+
+```bash
+npm run test:e2e -w frontend
+```
+
+### Helpful root shortcuts
+
+```bash
+npm run test
+npm run test:all
+```
+
+`npm run test` covers frontend and backend. `npm run test:all` adds the Rust workspace tests and a frontend production build.
+
+## Code Style and Linting
+
+### JavaScript and TypeScript
+
+```bash
+npm run lint
+npm run format
+```
+
+### Rust contracts
+
+```bash
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+```
+
+### All lint checks
+
+```bash
+npm run lint:all
+```
+
+Notes:
+
+- ESLint and Prettier cover the JS and TS codebase.
+- Husky is installed, but you should still run the relevant checks yourself before pushing.
+- Keep PRs focused. If you touch contracts and frontend together, explain why in the PR.
 
 ## Pull Request Process
 
-1. **Fill out the PR template** — describe what you changed and why
-2. **Link the issue** — use `Closes #42` in the description
-3. **Keep PRs focused** — one feature or fix per PR
-4. **Tests required** — new features need test coverage
-5. **CI must pass** — all checks green before review
-6. **One approval** — a maintainer will review within 48 hours
+1. Pick or claim an issue before starting substantial work.
+2. Keep the branch scoped to one fix, feature, or documentation change.
+3. Open a pull request against `main`.
+4. Fill in the PR template completely.
+5. Link the issue with `Closes #<issue-number>`.
+6. Run the relevant tests and list the exact commands in the PR.
+7. Wait for maintainer review and address feedback with follow-up commits.
 
-### PR Checklist
+Review expectations:
 
-- [ ] Branch is up to date with `main`
-- [ ] Tests pass (`cargo test` / `npm test`)
-- [ ] Linting passes (`cargo clippy` / `npm run lint`)
-- [ ] New functions have doc comments
-- [ ] PR description references the issue
+- Documentation-only changes should still be checked for command accuracy and broken links.
+- Code changes should include tests or explain why test coverage was not added.
+- UI changes should include screenshots or a short recording.
+- Breaking changes must be called out explicitly in the PR body.
 
----
+Minimum checklist before requesting review:
 
-## Questions?
+- [ ] Code compiles or the changed docs reference working commands
+- [ ] Tests added or updated when behavior changed
+- [ ] Linting and formatting pass
+- [ ] Relevant docs were updated
+- [ ] No breaking changes, or they are clearly documented
 
-Open a [Discussion](../../discussions) or comment directly on any issue. No question is too basic!
+## Finding a First Issue
+
+Use GitHub labels to find a good starting point:
+
+| Label | What it usually means |
+| --- | --- |
+| `good-first-issue` | Beginner-friendly tasks with a clear path to completion |
+| `documentation` | Docs cleanups, onboarding, examples, and guides |
+| `frontend` | Next.js UI, accessibility, and interaction work |
+| `backend` | API, services, Prisma, and operational tooling |
+| `smart-contract` | Rust and Soroban work |
+| `testing` | Unit, integration, accessibility, or end-to-end coverage |
+
+Useful searches:
+
+- Good first issues: `https://github.com/barry01-hash/stellar-trust-escrow/issues?q=is%3Aopen+is%3Aissue+label%3A%22good-first-issue%22`
+- Documentation issues: `https://github.com/barry01-hash/stellar-trust-escrow/issues?q=is%3Aopen+is%3Aissue+label%3Adocumentation`
+- Help wanted: `https://github.com/barry01-hash/stellar-trust-escrow/issues?q=is%3Aopen+is%3Aissue+label%3A%22help+wanted%22`
+
+If you want an issue, leave a comment so maintainers know it is in progress.
+
+## OS Notes
+
+- Linux and macOS: native setup is straightforward.
+- Windows: use PowerShell for npm and Docker commands. Install Visual Studio Build Tools for native Rust builds, or use WSL if you want Linux-style contract tooling and bash-based helper scripts like `scripts/test-contract.sh`.
+- Docker Desktop works well for local Postgres on all three platforms.
+
+## Troubleshooting
+
+### `npm ci` fails early
+
+Make sure you are on Node 18+ and rerun from the repository root.
+
+### Prisma cannot connect
+
+Confirm Docker Postgres is running:
+
+```bash
+docker compose ps postgres
+```
+
+Then verify `DATABASE_URL` and `DIRECT_URL` both point at the same local instance unless you intentionally use separate pooled and direct connections.
+
+### Rust contract builds fail on Windows
+
+Install Visual Studio Build Tools with the C++ workload, or run the Rust contract commands inside WSL.
+
+### Frontend cannot reach the backend
+
+Check that:
+
+- backend is running on port `4000`
+- `NEXT_PUBLIC_API_URL=http://localhost:4000`
+- `ALLOWED_ORIGINS` includes `http://localhost:3000`
+
+### Playwright tests fail before opening a browser
+
+Install browsers first:
+
+```bash
+cd frontend
+npx playwright install --with-deps chromium firefox
+```
+
+Questions are welcome in the issue tracker or pull request discussion. Small first contributions are absolutely fine.

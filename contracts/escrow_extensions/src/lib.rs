@@ -51,6 +51,35 @@
 //! The batch creation feature maintains its own escrow ID counter in
 //! instance storage. In production, the two contracts are coordinated
 //! off-chain or via a relayer.
+//! Four new capabilities added on top of the core escrow contract:
+//!
+//! ## 1. Batch Escrow Creation (#519)
+//! `create_batch(client, escrows: Vec<BatchEscrowParams>) → Vec<u64>`
+//! - Accepts up to MAX_BATCH_SIZE (10) escrow params in one transaction
+//! - Atomic: if any single creation fails the whole call reverts
+//! - Emits individual `bat_crt` events per escrow + one `bat_done` summary
+//! - Gas savings: one auth check, one counter read, N token transfers
+//!
+//! ## 2. Protocol Fee Collection (#518)
+//! `collect_fee(escrow_id, token, gross_amount) → (net, fee)`
+//! - Configurable fee in basis points (0–200, i.e. 0–2 %)
+//! - Fee collected only on successful release
+//! - Multi-recipient distribution with per-recipient share_bps
+//! - Emergency withdrawal for admin
+//! - Historical tracking via FeeBalance per token
+//!
+//! ## 3. On-Chain Dispute Arbitration (#516)
+//! `open_dispute / cast_vote / resolve_dispute`
+//! - 7-day voting window (VOTING_WINDOW_SECONDS)
+//! - Quadratic voting: weight = floor(sqrt(stake))
+//! - 51 % weighted threshold for resolution
+//! - Slashing: voters on losing side when dissent > 90 % lose their stake
+//!
+//! ## 4. Proxy Upgradeability (#517)
+//! `queue_upgrade / execute_upgrade / cancel_upgrade`
+//! - 24-hour mandatory delay (UPGRADE_DELAY_SECONDS)
+//! - Admin-only; emits events for transparency
+//! - State is preserved (Soroban upgrades only replace WASM)
 
 #![no_std]
 
@@ -81,6 +110,21 @@ pub const UPGRADE_DELAY_SECONDS: u64 = 86_400;
 
 /// Dissent threshold in basis points above which losing voters are slashed (90%).
 const SLASH_DISSENT_THRESHOLD_BPS: u64 = 9_000;
+/// Maximum escrows per batch call.
+const MAX_BATCH_SIZE: u32 = 10;
+
+/// Maximum protocol fee: 200 bps = 2 %.
+const MAX_FEE_BPS: u32 = 200;
+
+/// 7-day voting window in seconds (7 * 24 * 3600).
+const VOTING_WINDOW_SECONDS: u64 = 604_800;
+
+/// 24-hour upgrade delay in seconds.
+const UPGRADE_DELAY_SECONDS: u64 = 86_400;
+
+/// Dissent threshold for slashing: if losing side > 90 % of total weight,
+/// slash losing voters.
+const SLASH_DISSENT_THRESHOLD_BPS: u64 = 9_000; // 90 %
 
 // ── TTL ───────────────────────────────────────────────────────────────────────
 const INSTANCE_TTL_THRESHOLD: u32 = 5_000;
@@ -115,10 +159,14 @@ fn require_admin(env: &Env, caller: &Address) -> Result<(), ExtError> {
 }
 
 /// Integer square root via Newton's method — no floating point, overflow-safe.
+// ── isqrt helper (integer square root for quadratic voting) ───────────────────
+
+/// Integer square root via Newton's method — no floating point.
 fn isqrt(n: u64) -> u64 {
     if n == 0 {
         return 0;
     }
+    // Start estimate: avoid overflow by shifting right
     let mut x = n;
     let mut y = (x >> 1).saturating_add(1);
     while y < x {
@@ -142,6 +190,11 @@ impl EscrowExtensions {
     /// Initializes the extensions contract with an admin address and initial fee.
     ///
     /// Must be called once before any other function. `fee_bps` must be ≤ [`MAX_FEE_BPS`].
+    /// Initializes the extensions contract.
+    ///
+    /// # Arguments
+    /// * `admin`    — admin address
+    /// * `fee_bps`  — initial protocol fee in basis points (0–200)
     pub fn initialize(env: Env, admin: Address, fee_bps: u32) -> Result<(), ExtError> {
         if env.storage().instance().has(&DataKey::Admin) {
             return Err(ExtError::AlreadyInitialized);
@@ -171,6 +224,19 @@ impl EscrowExtensions {
     /// - [`ExtError::BatchEmpty`] — `escrows` is empty.
     /// - [`ExtError::BatchTooLarge`] — `escrows.len() > MAX_BATCH_SIZE`.
     /// - [`ExtError::BatchItemInvalid`] — any item has `total_amount <= 0` or a past deadline.
+    /// Creates up to MAX_BATCH_SIZE escrows atomically in a single transaction.
+    ///
+    /// All escrows share the same `client` and are created with the same token.
+    /// If any single escrow fails validation the entire call reverts (Soroban
+    /// panics unwind all state changes within a transaction).
+    ///
+    /// # Gas savings
+    /// - Single `require_auth` for the client
+    /// - Single ledger timestamp read
+    /// - N token transfers (unavoidable) but only one auth overhead
+    ///
+    /// # Returns
+    /// Vec of assigned escrow IDs in the same order as the input params.
     pub fn create_batch(
         env: Env,
         client: Address,
@@ -188,6 +254,8 @@ impl EscrowExtensions {
 
         let now = env.ledger().timestamp();
 
+        // ── Validate all params before touching storage ───────────────────────
+        // This ensures atomicity: we fail fast before any state changes.
         for i in 0..count {
             let p = escrows.get(i).unwrap();
             if p.total_amount <= 0 {
@@ -201,6 +269,16 @@ impl EscrowExtensions {
         }
 
         let batch_counter_key = DataKey::StorageVersion;
+        // ── Read and reserve escrow IDs atomically ────────────────────────────
+        let start_id: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::StorageVersion) // reuse as a simple counter seed
+            .unwrap_or(0_u64);
+        // We use a dedicated batch counter stored in instance storage.
+        // In production this would call into the core escrow contract's
+        // counter; here we maintain our own for the extension contract.
+        let batch_counter_key = DataKey::StorageVersion; // repurposed as escrow counter
         let base_id: u64 = env
             .storage()
             .instance()
@@ -209,6 +287,7 @@ impl EscrowExtensions {
         env.storage()
             .instance()
             .set(&batch_counter_key, &(base_id + u64::from(count)));
+        let _ = start_id; // suppress unused warning
 
         let mut ids = Vec::new(&env);
         let mut total_batch_amount: i128 = 0;
@@ -217,6 +296,7 @@ impl EscrowExtensions {
             let p = escrows.get(i).unwrap();
             let escrow_id = base_id + u64::from(i);
 
+            // Transfer tokens from client to this contract
             token::Client::new(&env, &p.token).transfer(
                 &client,
                 &env.current_contract_address(),
@@ -228,6 +308,13 @@ impl EscrowExtensions {
                 .ok_or(ExtError::BatchItemInvalid)?;
 
             events::emit_batch_escrow_created(&env, escrow_id, &client, &p.freelancer, p.total_amount);
+            events::emit_batch_escrow_created(
+                &env,
+                escrow_id,
+                &client,
+                &p.freelancer,
+                p.total_amount,
+            );
             ids.push_back(escrow_id);
         }
 
@@ -237,6 +324,7 @@ impl EscrowExtensions {
     }
 
     /// Returns the total number of escrows created via `create_batch`.
+    /// Returns the current batch counter (total escrows created via batch).
     pub fn batch_escrow_count(env: Env) -> u64 {
         env.storage()
             .instance()
@@ -247,6 +335,7 @@ impl EscrowExtensions {
     // ── #518 Protocol Fee Collection ──────────────────────────────────────────
 
     /// Sets the protocol fee in basis points. Admin only. Max [`MAX_FEE_BPS`] (2%).
+    /// Sets the protocol fee in basis points. Admin only. Max 200 (2 %).
     pub fn set_fee_bps(env: Env, caller: Address, fee_bps: u32) -> Result<(), ExtError> {
         caller.require_auth();
         require_admin(&env, &caller)?;
@@ -259,6 +348,7 @@ impl EscrowExtensions {
     }
 
     /// Sets fee recipients. Shares must sum to exactly 10_000 bps (100%).
+    /// Sets the fee recipients. Shares must sum to 10_000 bps (100 %).
     pub fn set_fee_recipients(
         env: Env,
         caller: Address,
@@ -266,11 +356,16 @@ impl EscrowExtensions {
     ) -> Result<(), ExtError> {
         caller.require_auth();
         require_admin(&env, &caller)?;
+
         let total: u32 = recipients.iter().map(|r| r.share_bps).sum();
         if total != 10_000 {
             return Err(ExtError::InvalidRecipient);
         }
         env.storage().instance().set(&DataKey::FeeRecipients, &recipients);
+
+        env.storage()
+            .instance()
+            .set(&DataKey::FeeRecipients, &recipients);
         bump_instance(&env);
         Ok(())
     }
@@ -279,6 +374,13 @@ impl EscrowExtensions {
     ///
     /// Returns `(net_amount, fee_amount)`. Call this on every successful milestone
     /// release. If `fee_bps == 0` the gross amount is returned unchanged.
+    /// Collects the protocol fee from a gross release amount.
+    ///
+    /// Called by the escrow contract (or relayer) on successful milestone release.
+    /// Accumulates the fee in `FeeBalance` for later distribution.
+    ///
+    /// # Returns
+    /// `(net_amount, fee_amount)` — net is what the freelancer receives.
     pub fn collect_fee(
         env: Env,
         escrow_id: u64,
@@ -289,16 +391,31 @@ impl EscrowExtensions {
         if fee_bps == 0 || gross_amount <= 0 {
             return Ok((gross_amount, 0));
         }
+        let fee_bps: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::FeeBps)
+            .unwrap_or(0);
+
+        if fee_bps == 0 || gross_amount <= 0 {
+            return Ok((gross_amount, 0));
+        }
+
         let fee = gross_amount
             .checked_mul(i128::from(fee_bps))
             .ok_or(ExtError::InvalidFeeBps)?
             / 10_000;
         let net = gross_amount - fee;
+
+        let net = gross_amount - fee;
+
+        // Accumulate fee
         let key = DataKey::FeeBalance(token.clone());
         let prev: i128 = env.storage().persistent().get(&key).unwrap_or(0);
         let new_balance = prev.checked_add(fee).ok_or(ExtError::InvalidFeeBps)?;
         env.storage().persistent().set(&key, &new_balance);
         bump_persistent(&env, &key);
+
         events::emit_fee_collected(&env, escrow_id, &token, fee);
         Ok((net, fee))
     }
@@ -307,12 +424,14 @@ impl EscrowExtensions {
     ///
     /// Returns the total amount distributed. Any dust from integer division
     /// remains in `FeeBalance`.
+    /// Distributes accumulated fees for a token to all configured recipients.
     pub fn distribute_fees(env: Env, token: Address) -> Result<i128, ExtError> {
         let key = DataKey::FeeBalance(token.clone());
         let balance: i128 = env.storage().persistent().get(&key).unwrap_or(0);
         if balance <= 0 {
             return Err(ExtError::NoFeesAccumulated);
         }
+
         let recipients: Vec<FeeRecipient> = env
             .storage()
             .instance()
@@ -322,6 +441,15 @@ impl EscrowExtensions {
         let mut distributed: i128 = 0;
         for r in recipients.iter() {
             let share = balance.checked_mul(i128::from(r.share_bps)).unwrap_or(0) / 10_000;
+
+        let token_client = token::Client::new(&env, &token);
+        let mut distributed: i128 = 0;
+
+        for r in recipients.iter() {
+            let share = balance
+                .checked_mul(i128::from(r.share_bps))
+                .unwrap_or(0)
+                / 10_000;
             if share > 0 {
                 token_client.transfer(&env.current_contract_address(), &r.address, &share);
                 distributed += share;
@@ -330,11 +458,18 @@ impl EscrowExtensions {
         let dust = balance - distributed;
         env.storage().persistent().set(&key, &dust);
         bump_persistent(&env, &key);
+
+        // Clear balance (any dust stays due to integer division)
+        let dust = balance - distributed;
+        env.storage().persistent().set(&key, &dust);
+        bump_persistent(&env, &key);
+
         events::emit_fee_distributed(&env, &token, distributed);
         Ok(distributed)
     }
 
     /// Emergency withdrawal of all accumulated fees for `token` to `to`. Admin only.
+    /// Emergency withdrawal of all accumulated fees for a token. Admin only.
     pub fn emergency_withdraw_fees(
         env: Env,
         caller: Address,
@@ -343,6 +478,7 @@ impl EscrowExtensions {
     ) -> Result<i128, ExtError> {
         caller.require_auth();
         require_admin(&env, &caller)?;
+
         let key = DataKey::FeeBalance(token.clone());
         let balance: i128 = env.storage().persistent().get(&key).unwrap_or(0);
         if balance <= 0 {
@@ -351,6 +487,15 @@ impl EscrowExtensions {
         token::Client::new(&env, &token).transfer(&env.current_contract_address(), &to, &balance);
         env.storage().persistent().set(&key, &0_i128);
         bump_persistent(&env, &key);
+
+        token::Client::new(&env, &token).transfer(
+            &env.current_contract_address(),
+            &to,
+            &balance,
+        );
+        env.storage().persistent().set(&key, &0_i128);
+        bump_persistent(&env, &key);
+
         events::emit_fee_emergency_withdrawn(&env, &token, balance, &to);
         Ok(balance)
     }
@@ -363,6 +508,20 @@ impl EscrowExtensions {
     /// Returns the accumulated fee balance for `token`.
     pub fn get_fee_balance(env: Env, token: Address) -> i128 {
         env.storage().persistent().get(&DataKey::FeeBalance(token)).unwrap_or(0)
+    /// Returns the current fee in basis points.
+    pub fn get_fee_bps(env: Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&DataKey::FeeBps)
+            .unwrap_or(0)
+    }
+
+    /// Returns the accumulated fee balance for a token.
+    pub fn get_fee_balance(env: Env, token: Address) -> i128 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::FeeBalance(token))
+            .unwrap_or(0)
     }
 
     // ── #516 On-Chain Dispute Arbitration ─────────────────────────────────────
@@ -372,6 +531,10 @@ impl EscrowExtensions {
     /// Anyone can call this for an escrow that is in Disputed state.
     /// Emits `arb_opn`. Reverts with [`ExtError::DisputeAlreadyExists`] if
     /// a dispute record already exists for this escrow.
+    /// Opens an on-chain arbitration window for a disputed escrow.
+    ///
+    /// Anyone can open arbitration for an escrow that is in Disputed state.
+    /// Voting runs for VOTING_WINDOW_SECONDS (7 days).
     pub fn open_dispute(env: Env, escrow_id: u64) -> Result<(), ExtError> {
         let key = DataKey::Dispute(escrow_id);
         if env.storage().persistent().has(&key) {
@@ -379,6 +542,10 @@ impl EscrowExtensions {
         }
         let now = env.ledger().timestamp();
         let closes_at = now + VOTING_WINDOW_SECONDS;
+
+        let now = env.ledger().timestamp();
+        let closes_at = now + VOTING_WINDOW_SECONDS;
+
         let dispute = ArbitrationDispute {
             escrow_id,
             voting_opens_at: now,
@@ -392,6 +559,10 @@ impl EscrowExtensions {
         };
         env.storage().persistent().set(&key, &dispute);
         bump_persistent(&env, &key);
+
+        env.storage().persistent().set(&key, &dispute);
+        bump_persistent(&env, &key);
+
         events::emit_dispute_opened(&env, escrow_id, closes_at);
         Ok(())
     }
@@ -406,6 +577,16 @@ impl EscrowExtensions {
     /// - [`ExtError::VotingWindowClosed`] — voting period has ended.
     /// - [`ExtError::AlreadyVoted`] — `voter` has already cast a vote.
     /// - [`ExtError::InsufficientStake`] — `stake == 0`.
+    /// Cast a vote on an open arbitration dispute.
+    ///
+    /// Voting weight = floor(sqrt(stake)) — quadratic voting.
+    /// Each address can vote only once per dispute.
+    ///
+    /// # Arguments
+    /// * `voter`      — must `require_auth()`
+    /// * `escrow_id`  — the disputed escrow
+    /// * `stake`      — reputation points committed (burned on slash)
+    /// * `for_client` — true = vote for client, false = vote for freelancer
     pub fn cast_vote(
         env: Env,
         voter: Address,
@@ -417,6 +598,11 @@ impl EscrowExtensions {
         if stake == 0 {
             return Err(ExtError::InsufficientStake);
         }
+
+        if stake == 0 {
+            return Err(ExtError::InsufficientStake);
+        }
+
         let key = DataKey::Dispute(escrow_id);
         let mut dispute: ArbitrationDispute = env
             .storage()
@@ -427,11 +613,22 @@ impl EscrowExtensions {
         if now > dispute.voting_closes_at || dispute.resolved {
             return Err(ExtError::VotingWindowClosed);
         }
+
+        let now = env.ledger().timestamp();
+        if now > dispute.voting_closes_at {
+            return Err(ExtError::VotingWindowClosed);
+        }
+        if dispute.resolved {
+            return Err(ExtError::VotingWindowClosed);
+        }
+
+        // Check for duplicate vote
         for v in dispute.votes.iter() {
             if v.voter == voter {
                 return Err(ExtError::AlreadyVoted);
             }
         }
+
         let weight = isqrt(stake);
         if weight == 0 {
             return Err(ExtError::InvalidVoteWeight);
@@ -445,6 +642,34 @@ impl EscrowExtensions {
         dispute.votes.push_back(Vote { voter: voter.clone(), stake, for_client, cast_at: now });
         env.storage().persistent().set(&key, &dispute);
         bump_persistent(&env, &key);
+
+        if for_client {
+            dispute.weight_for_client = dispute
+                .weight_for_client
+                .checked_add(weight)
+                .ok_or(ExtError::InvalidVoteWeight)?;
+        } else {
+            dispute.weight_for_freelancer = dispute
+                .weight_for_freelancer
+                .checked_add(weight)
+                .ok_or(ExtError::InvalidVoteWeight)?;
+        }
+
+        dispute.total_stake = dispute
+            .total_stake
+            .checked_add(stake)
+            .ok_or(ExtError::InvalidVoteWeight)?;
+
+        dispute.votes.push_back(Vote {
+            voter: voter.clone(),
+            stake,
+            for_client,
+            cast_at: now,
+        });
+
+        env.storage().persistent().set(&key, &dispute);
+        bump_persistent(&env, &key);
+
         events::emit_vote_cast(&env, escrow_id, &voter, stake, for_client);
         Ok(())
     }
@@ -459,6 +684,13 @@ impl EscrowExtensions {
     /// # Errors
     /// - [`ExtError::VotingWindowOpen`] — voting period has not yet ended.
     /// - [`ExtError::QuorumNotReached`] — no votes were cast.
+    /// Resolution rules:
+    /// - Client wins if `weight_for_client / total_weight >= 51 %`
+    /// - Freelancer wins otherwise
+    /// - Slashing: if losing side > 90 % of total weight, losing voters
+    ///   are flagged (actual stake deduction handled by reputation contract)
+    ///
+    /// Anyone can call this after the window closes.
     pub fn resolve_dispute(env: Env, escrow_id: u64) -> Result<bool, ExtError> {
         let key = DataKey::Dispute(escrow_id);
         let mut dispute: ArbitrationDispute = env
@@ -466,6 +698,7 @@ impl EscrowExtensions {
             .persistent()
             .get(&key)
             .ok_or(ExtError::DisputeNotFound)?;
+
         let now = env.ledger().timestamp();
         if now <= dispute.voting_closes_at {
             return Err(ExtError::VotingWindowOpen);
@@ -484,12 +717,47 @@ impl EscrowExtensions {
         if losing_weight * 10_000 / total_weight > SLASH_DISSENT_THRESHOLD_BPS {
             for v in dispute.votes.iter() {
                 if v.for_client != client_wins {
+            // Already resolved — return cached result
+            return Ok(dispute.client_wins.unwrap_or(false));
+        }
+
+        let total_weight = dispute.weight_for_client + dispute.weight_for_freelancer;
+        if total_weight == 0 {
+            // No votes cast — default to no resolution (admin must intervene)
+            return Err(ExtError::QuorumNotReached);
+        }
+
+        // 51 % threshold
+        let client_wins =
+            dispute.weight_for_client * 100 / total_weight >= 51;
+
+        dispute.resolved = true;
+        dispute.client_wins = Some(client_wins);
+
+        // ── Slashing ──────────────────────────────────────────────────────────
+        // If the losing side's weight > 90 % of total, slash losing voters.
+        let losing_weight = if client_wins {
+            dispute.weight_for_freelancer
+        } else {
+            dispute.weight_for_client
+        };
+
+        let slash = losing_weight * 10_000 / total_weight > SLASH_DISSENT_THRESHOLD_BPS;
+
+        if slash {
+            for v in dispute.votes.iter() {
+                let voted_losing = v.for_client != client_wins;
+                if voted_losing {
                     events::emit_voter_slashed(&env, escrow_id, &v.voter, v.stake);
                 }
             }
         }
         env.storage().persistent().set(&key, &dispute);
         bump_persistent(&env, &key);
+
+        env.storage().persistent().set(&key, &dispute);
+        bump_persistent(&env, &key);
+
         events::emit_dispute_resolved(&env, escrow_id, client_wins);
         Ok(client_wins)
     }
@@ -497,6 +765,10 @@ impl EscrowExtensions {
     /// Returns the current state of an arbitration dispute.
     pub fn get_dispute(env: Env, escrow_id: u64) -> Result<ArbitrationDispute, ExtError> {
         env.storage().persistent().get(&DataKey::Dispute(escrow_id)).ok_or(ExtError::DisputeNotFound)
+        env.storage()
+            .persistent()
+            .get(&DataKey::Dispute(escrow_id))
+            .ok_or(ExtError::DisputeNotFound)
     }
 
     // ── #517 Proxy Upgradeability ─────────────────────────────────────────────
@@ -507,6 +779,10 @@ impl EscrowExtensions {
     /// Returns the earliest timestamp at which `execute_upgrade` may be called.
     /// Admin only. Reverts with [`ExtError::UpgradeAlreadyPending`] if a
     /// pending upgrade already exists.
+    /// Queues a contract upgrade with a mandatory 24-hour delay.
+    ///
+    /// The new WASM must be uploaded to the network before calling this.
+    /// Admin only.
     pub fn queue_upgrade(
         env: Env,
         caller: Address,
@@ -519,6 +795,14 @@ impl EscrowExtensions {
         }
         let now = env.ledger().timestamp();
         let executable_after = now + UPGRADE_DELAY_SECONDS;
+
+        if env.storage().instance().has(&DataKey::PendingUpgrade) {
+            return Err(ExtError::UpgradeAlreadyPending);
+        }
+
+        let now = env.ledger().timestamp();
+        let executable_after = now + UPGRADE_DELAY_SECONDS;
+
         let pending = PendingUpgrade {
             new_wasm_hash: new_wasm_hash.clone(),
             queued_at: now,
@@ -527,6 +811,12 @@ impl EscrowExtensions {
         };
         env.storage().instance().set(&DataKey::PendingUpgrade, &pending);
         bump_instance(&env);
+
+        env.storage()
+            .instance()
+            .set(&DataKey::PendingUpgrade, &pending);
+        bump_instance(&env);
+
         events::emit_upgrade_queued(&env, &new_wasm_hash, executable_after);
         Ok(executable_after)
     }
@@ -539,6 +829,12 @@ impl EscrowExtensions {
     pub fn execute_upgrade(env: Env, caller: Address) -> Result<(), ExtError> {
         caller.require_auth();
         require_admin(&env, &caller)?;
+    /// Admin only. Soroban upgrades replace only the WASM — all storage
+    /// (escrows, reputation, counters) is preserved.
+    pub fn execute_upgrade(env: Env, caller: Address) -> Result<(), ExtError> {
+        caller.require_auth();
+        require_admin(&env, &caller)?;
+
         let pending: PendingUpgrade = env
             .storage()
             .instance()
@@ -562,12 +858,44 @@ impl EscrowExtensions {
         }
         env.storage().instance().remove(&DataKey::PendingUpgrade);
         bump_instance(&env);
+
+        let now = env.ledger().timestamp();
+        if now < pending.executable_after {
+            return Err(ExtError::UpgradeDelayNotElapsed);
+        }
+
+        env.storage().instance().remove(&DataKey::PendingUpgrade);
+
+        events::emit_upgrade_executed(&env, &pending.new_wasm_hash);
+
+        // Execute the WASM upgrade — replaces contract logic, preserves storage
+        env.deployer()
+            .update_current_contract_wasm(pending.new_wasm_hash);
+
+        Ok(())
+    }
+
+    /// Cancels a pending upgrade. Admin only.
+    pub fn cancel_upgrade(env: Env, caller: Address) -> Result<(), ExtError> {
+        caller.require_auth();
+        require_admin(&env, &caller)?;
+
+        if !env.storage().instance().has(&DataKey::PendingUpgrade) {
+            return Err(ExtError::NoPendingUpgrade);
+        }
+
+        env.storage().instance().remove(&DataKey::PendingUpgrade);
+        bump_instance(&env);
+
         events::emit_upgrade_cancelled(&env);
         Ok(())
     }
 
     /// Returns the pending upgrade record, if any.
+    /// Returns the pending upgrade, if any.
     pub fn get_pending_upgrade(env: Env) -> Option<PendingUpgrade> {
         env.storage().instance().get(&DataKey::PendingUpgrade)
     }
 }
+
+mod tests;

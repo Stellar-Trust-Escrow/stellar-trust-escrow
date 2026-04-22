@@ -31,10 +31,10 @@ import { useI18n } from '../../i18n/index.jsx';
 import { useRef } from 'react';
 
 export default function EscrowCard({ escrow, isLoading = false }) {
-  if (isLoading) return <EscrowCardSkeleton />;
   const { t } = useI18n();
-  const { id, title, status, totalAmount, milestoneProgress, counterparty, role, transactionHash } = escrow;
   const cardRef = useRef(null);
+  if (isLoading) return <EscrowCardSkeleton />;
+  const { id, title, status, totalAmount, milestoneProgress, counterparty, role, transactionHash } = escrow;
 
   const [done, total] = milestoneProgress?.split(' / ').map(Number) ?? [0, 0];
   const progressPct = total > 0 ? Math.round((done / total) * 100) : 0;

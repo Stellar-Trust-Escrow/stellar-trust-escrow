@@ -277,3 +277,198 @@ mod gas_profiling {
         print("request_cancellation", env.budget().cpu_instruction_cost(), env.budget().memory_bytes_cost());
     }
 }
+
+    // ── Batch operation benchmarks ────────────────────────────────────────────
+
+    /// Benchmark: batch_add_milestones with 5 milestones vs 5 individual add_milestone calls.
+    #[test]
+    fn profile_batch_add_milestones_5() {
+        let (env, admin, _contract_id, client) = setup();
+        let (escrow_client, _freelancer, escrow_id) = make_escrow(&env, &admin, &client);
+
+        let titles = soroban_sdk::Vec::from_array(
+            &env,
+            [
+                String::from_str(&env, "M1"),
+                String::from_str(&env, "M2"),
+                String::from_str(&env, "M3"),
+                String::from_str(&env, "M4"),
+                String::from_str(&env, "M5"),
+            ],
+        );
+        let hashes = soroban_sdk::Vec::from_array(
+            &env,
+            [
+                BytesN::from_array(&env, &[1; 32]),
+                BytesN::from_array(&env, &[2; 32]),
+                BytesN::from_array(&env, &[3; 32]),
+                BytesN::from_array(&env, &[4; 32]),
+                BytesN::from_array(&env, &[5; 32]),
+            ],
+        );
+        let amounts = soroban_sdk::Vec::from_array(&env, [100_i128, 100, 100, 100, 100]);
+
+        env.budget().reset_default();
+        client.batch_add_milestones(&escrow_client, &escrow_id, &titles, &hashes, &amounts);
+        print(
+            "batch_add_milestones_5",
+            env.budget().cpu_instruction_cost(),
+            env.budget().memory_bytes_cost(),
+        );
+    }
+
+    /// Benchmark: 5 individual add_milestone calls (baseline for comparison).
+    #[test]
+    fn profile_add_milestone_x5_sequential() {
+        let (env, admin, _contract_id, client) = setup();
+        let (escrow_client, _freelancer, escrow_id) = make_escrow(&env, &admin, &client);
+
+        env.budget().reset_default();
+        for i in 0_u8..5 {
+            let title = String::from_str(&env, "M");
+            let hash = BytesN::from_array(&env, &[i; 32]);
+            client.add_milestone(&escrow_client, &escrow_id, &title, &hash, &100_i128);
+        }
+        print(
+            "add_milestone_x5_sequential",
+            env.budget().cpu_instruction_cost(),
+            env.budget().memory_bytes_cost(),
+        );
+    }
+
+    /// Benchmark: batch_approve_milestones with 3 milestones.
+    #[test]
+    fn profile_batch_approve_milestones_3() {
+        let (env, admin, _contract_id, client) = setup();
+        let (escrow_client, freelancer, escrow_id) = make_escrow(&env, &admin, &client);
+
+        // Add 3 milestones and submit them all.
+        let mut ids = soroban_sdk::Vec::new(&env);
+        for i in 0_u8..3 {
+            let mid = client.add_milestone(
+                &escrow_client,
+                &escrow_id,
+                &String::from_str(&env, "M"),
+                &BytesN::from_array(&env, &[i; 32]),
+                &100_i128,
+            );
+            client.submit_milestone(&freelancer, &escrow_id, &mid);
+            ids.push_back(mid);
+        }
+
+        env.budget().reset_default();
+        client.batch_approve_milestones(&escrow_client, &escrow_id, &ids);
+        print(
+            "batch_approve_milestones_3",
+            env.budget().cpu_instruction_cost(),
+            env.budget().memory_bytes_cost(),
+        );
+    }
+
+    /// Benchmark: 3 individual approve_milestone calls (baseline for comparison).
+    #[test]
+    fn profile_approve_milestone_x3_sequential() {
+        let (env, admin, _contract_id, client) = setup();
+        let (escrow_client, freelancer, escrow_id) = make_escrow(&env, &admin, &client);
+
+        let mut ids = soroban_sdk::Vec::new(&env);
+        for i in 0_u8..3 {
+            let mid = client.add_milestone(
+                &escrow_client,
+                &escrow_id,
+                &String::from_str(&env, "M"),
+                &BytesN::from_array(&env, &[i; 32]),
+                &100_i128,
+            );
+            client.submit_milestone(&freelancer, &escrow_id, &mid);
+            ids.push_back(mid);
+        }
+
+        env.budget().reset_default();
+        for i in 0..ids.len() {
+            let mid = ids.get(i).unwrap();
+            client.approve_milestone(&escrow_client, &escrow_id, &mid);
+        }
+        print(
+            "approve_milestone_x3_sequential",
+            env.budget().cpu_instruction_cost(),
+            env.budget().memory_bytes_cost(),
+        );
+    }
+
+    /// Benchmark: cancel_escrow with 5 milestones (O(1) counter check, no iteration).
+    #[test]
+    fn profile_cancel_escrow_with_5_milestones() {
+        let (env, admin, _contract_id, client) = setup();
+        let (escrow_client, _freelancer, escrow_id) = make_escrow(&env, &admin, &client);
+
+        for i in 0_u8..5 {
+            client.add_milestone(
+                &escrow_client,
+                &escrow_id,
+                &String::from_str(&env, "M"),
+                &BytesN::from_array(&env, &[i; 32]),
+                &100_i128,
+            );
+        }
+
+        env.budget().reset_default();
+        client.cancel_escrow(&escrow_client, &escrow_id);
+        print(
+            "cancel_escrow_5_milestones",
+            env.budget().cpu_instruction_cost(),
+            env.budget().memory_bytes_cost(),
+        );
+    }
+
+    /// Benchmark: MAX_MILESTONES capacity boundary check.
+    #[test]
+    fn profile_add_milestone_at_capacity() {
+        use crate::MAX_MILESTONES;
+        let (env, admin, _contract_id, client) = setup();
+
+        // Create escrow with enough funds for MAX_MILESTONES milestones.
+        let escrow_client = soroban_sdk::Address::generate(&env);
+        let freelancer = soroban_sdk::Address::generate(&env);
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_id = token_contract.address();
+        token::StellarAssetClient::new(&env, &token_id)
+            .mint(&escrow_client, &1_000_000_i128);
+        let escrow_id = client.create_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &100_000_i128,
+            &BytesN::from_array(&env, &[9; 32]),
+            &None,
+            &None,
+            &None,
+        );
+
+        // Fill up to MAX_MILESTONES - 1.
+        for i in 0_u32..(MAX_MILESTONES - 1) {
+            client.add_milestone(
+                &escrow_client,
+                &escrow_id,
+                &String::from_str(&env, "M"),
+                &BytesN::from_array(&env, &[(i as u8); 32]),
+                &100_i128,
+            );
+        }
+
+        // Profile the last allowed add.
+        env.budget().reset_default();
+        client.add_milestone(
+            &escrow_client,
+            &escrow_id,
+            &String::from_str(&env, "Last"),
+            &BytesN::from_array(&env, &[99; 32]),
+            &100_i128,
+        );
+        print(
+            "add_milestone_at_capacity",
+            env.budget().cpu_instruction_cost(),
+            env.budget().memory_bytes_cost(),
+        );
+    }
+}

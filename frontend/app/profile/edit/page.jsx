@@ -1,26 +1,22 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import ProfileForm from '../../components/profile/ProfileForm';
+import ProfileForm from '../../../components/profile/ProfileForm';
 
-// Assuming we have some hook or context to get the connected wallet address
-// For MVP we can just use a placeholder or read it from localStorage
 const CONNECTED_USER = 'GABCD1234EFGH5678IJKL9012MNOP3456QRST7890UVWX1234YZ56';
 
 export default function EditProfilePage() {
-  const router = useRouter();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Use the assumed connected address for this edit page
   const address = CONNECTED_USER;
 
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api'}/users/${address}`);
+        const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+        const res = await fetch(`${base}/api/users/${address}`);
         if (!res.ok) {
           throw new Error('Failed to fetch profile details');
         }

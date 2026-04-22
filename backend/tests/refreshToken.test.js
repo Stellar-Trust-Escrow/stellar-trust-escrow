@@ -11,16 +11,24 @@ import jwt from 'jsonwebtoken';
 import prisma from '../lib/prisma.js';
 import app from '../server.js';
 import tokenBlacklistService from '../services/tokenBlacklistService.js';
-import refreshTokenService from '../services/refreshTokenService.js';
 import tokenMetricsService from '../services/tokenMetricsService.js';
 
 describe('Refresh Token Flow', () => {
-  let testUser, tenantId, accessToken, refreshToken;
+  let testUser, tenant, tenantId, accessToken, refreshToken;
 
   beforeAll(async () => {
     // Set up test tenant and user
     tenantId = 'test_tenant';
     
+    tenant = await prisma.tenant.create({
+      data: {
+        id: tenantId,
+        slug: 'test-tenant',
+        name: 'Test Tenant',
+        status: 'active',
+      },
+    });
+
     // Create test user
     const hashedPassword = await bcrypt.hash('password123', 10);
     testUser = await prisma.user.create({
@@ -39,6 +47,9 @@ describe('Refresh Token Flow', () => {
     });
     await prisma.user.delete({
       where: { id: testUser.id }
+    });
+    await prisma.tenant.delete({
+      where: { id: tenant.id }
     });
   });
 
@@ -211,12 +222,21 @@ describe('Refresh Token Flow', () => {
     });
 
     test('should reject blacklisted access tokens', async () => {
-      // Blacklist the access token
-      await tokenBlacklistService.blacklistToken(accessToken, 'access', 'test_blacklist');
+      const loginResponse = await request(app)
+        .post('/api/auth/login')
+        .set('X-Tenant-ID', tenantId)
+        .send({
+          email: 'test@example.com',
+          password: 'password123'
+        });
+      const blacklistedAccessToken = loginResponse.body.accessToken;
+
+      // Blacklist a throwaway access token so the shared suite token remains usable.
+      await tokenBlacklistService.blacklistToken(blacklistedAccessToken, 'access', 'test_blacklist');
 
       const response = await request(app)
         .get('/api/auth/sessions')
-        .set('Authorization', `Bearer ${accessToken}`)
+        .set('Authorization', `Bearer ${blacklistedAccessToken}`)
         .set('X-Tenant-ID', tenantId);
 
       expect(response.status).toBe(403);

@@ -57,3 +57,10 @@ if (typeof HTMLCanvasElement !== 'undefined') {
     clip: jest.fn(),
   }));
 }
+
+if (typeof global.fetch === 'undefined') {
+  global.fetch = jest.fn(async () => ({
+    ok: true,
+    json: async () => ({ rates: { USD: 1 } }),
+  }));
+}

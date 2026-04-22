@@ -1,7 +1,7 @@
 import { requestWithRetry } from "../lib/api/client";
 import { parseError } from "../lib/api/errorParser";
 
-async function fetchData() {
+export async function fetchData() {
   try {
     const res = await requestWithRetry({ method: "GET", url: "/some-endpoint" });
     console.log(res.data);

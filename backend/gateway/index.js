@@ -17,13 +17,13 @@ import { httpRequestDuration, httpRequestTotal, httpRequestsInFlight } from '../
 // ── Routes that skip JWT auth ─────────────────────────────────────────────────
 
 const PUBLIC_ROUTES = [
-  { method: 'POST', path: '/api/auth/login' },
-  { method: 'POST', path: '/api/auth/register' },
-  { method: 'POST', path: '/api/auth/refresh' },
-  { method: 'GET',  path: '/api/health' },
-  { method: 'GET',  path: '/health' },
-  { method: 'GET',  path: '/api/metrics' },
-  { method: 'GET',  path: '/api/csrf-token' },
+  { method: 'POST', path: '/auth/login' },
+  { method: 'POST', path: '/auth/register' },
+  { method: 'POST', path: '/auth/refresh' },
+  { method: 'POST', path: '/auth/logout' },
+  { method: 'GET', path: '/health' },
+  { method: 'GET', path: '/metrics' },
+  { method: 'GET', path: '/csrf-token' },
 ];
 
 function isPublicRoute(req) {
@@ -76,7 +76,6 @@ function gatewayLogger(req, res, next) {
 function gatewayMetrics(req, res, next) {
   httpRequestsInFlight.inc();
   const end = httpRequestDuration.startTimer();
-  const start = Date.now();
 
   res.on('finish', () => {
     const route = req.route?.path ?? req.path ?? 'unknown';
@@ -96,6 +95,9 @@ function gatewayMetrics(req, res, next) {
  * Mount with:  app.use('/api', ...createGateway())
  */
 export function createGateway() {
+  const gatewayRateLimiter =
+    process.env.NODE_ENV === 'test' ? (_req, _res, next) => next() : perUserLimiter;
+
   return [
     requestId,
     gatewayLogger,
@@ -108,6 +110,6 @@ export function createGateway() {
     },
 
     // Rate limiting: applied after auth so tier is available on req.user
-    perUserLimiter,
+    gatewayRateLimiter,
   ];
 }

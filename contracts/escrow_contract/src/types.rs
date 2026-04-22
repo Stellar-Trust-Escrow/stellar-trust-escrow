@@ -24,23 +24,49 @@ pub enum EscrowStatus {
     CancellationPending,
 }
 
-/// The lifecycle state of an individual milestone.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum MilestoneStatus {
-    /// Milestone defined but work not yet started/submitted.
-    Pending,
-    /// Freelancer has submitted work for this milestone.
-    Submitted,
-    /// Client has approved the milestone and funds are pending release.
-    Approved,
-    /// Funds have been released for this milestone.
-    Released,
-    /// Client rejected the submission. Freelancer should resubmit.
-    Rejected,
-    /// A dispute has been raised on this milestone. Funds are frozen.
-    Disputed,
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// MILESTONE STATUS — compact bitflag encoding
+//
+// Replaces the `#[contracttype]` enum (tagged-union, ~40 bytes serialized) with
+// a plain `u32` constant set (~4 bytes).  Each status maps to a unique power-of-
+// two bit so callers can test membership with a single bitwise AND, and the
+// Soroban host serialises the value as a single 32-bit word.
+//
+// Bit layout (only one bit is ever set at a time):
+//   0x01  Pending   — defined, work not yet submitted
+//   0x02  Submitted — freelancer submitted work
+//   0x04  Approved  — client approved, funds pending release
+//   0x08  Released  — funds transferred to freelancer
+//   0x10  Rejected  — client rejected; freelancer should resubmit
+//   0x20  Disputed  — dispute raised; funds frozen
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Compact bitflag type for milestone lifecycle state.
+///
+/// Use the `MS_*` constants below instead of constructing raw values.
+/// A single bit is set at any given time; the bitflag layout allows
+/// cheap membership tests (`status & MS_TERMINAL != 0`) without
+/// deserialising a tagged-union enum.
+pub type MilestoneStatus = u32;
+
+/// Milestone defined but work not yet started/submitted.
+pub const MS_PENDING: MilestoneStatus = 0x01;
+/// Freelancer has submitted work for this milestone.
+pub const MS_SUBMITTED: MilestoneStatus = 0x02;
+/// Client has approved the milestone and funds are pending release.
+pub const MS_APPROVED: MilestoneStatus = 0x04;
+/// Funds have been released for this milestone.
+pub const MS_RELEASED: MilestoneStatus = 0x08;
+/// Client rejected the submission. Freelancer should resubmit.
+pub const MS_REJECTED: MilestoneStatus = 0x10;
+/// A dispute has been raised on this milestone. Funds are frozen.
+pub const MS_DISPUTED: MilestoneStatus = 0x20;
+
+/// Mask of all terminal states (no further transitions expected).
+pub const MS_TERMINAL: MilestoneStatus = MS_RELEASED | MS_DISPUTED;
+
+/// Mask of states that block escrow cancellation.
+pub const MS_BLOCKS_CANCEL: MilestoneStatus = MS_SUBMITTED | MS_APPROVED;
 
 /// Timelock metadata for protecting buyers: no release until expiry.
 #[contracttype]
@@ -50,6 +76,33 @@ pub struct Timelock {
     pub duration_ledger: u64,
     /// Ledger timestamp when timelock started.
     pub start_ledger: u64,
+}
+
+/// Optional timelock wrapper — used in `EscrowState` to avoid `Option<Timelock>`
+/// which does not satisfy `ScVal: TryFrom<&Option<Timelock>>` in test mode.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum OptionalTimelock {
+    None,
+    Some(Timelock),
+}
+
+impl From<Option<Timelock>> for OptionalTimelock {
+    fn from(opt: Option<Timelock>) -> Self {
+        match opt {
+            Some(t) => OptionalTimelock::Some(t),
+            None => OptionalTimelock::None,
+        }
+    }
+}
+
+impl From<OptionalTimelock> for Option<Timelock> {
+    fn from(opt: OptionalTimelock) -> Self {
+        match opt {
+            OptionalTimelock::Some(t) => Some(t),
+            OptionalTimelock::None => None,
+        }
+    }
 }
 
 /// Supported recurring payment intervals.
@@ -73,11 +126,25 @@ pub struct ApprovalRecord {
 // STRUCTS
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Multisig policy for milestone approve/reject. Empty `approvers` disables multisig
+/// (only `client` may approve/reject, legacy behaviour).
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct MultisigConfig {
+    pub approvers: soroban_sdk::Vec<Address>,
+    pub weights: soroban_sdk::Vec<u32>,
+    pub threshold: u32,
+}
+
 /// A single milestone within an escrow agreement.
 ///
 /// Each milestone represents a discrete deliverable with a defined
 /// payment amount. Funds for a milestone are released only after
 /// the client approves the submission.
+///
+/// # Storage layout
+/// `status` is stored as a compact `u32` bitflag (see `MS_*` constants)
+/// rather than a tagged-union enum, saving ~36 bytes per milestone entry.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Milestone {
@@ -89,13 +156,12 @@ pub struct Milestone {
     pub title: String,
 
     /// IPFS content hash of the full milestone description/requirements.
-    /// TODO (contributor): implement IPFS hash validation helper
     pub description_hash: BytesN<32>,
 
     /// Token amount allocated to this milestone (in stroops / base units).
     pub amount: i128,
 
-    /// Current state of this milestone.
+    /// Current state of this milestone — one of the `MS_*` bitflag constants.
     pub status: MilestoneStatus,
 
     /// Ledger timestamp when the freelancer submitted work.
@@ -209,10 +275,19 @@ pub struct EscrowState {
     pub lock_time_extension: Option<u64>,
 
     /// Optional timelock payload for buyer remorse protection.
-    pub timelock: Option<Timelock>,
+    pub timelock: OptionalTimelock,
 
     /// IPFS hash of the full project brief / agreement document.
     pub brief_hash: BytesN<32>,
+
+    /// Multisig approvers (empty = legacy mode: only `client` may approve/reject milestones).
+    pub multisig_approvers: soroban_sdk::Vec<Address>,
+
+    /// Weight per approver (same length as `multisig_approvers` when multisig is used).
+    pub multisig_weights: soroban_sdk::Vec<u32>,
+
+    /// Minimum sum of weights required to approve a submitted milestone.
+    pub multisig_threshold: u32,
 }
 
 /// On-chain reputation record for a user address.
@@ -374,4 +449,6 @@ pub enum DataKey {
     OracleAddress,
     /// Fallback oracle contract address — value: Address
     FallbackOracleAddress,
+    /// Wormhole token bridge contract address — value: Address
+    WormholeBridge,
 }

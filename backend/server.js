@@ -11,7 +11,7 @@ import compressionMiddleware from './middleware/compression.js';
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
-import { logger, requestLogger } from './lib/logger.js';
+import { requestLogger } from './lib/logger.js';
 
 import cookieParser from 'cookie-parser';
 import {
@@ -40,7 +40,6 @@ import incidentRoutes from './api/routes/incidentRoutes.js';
 import batchRoutes from './api/routes/batchRoutes.js';
 import tenantMiddleware from './api/middleware/tenant.js';
 import auditMiddleware from './api/middleware/audit.js';
-import { deprecateVersion } from './api/middleware/deprecation.js';
 import { createWebSocketServer, pool } from './api/websocket/handlers.js';
 import cache from './lib/cache.js';
 import { attachPrismaMetrics } from './lib/prismaMetrics.js';
@@ -52,6 +51,7 @@ import { errorsTotal } from './lib/metrics.js';
 import { leaderboardRateLimit } from './middleware/rateLimit.js';
 import metricsMiddleware from './middleware/metricsMiddleware.js';
 import responseTime from './middleware/responseTime.js';
+import logger, { getLogger } from './config/logger.js';
 import emailService from './services/emailService.js';
 import complianceService from './services/complianceService.js';
 import { startIndexer } from './services/eventIndexer.js';
@@ -62,14 +62,21 @@ import { createGateway } from './gateway/index.js';
 
 // Attach Prisma query instrumentation and monitoring
 attachPrismaMetrics(prisma);
-startConnectionMonitoring(prisma);
 
 const PORT = process.env.PORT || 4000;
 const app = express();
+const sentryRequestHandler = Sentry.expressRequestHandler?.() ?? ((_req, _res, next) => next());
+const sentryTracingHandler = Sentry.expressTracingHandler?.() ?? ((_req, _res, next) => next());
+const sentryErrorHandler =
+  Sentry.expressErrorHandler?.({
+    shouldHandleError(err) {
+      return !err.statusCode || err.statusCode >= 500;
+    },
+  }) ?? ((err, _req, _res, next) => next(err));
 
 // ── Sentry request handler — must be first middleware ─────────────────────────
 // Attaches trace context and request data to every event captured downstream.
-app.use(Sentry.expressRequestHandler());
+app.use(sentryRequestHandler);
 
 app.use(helmet());
 app.use(compressionMiddleware);
@@ -77,7 +84,8 @@ app.use(metricsMiddleware);
 app.use(responseTime);
 app.use(requestLogger);
 app.use((req, res, next) => {
-  const requestId = req.id || req.headers['x-request-id'] || req.headers['x-correlation-id'] || randomUUID();
+  const requestId =
+    req.id || req.headers['x-request-id'] || req.headers['x-correlation-id'] || randomUUID();
   req.id = requestId;
   res.setHeader('X-Request-Id', requestId);
   next();
@@ -93,13 +101,11 @@ app.use(express.urlencoded({ extended: true, limit: REQUEST_SIZE_LIMIT }));
 app.use(cookieParser());
 app.use(sanitizeInputs);
 app.use(csrfProtection);
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static('uploads'));
 app.use(auditMiddleware);
 
 // ── Sentry tracing handler — after body parsers, before routes ────────────────
-app.use(Sentry.expressTracingHandler());
+app.use(sentryTracingHandler);
 
 // ── API Gateway — centralized auth, rate limiting, logging, metrics ───────────
 app.use('/api', ...createGateway());
@@ -134,12 +140,18 @@ app.get('/health', async (_req, res) => {
         timestamp: poolCheck[0].current_time,
       };
     } catch (poolError) {
-      // Pool info not available, that's ok
-      console.warn('[HEALTH] Could not get pool info:', poolError.message);
+      getLogger().warn({
+        message: 'health_db_pool_info_unavailable',
+        error: poolError.message,
+      });
     }
   } catch (error) {
     dbStatus = 'error';
-    console.error('[HEALTH] Database check failed:', error.message);
+    getLogger().error({
+      message: 'health_database_check_failed',
+      error: error.message,
+      stack: error.stack,
+    });
   }
 
   const backupStatus = await getBackupStatus();
@@ -164,6 +176,7 @@ app.get('/api/csrf-token', generateCsrfToken);
 // ── API Routes ────────────────────────────────────────────────────────────────
 // Auth is handled by the gateway above — no per-route authMiddleware needed.
 app.use('/api/health', healthRoutes);
+app.use('/ws/health', wsHealthRoutes);
 app.use('/api', tenantMiddleware);
 app.use('/api/auth', authRoutes);
 app.use('/api/tenant', tenantRoutes);
@@ -184,7 +197,10 @@ app.use('/api/compliance', complianceRoutes);
 app.use('/api/incidents', incidentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/batch', batchRoutes);
+app.use('/api/search', searchRoutes);
 app.use('/docs', docsRouter);
+// Alias — acceptance criteria requires /api-docs
+app.use('/api-docs', docsRouter);
 
 // ── Example: Deprecated API Version ───────────────────────────────────────────
 // Uncomment to deprecate unversioned endpoints in favor of /api/v1
@@ -192,19 +208,17 @@ app.use('/docs', docsRouter);
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((req, res) => {
+  getLogger().warn({
+    message: 'http_not_found',
+    method: req.method,
+    path: req.originalUrl?.split('?')[0],
+  });
   res.status(404).json({ error: 'Route not found' });
 });
 
 // ── Sentry error handler — must be before the generic error handler ───────────
 // Captures unhandled Express errors and attaches request context.
-app.use(
-  Sentry.expressErrorHandler({
-    shouldHandleError(err) {
-      // Report all 5xx errors; skip expected 4xx client errors
-      return !err.statusCode || err.statusCode >= 500;
-    },
-  }),
-);
+app.use(sentryErrorHandler);
 
 // ── Generic error handler ─────────────────────────────────────────────────────
 
@@ -239,32 +253,52 @@ app.use((err, req, res, _next) => {
 const server = http.createServer(app);
 createWebSocketServer(server);
 
-server.listen(PORT, async () => {
-  // Load secrets first — merges vault/env secrets into process.env
-  await initSecrets();
-  logger.info({ secretsBackend: process.env.SECRETS_BACKEND || 'env' }, 'Secrets backend loaded');
-  logger.info({ port: PORT, network: process.env.STELLAR_NETWORK }, 'API server started');
-  await emailService.start();
-  logger.info('[EmailService] Queue processor started');
-  complianceService.startScheduler();
-  logger.info('[ComplianceService] Scheduler started');
-  logger.info('[WebSocket] Server attached');
-  startIndexer().catch((err) => {
-    logger.error({ err, component: 'indexer' }, 'Indexer failed to start');
-    Sentry.captureException(err, { tags: { component: 'indexer' } });
-  });
+async function startServer() {
+  return new Promise((resolve, reject) => {
+    server.listen(PORT, async () => {
+      try {
+        startConnectionMonitoring(prisma);
+        // Load secrets first — merges vault/env secrets into process.env
+        await initSecrets();
+        logger.info(
+          { secretsBackend: process.env.SECRETS_BACKEND || 'env' },
+          'Secrets backend loaded',
+        );
+        logger.info({ port: PORT, network: process.env.STELLAR_NETWORK }, 'API server started');
+        await emailService.start();
+        logger.info('[EmailService] Queue processor started');
+        complianceService.startScheduler();
+        logger.info('[ComplianceService] Scheduler started');
+        logger.info('[WebSocket] Server attached');
+        startIndexer().catch((err) => {
+          logger.error({ err, component: 'indexer' }, 'Indexer failed to start');
+          Sentry.captureException(err, { tags: { component: 'indexer' } });
+        });
 
-  // Reputation ES sync — initial + daily re-sync
-  ensureIndex().then(() =>
-    syncFromPrisma().catch((err) =>
-      logger.warn({ err }, '[ReputationSearch] Initial sync failed'),
-    ),
-  );
-  const MS_PER_DAY = 86_400_000;
-  setInterval(
-    () => syncFromPrisma().catch((err) => logger.warn({ err }, '[ReputationSearch] Daily sync failed')),
-    MS_PER_DAY,
-  );
-});
+        // Reputation ES sync — ensure index + initial sync on startup
+        ensureIndex().then(() =>
+          syncFromPrisma().catch((err) =>
+            logger.warn({ err }, '[ReputationSearch] Initial sync failed'),
+          ),
+        );
+        resolve(server);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  });
+}
+
+if (
+  process.env.NODE_ENV !== 'test' &&
+  process.argv[1] &&
+  import.meta.url === new URL(`file://${process.argv[1]}`).href
+) {
+  startServer().catch((error) => {
+    logger.error({ err: error }, 'Failed to start API server');
+    process.exitCode = 1;
+  });
+}
 
 export default app;
+export { server, startServer };

@@ -52,7 +52,7 @@ export default function ProfileForm({ initialData = {}, address }) {
       let parsedPrefs;
       try {
         parsedPrefs = JSON.parse(formData.preferences);
-      } catch (err) {
+      } catch (_err) {
         throw new Error('Preferences must be valid JSON');
       }
 
