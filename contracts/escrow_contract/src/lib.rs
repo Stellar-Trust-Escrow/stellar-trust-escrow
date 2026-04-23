@@ -2690,6 +2690,14 @@ impl EscrowContract {
         // Emit slash event
         events::emit_slash_applied(env, escrow_id, slashed_user, recipient, amount, reason);
     }
+
+    /// Returns the contract's current token balance for the given token address.
+    /// Use this for on-chain solvency checks to verify the contract holds
+    /// sufficient funds to cover all active escrow `remaining_balance` values.
+    pub fn get_contract_balance(env: Env, token: Address) -> i128 {
+        ContractStorage::bump_instance_ttl(&env);
+        token::Client::new(&env, &token).balance(&env.current_contract_address())
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -3773,5 +3781,41 @@ mod tests {
             &50_i128,
         );
         assert_eq!(mid, 0);
+    }
+
+    #[test]
+    fn test_get_contract_balance() {
+        let (env, admin, _, client) = setup();
+        client.initialize(&admin);
+
+        let escrow_client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_id = token_contract.address();
+        let token_admin = token::StellarAssetClient::new(&env, &token_id);
+
+        let total_amount = 1_000_i128;
+        let rent_reserve = ContractStorage::reserve_for_entries(1);
+        token_admin.mint(&escrow_client, &(total_amount + rent_reserve));
+
+        assert_eq!(client.get_contract_balance(&token_id), 0);
+
+        client.create_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &total_amount,
+            &BytesN::from_array(&env, &[1; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
+
+        assert_eq!(
+            client.get_contract_balance(&token_id),
+            total_amount + rent_reserve
+        );
     }
 }
