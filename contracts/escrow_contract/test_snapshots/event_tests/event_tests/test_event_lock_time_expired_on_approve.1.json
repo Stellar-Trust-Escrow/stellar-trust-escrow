@@ -676,7 +676,28 @@
                         "symbol": "approvals"
                       },
                       "val": {
-                        "vec": []
+                        "vec": [
+                          {
+                            "map": [
+                              {
+                                "key": {
+                                  "symbol": "approved_at"
+                                },
+                                "val": {
+                                  "u64": 3000
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "signer"
+                                },
+                                "val": {
+                                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                                }
+                              }
+                            ]
+                          }
+                        ]
                       }
                     },
                     {

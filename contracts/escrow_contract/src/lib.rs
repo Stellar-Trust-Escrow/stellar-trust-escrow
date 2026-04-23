@@ -65,7 +65,7 @@ pub use errors::EscrowError;
 use storage::StorageManager;
 use types::{CancellationRequest, RecurringInterval, RecurringPaymentConfig, SlashRecord};
 pub use types::{
-    DataKey, EscrowState, EscrowStatus, Milestone, MilestoneStatus, MultisigConfig,
+    ApprovalRecord, DataKey, EscrowState, EscrowStatus, Milestone, MilestoneStatus, MultisigConfig,
     OptionalTimelock, ReputationRecord, Timelock, MS_APPROVED, MS_DISPUTED, MS_PENDING,
     MS_REJECTED, MS_RELEASED, MS_SUBMITTED,
 };
@@ -1623,6 +1623,12 @@ impl EscrowContract {
         let now = env.ledger().timestamp();
         let amount = milestone.amount;
 
+        // Record this signer's approval in the approvals list.
+        milestone.approvals.push_back(ApprovalRecord {
+            signer: caller.clone(),
+            approved_at: now,
+        });
+
         milestone.status = MS_APPROVED;
         milestone.resolved_at = Some(now);
         meta.approved_count = meta
@@ -2245,6 +2251,19 @@ impl EscrowContract {
     ) -> Result<Milestone, EscrowError> {
         ContractStorage::ensure_live_escrow(&env, escrow_id)?;
         ContractStorage::load_milestone(&env, escrow_id, milestone_id)
+    }
+
+    /// Returns the approvals list for a given milestone.
+    /// Useful for frontends displaying multisig approval progress (e.g. "2 of 3 signers approved").
+    /// Returns `EscrowError::MilestoneNotFound` if the milestone does not exist.
+    pub fn get_milestone_approvals(
+        env: Env,
+        escrow_id: u64,
+        milestone_id: u32,
+    ) -> Result<soroban_sdk::Vec<ApprovalRecord>, EscrowError> {
+        ContractStorage::ensure_live_escrow(&env, escrow_id)?;
+        let milestone = ContractStorage::load_milestone(&env, escrow_id, milestone_id)?;
+        Ok(milestone.approvals)
     }
 
     pub fn get_cancellation_request(
@@ -3773,5 +3792,76 @@ mod tests {
             &50_i128,
         );
         assert_eq!(mid, 0);
+    }
+
+    #[test]
+    fn test_get_milestone_approvals() {
+        let (env, admin, _, client) = setup();
+        client.initialize(&admin);
+
+        let escrow_client = Address::generate(&env);
+        let signer2 = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_id = token_contract.address();
+        let token_admin = token::StellarAssetClient::new(&env, &token_id);
+
+        let mut signers = soroban_sdk::Vec::new(&env);
+        signers.push_back(escrow_client.clone());
+        signers.push_back(signer2.clone());
+
+        token_admin.mint(
+            &escrow_client,
+            &(200_i128 + (3 * ContractStorage::reserve_for_entries(1))),
+        );
+
+        let escrow_id = client.create_escrow_with_buyer_signers(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &200_i128,
+            &BytesN::from_array(&env, &[1; 32]),
+            &None,
+            &None,
+            &None,
+            &signers,
+        );
+
+        let mid0 = client.add_milestone(
+            &escrow_client,
+            &escrow_id,
+            &String::from_str(&env, "M0"),
+            &BytesN::from_array(&env, &[2; 32]),
+            &100_i128,
+        );
+        let mid1 = client.add_milestone(
+            &escrow_client,
+            &escrow_id,
+            &String::from_str(&env, "M1"),
+            &BytesN::from_array(&env, &[3; 32]),
+            &100_i128,
+        );
+
+        // Empty before any approval
+        let approvals = client.get_milestone_approvals(&escrow_id, &mid0);
+        assert_eq!(approvals.len(), 0);
+
+        // Returns MilestoneNotFound for invalid milestone ID
+        let err = client.try_get_milestone_approvals(&escrow_id, &999_u32);
+        assert!(err.is_err());
+
+        // First signer approves milestone 0 — approvals list grows to 1
+        client.submit_milestone(&freelancer, &escrow_id, &mid0);
+        client.approve_milestone(&escrow_client, &escrow_id, &mid0);
+        let approvals = client.get_milestone_approvals(&escrow_id, &mid0);
+        assert_eq!(approvals.len(), 1);
+        assert_eq!(approvals.get(0).unwrap().signer, escrow_client);
+
+        // Second signer approves milestone 1 — approvals list grows to 1 for that milestone
+        client.submit_milestone(&freelancer, &escrow_id, &mid1);
+        client.approve_milestone(&signer2, &escrow_id, &mid1);
+        let approvals = client.get_milestone_approvals(&escrow_id, &mid1);
+        assert_eq!(approvals.len(), 1);
+        assert_eq!(approvals.get(0).unwrap().signer, signer2);
     }
 }
