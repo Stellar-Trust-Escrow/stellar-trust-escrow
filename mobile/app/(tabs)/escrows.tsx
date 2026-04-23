@@ -63,7 +63,7 @@ export default function EscrowsScreen() {
 
       <FlatList
         data={escrows}
-        keyExtractor={(e) => String(e.id)}
+        keyExtractor={(e: Escrow) => String(e.id)}
         contentContainerStyle={styles.list}
         refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor="#6366f1" />}
         renderItem={({ item }) => <EscrowCard escrow={item} userAddress={address} />}

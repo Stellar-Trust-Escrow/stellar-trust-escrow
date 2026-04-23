@@ -87,7 +87,7 @@ export default function CreateEscrowScreen() {
       Alert.alert(
         'Success',
         `Escrow created!\nTx: ${result.hash.slice(0, 16)}…`,
-        [{ text: 'View Escrows', onPress: () => router.replace('/(tabs)/escrows') }],
+        [{ text: 'View Escrows', onPress: () => void router.replace('/(tabs)/escrows') }],
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Broadcast failed';

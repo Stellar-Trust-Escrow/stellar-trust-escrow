@@ -37,12 +37,12 @@ export function getCachedEscrow(id: string): Record<string, unknown> | null {
     `SELECT data FROM escrows WHERE id = ?`,
     [id],
   );
-  return row ? JSON.parse(row.data) : null;
+  return row ? (JSON.parse(row.data) as Record<string, unknown>) : null;
 }
 
 export function getCachedEscrows(): Record<string, unknown>[] {
   const rows = db.getAllSync<{ data: string }>(`SELECT data FROM escrows ORDER BY cached_at DESC`);
-  return rows.map((r) => JSON.parse(r.data));
+  return rows.map((r: { data: string }) => JSON.parse(r.data) as Record<string, unknown>);
 }
 
 export function cacheMilestones(escrowId: string, milestones: Record<string, unknown>[]): void {
@@ -60,5 +60,5 @@ export function getCachedMilestones(escrowId: string): Record<string, unknown>[]
     `SELECT data FROM milestones WHERE escrow_id = ? ORDER BY id`,
     [escrowId],
   );
-  return rows.map((r) => JSON.parse(r.data));
+  return rows.map((r: { data: string }) => JSON.parse(r.data) as Record<string, unknown>);
 }

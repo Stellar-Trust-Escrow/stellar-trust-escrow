@@ -208,3 +208,29 @@ pub fn emit_lock_time_extended(
         (old_lock_time, new_lock_time, extended_by.clone()),
     );
 }
+
+/// Emitted when the contract is initialized with an admin address.
+///
+/// Off-chain indexers can use this event to determine the initial admin
+/// without requiring a direct contract storage read.
+///
+/// # Arguments
+/// * `admin` - The address set as the initial contract admin
+pub fn emit_admin_initialized(env: &Env, admin: &Address) {
+    env.events()
+        .publish((symbol_short!("adm_init"),), admin.clone());
+}
+
+/// Emitted when the contract admin is transferred to a new address.
+///
+/// Enables a fully auditable admin history from event logs alone.
+///
+/// # Arguments
+/// * `old_admin` - The previous admin address
+/// * `new_admin` - The incoming admin address
+pub fn emit_admin_changed(env: &Env, old_admin: &Address, new_admin: &Address) {
+    env.events().publish(
+        (symbol_short!("adm_chg"),),
+        (old_admin.clone(), new_admin.clone()),
+    );
+}

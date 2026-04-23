@@ -101,6 +101,32 @@ jobs:
         env:
           NEXT_PUBLIC_API_URL: http://localhost:3001
 
+  mobile:
+    name: Mobile (React Native / Expo)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-mobile-${{ hashFiles('mobile/package.json') }}
+          fail-on-cache-miss: false
+
+      - name: Install dependencies
+        run: cd mobile && npm install
+
+      - name: Type check
+        run: cd mobile && npx tsc --noEmit
+
+      - name: Test
+        run: cd mobile && npm test
+
   bundle-analysis:
     name: Frontend Bundle Analysis
     runs-on: ubuntu-latest

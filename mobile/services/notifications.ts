@@ -73,8 +73,7 @@ export async function registerForPushNotifications(stellarAddress: string): Prom
       token,
       platform: Platform.OS,
     });
-  } catch (err) {
-    // Non-fatal — token stored locally, backend registration is best-effort
+  } catch (err: unknown) {
     console.warn('[Notifications] Failed to register token with backend:', err);
   }
 

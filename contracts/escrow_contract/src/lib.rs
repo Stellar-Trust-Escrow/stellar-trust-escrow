@@ -96,6 +96,7 @@ impl ContractStorage {
         instance.set(&DataKey::Admin, admin);
         instance.set(&DataKey::EscrowCounter, &0_u64);
         Self::bump_instance_ttl(env);
+        events::emit_admin_initialized(env, admin);
         Ok(())
     }
 
@@ -552,11 +553,6 @@ impl EscrowContract {
         Ok(())
     }
 
-    /// Admin-triggered fund release for an already-approved milestone.
-    ///
-    /// # Gas notes
-    /// - Validates milestone state before loading meta.
-    pub fn release_funds(env: Env, escrow_id: u64, milestone_id: u32) -> Result<(), EscrowError> {
     /// Admin-only fallback for edge cases. Normal flow uses `approve_milestone`.
     ///
     /// # Security (STE-01, STE-02)
@@ -587,7 +583,7 @@ impl EscrowContract {
         }
 
         // Load meta to check lock time
-        let meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
+        let mut meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
 
         // Check if lock time has expired
         ContractStorage::check_lock_time_expired(&env, escrow_id, meta.lock_time)?;
@@ -603,7 +599,6 @@ impl EscrowContract {
             &meta.freelancer,
             &amount,
         );
-        meta.remaining_balance -= amount;
         ContractStorage::save_escrow_meta(&env, &meta);
 
         events::emit_funds_released(&env, escrow_id, &meta.freelancer, amount);
@@ -889,6 +884,46 @@ mod tests {
     }
 
     #[test]
+    fn test_admin_initialized_event() {
+        use soroban_sdk::testutils::Events;
+        use soroban_sdk::{IntoVal, TryIntoVal};
+
+        let (env, admin, _contract_id, client) = setup();
+        client.initialize(&admin);
+
+        // Collect all contract events (non-diagnostic) emitted during initialize
+        let all_events = env.events().all();
+
+        // The adm_init symbol we expect in the topics
+        let adm_init_sym: soroban_sdk::Val =
+            soroban_sdk::symbol_short!("adm_init").into_val(&env);
+
+        // Find events whose first topic matches adm_init
+        let mut found_count = 0u32;
+        let mut found_data: Option<soroban_sdk::Val> = None;
+        for (_contract, topics, data) in all_events.iter() {
+            if topics.len() == 1 {
+                if let Some(topic) = topics.get(0) {
+                    // Compare raw bit representation — Val is a u64 wrapper
+                    if topic.get_payload() == adm_init_sym.get_payload() {
+                        found_count += 1;
+                        found_data = Some(data);
+                    }
+                }
+            }
+        }
+
+        assert_eq!(found_count, 1, "expected exactly one adm_init event");
+
+        // Verify the event data carries the correct admin address
+        let emitted_admin: Address = found_data
+            .unwrap()
+            .try_into_val(&env)
+            .expect("event data should be an Address");
+        assert_eq!(emitted_admin, admin, "adm_init event must carry the admin address");
+    }
+
+    #[test]
     fn test_create_escrow_packs_metadata_separately() {
         let (env, admin, contract_id, client) = setup();
         client.initialize(&admin);
@@ -908,6 +943,7 @@ mod tests {
             &token_id,
             &1_000_i128,
             &BytesN::from_array(&env, &[1; 32]),
+            &None,
             &None,
             &None,
         );
@@ -940,6 +976,7 @@ mod tests {
             &token_id,
             &1_000_i128,
             &BytesN::from_array(&env, &[2; 32]),
+            &None,
             &None,
             &None,
         );
@@ -995,6 +1032,7 @@ mod tests {
             &BytesN::from_array(&env, &[4; 32]),
             &None,
             &None,
+            &None,
         );
 
         let mid = client.add_milestone(
@@ -1044,6 +1082,7 @@ mod tests {
             &token_id,
             &200_i128,
             &BytesN::from_array(&env, &[6; 32]),
+            &None,
             &None,
             &None,
         );
