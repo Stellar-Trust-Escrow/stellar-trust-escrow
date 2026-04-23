@@ -9,10 +9,7 @@
  * Step 4: Sign & Submit — Freighter signs, broadcast to Stellar
  *
  * TODO (contributor — hard, Issue #33):
- * - Implement multi-step form state management
  * - Step 1: validate Stellar address format (G..., 56 chars)
- * - Step 1: token selector (USDC, XLM, custom)
- * - Step 2: add/remove milestones dynamically
  * - Step 2: validate milestone amounts sum <= total_amount
  * - Step 3: show summary with gas estimate
  * - Step 4: build Soroban transaction with stellar-sdk
@@ -21,12 +18,16 @@
  * - On success: redirect to /escrow/[id]
  */
 
-
-
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Button from '../../../components/ui/Button';
+import TemplateSelector from '../../../components/escrow/TemplateSelector';
+import StellarAddressInput from '../../../components/ui/StellarAddressInput';
+import XLMAmountInput from '../../../components/ui/XLMAmountInput';
+import templatesData from '../../../data/templates.json';
+import { useToast } from '../../../contexts/ToastContext';
 
 const STEPS = [
   { id: 1, label: 'Counterparty' },
@@ -35,19 +36,80 @@ const STEPS = [
   { id: 4, label: 'Sign' },
 ];
 
+const DEFAULT_MILESTONE = { title: '', description: '', amount: '' };
+
+const DESCRIPTION_MIN_LENGTH = 10;
+
+function applyTemplateToForm(currentForm, template) {
+  const milestones = Array.isArray(template.milestones) && template.milestones.length > 0
+    ? template.milestones.map((milestone) => ({
+        title: milestone.title || '',
+        description: milestone.description || '',
+        amount: milestone.amount || '',
+      }))
+    : [{ ...DEFAULT_MILESTONE }];
+
+  return {
+    ...currentForm,
+    tokenAddress: template.tokenAddress || currentForm.tokenAddress || 'usdc',
+    totalAmount: template.totalAmount || '',
+    briefDescription: template.briefDescription || '',
+    deadline: template.deadline || '',
+    milestones,
+  };
+}
+
+/** Returns true when the amount string represents a positive number. */
+function isPositiveAmount(value) {
+  const n = Number(value);
+  return value !== '' && !Number.isNaN(n) && n > 0;
+}
+
 export default function CreateEscrowPage() {
-  // TODO (contributor): lift this into a useCreateEscrow() custom hook
+  const searchParams = useSearchParams();
+  const templateLibrary = templatesData.templates || [];
+
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState({
     freelancerAddress: '',
-    tokenAddress: '',
+    tokenAddress: 'usdc',
     totalAmount: '',
     briefDescription: '',
     deadline: '',
-    milestones: [{ title: '', description: '', amount: '' }],
+    milestones: [{ ...DEFAULT_MILESTONE }],
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [templateNotice, setTemplateNotice] = useState('');
+  const [appliedQueryTemplateId, setAppliedQueryTemplateId] = useState(null);
+
+  // Touched state tracks which fields the user has interacted with
+  const [touched, setTouched] = useState({ totalAmount: false, briefDescription: false });
+
+  const { showToast } = useToast();
+
+  useEffect(() => {
+    const templateId = searchParams.get('template');
+    if (!templateId || templateId === appliedQueryTemplateId) {
+      return;
+    }
+
+    const template = templateLibrary.find((item) => item.id === templateId);
+    if (!template) {
+      return;
+    }
+
+    setFormData((previous) => applyTemplateToForm(previous, template));
+    setCurrentStep(1);
+    setTemplateNotice(`Applied template: ${template.name}`);
+    setAppliedQueryTemplateId(templateId);
+  }, [searchParams, templateLibrary, appliedQueryTemplateId]);
+
+  const handleApplyTemplate = (template) => {
+    setFormData((previous) => applyTemplateToForm(previous, template));
+    setCurrentStep(1);
+    setTemplateNotice(`Applied template: ${template.name}`);
+  };
 
   // TODO (contributor — Issue #33): implement form submission
   const handleSubmit = async () => {
@@ -61,25 +123,70 @@ export default function CreateEscrowPage() {
       throw new Error('Not implemented — see Issue #33');
     } catch (err) {
       setError(err.message);
+      showToast('Failed to create escrow', 'error');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const addMilestone = () => {
-    // TODO (contributor): append empty milestone to formData.milestones
+    setFormData((data) => ({
+      ...data,
+      milestones: [...data.milestones, { ...DEFAULT_MILESTONE }],
+    }));
   };
 
-  const removeMilestone = (_index) => {
-    // TODO (contributor): remove milestone at index
+  const removeMilestone = (index) => {
+    setFormData((data) => {
+      const nextMilestones = data.milestones.filter((_, milestoneIndex) => milestoneIndex !== index);
+      return {
+        ...data,
+        milestones: nextMilestones.length > 0 ? nextMilestones : [{ ...DEFAULT_MILESTONE }],
+      };
+    });
   };
+
+  const updateMilestone = (index, field, value) => {
+    setFormData((data) => ({
+      ...data,
+      milestones: data.milestones.map((milestone, milestoneIndex) =>
+        milestoneIndex === index ? { ...milestone, [field]: value } : milestone,
+      ),
+    }));
+  };
+
+  // Validation errors (only shown after field is touched)
+  const amountError =
+    touched.totalAmount && formData.totalAmount !== '' && !isPositiveAmount(formData.totalAmount)
+      ? 'Amount must be a positive number.'
+      : null;
+
+  const descriptionError =
+    touched.briefDescription &&
+    formData.briefDescription.length > 0 &&
+    formData.briefDescription.length < DESCRIPTION_MIN_LENGTH
+      ? `Description must be at least ${DESCRIPTION_MIN_LENGTH} characters.`
+      : null;
 
   return (
-    <div className="max-w-2xl mx-auto space-y-8">
+    <div className="max-w-4xl mx-auto space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-white">Create New Escrow</h1>
         <p className="text-gray-400 mt-1">Lock funds and define milestones for your project.</p>
       </div>
+
+      <TemplateSelector
+        baseTemplates={templateLibrary}
+        formData={formData}
+        onApplyTemplate={handleApplyTemplate}
+        compact
+      />
+
+      {templateNotice && (
+        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3 text-emerald-300 text-sm">
+          {templateNotice}
+        </div>
+      )}
 
       {/* Step Indicator */}
       <div className="flex items-center gap-2">
@@ -106,13 +213,21 @@ export default function CreateEscrowPage() {
 
       {/* Step Content */}
       <div className="card space-y-6">
-        {currentStep === 1 && <StepCounterparty formData={formData} setFormData={setFormData} />}
+        {currentStep === 1 && (
+          <StepCounterparty
+            formData={formData}
+            setFormData={setFormData}
+            setTouched={setTouched}
+            amountError={amountError}
+            descriptionError={descriptionError}
+          />
+        )}
         {currentStep === 2 && (
           <StepMilestones
             formData={formData}
-            setFormData={setFormData}
             onAdd={addMilestone}
             onRemove={removeMilestone}
+            onUpdate={updateMilestone}
           />
         )}
         {currentStep === 3 && <StepReview formData={formData} />}
@@ -122,21 +237,24 @@ export default function CreateEscrowPage() {
       </div>
 
       {/* Navigation */}
-      <div className="flex justify-between">
+      <div className="flex flex-col sm:flex-row justify-between gap-4">
         <Button
           variant="secondary"
-          onClick={() => setCurrentStep((s) => Math.max(1, s - 1))}
+          onClick={() => setCurrentStep((step) => Math.max(1, step - 1))}
           disabled={currentStep === 1}
         >
           Back
         </Button>
         {currentStep < 4 ? (
-          <Button variant="primary" onClick={() => setCurrentStep((s) => s + 1)}>
+          <Button
+            variant="primary"
+            onClick={() => setCurrentStep((step) => step + 1)}
+          >
             Next →
           </Button>
         ) : (
-          <Button variant="primary" onClick={handleSubmit} disabled={isSubmitting}>
-            {isSubmitting ? 'Signing…' : 'Sign & Create Escrow'}
+          <Button variant="primary" onClick={handleSubmit} isLoading={isSubmitting}>
+            Sign & Create Escrow
           </Button>
         )}
       </div>
@@ -148,61 +266,80 @@ export default function CreateEscrowPage() {
 
 /**
  * Step 1: Enter counterparty details.
- * TODO (contributor — Issue #33): wire up form fields to formData state
  */
-function StepCounterparty({ formData, setFormData }) {
+function StepCounterparty({ formData, setFormData, setTouched, amountError, descriptionError }) {
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-semibold text-white">Counterparty & Funds</h2>
 
-      <div>
-        <label className="block text-sm text-gray-400 mb-1">Freelancer Stellar Address</label>
-        <input
-          type="text"
-          placeholder="GABCD1234..."
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5
-                     text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
-          value={formData.freelancerAddress}
-          onChange={(e) => setFormData((d) => ({ ...d, freelancerAddress: e.target.value }))}
-        />
-        {/* TODO (contributor): add validation error display */}
-      </div>
+      <StellarAddressInput
+        id="freelancer-address"
+        label="Freelancer Stellar Address"
+        placeholder="GABCD1234..."
+        value={formData.freelancerAddress}
+        onChange={(val) => setFormData((data) => ({ ...data, freelancerAddress: val }))}
+        required
+      />
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Token</label>
-          {/* TODO (contributor — Issue #33): implement token selector dropdown */}
-          <select className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white">
+          <label htmlFor="token" className="block text-sm text-gray-400 mb-1">Token</label>
+          <select
+            id="token"
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white"
+            value={formData.tokenAddress}
+            onChange={(event) =>
+              setFormData((data) => ({ ...data, tokenAddress: event.target.value }))
+            }
+          >
             <option value="usdc">USDC</option>
             <option value="xlm">XLM</option>
             <option value="custom">Custom…</option>
           </select>
         </div>
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Total Amount</label>
-          <input
-            type="number"
-            placeholder="0.00"
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5
-                       text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
+          <label htmlFor="total-amount" className="block text-sm text-gray-400 mb-1">
+            Total Amount
+          </label>
+          <XLMAmountInput
+            id="total-amount"
             value={formData.totalAmount}
-            onChange={(e) => setFormData((d) => ({ ...d, totalAmount: e.target.value }))}
+            onChange={(event) => {
+              setFormData((data) => ({ ...data, totalAmount: event.target.value }));
+              setTouched((t) => ({ ...t, totalAmount: true }));
+            }}
+            onBlur={() => setTouched((t) => ({ ...t, totalAmount: true }))}
+            error={amountError}
+            errorId="total-amount-error"
           />
         </div>
       </div>
 
       <div>
-        <label className="block text-sm text-gray-400 mb-1">
+        <label htmlFor="brief-description" className="block text-sm text-gray-400 mb-1">
           Project Brief <span className="text-gray-600">(optional)</span>
         </label>
         <textarea
+          id="brief-description"
           rows={3}
           placeholder="Briefly describe the project scope and deliverables…"
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5
-                     text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 resize-none"
+          className={`w-full bg-gray-800 border rounded-lg px-4 py-2.5
+                     text-white placeholder-gray-500 focus:outline-none resize-none transition-colors
+                     ${descriptionError ? 'border-red-500 focus:border-red-400' : 'border-gray-700 focus:border-indigo-500'}`}
           value={formData.briefDescription}
-          onChange={(e) => setFormData((d) => ({ ...d, briefDescription: e.target.value }))}
+          aria-invalid={!!descriptionError}
+          aria-describedby={descriptionError ? 'brief-description-error' : undefined}
+          onChange={(event) => {
+            setFormData((data) => ({ ...data, briefDescription: event.target.value }));
+            setTouched((t) => ({ ...t, briefDescription: true }));
+          }}
+          onBlur={() => setTouched((t) => ({ ...t, briefDescription: true }))}
         />
+        {descriptionError && (
+          <p id="brief-description-error" className="mt-1 text-xs text-red-400" role="alert">
+            {descriptionError}
+          </p>
+        )}
         {/* TODO (contributor): upload to IPFS and store hash */}
       </div>
     </div>
@@ -211,26 +348,26 @@ function StepCounterparty({ formData, setFormData }) {
 
 /**
  * Step 2: Define milestones.
- * TODO (contributor — Issue #33): implement add/remove and validate amounts
  */
-function StepMilestones({ formData, setFormData: _setFormData, onAdd, onRemove }) {
+function StepMilestones({ formData, onAdd, onRemove, onUpdate }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-white">Milestones</h2>
         <span className="text-sm text-gray-500">
-          Total: {formData.milestones.reduce((s, m) => s + Number(m.amount || 0), 0)} /{' '}
-          {formData.totalAmount || '—'}
+          Total: {formData.milestones.reduce((sum, milestone) => sum + Number(milestone.amount || 0), 0)}{' '}
+          / {formData.totalAmount || '—'} {String(formData.tokenAddress || 'USDC').toUpperCase()}
         </span>
       </div>
 
-      {formData.milestones.map((m, i) => (
-        <div key={i} className="bg-gray-800 rounded-lg p-4 space-y-3">
+      {formData.milestones.map((milestone, index) => (
+        <div key={index} className="bg-gray-800 rounded-lg p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-300">Milestone {i + 1}</span>
+            <span className="text-sm font-medium text-gray-300">Milestone {index + 1}</span>
             {formData.milestones.length > 1 && (
               <button
-                onClick={() => onRemove(i)}
+                type="button"
+                onClick={() => onRemove(index)}
                 className="text-red-400 text-sm hover:text-red-300"
               >
                 Remove
@@ -242,28 +379,34 @@ function StepMilestones({ formData, setFormData: _setFormData, onAdd, onRemove }
             placeholder="Title (e.g. Initial Design Mockups)"
             className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2
                        text-white placeholder-gray-500 text-sm focus:outline-none focus:border-indigo-500"
-            value={m.title}
-            onChange={(_e) => {
-              // TODO (contributor): update milestone at index i
-            }}
+            value={milestone.title}
+            onChange={(event) => onUpdate(index, 'title', event.target.value)}
           />
-          <div className="flex gap-2">
-            <input
-              type="number"
+          <textarea
+            rows={2}
+            placeholder="Milestone description"
+            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2
+                       text-white placeholder-gray-500 text-sm focus:outline-none focus:border-indigo-500 resize-none"
+            value={milestone.description}
+            onChange={(event) => onUpdate(index, 'description', event.target.value)}
+          />
+          <div className="flex gap-2 items-center">
+            <XLMAmountInput
+              value={milestone.amount}
               placeholder="Amount"
-              className="w-32 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2
-                         text-white placeholder-gray-500 text-sm focus:outline-none focus:border-indigo-500"
-              value={m.amount}
-              onChange={(_e) => {
-                // TODO (contributor): update amount at index i
-              }}
+              onChange={(event) => onUpdate(index, 'amount', event.target.value)}
+              inputClassName="w-32"
+              className="w-32"
             />
-            <span className="text-gray-500 text-sm self-center">USDC</span>
+            <span className="text-gray-500 text-sm">
+              {String(formData.tokenAddress || 'USDC').toUpperCase()}
+            </span>
           </div>
         </div>
       ))}
 
       <button
+        type="button"
         onClick={onAdd}
         className="w-full border border-dashed border-gray-700 rounded-lg py-3
                    text-gray-500 hover:text-gray-400 hover:border-gray-600 text-sm transition-colors"
@@ -276,9 +419,10 @@ function StepMilestones({ formData, setFormData: _setFormData, onAdd, onRemove }
 
 /**
  * Step 3: Review summary before signing.
- * TODO (contributor — Issue #33): display formData as a read-only summary
  */
 function StepReview({ formData }) {
+  const token = String(formData.tokenAddress || 'USDC').toUpperCase();
+
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-semibold text-white">Review Details</h2>
@@ -287,7 +431,7 @@ function StepReview({ formData }) {
           Freelancer: <span className="text-white">{formData.freelancerAddress || '—'}</span>
         </p>
         <p>
-          Total Amount: <span className="text-white">{formData.totalAmount || '—'} USDC</span>
+          Total Amount: <span className="text-white">{formData.totalAmount || '—'} {token}</span>
         </p>
         <p>
           Milestones: <span className="text-white">{formData.milestones.length}</span>
@@ -295,7 +439,7 @@ function StepReview({ formData }) {
       </div>
       <p className="text-xs text-gray-500">
         ⚠️ By proceeding, you authorize locking{' '}
-        <strong className="text-white">{formData.totalAmount} USDC</strong> in the escrow contract.
+        <strong className="text-white">{formData.totalAmount || '0'} {token}</strong> in the escrow contract.
         This action cannot be undone without mutual agreement.
       </p>
     </div>
@@ -306,7 +450,7 @@ function StepReview({ formData }) {
  * Step 4: Sign with Freighter.
  * TODO (contributor — Issue #33): build and sign the Soroban transaction
  */
-function StepSign({ onSubmit: _onSubmit, isSubmitting: _isSubmitting, error }) {
+function StepSign({ error }) {
   return (
     <div className="space-y-4 text-center">
       <h2 className="text-lg font-semibold text-white">Sign & Submit</h2>
