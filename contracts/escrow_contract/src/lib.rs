@@ -2072,6 +2072,18 @@ impl EscrowContract {
         ContractStorage::is_paused(&env)
     }
 
+    /// Returns the current admin address.
+    /// Returns EscrowError::NotInitialized if the contract has not been initialized.
+    pub fn get_admin(env: Env) -> Result<Address, EscrowError> {
+        ContractStorage::require_initialized(&env)?;
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(EscrowError::NotInitialized)?;
+        Ok(admin)
+    }
+
     /// Pauses scheduled recurring releases for an escrow.
     pub fn pause_recurring_schedule(
         env: Env,
@@ -2894,6 +2906,21 @@ mod tests {
             assert!(!env.storage().persistent().has(&DataKey::Admin));
             assert!(!env.storage().persistent().has(&DataKey::EscrowCounter));
         });
+    }
+
+    #[test]
+    fn test_get_admin_returns_initialized_admin() {
+        let (_env, admin, _contract_id, client) = setup();
+        client.initialize(&admin);
+        assert_eq!(client.get_admin(), admin);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_get_admin_not_initialized_panics() {
+        let (_env, _admin, _contract_id, client) = setup();
+        // contract not initialized — should return NotInitialized error
+        client.get_admin();
     }
 
     #[test]
