@@ -553,6 +553,78 @@ impl EscrowContract {
         Ok(())
     }
 
+    /// Rejects multiple submitted milestones in a single transaction.
+    ///
+    /// Iterates over `milestone_ids`, skipping any milestone that is not in
+    /// `Submitted` state rather than aborting the entire batch.  This lets a
+    /// client perform a sprint-review rejection in one transaction even when
+    /// some milestones have already been rejected or are still pending.
+    ///
+    /// # Authorization
+    /// Only the escrow's client may call this function.
+    ///
+    /// # Errors
+    /// - [`EscrowError::Unauthorized`]      — `milestone_ids` exceeds `MAX_BATCH_SIZE`.
+    /// - [`EscrowError::EscrowNotFound`]    — escrow does not exist.
+    /// - [`EscrowError::ClientOnly`]        — caller is not the client.
+    /// - [`EscrowError::EscrowNotActive`]   — escrow is not in `Active` state.
+    ///
+    /// # Returns
+    /// The count of milestones that were successfully rejected.
+    ///
+    /// # Gas notes
+    /// - Auth and meta load happen once before the loop.
+    /// - Each milestone is a separate persistent entry — only touched entries
+    ///   are read/written, consistent with the granular storage design.
+    /// - `MAX_BATCH_SIZE` caps the loop to bound per-transaction resource usage.
+    pub fn batch_reject_milestones(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+        milestone_ids: Vec<u32>,
+    ) -> Result<u32, EscrowError> {
+        // Cap batch size to bound per-transaction resource usage.
+        const MAX_BATCH_SIZE: u32 = 20;
+        if milestone_ids.len() > MAX_BATCH_SIZE {
+            return Err(EscrowError::Unauthorized);
+        }
+
+        caller.require_auth();
+
+        let meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
+        if caller != meta.client {
+            return Err(EscrowError::ClientOnly);
+        }
+        if meta.status != EscrowStatus::Active {
+            return Err(EscrowError::EscrowNotActive);
+        }
+
+        let now = env.ledger().timestamp();
+        let mut rejected_count: u32 = 0;
+
+        for milestone_id in milestone_ids.iter() {
+            // Skip milestones that cannot be loaded or are not in Submitted state.
+            let Ok(mut milestone) =
+                ContractStorage::load_milestone(&env, escrow_id, milestone_id)
+            else {
+                continue;
+            };
+
+            if milestone.status != MilestoneStatus::Submitted {
+                continue;
+            }
+
+            milestone.status = MilestoneStatus::Rejected;
+            milestone.resolved_at = Some(now);
+            ContractStorage::save_milestone(&env, escrow_id, &milestone);
+
+            events::emit_milestone_rejected(&env, escrow_id, milestone_id, &caller);
+            rejected_count += 1;
+        }
+
+        Ok(rejected_count)
+    }
+
     /// Updates the IPFS description hash of a milestone that is in `Pending` state.
     ///
     /// After a client rejects a milestone (status transitions back to `Pending`),
@@ -1288,5 +1360,235 @@ mod tests {
 
         // Must panic — zero hash is not a valid IPFS reference
         client.update_milestone_hash(&freelancer, &escrow_id, &milestone_id, &zero_hash);
+    }
+
+    // ── batch_reject_milestones tests ─────────────────────────────────────────
+
+    /// Shared helper: creates an escrow with `n` milestones, all submitted.
+    /// Returns `(env, client_addr, freelancer_addr, escrow_id, milestone_ids)`.
+    fn setup_escrow_with_n_submitted_milestones(
+        n: u32,
+    ) -> (
+        Env,
+        EscrowContractClient<'static>,
+        Address,
+        Address,
+        u64,
+        soroban_sdk::Vec<u32>,
+    ) {
+        let env = Env::default();
+        env.mock_all_auths();
+        let admin = Address::generate(&env);
+        let contract_id = env.register_contract(None, EscrowContract);
+        let client = EscrowContractClient::new(&env, &contract_id);
+        client.initialize(&admin);
+
+        let escrow_client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_id = token_contract.address();
+        token::StellarAssetClient::new(&env, &token_id)
+            .mint(&escrow_client, &(100_i128 * n as i128));
+
+        let escrow_id = client.create_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &(100_i128 * n as i128),
+            &BytesN::from_array(&env, &[9u8; 32]),
+            &None,
+            &None,
+            &None,
+        );
+
+        let mut ids = soroban_sdk::Vec::new(&env);
+        for i in 0..n {
+            let mid = client.add_milestone(
+                &escrow_client,
+                &escrow_id,
+                &String::from_str(&env, "M"),
+                &BytesN::from_array(&env, &[i as u8 + 1; 32]),
+                &100_i128,
+            );
+            client.submit_milestone(&freelancer, &escrow_id, &mid);
+            ids.push_back(mid);
+        }
+
+        (env, client, escrow_client, freelancer, escrow_id, ids)
+    }
+
+    /// All milestones are Submitted — all should be rejected, count == n.
+    #[test]
+    fn test_batch_reject_milestones_all_submitted() {
+        let (env, client, escrow_client, _freelancer, escrow_id, ids) =
+            setup_escrow_with_n_submitted_milestones(3);
+
+        let rejected = client.batch_reject_milestones(&escrow_client, &escrow_id, &ids);
+        assert_eq!(rejected, 3, "all three submitted milestones must be rejected");
+
+        // Verify each milestone is now Rejected
+        for mid in ids.iter() {
+            let m = client.get_milestone(&escrow_id, &mid);
+            assert_eq!(
+                m.status,
+                MilestoneStatus::Rejected,
+                "milestone {mid} must be in Rejected state"
+            );
+        }
+
+        // Verify three mil_rej events were emitted
+        use soroban_sdk::testutils::Events;
+        use soroban_sdk::IntoVal;
+        let mil_rej_sym: soroban_sdk::Val = soroban_sdk::symbol_short!("mil_rej").into_val(&env);
+        let rej_event_count = env
+            .events()
+            .all()
+            .iter()
+            .filter(|(_c, topics, _d)| {
+                topics
+                    .get(0)
+                    .map(|t| t.get_payload() == mil_rej_sym.get_payload())
+                    .unwrap_or(false)
+            })
+            .count();
+        assert_eq!(rej_event_count, 3, "expected exactly 3 mil_rej events");
+    }
+
+    /// Mixed states: only Submitted milestones are rejected; Pending ones are skipped.
+    #[test]
+    fn test_batch_reject_milestones_mixed_states() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let admin = Address::generate(&env);
+        let contract_id = env.register_contract(None, EscrowContract);
+        let client = EscrowContractClient::new(&env, &contract_id);
+        client.initialize(&admin);
+
+        let escrow_client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_id = token_contract.address();
+        token::StellarAssetClient::new(&env, &token_id).mint(&escrow_client, &300_i128);
+
+        let escrow_id = client.create_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &300_i128,
+            &BytesN::from_array(&env, &[10u8; 32]),
+            &None,
+            &None,
+            &None,
+        );
+
+        // m0: Submitted, m1: Pending (never submitted), m2: Submitted
+        let m0 = client.add_milestone(
+            &escrow_client,
+            &escrow_id,
+            &String::from_str(&env, "M0"),
+            &BytesN::from_array(&env, &[1u8; 32]),
+            &100_i128,
+        );
+        let m1 = client.add_milestone(
+            &escrow_client,
+            &escrow_id,
+            &String::from_str(&env, "M1"),
+            &BytesN::from_array(&env, &[2u8; 32]),
+            &100_i128,
+        );
+        let m2 = client.add_milestone(
+            &escrow_client,
+            &escrow_id,
+            &String::from_str(&env, "M2"),
+            &BytesN::from_array(&env, &[3u8; 32]),
+            &100_i128,
+        );
+
+        client.submit_milestone(&freelancer, &escrow_id, &m0);
+        // m1 intentionally left as Pending
+        client.submit_milestone(&freelancer, &escrow_id, &m2);
+
+        let mut ids = soroban_sdk::Vec::new(&env);
+        ids.push_back(m0);
+        ids.push_back(m1);
+        ids.push_back(m2);
+
+        let rejected = client.batch_reject_milestones(&escrow_client, &escrow_id, &ids);
+        assert_eq!(rejected, 2, "only the 2 Submitted milestones must be rejected");
+
+        assert_eq!(
+            client.get_milestone(&escrow_id, &m0).status,
+            MilestoneStatus::Rejected
+        );
+        assert_eq!(
+            client.get_milestone(&escrow_id, &m1).status,
+            MilestoneStatus::Pending,
+            "Pending milestone must be skipped, not mutated"
+        );
+        assert_eq!(
+            client.get_milestone(&escrow_id, &m2).status,
+            MilestoneStatus::Rejected
+        );
+    }
+
+    /// Empty list — should return 0 without error.
+    #[test]
+    fn test_batch_reject_milestones_empty_list() {
+        let (_env, client, escrow_client, _freelancer, escrow_id, _ids) =
+            setup_escrow_with_n_submitted_milestones(2);
+
+        let empty = soroban_sdk::Vec::new(&_env);
+        let rejected = client.batch_reject_milestones(&escrow_client, &escrow_id, &empty);
+        assert_eq!(rejected, 0, "empty batch must return 0");
+    }
+
+    /// Unauthorized caller — must panic (ClientOnly error).
+    #[test]
+    #[should_panic]
+    fn test_batch_reject_milestones_unauthorized_caller() {
+        let (_env, client, _escrow_client, freelancer, escrow_id, ids) =
+            setup_escrow_with_n_submitted_milestones(2);
+
+        // Freelancer is not the client — must be rejected
+        let _ = client.batch_reject_milestones(&freelancer, &escrow_id, &ids);
+    }
+
+    /// Batch size exceeding MAX_BATCH_SIZE (20) — must panic (Unauthorized error).
+    #[test]
+    #[should_panic]
+    fn test_batch_reject_milestones_exceeds_max_batch_size() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let admin = Address::generate(&env);
+        let contract_id = env.register_contract(None, EscrowContract);
+        let client = EscrowContractClient::new(&env, &contract_id);
+        client.initialize(&admin);
+
+        let escrow_client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_id = token_contract.address();
+        // Mint enough for 21 milestones
+        token::StellarAssetClient::new(&env, &token_id).mint(&escrow_client, &2_100_i128);
+
+        let escrow_id = client.create_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &2_100_i128,
+            &BytesN::from_array(&env, &[11u8; 32]),
+            &None,
+            &None,
+            &None,
+        );
+
+        // Build a Vec of 21 IDs (all 0 — we only need the length check to fire)
+        let mut ids = soroban_sdk::Vec::new(&env);
+        for i in 0u32..21 {
+            ids.push_back(i);
+        }
+
+        // Must panic — exceeds MAX_BATCH_SIZE
+        let _ = client.batch_reject_milestones(&escrow_client, &escrow_id, &ids);
     }
 }
