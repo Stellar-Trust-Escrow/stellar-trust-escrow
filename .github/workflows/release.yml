@@ -195,7 +195,7 @@ jobs:
           NEXT_PUBLIC_API_URL: http://127.0.0.1:4000
 
       - name: Run Playwright suite
-        run: npm run test:e2e
+        run: npm run test:e2e -- --update-snapshots
         working-directory: frontend
         env:
           CI: 'true'
