@@ -2841,6 +2841,7 @@ impl EscrowContract {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::all)]
     use super::*;
     use soroban_sdk::{
         testutils::{Address as _, Ledger as _},
