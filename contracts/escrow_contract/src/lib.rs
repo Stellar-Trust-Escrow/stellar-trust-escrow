@@ -837,6 +837,56 @@ impl EscrowContract {
         Ok(())
     }
 
+    // ── Admin Transfer ────────────────────────────────────────────────────────
+
+    /// Proposes a new admin address with timestamp.
+    ///
+    /// # Security (Issue #679)
+    /// - Stores proposed admin with current timestamp
+    /// - Requires ADMIN_CHANGE_DELAY_SECONDS to elapse before accept_admin can succeed
+    pub fn propose_admin(env: Env, caller: Address, new_admin: Address) -> Result<(), EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_admin(&env, &caller)?;
+        
+        let now = env.ledger().timestamp();
+        env.storage()
+            .instance()
+            .set(&DataKey::PendingAdmin, &(new_admin, now));
+        
+        Ok(())
+    }
+
+    /// Accepts a pending admin transfer after timelock expires.
+    ///
+    /// # Security (Issue #679)
+    /// - Checks that ADMIN_CHANGE_DELAY_SECONDS have elapsed since propose_admin
+    /// - Returns TimelockNotExpired (53) if called too early
+    /// - Gives protocol team 24 hours to detect and respond to unauthorized proposals
+    pub fn accept_admin(env: Env, caller: Address) -> Result<(), EscrowError> {
+        caller.require_auth();
+        
+        let (pending_admin, proposed_at): (Address, u64) = env
+            .storage()
+            .instance()
+            .get(&DataKey::PendingAdmin)
+            .ok_or(EscrowError::Unauthorized)?;
+        
+        if caller != pending_admin {
+            return Err(EscrowError::Unauthorized);
+        }
+        
+        let now = env.ledger().timestamp();
+        if now < proposed_at + ADMIN_CHANGE_DELAY_SECONDS {
+            return Err(EscrowError::TimelockNotExpired);
+        }
+        
+        // Transfer admin role
+        env.storage().instance().set(&DataKey::Admin, &pending_admin);
+        env.storage().instance().remove(&DataKey::PendingAdmin);
+        
+        Ok(())
+    }
+
     // ── View Functions ────────────────────────────────────────────────────────
 
     pub fn get_escrow(env: Env, escrow_id: u64) -> Result<EscrowState, EscrowError> {
