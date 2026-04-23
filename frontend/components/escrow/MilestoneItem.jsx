@@ -35,6 +35,9 @@
 import { useState } from 'react';
 import Badge from '../ui/Badge';
 import Button from '../ui/Button';
+import CurrencyAmount from '../ui/CurrencyAmount';
+import { useI18n } from '../../i18n/index.jsx';
+import { useToast } from '../../contexts/ToastContext';
 
 export default function MilestoneItem({
   milestone,
@@ -46,13 +49,16 @@ export default function MilestoneItem({
   isLast,
 }) {
   const [isActing, setIsActing] = useState(false);
+  const { t, formatDate } = useI18n();
+  const { showToast } = useToast();
 
   const handleAction = async (actionFn, actionName) => {
     setIsActing(true);
     try {
       await actionFn(milestone.id);
+      showToast(`${actionName} milestone successful!`, 'success');
     } catch (err) {
-      // TODO (contributor — Issue #40): show toast notification on error
+      showToast(`Failed to ${actionName.toLowerCase()} milestone`, 'error');
       console.error(`${actionName} failed:`, err.message);
     } finally {
       setIsActing(false);
@@ -92,11 +98,11 @@ export default function MilestoneItem({
                 <h4 className="text-white font-medium">{milestone.title}</h4>
               </div>
               {milestone.submittedAt && (
-                <p className="text-xs text-gray-500 mt-0.5">Submitted: {milestone.submittedAt}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{t('milestone.status.submitted')}: {formatDate(milestone.submittedAt)}</p>
               )}
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              <span className="text-white font-semibold text-sm">{milestone.amount}</span>
+              <CurrencyAmount amount={milestone.amount} size="sm" />
               <Badge status={milestone.status} size="sm" />
             </div>
           </div>
@@ -111,9 +117,10 @@ export default function MilestoneItem({
               onApprove={() => handleAction(onApprove, 'approve')}
               onReject={() => handleAction(onReject, 'reject')}
               onSubmit={() => handleAction(onSubmit, 'submit')}
+              t={t}
             />
           ) : (
-            <p className="text-xs text-indigo-400 animate-pulse">Waiting for wallet signature…</p>
+            <p className="text-xs text-indigo-400 animate-pulse">{t('common.loading')}</p>
           )}
         </div>
       </div>
@@ -124,15 +131,15 @@ export default function MilestoneItem({
 /**
  * Renders the correct set of action buttons based on role + status.
  */
-function ActionButtons({ status, role, onApprove, onReject, onSubmit }) {
+function ActionButtons({ status, role, onApprove, onReject, onSubmit, t }) {
   if (role === 'client' && status === 'Submitted') {
     return (
       <div className="flex gap-2">
         <Button variant="primary" size="sm" onClick={onApprove}>
-          ✓ Approve & Release Funds
+          ✓ {t('escrow.actions.approve')}
         </Button>
         <Button variant="danger" size="sm" onClick={onReject}>
-          ✗ Reject
+          ✗ {t('escrow.actions.reject')}
         </Button>
       </div>
     );
@@ -141,15 +148,14 @@ function ActionButtons({ status, role, onApprove, onReject, onSubmit }) {
   if (role === 'freelancer' && (status === 'Pending' || status === 'Rejected')) {
     return (
       <Button variant="secondary" size="sm" onClick={onSubmit}>
-        📤 Submit Work
+        📤 {t('escrow.actions.submit')}
       </Button>
     );
   }
 
   if (status === 'Approved') {
-    return <p className="text-xs text-emerald-400">✓ Funds released to freelancer</p>;
+    return <p className="text-xs text-emerald-400">✓ {t('escrow.actions.approve')}</p>;
   }
 
-  // observer or no action available
   return null;
 }

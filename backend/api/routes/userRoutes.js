@@ -1,36 +1,30 @@
 import express from 'express';
 import userController from '../controllers/userController.js';
+import {
+  stellarAddressParam,
+  paginationQuery,
+  handleValidationErrors,
+} from '../../middleware/validation.js';
 import exportController from '../controllers/exportController.js';
+import authMiddleware from '../middleware/auth.js';
+import { authorizeParamAddress } from '../middleware/authorization.js';
 
 const router = express.Router();
+router.use(authMiddleware);
 
-/**
- * @route  GET /api/users/:address
- * @desc   Get a user's profile: reputation, escrow history, stats.
- * @param  address - Stellar public key (G...)
- */
-router.get('/:address', userController.getUserProfile);
+const validateAddress = [stellarAddressParam('address'), handleValidationErrors];
+const validatePagination = [...paginationQuery, handleValidationErrors];
 
-/**
- * @route  GET /api/users/:address/escrows
- * @desc   Get a paginated escrow list for a user with the standard pagination envelope.
- * @query  role (client|freelancer|all), status, page (default 1), limit (default 20, max 100)
- * @returns { data, page, limit, total, totalPages, hasNextPage, hasPreviousPage }
- */
-router.get('/:address/escrows', userController.getUserEscrows);
-
-/**
- * @route  GET /api/users/:address/stats
- * @desc   Aggregated stats: total volume, completion rate, avg milestone time.
- */
-router.get('/:address/stats', userController.getUserStats);
+router.get('/:address', validateAddress, userController.getUserProfile);
+router.get('/:address/escrows', validateAddress, validatePagination, userController.getUserEscrows);
+router.get('/:address/stats', validateAddress, userController.getUserStats);
 
 /**
  * @route  GET /api/users/:address/export
  * @desc   Export all user data in JSON format
  * @returns { version, exportedAt, userAddress, data: { escrows, payments, kyc, reputation } }
  */
-router.get('/:address/export', exportController.exportUserData);
+router.get('/:address/export', authorizeParamAddress('address'), exportController.exportUserData);
 
 /**
  * @route  POST /api/users/:address/import
@@ -38,13 +32,17 @@ router.get('/:address/export', exportController.exportUserData);
  * @body   { data: {...}, mode: 'merge' | 'replace' }
  * @returns { success, results }
  */
-router.post('/:address/import', exportController.importUserData);
+router.post('/:address/import', authorizeParamAddress('address'), exportController.importUserData);
 
 /**
  * @route  GET /api/users/:address/export/file
  * @desc   Download user data as a file
  * @returns { file: 'data.json', content: {...} }
  */
-router.get('/:address/export/file', exportController.downloadExportFile);
+router.get(
+  '/:address/export/file',
+  authorizeParamAddress('address'),
+  exportController.downloadExportFile,
+);
 
 export default router;

@@ -13,6 +13,8 @@ const cacheMock = {
   set: jest.fn(),
   invalidate: jest.fn(),
   invalidatePrefix: jest.fn(),
+  invalidateTags: jest.fn(),
+  analytics: jest.fn(() => ({ hits: 0, misses: 0, sets: 0, invalidations: 0, hitRate: '0', backend: 'memory', memSize: 0 })),
   size: jest.fn(),
 };
 
@@ -76,19 +78,23 @@ describe('escrowController', () => {
       expect(res.json).toHaveBeenCalled();
       expect(res.body.data).toHaveLength(fixtures.escrows.length);
       expect(res.body.total).toBe(fixtures.escrows.length);
-      expect(cacheMock.set).toHaveBeenCalled();
     });
 
-    it('returns cached data if available', async () => {
+    it('returns the normalized paginated response shape', async () => {
       const req = { query: {} };
       const res = createMockRes();
-      const cachedData = { data: [], pagination: {} };
-      cacheMock.get.mockReturnValue(cachedData);
 
       await escrowController.listEscrows(req, res);
 
-      expect(res.json).toHaveBeenCalledWith(cachedData);
-      expect(prismaMock.escrow.findMany).not.toHaveBeenCalled();
+      expect(res.json).toHaveBeenCalledWith({
+        data: [],
+        page: 1,
+        limit: 20,
+        total: 0,
+        totalPages: 0,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      });
     });
 
     it('applies status filter correctly', async () => {
@@ -161,7 +167,6 @@ describe('escrowController', () => {
       await escrowController.getEscrow(req, res);
 
       expect(res.json).toHaveBeenCalledWith(escrow);
-      expect(cacheMock.set).toHaveBeenCalled();
     });
 
     it('returns 404 if escrow not found', async () => {
@@ -247,6 +252,71 @@ describe('escrowController', () => {
       await escrowController.getMilestone(req, res);
 
       expect(res.status).toHaveBeenCalledWith(404);
+    });
+  });
+});
+
+// ── Cache hit / miss / invalidation tests ─────────────────────────────────────
+
+describe('escrowController — cache behaviour', () => {
+  describe('onEscrowStatusChange', () => {
+    it('invalidates escrow:{id} and escrows tags', async () => {
+      cacheMock.invalidateTags.mockResolvedValue(undefined);
+
+      await escrowController.onEscrowStatusChange('42');
+
+      expect(cacheMock.invalidateTags).toHaveBeenCalledWith(['escrows', 'escrow:42']);
+    });
+
+    it('logs cache metrics after invalidation', async () => {
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+      cacheMock.invalidateTags.mockResolvedValue(undefined);
+
+      await escrowController.onEscrowStatusChange('7');
+
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('[Cache]'));
+      consoleSpy.mockRestore();
+    });
+
+    it('does not throw when invalidateTags rejects (graceful fallback)', async () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      cacheMock.invalidateTags.mockRejectedValue(new Error('Redis unavailable'));
+
+      await expect(escrowController.onEscrowStatusChange('99')).resolves.toBeUndefined();
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[Cache] invalidateEscrowCache failed:'),
+        'Redis unavailable',
+      );
+      consoleErrorSpy.mockRestore();
+    });
+  });
+
+  describe('listEscrows — cache miss falls through to DB', () => {
+    it('queries DB and returns data when cache is cold', async () => {
+      const req = { query: { page: '1', limit: '5' } };
+      const res = createMockRes();
+
+      prismaMock.escrow.findMany.mockResolvedValue(fixtures.escrows);
+      prismaMock.escrow.count.mockResolvedValue(fixtures.escrows.length);
+
+      await escrowController.listEscrows(req, res);
+
+      expect(prismaMock.escrow.findMany).toHaveBeenCalled();
+      expect(res.body.data).toHaveLength(fixtures.escrows.length);
+    });
+  });
+
+  describe('getEscrow — cache miss falls through to DB', () => {
+    it('queries DB and returns escrow when cache is cold', async () => {
+      const req = { params: { id: '1' } };
+      const res = createMockRes();
+      prismaMock.escrow.findUnique.mockResolvedValue(fixtures.escrows[0]);
+
+      await escrowController.getEscrow(req, res);
+
+      expect(prismaMock.escrow.findUnique).toHaveBeenCalled();
+      expect(res.json).toHaveBeenCalledWith(fixtures.escrows[0]);
     });
   });
 });

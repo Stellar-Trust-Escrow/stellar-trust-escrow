@@ -9,16 +9,21 @@
  * @param {string}         [props.title]    — modal heading
  * @param {React.ReactNode} props.children
  * @param {'sm'|'md'|'lg'} [props.size='md']
+ * @param {boolean}        [props.isConfirmation] — shows confirm/cancel buttons
+ * @param {Function}       [props.onConfirm] — called when confirm button clicked
+ * @param {string}         [props.confirmLabel='Confirm'] — confirm button text
+ * @param {string}         [props.cancelLabel='Cancel'] — cancel button text
+ * @param {string}         [props.confirmVariant='primary'] — confirm button variant
  *
  * TODO (contributor — easy, Issue #42):
  * - Add focus-trap so keyboard users can't tab outside the modal
  * - Add enter/exit animation (scale + fade)
- * - Add optional footer slot for action buttons
  */
 
 'use client';
 
 import { useEffect } from 'react';
+import Button from './Button';
 
 const SIZE_CLASSES = {
   sm: 'max-w-sm',
@@ -26,7 +31,18 @@ const SIZE_CLASSES = {
   lg: 'max-w-2xl',
 };
 
-export default function Modal({ isOpen, onClose, title, children, size = 'md' }) {
+export default function Modal({
+  isOpen,
+  onClose,
+  title,
+  children,
+  size = 'md',
+  isConfirmation = false,
+  onConfirm,
+  confirmLabel = 'Confirm',
+  cancelLabel = 'Cancel',
+  confirmVariant = 'primary',
+}) {
   // Close on Escape key
   useEffect(() => {
     if (!isOpen) return;
@@ -69,11 +85,15 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' })
               {title}
             </h2>
           )}
+          {/* Accessibility: aria-label describes action; focus-visible ring for keyboard users */}
           <button
             onClick={onClose}
             className="ml-auto text-gray-500 hover:text-white transition-colors p-1 rounded-lg
-                       hover:bg-gray-800"
+                       hover:bg-gray-800 focus:outline-none focus-visible:ring-2
+                       focus-visible:ring-indigo-500 focus-visible:ring-offset-2
+                       focus-visible:ring-offset-gray-900"
             aria-label="Close modal"
+            type="button"
           >
             ✕
           </button>
@@ -81,6 +101,18 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' })
 
         {/* Content */}
         <div>{children}</div>
+
+        {/* Footer with Confirmation Buttons */}
+        {isConfirmation && (
+          <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-800">
+            <Button variant="secondary" className="flex-1" onClick={onClose}>
+              {cancelLabel}
+            </Button>
+            <Button variant={confirmVariant} className="flex-1" onClick={onConfirm}>
+              {confirmLabel}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

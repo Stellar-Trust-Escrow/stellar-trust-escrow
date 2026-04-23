@@ -1,7 +1,16 @@
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod pause_tests {
-    use soroban_sdk::{testutils::Address as _, token, BytesN, Env, String, Address};
-    use crate::{EscrowContract, EscrowContractClient, EscrowError, EscrowStatus, MilestoneStatus};
+    use crate::{EscrowContract, EscrowContractClient, EscrowError, EscrowStatus, MilestoneStatus, MultisigConfig};
+
+    fn no_multisig(env: &Env) -> MultisigConfig {
+        MultisigConfig {
+            approvers: soroban_sdk::Vec::new(env),
+            weights: soroban_sdk::Vec::new(env),
+            threshold: 0,
+        }
+    }
+    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String};
 
     fn setup() -> (Env, Address, Address, EscrowContractClient<'static>) {
         let env = Env::default();
@@ -49,25 +58,27 @@ mod pause_tests {
         let (env, admin, _, client) = setup();
         let client_addr = Address::generate(&env);
         let freelancer = Address::generate(&env);
-        let token = register_token(&env, &admin, &client_addr, 1000);
+        let token = register_token(&env, &admin, &client_addr, 1030);
 
         client.pause(&admin);
 
         let result = client.try_create_escrow(
-            &client_addr,
-            &freelancer,
-            &token,
-            &500,
-            &BytesN::from_array(&env, &[1; 32]),
-            &None,
-            &None,
-            &None,
-        );
+                    &client_addr,
+                    &freelancer,
+                    &token,
+                    &500,
+                    &BytesN::from_array(&env, &[1; 32]),
+                    &None,
+                    &None,
+                    &None,
+                    &None,
+                    &no_multisig(&env),
+                );
 
-        assert!(match result {
-            Err(Ok(EscrowError::ContractPaused)) => true,
-            _ => false,
-        }, "Should fail with ContractPaused error");
+        assert!(
+            matches!(result, Err(Ok(EscrowError::ContractPaused))),
+            "Should fail with ContractPaused error"
+        );
     }
 
     #[test]
@@ -75,18 +86,20 @@ mod pause_tests {
         let (env, admin, _, client) = setup();
         let client_addr = Address::generate(&env);
         let freelancer = Address::generate(&env);
-        let token = register_token(&env, &admin, &client_addr, 1000);
+        let token = register_token(&env, &admin, &client_addr, 1030);
 
         let escrow_id = client.create_escrow(
-            &client_addr,
-            &freelancer,
-            &token,
-            &1000,
-            &BytesN::from_array(&env, &[1; 32]),
-            &None,
-            &None,
-            &None,
-        );
+                    &client_addr,
+                    &freelancer,
+                    &token,
+                    &1000,
+                    &BytesN::from_array(&env, &[1; 32]),
+                    &None,
+                    &None,
+                    &None,
+                    &None,
+                    &no_multisig(&env),
+                );
 
         client.pause(&admin);
 
@@ -98,29 +111,31 @@ mod pause_tests {
             &500,
         );
 
-        assert!(match result {
-            Err(Ok(EscrowError::ContractPaused)) => true,
-            _ => false,
-        }, "Should fail with ContractPaused error");
+        assert!(
+            matches!(result, Err(Ok(EscrowError::ContractPaused))),
+            "Should fail with ContractPaused error"
+        );
     }
 
     #[test]
-    fn test_existing_operations_work_when_paused() {
+    fn test_mutations_blocked_when_paused() {
         let (env, admin, _, client) = setup();
         let client_addr = Address::generate(&env);
         let freelancer = Address::generate(&env);
-        let token_addr = register_token(&env, &admin, &client_addr, 1000);
+        let token_addr = register_token(&env, &admin, &client_addr, 1060);
 
         let escrow_id = client.create_escrow(
-            &client_addr,
-            &freelancer,
-            &token_addr,
-            &1000,
-            &BytesN::from_array(&env, &[1; 32]),
-            &None,
-            &None,
-            &None,
-        );
+                    &client_addr,
+                    &freelancer,
+                    &token_addr,
+                    &1000,
+                    &BytesN::from_array(&env, &[1; 32]),
+                    &None,
+                    &None,
+                    &None,
+                    &None,
+                    &no_multisig(&env),
+                );
 
         let mid = client.add_milestone(
             &client_addr,
@@ -132,17 +147,25 @@ mod pause_tests {
 
         client.pause(&admin);
 
-        // Submit milestone should work
-        client.submit_milestone(&freelancer, &escrow_id, &mid);
-        let milestone = client.get_milestone(&escrow_id, &mid);
-        assert_eq!(milestone.status, MilestoneStatus::Submitted);
+        // submit_milestone must be blocked
+        let result = client.try_submit_milestone(&freelancer, &escrow_id, &mid);
+        assert!(
+            matches!(result, Err(Ok(EscrowError::ContractPaused))),
+            "submit_milestone should fail with ContractPaused"
+        );
 
-        // Approve milestone should work
-        client.approve_milestone(&client_addr, &escrow_id, &mid);
+        // approve_milestone must be blocked
+        let result = client.try_approve_milestone(&client_addr, &escrow_id, &mid);
+        assert!(
+            matches!(result, Err(Ok(EscrowError::ContractPaused))),
+            "approve_milestone should fail with ContractPaused"
+        );
+
+        // View functions must still work
         let milestone = client.get_milestone(&escrow_id, &mid);
-        assert_eq!(milestone.status, MilestoneStatus::Approved);
-        
+        assert_eq!(milestone.status, MilestoneStatus::Pending);
+
         let escrow = client.get_escrow(&escrow_id);
-        assert_eq!(escrow.status, EscrowStatus::Completed);
+        assert_eq!(escrow.status, EscrowStatus::Active);
     }
 }

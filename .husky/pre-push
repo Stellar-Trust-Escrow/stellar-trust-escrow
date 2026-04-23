@@ -1,51 +1,45 @@
-# #!/usr/bin/env sh
-# . "$(dirname "$0")/_/husky.sh"
+#!/usr/bin/env sh
 
-# # 1️⃣ Validate branch name
-# branch_name=$(git symbolic-ref --short HEAD)
+# 1️⃣ Validate branch name
+echo "🔖 Validating branch name..."
+npx validate-branch-name || {
+  echo "❌ Invalid branch name. Push aborted."
+  exit 1
+}
 
-# echo "🔖 Validating branch name..."
-# npx validate-branch-name || {
-#   echo "❌ Invalid branch name. Push aborted."
-#   exit 1
-# }
+# 2️⃣ Run backend tests before push
+echo "🧪 Running backend tests..."
+npm run test:backend || {
+  echo "❌ Backend tests failed. Push aborted."
+  exit 1
+}
 
-# # 2️⃣ Run tests before push (lint-staged already ran in pre-commit)
-# echo "🧪 Running all tests before push..."
-# npm run test || {
-#   echo "❌ Tests failed! Push aborted."
-#   exit 1
-# }
+# 3️⃣ Protect main branch
+# NOTE: no set -e here — while read returns non-zero on EOF which would false-exit
+protected_branch='refs/heads/main'
+allowed_user='ilorahdavid126@gmail.com'
+z40=0000000000000000000000000000000000000000
 
-# # 3️⃣ Protected branch checks for main
-# protected_branch='refs/heads/main'
-# current_user=$(git config user.email)
-# allowed_user='ilorahdavid126@gmail.com'
-# z40=0000000000000000000000000000000000000000
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [ "$remote_ref" = "$protected_branch" ]; then
+    current_user=$(git config user.email)
 
-# while read local_ref local_sha remote_ref remote_sha
-# do
-#     if [ "$remote_ref" = "$protected_branch" ]; then
+    if [ "$current_user" != "$allowed_user" ]; then
+      echo "❌ Only $allowed_user can push directly to main."
+      exit 1
+    fi
 
-#         if [ "$current_user" != "$allowed_user" ]; then
-#             echo "❌ Only $allowed_user can push to main."
-#             exit 1
-#         fi
+    if [ "$local_sha" = "$z40" ]; then
+      echo "❌ Deleting main is not allowed."
+      exit 1
+    fi
 
-#         if [ "$local_sha" = "$z40" ]; then
-#             echo "❌ Deleting main is restricted."
-#             exit 1
-#         fi
+    if ! git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null; then
+      echo "❌ Force push to main is not allowed."
+      exit 1
+    fi
+  fi
+done
 
-#         if ! git merge-base --is-ancestor "$remote_sha" "$local_sha"; then
-#             echo "❌ Force push to main is restricted."
-#             exit 1
-#         fi
-#     fi
-# done
-
-# echo "✅ Pre-push checks passed."
-
-# exit 0
-
-
+echo "✅ Pre-push checks passed."
+exit 0

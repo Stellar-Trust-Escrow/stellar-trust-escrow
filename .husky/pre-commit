@@ -1,9 +1,7 @@
-# #!/usr/bin/env sh
+#!/usr/bin/env sh
+set -e
 
-# # Exit immediately if any command fails
-# set -e
+echo "💅 Running lint-staged..."
+npx lint-staged
 
-# echo "💅 Fixing lint & formatting staged files..."
-# npx lint-staged
-
-# echo "✅ Pre-commit checks passed."
+echo "✅ Pre-commit checks passed."

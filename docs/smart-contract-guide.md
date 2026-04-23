@@ -34,9 +34,19 @@ cd contracts/escrow_contract
 # Native build for tests
 cargo build
 
-# Wasm build for deployment
-stellar contract build
+# Optimized WASM build for deployment (uses release profile: opt-level=z, LTO, strip)
+cargo build --release --target wasm32-unknown-unknown
+
+# Or via the test script (also runs tests first)
+bash scripts/test-contract.sh --build
 ```
+
+The release profile is configured in `Cargo.toml` with:
+- `opt-level = "z"` — optimize for smallest binary size
+- `lto = true` — link-time optimization across crates
+- `codegen-units = 1` — single codegen unit for maximum optimization
+- `strip = "symbols"` — remove debug symbols from the WASM output
+- `panic = "abort"` — removes panic unwinding machinery
 
 ---
 

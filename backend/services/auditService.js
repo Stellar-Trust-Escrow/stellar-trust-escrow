@@ -8,7 +8,10 @@
  */
 
 import { stringify } from 'csv-stringify/sync';
+import { createModuleLogger } from '../config/logger.js';
 import prisma from '../lib/prisma.js';
+
+const auditLogger = createModuleLogger('auditService');
 
 // ── Categories & Actions ──────────────────────────────────────────────────────
 
@@ -20,6 +23,7 @@ export const AuditCategory = {
   ADMIN: 'ADMIN',
   PAYMENT: 'PAYMENT',
   KYC: 'KYC',
+  REPORTING: 'REPORTING',
 };
 
 export const AuditAction = {
@@ -39,6 +43,10 @@ export const AuditAction = {
   // Dispute
   RAISE_DISPUTE: 'RAISE_DISPUTE',
   RESOLVE_DISPUTE: 'RESOLVE_DISPUTE',
+  SUBMIT_EVIDENCE: 'SUBMIT_EVIDENCE',
+  ESCALATE_DISPUTE: 'ESCALATE_DISPUTE',
+  SUBMIT_APPEAL: 'SUBMIT_APPEAL',
+  REVIEW_APPEAL: 'REVIEW_APPEAL',
   // Admin
   SUSPEND_USER: 'SUSPEND_USER',
   BAN_USER: 'BAN_USER',
@@ -52,6 +60,12 @@ export const AuditAction = {
   KYC_SUBMITTED: 'KYC_SUBMITTED',
   KYC_APPROVED: 'KYC_APPROVED',
   KYC_DECLINED: 'KYC_DECLINED',
+  // Reporting
+  REPORT_GENERATED: 'REPORT_GENERATED',
+  REPORT_EXPORTED: 'REPORT_EXPORTED',
+  REPORT_SCHEDULED: 'REPORT_SCHEDULED',
+  REPORT_SCHEDULED_RUN: 'REPORT_SCHEDULED_RUN',
+  REPORT_SCHEDULE_DISABLED: 'REPORT_SCHEDULE_DISABLED',
 };
 
 // ── Write ─────────────────────────────────────────────────────────────────────
@@ -83,7 +97,11 @@ export async function log(entry) {
       },
     });
   } catch (err) {
-    console.error('[AuditService] Failed to write audit log:', err.message);
+    auditLogger.error({
+      message: 'audit_write_failed',
+      error: err.message,
+      stack: err.stack,
+    });
   }
 }
 
