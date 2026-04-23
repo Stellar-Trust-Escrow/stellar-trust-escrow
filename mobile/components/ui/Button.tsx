@@ -4,8 +4,8 @@ import {
   Text,
   StyleSheet,
   ActivityIndicator,
-  ViewStyle,
-  TextStyle,
+  type ViewStyle,
+  type TextStyle,
 } from 'react-native';
 
 interface ButtonProps {
