@@ -9,7 +9,7 @@
 
 #![allow(dead_code)]
 
-use soroban_sdk::{symbol_short, Address, Env};
+use soroban_sdk::{symbol_short, Address, BytesN, Env};
 
 /// Emitted when a new escrow is created and funds are locked.
 ///
@@ -232,5 +232,28 @@ pub fn emit_admin_changed(env: &Env, old_admin: &Address, new_admin: &Address) {
     env.events().publish(
         (symbol_short!("adm_chg"),),
         (old_admin.clone(), new_admin.clone()),
+    );
+}
+
+/// Emitted when a freelancer updates a milestone's IPFS description hash.
+///
+/// Provides an on-chain audit trail when a deliverable is revised after
+/// rejection, before the freelancer calls `submit_milestone` again.
+///
+/// # Arguments
+/// * `escrow_id`    - The escrow ID
+/// * `milestone_id` - The milestone whose hash was updated
+/// * `freelancer`   - The freelancer who performed the update
+/// * `new_hash`     - The new IPFS content hash
+pub fn emit_milestone_description_updated(
+    env: &Env,
+    escrow_id: u64,
+    milestone_id: u32,
+    freelancer: &Address,
+    new_hash: &BytesN<32>,
+) {
+    env.events().publish(
+        (symbol_short!("mil_dsc"), escrow_id),
+        (milestone_id, freelancer.clone(), new_hash.clone()),
     );
 }

@@ -553,6 +553,69 @@ impl EscrowContract {
         Ok(())
     }
 
+    /// Updates the IPFS description hash of a milestone that is in `Pending` state.
+    ///
+    /// After a client rejects a milestone (status transitions back to `Pending`),
+    /// the freelancer may revise their deliverable and update the IPFS hash to
+    /// reflect the new content before calling `submit_milestone` again. This
+    /// provides an accurate, auditable trail of deliverable revisions.
+    ///
+    /// # Authorization
+    /// Only the escrow's freelancer may call this function.
+    ///
+    /// # Errors
+    /// - [`EscrowError::EscrowNotFound`]       — escrow does not exist.
+    /// - [`EscrowError::FreelancerOnly`]        — caller is not the freelancer.
+    /// - [`EscrowError::MilestoneNotFound`]     — milestone does not exist.
+    /// - [`EscrowError::InvalidMilestoneState`] — milestone is not in `Pending` state.
+    /// - [`EscrowError::Unauthorized`]          — `new_hash` is the zero hash.
+    ///
+    /// # Gas notes
+    /// - Loads only the single milestone entry, not the full escrow.
+    /// - Two storage writes: milestone + no meta change needed.
+    pub fn update_milestone_hash(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+        milestone_id: u32,
+        new_hash: BytesN<32>,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+
+        // Reject zero hash — it signals an unset / invalid IPFS reference
+        let zero_hash = BytesN::from_array(&env, &[0u8; 32]);
+        if new_hash == zero_hash {
+            return Err(EscrowError::Unauthorized);
+        }
+
+        // Load meta only to verify freelancer identity (cheaper than full escrow)
+        let meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
+        if caller != meta.freelancer {
+            return Err(EscrowError::FreelancerOnly);
+        }
+
+        let mut milestone = ContractStorage::load_milestone(&env, escrow_id, milestone_id)?;
+
+        // Only allow update when the milestone is Pending (i.e. after rejection
+        // or before first submission). Submitted / Approved / Disputed states
+        // must not be mutated here.
+        if milestone.status != MilestoneStatus::Pending {
+            return Err(EscrowError::InvalidMilestoneState);
+        }
+
+        milestone.description_hash = new_hash.clone();
+        ContractStorage::save_milestone(&env, escrow_id, &milestone);
+
+        events::emit_milestone_description_updated(
+            &env,
+            escrow_id,
+            milestone_id,
+            &caller,
+            &new_hash,
+        );
+        Ok(())
+    }
+
     /// Admin-only fallback for edge cases. Normal flow uses `approve_milestone`.
     ///
     /// # Security (STE-01, STE-02)
@@ -1101,4 +1164,129 @@ mod tests {
     #[test]
     #[ignore = "implement dispute flow — Issues #9–#10"]
     fn test_dispute_resolution() {}
+
+    // ── update_milestone_description_hash tests ───────────────────────────────
+
+    /// Shared helper: creates an initialized escrow with one milestone and
+    /// returns everything needed by the hash-update tests.
+    fn setup_escrow_with_milestone(
+        env: &Env,
+        client_contract: &EscrowContractClient<'static>,
+        admin: &Address,
+    ) -> (Address, Address, u64, u32) {
+        let escrow_client = Address::generate(env);
+        let freelancer = Address::generate(env);
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_id = token_contract.address();
+        token::StellarAssetClient::new(env, &token_id).mint(&escrow_client, &500_i128);
+
+        let escrow_id = client_contract.create_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &500_i128,
+            &BytesN::from_array(env, &[1u8; 32]),
+            &None,
+            &None,
+            &None,
+        );
+
+        let milestone_id = client_contract.add_milestone(
+            &escrow_client,
+            &escrow_id,
+            &String::from_str(env, "Deliverable"),
+            &BytesN::from_array(env, &[2u8; 32]),
+            &500_i128,
+        );
+
+        (escrow_client, freelancer, escrow_id, milestone_id)
+    }
+
+    /// Happy path: freelancer updates the hash on a Pending milestone.
+    /// Verifies the new hash is persisted and the event is emitted.
+    #[test]
+    fn test_update_milestone_description_hash_on_pending_milestone() {
+        use soroban_sdk::testutils::Events;
+        use soroban_sdk::{IntoVal, TryIntoVal};
+
+        let (env, admin, _contract_id, client) = setup();
+        client.initialize(&admin);
+
+        let (_escrow_client, freelancer, escrow_id, milestone_id) =
+            setup_escrow_with_milestone(&env, &client, &admin);
+
+        let new_hash = BytesN::from_array(&env, &[0xABu8; 32]);
+
+        // Should succeed — milestone is Pending
+        client.update_milestone_hash(&freelancer, &escrow_id, &milestone_id, &new_hash);
+
+        // Verify the hash was persisted
+        let milestone = client.get_milestone(&escrow_id, &milestone_id);
+        assert_eq!(
+            milestone.description_hash, new_hash,
+            "description_hash must be updated to the new value"
+        );
+
+        // Verify the mil_dsc event was emitted
+        let all_events = env.events().all();
+        let mil_dsc_sym: soroban_sdk::Val =
+            soroban_sdk::symbol_short!("mil_dsc").into_val(&env);
+
+        let mut found = false;
+        for (_contract, topics, data) in all_events.iter() {
+            if topics.len() == 2 {
+                if let Some(topic) = topics.get(0) {
+                    if topic.get_payload() == mil_dsc_sym.get_payload() {
+                        // data is (milestone_id, freelancer, new_hash)
+                        let (emitted_mid, emitted_freelancer, emitted_hash): (
+                            u32,
+                            Address,
+                            BytesN<32>,
+                        ) = data.try_into_val(&env).expect("event data shape mismatch");
+                        assert_eq!(emitted_mid, milestone_id);
+                        assert_eq!(emitted_freelancer, freelancer);
+                        assert_eq!(emitted_hash, new_hash);
+                        found = true;
+                    }
+                }
+            }
+        }
+        assert!(found, "mil_dsc event must be emitted on successful hash update");
+    }
+
+    /// Rejection path: milestone is Submitted — update must fail with
+    /// `InvalidMilestoneState` (error code 14).
+    #[test]
+    #[should_panic]
+    fn test_update_milestone_description_hash_rejected_on_submitted_milestone() {
+        let (env, admin, _contract_id, client) = setup();
+        client.initialize(&admin);
+
+        let (_escrow_client, freelancer, escrow_id, milestone_id) =
+            setup_escrow_with_milestone(&env, &client, &admin);
+
+        // Advance milestone to Submitted
+        client.submit_milestone(&freelancer, &escrow_id, &milestone_id);
+
+        let new_hash = BytesN::from_array(&env, &[0xCDu8; 32]);
+
+        // Must panic — milestone is Submitted, not Pending
+        client.update_milestone_hash(&freelancer, &escrow_id, &milestone_id, &new_hash);
+    }
+
+    /// Rejection path: zero hash must be rejected.
+    #[test]
+    #[should_panic]
+    fn test_update_milestone_description_hash_rejects_zero_hash() {
+        let (env, admin, _contract_id, client) = setup();
+        client.initialize(&admin);
+
+        let (_escrow_client, freelancer, escrow_id, milestone_id) =
+            setup_escrow_with_milestone(&env, &client, &admin);
+
+        let zero_hash = BytesN::from_array(&env, &[0u8; 32]);
+
+        // Must panic — zero hash is not a valid IPFS reference
+        client.update_milestone_hash(&freelancer, &escrow_id, &milestone_id, &zero_hash);
+    }
 }
