@@ -67,8 +67,7 @@ use types::{CancellationRequest, RecurringInterval, RecurringPaymentConfig, Slas
 pub use types::{
     DataKey, EscrowState, EscrowStatus, Milestone, MilestoneStatus, MultisigConfig,
     OptionalBytesN32, OptionalTimelock, ReputationRecord, Timelock, MS_APPROVED, MS_DISPUTED,
-    MS_PENDING,
-    MS_REJECTED, MS_RELEASED, MS_SUBMITTED,
+    MS_PENDING, MS_REJECTED, MS_RELEASED, MS_SUBMITTED,
 };
 
 use soroban_sdk::{
