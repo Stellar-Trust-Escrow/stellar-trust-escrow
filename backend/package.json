@@ -52,7 +52,6 @@
     "pino": "^8.21.0",
     "pino-http": "^8.6.1",
     "prom-client": "^15.1.0",
-    "redis": "^4.7.1",
     "redis": "^4.7.0",
     "rotating-file-stream": "^2.1.5",
     "swagger-jsdoc": "^6.2.8",
