@@ -31,6 +31,7 @@
 
 mod errors;
 mod events;
+mod oracle;
 mod types;
 mod upgrade_tests;
 
@@ -45,6 +46,12 @@ const INSTANCE_TTL_THRESHOLD: u32 = 5_000;
 const INSTANCE_TTL_EXTEND_TO: u32 = 50_000;
 const PERSISTENT_TTL_THRESHOLD: u32 = 5_000;
 const PERSISTENT_TTL_EXTEND_TO: u32 = 50_000;
+
+// ── Admin timelock constant ───────────────────────────────────────────────────
+/// Minimum delay (in seconds) between proposing and accepting admin transfer.
+/// Set to 24 hours (86,400 seconds) to allow protocol team time to detect
+/// and respond to unauthorized admin transfer proposals.
+const ADMIN_CHANGE_DELAY_SECONDS: u64 = 86_400;
 
 // ── Granular storage keys ─────────────────────────────────────────────────────
 // Separate keys for meta vs each milestone avoids deserialising the full

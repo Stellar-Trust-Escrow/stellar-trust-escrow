@@ -77,4 +77,14 @@ pub enum EscrowError {
     /// The escrow deadline has passed.
     /// TODO (contributor): implement deadline enforcement
     DeadlineExpired = 25,
+
+    // ── Admin ─────────────────────────────────────────────────────────────────
+    /// Timelock for admin change has not expired yet.
+    TimelockNotExpired = 53,
+
+    // ── Oracle ────────────────────────────────────────────────────────────────
+    /// Oracle returned an invalid price (zero or negative).
+    OracleInvalidPrice = 50,
+    /// Oracle price data is stale (timestamp too old).
+    OracleStalePrice = 51,
 }
