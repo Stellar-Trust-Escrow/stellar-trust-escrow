@@ -3,6 +3,11 @@ import disputeController from '../controllers/disputeController.js';
 import { cacheResponse, invalidateOn, TTL } from '../middleware/cache.js';
 import authMiddleware from '../middleware/auth.js';
 import { handleUploadError } from '../middleware/fileUpload.js';
+import {
+  validate,
+  disputeListQueryRules,
+  disputeEscrowIdParamRules,
+} from '../middleware/validation.js';
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -11,6 +16,7 @@ router.use(authMiddleware);
 
 router.get(
   '/',
+  validate(disputeListQueryRules),
   cacheResponse({ ttl: TTL.LIST, tags: ['disputes'] }),
   disputeController.listDisputes,
 );
@@ -23,6 +29,7 @@ router.get(
 
 router.get(
   '/:escrowId',
+  validate(disputeEscrowIdParamRules),
   cacheResponse({
     ttl: TTL.DETAIL,
     tags: (req) => ['disputes', `dispute:${req.params.escrowId}`],
@@ -54,12 +61,7 @@ router.get(
 router.post(
   '/:id/resolve/auto',
   invalidateOn({
-    tags: (req) => [
-      `dispute:${req.params.id}`,
-      `escrow:${req.params.id}`,
-      'disputes',
-      'escrows',
-    ],
+    tags: (req) => [`dispute:${req.params.id}`, `escrow:${req.params.id}`, 'disputes', 'escrows'],
   }),
   disputeController.autoResolve,
 );

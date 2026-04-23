@@ -7,7 +7,9 @@ describe('stellar utils', () => {
   });
 
   it('validates stellar addresses', () => {
-    expect(isValidStellarAddress('GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN')).toBe(true);
+    expect(isValidStellarAddress('GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWNA')).toBe(
+      true,
+    );
     expect(isValidStellarAddress('invalid')).toBe(false);
     expect(isValidStellarAddress('')).toBe(false);
   });

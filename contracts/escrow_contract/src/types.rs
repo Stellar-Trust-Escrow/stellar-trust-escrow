@@ -78,6 +78,32 @@ pub struct Timelock {
     pub start_ledger: u64,
 }
 
+/// Optional BytesN<32> wrapper — `#[contracttype]` cannot serialize `Option<BytesN<32>>` directly.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum OptionalBytesN32 {
+    None,
+    Some(BytesN<32>),
+}
+
+impl From<Option<BytesN<32>>> for OptionalBytesN32 {
+    fn from(opt: Option<BytesN<32>>) -> Self {
+        match opt {
+            Some(b) => OptionalBytesN32::Some(b),
+            None => OptionalBytesN32::None,
+        }
+    }
+}
+
+impl From<OptionalBytesN32> for Option<BytesN<32>> {
+    fn from(opt: OptionalBytesN32) -> Self {
+        match opt {
+            OptionalBytesN32::Some(b) => Some(b),
+            OptionalBytesN32::None => None,
+        }
+    }
+}
+
 /// Optional timelock wrapper — used in `EscrowState` to avoid `Option<Timelock>`
 /// which does not satisfy `ScVal: TryFrom<&Option<Timelock>>` in test mode.
 #[contracttype]
@@ -173,6 +199,9 @@ pub struct Milestone {
 
     /// Buyer approvals for this milestone (signer + timestamp).
     pub approvals: soroban_sdk::Vec<ApprovalRecord>,
+
+    /// IPFS hash of the rejection rationale document, set by reject_milestone_with_reason.
+    pub rejection_reason: OptionalBytesN32,
 }
 
 /// Configuration for a recurring/subscription escrow.
@@ -473,4 +502,6 @@ pub enum DataKey {
     FallbackOracleAddress,
     /// Wormhole token bridge contract address — value: Address
     WormholeBridge,
+    /// Configurable milestone cap set by admin — value: u32
+    MaxMilestones,
 }

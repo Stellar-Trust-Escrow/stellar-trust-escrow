@@ -11,15 +11,17 @@ import { errorsTotal } from '../../lib/metrics.js';
 
 const router = express.Router();
 
-// Initialize relayer service
-const relayer = createRelayer({
-  network:
-    process.env.STELLAR_NETWORK === 'mainnet'
-      ? 'Public Global Stellar Network ; September 2015'
-      : 'Test SDF Network ; September 2015',
-  contractId: process.env.ESCROW_CONTRACT_ID,
-  relayerSecret: process.env.RELAYER_SECRET_KEY,
-});
+function getRelayer() {
+  if (!process.env.RELAYER_SECRET_KEY) return null;
+  return createRelayer({
+    network:
+      process.env.STELLAR_NETWORK === 'mainnet'
+        ? 'Public Global Stellar Network ; September 2015'
+        : 'Test SDF Network ; September 2015',
+    contractId: process.env.ESCROW_CONTRACT_ID,
+    relayerSecret: process.env.RELAYER_SECRET_KEY,
+  });
+}
 
 /**
  * POST /api/relayer/execute
@@ -27,6 +29,11 @@ const relayer = createRelayer({
  */
 router.post('/execute', authMiddleware, async (req, res) => {
   try {
+    const relayer = getRelayer();
+    if (!relayer) {
+      return res.status(503).json({ error: 'Relayer is not configured' });
+    }
+
     const { metaTx, feeDelegation } = req.body;
 
     if (!metaTx) {
@@ -68,6 +75,11 @@ router.post('/execute', authMiddleware, async (req, res) => {
  */
 router.post('/fee-estimate', authMiddleware, async (req, res) => {
   try {
+    const relayer = getRelayer();
+    if (!relayer) {
+      return res.status(503).json({ error: 'Relayer is not configured' });
+    }
+
     const { metaTx } = req.body;
 
     if (!metaTx) {
@@ -99,11 +111,12 @@ router.post('/fee-estimate', authMiddleware, async (req, res) => {
  * Get relayer service status
  */
 router.get('/status', (req, res) => {
+  const relayer = getRelayer();
   res.json({
-    status: 'active',
+    status: relayer ? 'active' : 'unconfigured',
     network: process.env.STELLAR_NETWORK,
     contractId: process.env.ESCROW_CONTRACT_ID,
-    relayerAddress: relayer.relayerKeypair.publicKey(),
+    relayerAddress: relayer ? relayer.relayerKeypair.publicKey() : null,
   });
 });
 
