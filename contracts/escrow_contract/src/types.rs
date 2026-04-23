@@ -153,6 +153,23 @@ pub struct ReputationRecord {
     pub last_updated: u64,
 }
 
+/// Multi-signature configuration for buyer-side approvals.
+///
+/// Allows multiple parties to collectively approve milestones,
+/// requiring a weighted threshold to be met.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct MultisigConfig {
+    /// List of addresses that can approve milestones.
+    pub approvers: soroban_sdk::Vec<Address>,
+    
+    /// Weight assigned to each approver (parallel to approvers vec).
+    pub weights: soroban_sdk::Vec<u32>,
+    
+    /// Minimum total weight required to approve a milestone.
+    pub threshold: u32,
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // STORAGE KEYS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -170,4 +187,6 @@ pub enum DataKey {
     Reputation(Address),
     /// Contract admin address — value: Address
     Admin,
+    /// Pending admin with proposed timestamp — value: (Address, u64)
+    PendingAdmin,
 }
