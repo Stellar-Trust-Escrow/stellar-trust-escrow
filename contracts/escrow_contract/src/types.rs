@@ -283,7 +283,15 @@ pub struct MetaTransaction {
     /// The address of the user who signed this transaction
     pub signer: Address,
 
-    /// Unique nonce to prevent replay attacks
+    /// Unique nonce to prevent replay attacks.
+    /// 
+    /// SECURITY: Nonces are enforced to be strictly monotonically increasing.
+    /// The contract stores the last used nonce per signer in DataKey::MetaTxNonce(signer).
+    /// Each new meta-transaction must have nonce > last_nonce, preventing:
+    /// - Replay attacks (reusing the same nonce)
+    /// - Gap attacks (skipping nonces and replaying old ones)
+    /// 
+    /// After successful execution, the nonce is updated to the used value.
     pub nonce: u64,
 
     /// Maximum timestamp when this meta-tx is valid (Unix timestamp)
@@ -340,4 +348,7 @@ pub enum DataKey {
     SlashRecord(u64),
     /// Recurring payment config by escrow ID — key: u64, value: RecurringPaymentConfig
     RecurringConfig(u64),
+    /// Last used nonce for meta-transaction by signer address — key: Address, value: u64
+    /// Enforces monotonically increasing nonces to prevent replay attacks
+    MetaTxNonce(Address),
 }
