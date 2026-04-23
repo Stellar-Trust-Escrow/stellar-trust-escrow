@@ -717,6 +717,58 @@ impl EscrowContract {
         Ok(())
     }
 
+    /// Expires an escrow when rent/TTL is depleted, refunding remaining balance to client.
+    ///
+    /// # Edge Cases (Issue #678)
+    ///
+    /// ## 1. Zero remaining_balance
+    /// If `remaining_balance == 0`, no token transfer is attempted. The escrow is marked
+    /// as Cancelled without any transfer operation, preventing transfer errors.
+    ///
+    /// ## 2. Disputed escrow expiry
+    /// If the escrow is in `EscrowStatus::Disputed` at expiry time, the function will
+    /// return `EscrowNotActive` error. Disputed escrows must be resolved by the arbiter
+    /// via `resolve_dispute` before expiry can proceed. This prevents bypassing dispute
+    /// resolution through TTL expiry.
+    ///
+    /// ## 3. Partial milestone releases
+    /// If some milestones are in `MS_APPROVED` but not yet released (edge case in admin
+    /// flow), the `remaining_balance` field accurately reflects unreleased funds. Only
+    /// the remaining balance is refunded; already-released milestone funds are not affected.
+    ///
+    /// # Security
+    /// - Only callable by admin or contract itself
+    /// - Validates escrow is in Active state (not Disputed or already finalized)
+    pub fn expire_escrow(env: Env, caller: Address, escrow_id: u64) -> Result<(), EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_admin(&env, &caller)?;
+
+        let mut meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
+        
+        // Edge case #2: Disputed escrows cannot expire without arbiter resolution
+        if meta.status != EscrowStatus::Active {
+            return Err(EscrowError::EscrowNotActive);
+        }
+
+        let refund_amount = meta.remaining_balance;
+        
+        // Edge case #1: Skip token transfer if remaining_balance is zero
+        if refund_amount > 0 {
+            token::Client::new(&env, &meta.token).transfer(
+                &env.current_contract_address(),
+                &meta.client,
+                &refund_amount,
+            );
+        }
+
+        meta.remaining_balance = 0;
+        meta.status = EscrowStatus::Cancelled;
+        ContractStorage::save_escrow_meta(&env, &meta);
+
+        events::emit_escrow_cancelled(&env, escrow_id, refund_amount);
+        Ok(())
+    }
+
     // ── Dispute Resolution ────────────────────────────────────────────────────
 
     /// Raises a dispute, freezing further fund releases.
