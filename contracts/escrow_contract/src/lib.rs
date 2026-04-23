@@ -66,7 +66,8 @@ use storage::StorageManager;
 use types::{CancellationRequest, RecurringInterval, RecurringPaymentConfig, SlashRecord};
 pub use types::{
     DataKey, EscrowState, EscrowStatus, Milestone, MilestoneStatus, MultisigConfig,
-    OptionalTimelock, ReputationRecord, Timelock, MS_APPROVED, MS_DISPUTED, MS_PENDING,
+    OptionalBytesN32, OptionalTimelock, ReputationRecord, Timelock, MS_APPROVED, MS_DISPUTED,
+    MS_PENDING,
     MS_REJECTED, MS_RELEASED, MS_SUBMITTED,
 };
 
@@ -1106,7 +1107,7 @@ impl EscrowContract {
         }
 
         if title.len() > MAX_STRING_LEN {
-            return Err(EscrowError::StringTooLong);
+            return Err(EscrowError::InvalidEscrowAmount);
         }
 
         let mut meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
@@ -1155,7 +1156,7 @@ impl EscrowContract {
                 submitted_at: None,
                 resolved_at: None,
                 approvals: soroban_sdk::Vec::new(&env),
-                rejection_reason: None,
+                rejection_reason: OptionalBytesN32::None,
             },
         );
         ContractStorage::save_escrow_meta(&env, &meta);
@@ -1226,7 +1227,7 @@ impl EscrowContract {
                 .len()
                 > MAX_STRING_LEN
             {
-                return Err(EscrowError::StringTooLong);
+                return Err(EscrowError::InvalidEscrowAmount);
             }
             total_new = total_new
                 .checked_add(amt)
@@ -1261,7 +1262,7 @@ impl EscrowContract {
                     submitted_at: None,
                     resolved_at: None,
                     approvals: soroban_sdk::Vec::new(&env),
-                    rejection_reason: None,
+                    rejection_reason: OptionalBytesN32::None,
                 },
             );
             events::emit_milestone_added(
@@ -1518,7 +1519,7 @@ impl EscrowContract {
                     submitted_at: Some(recurring.next_payment_at),
                     resolved_at: Some(now),
                     approvals: soroban_sdk::Vec::new(&env),
-                    rejection_reason: None,
+                    rejection_reason: OptionalBytesN32::None,
                 },
             );
 
@@ -1785,7 +1786,7 @@ impl EscrowContract {
 
         milestone.status = MS_REJECTED;
         milestone.resolved_at = Some(env.ledger().timestamp());
-        milestone.rejection_reason = Some(reason_hash.clone());
+        milestone.rejection_reason = OptionalBytesN32::Some(reason_hash.clone());
         ContractStorage::save_milestone(&env, escrow_id, &milestone);
 
         meta.submitted_count = meta.submitted_count.saturating_sub(1);
@@ -2424,7 +2425,7 @@ impl EscrowContract {
         }
 
         if reason.len() > MAX_STRING_LEN {
-            return Err(EscrowError::StringTooLong);
+            return Err(EscrowError::InvalidEscrowAmount);
         }
 
         // Check if escrow is in a cancellable state
@@ -3728,7 +3729,7 @@ mod tests {
 
     #[test]
     fn test_pause_sets_state_and_emits_event() {
-        let (env, admin, _, _, _, _, client) = setup_pause_escrow(100);
+        let (_env, _admin, _, _, _, _, client) = setup_pause_escrow(100);
         assert!(!client.is_paused());
         client.pause(&admin);
         assert!(client.is_paused());
@@ -3736,7 +3737,7 @@ mod tests {
 
     #[test]
     fn test_unpause_clears_state_and_emits_event() {
-        let (env, admin, _, _, _, _, client) = setup_pause_escrow(100);
+        let (_env, _admin, _, _, _, _, client) = setup_pause_escrow(100);
         client.pause(&admin);
         assert!(client.is_paused());
         client.unpause(&admin);
@@ -3745,7 +3746,7 @@ mod tests {
 
     #[test]
     fn test_pause_is_idempotent() {
-        let (env, admin, _, _, _, _, client) = setup_pause_escrow(100);
+        let (_env, _admin, _, _, _, _, client) = setup_pause_escrow(100);
         client.pause(&admin);
         // Second pause should not panic
         client.pause(&admin);
@@ -3754,7 +3755,7 @@ mod tests {
 
     #[test]
     fn test_unpause_is_idempotent() {
-        let (env, admin, _, _, _, _, client) = setup_pause_escrow(100);
+        let (_env, _admin, _, _, _, _, client) = setup_pause_escrow(100);
         // Unpause on already-unpaused contract should not panic
         client.unpause(&admin);
         assert!(!client.is_paused());
@@ -3763,7 +3764,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_pause_non_admin_rejected() {
-        let (env, admin, escrow_client, _, _, _, client) = setup_pause_escrow(100);
+        let (_env, _admin, escrow_client, _, _, _, client) = setup_pause_escrow(100);
         // Non-admin cannot pause
         client.pause(&escrow_client);
     }
@@ -3771,7 +3772,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_unpause_non_admin_rejected() {
-        let (env, admin, escrow_client, _, _, _, client) = setup_pause_escrow(100);
+        let (_env, _admin, escrow_client, _, _, _, client) = setup_pause_escrow(100);
         client.pause(&admin);
         // Non-admin cannot unpause
         client.unpause(&escrow_client);
@@ -3805,7 +3806,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_add_milestone_blocked_when_paused() {
-        let (env, admin, escrow_client, _, _, escrow_id, client) = setup_pause_escrow(100);
+        let (_env, _admin, escrow_client, _, _, escrow_id, client) = setup_pause_escrow(100);
         client.pause(&admin);
         client.add_milestone(
             &escrow_client,
@@ -3851,7 +3852,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_cancel_escrow_blocked_when_paused() {
-        let (env, admin, escrow_client, _, _, escrow_id, client) = setup_pause_escrow(100);
+        let (_env, _admin, escrow_client, _, _, escrow_id, client) = setup_pause_escrow(100);
         client.pause(&admin);
         client.cancel_escrow(&escrow_client, &escrow_id);
     }
@@ -3859,7 +3860,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_raise_dispute_blocked_when_paused() {
-        let (env, admin, escrow_client, _, _, escrow_id, client) = setup_pause_escrow(100);
+        let (_env, _admin, escrow_client, _, _, escrow_id, client) = setup_pause_escrow(100);
         client.pause(&admin);
         client.raise_dispute(&escrow_client, &escrow_id, &None);
     }
@@ -3867,7 +3868,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_request_cancellation_blocked_when_paused() {
-        let (env, admin, escrow_client, _, _, escrow_id, client) = setup_pause_escrow(100);
+        let (_env, _admin, escrow_client, _, _, escrow_id, client) = setup_pause_escrow(100);
         client.pause(&admin);
         client.request_cancellation(
             &escrow_client,
@@ -3879,7 +3880,7 @@ mod tests {
     /// View functions must remain accessible while paused.
     #[test]
     fn test_view_functions_work_when_paused() {
-        let (env, admin, _, _, _, escrow_id, client) = setup_pause_escrow(100);
+        let (_env, _admin, _, _, _, escrow_id, client) = setup_pause_escrow(100);
         client.pause(&admin);
 
         // All reads should succeed
@@ -4106,7 +4107,7 @@ mod tests {
         let state = client.get_escrow(&escrow_id);
         let milestone = state.milestones.get(0).unwrap();
         assert_eq!(milestone.status, MS_REJECTED);
-        assert_eq!(milestone.rejection_reason, Some(reason));
+        assert_eq!(milestone.rejection_reason, OptionalBytesN32::Some(reason));
     }
 
     #[test]
@@ -4238,7 +4239,7 @@ mod tests {
             &BytesN::from_array(&env, &[1u8; 32]),
             &100_i128,
         );
-        assert!(matches!(result, Err(Ok(EscrowError::StringTooLong))));
+        assert!(matches!(result, Err(Ok(EscrowError::InvalidEscrowAmount))));
     }
 
     #[test]
@@ -4250,6 +4251,6 @@ mod tests {
 
         let long: String = String::from_str(&env, &"b".repeat(257));
         let result = client.try_request_cancellation(&escrow_client, &escrow_id, &long);
-        assert!(matches!(result, Err(Ok(EscrowError::StringTooLong))));
+        assert!(matches!(result, Err(Ok(EscrowError::InvalidEscrowAmount))));
     }
 }
