@@ -147,37 +147,37 @@ struct ApproveMilestoneArgs {
 // `submitted_count` replaces the O(n) loop in cancel_escrow.
 #[contracttype]
 #[derive(Clone, Debug)]
-pub(crate) struct EscrowMeta {
-    pub(crate) escrow_id: u64,
-    pub(crate) client: Address,
-    pub(crate) freelancer: Address,
-    pub(crate) token: Address,
-    pub(crate) total_amount: i128,
+pub struct EscrowMeta {
+    pub escrow_id: u64,
+    pub client: Address,
+    pub freelancer: Address,
+    pub token: Address,
+    pub total_amount: i128,
     /// Running sum of milestone amounts added so far (allocation guard).
-    pub(crate) allocated_amount: i128,
-    pub(crate) remaining_balance: i128,
-    pub(crate) status: EscrowStatus,
-    pub(crate) milestone_count: u32,
+    pub allocated_amount: i128,
+    pub remaining_balance: i128,
+    pub status: EscrowStatus,
+    pub milestone_count: u32,
     /// Number of milestones in Approved state — avoids full scan on completion check.
-    pub(crate) approved_count: u32,
-    pub(crate) released_count: u32,
+    pub approved_count: u32,
+    pub released_count: u32,
     /// Number of milestones in Submitted state — avoids O(n) scan in cancel_escrow.
-    pub(crate) submitted_count: u32,
-    pub(crate) arbiter: Option<Address>,
-    pub(crate) buyer_signers: soroban_sdk::Vec<Address>,
-    pub(crate) created_at: u64,
-    pub(crate) deadline: Option<u64>,
+    pub submitted_count: u32,
+    pub arbiter: Option<Address>,
+    pub buyer_signers: soroban_sdk::Vec<Address>,
+    pub created_at: u64,
+    pub deadline: Option<u64>,
     /// Optional lock time (ledger timestamp) - funds locked until this time.
-    pub(crate) lock_time: Option<u64>,
+    pub lock_time: Option<u64>,
     /// Optional extension deadline for the lock time.
-    pub(crate) lock_time_extension: Option<u64>,
+    pub lock_time_extension: Option<u64>,
     /// Optional timelock controls release window after approval.
-    pub(crate) timelock: OptionalTimelock,
-    pub(crate) brief_hash: BytesN<32>,
+    pub timelock: OptionalTimelock,
+    pub brief_hash: BytesN<32>,
     /// Prepaid storage rent reserve held by the contract in the escrow token.
-    pub(crate) rent_balance: i128,
+    pub rent_balance: i128,
     /// Timestamp of the last successful rent collection checkpoint.
-    pub(crate) last_rent_collection_at: u64,
+    pub last_rent_collection_at: u64,
 }
 
 // ── Storage helpers ───────────────────────────────────────────────────────────
@@ -2198,6 +2198,14 @@ impl EscrowContract {
         ContractStorage::load_escrow(&env, escrow_id)
     }
 
+    /// O(1) lightweight view — returns only the escrow header without loading milestones.
+    /// Suitable for monitoring dashboards that only need status, balances, and party info.
+    pub fn get_escrow_meta(env: Env, escrow_id: u64) -> Result<EscrowMeta, EscrowError> {
+        let mut meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
+        ContractStorage::settle_rent_for_access(&env, &mut meta)?;
+        Ok(meta)
+    }
+
     pub fn collect_rent(env: Env, escrow_id: u64) -> Result<i128, EscrowError> {
         ContractStorage::require_initialized(&env)?;
         let mut meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
@@ -3800,5 +3808,42 @@ mod tests {
             &50_i128,
         );
         assert_eq!(mid, 0);
+    }
+
+    #[test]
+    fn test_get_escrow_meta_returns_correct_metadata() {
+        let (env, admin, _, client) = setup();
+        client.initialize(&admin);
+
+        let (escrow_client, freelancer, token_id, escrow_id) =
+            setup_funded_escrow(&env, &admin, &client, 100_i128);
+
+        // Add a milestone so milestone_count is non-zero
+        client.add_milestone(
+            &escrow_client,
+            &escrow_id,
+            &String::from_str(&env, "M1"),
+            &BytesN::from_array(&env, &[1u8; 32]),
+            &50_i128,
+        );
+
+        let meta = client.get_escrow_meta(&escrow_id);
+
+        assert_eq!(meta.escrow_id, escrow_id);
+        assert_eq!(meta.client, escrow_client);
+        assert_eq!(meta.freelancer, freelancer);
+        assert_eq!(meta.token, token_id);
+        assert_eq!(meta.total_amount, 100_i128);
+        assert_eq!(meta.status, EscrowStatus::Active);
+        assert_eq!(meta.milestone_count, 1);
+    }
+
+    #[test]
+    fn test_get_escrow_meta_not_found() {
+        let (_, admin, _, client) = setup();
+        client.initialize(&admin);
+
+        let result = client.try_get_escrow_meta(&9999_u64);
+        assert!(result.is_err());
     }
 }
