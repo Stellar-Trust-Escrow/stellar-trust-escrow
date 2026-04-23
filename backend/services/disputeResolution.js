@@ -42,7 +42,7 @@ const rules = [
    */
   {
     name: 'one_sided_evidence',
-    evaluate(evidence, escrow) {
+    evaluate(evidence, _escrow) {
       const clientEvidence = evidence.filter((e) => e.role === 'client');
       const freelancerEvidence = evidence.filter((e) => e.role === 'freelancer');
 

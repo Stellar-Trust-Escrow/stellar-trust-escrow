@@ -1,0 +1,66 @@
+C:\Users\USER\Desktop\KING\Clones\stellar-trust-escrow\frontend
+├── app
+|  ├── admin
+|  ├── dashboard
+|  ├── escrow
+|  ├── explorer
+|  ├── global-error.jsx
+|  ├── globals.css
+|  ├── kyc
+|  ├── layout.jsx
+|  ├── LazySection.jsx
+|  ├── loading.jsx
+|  ├── page.jsx
+|  └── profile
+├── components
+|  ├── dashboard
+|  ├── escrow
+|  ├── explorer
+|  ├── layout
+|  ├── LocaleHtmlAttributes.jsx
+|  ├── profile
+|  ├── ServiceWorkerRegistrar.jsx
+|  ├── settings
+|  └── ui
+├── contexts
+|  └── ThemeContext.jsx
+├── data
+|  └── templates.json
+├── hooks
+|  ├── useEscrow.js
+|  ├── useIntersectionObserver.js
+|  ├── usePerformance.js
+|  ├── useReputation.js
+|  └── useWallet.js
+├── i18n
+|  ├── config.js
+|  ├── index.jsx
+|  └── locales
+├── jest.config.cjs
+├── jest.config.js
+├── jest.setup.cjs
+├── jest.setup.js
+├── lib
+|  ├── performance.js
+|  ├── sentry.js
+|  ├── sentryUser.js
+|  └── stellar.js
+├── next.config.js
+├── package-lock.json
+├── package.json
+├── public
+|  ├── offline.html
+|  └── sw.js
+├── sentry.client.config.js
+├── sentry.edge.config.js
+├── sentry.server.config.js
+├── tailwind.config.js
+└── tests
+   ├── a11y
+   ├── components
+   ├── hooks
+   ├── pages
+   └── __mocks__
+
+directory: 28 file: 34
+

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import AdminAuditLogsPage from '../../../app/admin/audit-logs/page';
 import { renderWithStore } from '../../../store/test-utils';
 

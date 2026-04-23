@@ -1,18 +1,28 @@
-# Error Boundary Implementation TODO - Issue #238
+# Contributor Onboarding Guide Implementation TODO
 
+## Approved Plan Breakdown
 
-- [x] 1. Create new git branch `blackboxai/error-boundaries-#238`
+**✅ Step 1: Create development branch**  
+- `git checkout -b docs/contributor-onboarding`
 
+**✅ Step 2: Create comprehensive CONTRIBUTING.md** (Complete file with all sections)
 
-  - [ ] `frontend/app/dashboard/page.jsx` (wrap page content)
-  - [ ] `frontend/app/escrow/create/page.jsx` (wrap content)
-  - [ ] `frontend/app/explorer/page.jsx` (wrap content)
-- [ ] 5. Enhance `frontend/app/global-error.jsx` (better UI, more context)
-- [ ] 6. Add component-level boundaries (e.g., dynamic imports in dashboard)
-- [ ] 7. Test: Run `cd frontend && npm run dev`, simulate errors (throw new Error in components), verify Sentry/recovery
-- [ ] 8. Lint & test: `cd frontend && npm run lint && npm run test`
-- [ ] 9. Commit changes (git add/commit -m "feat: implement comprehensive error boundaries #238")
-- [ ] 10. Create PR: `gh pr create --title "feat: Comprehensive Frontend Error Boundary System #238" --body "$(cat pr_body.md)"`
+**✅ Step 4: Create GitHub PR template**  
+- .github/pull_request_template.md from pr_body.md
 
-**Next Action:** Implement ErrorBoundary component.
+**✅ Step 3: Update README.md**  
+- Add prominent CONTRIBUTING.md link  
+- Simplify Quick Start to reference CONTRIBUTING.md
 
+**Step 5: Verify linters & format**  
+- `npm run lint && npm run format`
+
+**Step 6: Commit changes**  
+- `git add .`  
+- `git commit -m \"docs: create complete contributor onboarding guide\"`
+
+**Step 7: Push and create PR**  
+- `git push origin docs/contributor-onboarding`  
+- Open PR per CONTRIBUTING.md process
+
+**Progress: 5/7 complete** (README.md Quick Start simplified)

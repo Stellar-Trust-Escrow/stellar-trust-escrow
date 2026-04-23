@@ -9,7 +9,7 @@
 
 #![allow(dead_code)]
 
-use soroban_sdk::{symbol_short, Address, Env};
+use soroban_sdk::{symbol_short, Address, BytesN, Env};
 
 /// Emitted when a new escrow is created and funds are locked.
 ///
@@ -72,6 +72,24 @@ pub fn emit_milestone_approved(env: &Env, escrow_id: u64, milestone_id: u32, amo
     env.events().publish(
         (symbol_short!("mil_apr"), escrow_id),
         (milestone_id, amount),
+    );
+}
+
+/// Emitted when a multisig approver records a vote; escrow may still be below threshold.
+///
+/// * `accrued_weight` — running sum of weights after this vote
+/// * `threshold`      — configured threshold for final approval
+pub fn emit_multisig_approval_recorded(
+    env: &Env,
+    escrow_id: u64,
+    milestone_id: u32,
+    signer: &Address,
+    accrued_weight: u32,
+    threshold: u32,
+) {
+    env.events().publish(
+        (symbol_short!("msig_apr"), escrow_id),
+        (milestone_id, signer.clone(), accrued_weight, threshold),
     );
 }
 
@@ -251,6 +269,18 @@ pub fn emit_lock_time_expired(env: &Env, escrow_id: u64, lock_time: u64) {
 /// * `old_lock_time`  - The previous lock time
 /// * `new_lock_time`  - The new lock time
 /// * `extended_by`     - Address of the party that extended the lock
+pub fn emit_timelock_started(env: &Env, escrow_id: u64, duration_ledger: u64, start_ledger: u64) {
+    env.events().publish(
+        (symbol_short!("tl_start"), escrow_id),
+        (duration_ledger, start_ledger),
+    );
+}
+
+pub fn emit_timelock_released(env: &Env, escrow_id: u64, released_ledger: u64) {
+    env.events()
+        .publish((symbol_short!("tl_rel"), escrow_id), released_ledger);
+}
+
 pub fn emit_lock_time_extended(
     env: &Env,
     escrow_id: u64,
@@ -292,6 +322,12 @@ pub fn emit_cancellation_executed(
         (symbol_short!("can_exe"), escrow_id),
         (client_amount, slash_amount),
     );
+}
+
+/// Emitted when the counterparty approves a pending cancellation request.
+pub fn emit_cancellation_approved(env: &Env, escrow_id: u64, approver: &Address) {
+    env.events()
+        .publish((symbol_short!("can_apr"), escrow_id), approver.clone());
 }
 
 /// Emitted when a cancellation is requested.
@@ -340,4 +376,22 @@ pub fn emit_slash_disputed(env: &Env, escrow_id: u64, disputer: &Address, amount
 pub fn emit_slash_dispute_resolved(env: &Env, escrow_id: u64, upheld: bool, amount: i128) {
     env.events()
         .publish((symbol_short!("slsh_res"), escrow_id), (upheld, amount));
+}
+
+/// Emitted when the client role is transferred to a new address.
+///
+/// # Arguments
+/// * `escrow_id`  - The escrow ID
+/// * `old_client` - The previous client address
+/// * `new_client` - The new client address
+pub fn emit_client_role_transferred(
+    env: &Env,
+    escrow_id: u64,
+    old_client: &Address,
+    new_client: &Address,
+) {
+    env.events().publish(
+        (symbol_short!("cli_xfr"), escrow_id),
+        (old_client.clone(), new_client.clone()),
+    );
 }

@@ -15,15 +15,26 @@ import { attachConnectionMonitoring, startConnectionMonitoring } from './connect
 import { attachRetryMiddleware } from './retryUtils.js';
 import { DEFAULT_TENANT_ID, getCurrentTenantId, isTenantScopeBypassed } from './tenantContext.js';
 
+const SLOW_QUERY_MS = parseInt(process.env.SLOW_QUERY_THRESHOLD_MS || '500', 10);
+
 const globalForPrisma = globalThis;
 
 const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
-    log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
-    // Additional options for better error handling and performance
+    log: process.env.NODE_ENV === 'development'
+      ? [{ emit: 'event', level: 'query' }, 'warn', 'error']
+      : ['error'],
     errorFormat: 'minimal',
   });
+
+if (process.env.NODE_ENV === 'development' && !globalForPrisma.prisma) {
+  prisma.$on('query', (e) => {
+    if (e.duration > SLOW_QUERY_MS) {
+      console.warn(`[Prisma] Slow query (${e.duration}ms): ${e.query}`);
+    }
+  });
+}
 
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;

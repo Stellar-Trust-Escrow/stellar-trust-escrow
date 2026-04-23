@@ -19,13 +19,11 @@
  */
 
 import { readFileSync } from 'fs';
-import { createRequire } from 'module';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import http from 'http';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const require = createRequire(import.meta.url);
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 

@@ -436,6 +436,30 @@
                     },
                     {
                       "key": {
+                        "symbol": "multisig_approvers"
+                      },
+                      "val": {
+                        "vec": []
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "multisig_threshold"
+                      },
+                      "val": {
+                        "u32": 0
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "multisig_weights"
+                      },
+                      "val": {
+                        "vec": []
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "remaining_balance"
                       },
                       "val": {
@@ -548,6 +572,22 @@
                           "hi": 0,
                           "lo": 300
                         }
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "approval_signers"
+                      },
+                      "val": {
+                        "vec": []
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "approval_weight_accrued"
+                      },
+                      "val": {
+                        "u32": 0
                       }
                     },
                     {
@@ -1040,6 +1080,26 @@
               },
               {
                 "symbol": "initialize"
+              }
+            ],
+            "data": {
+              "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000002",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "adm_init"
               }
             ],
             "data": {
@@ -1823,6 +1883,22 @@
                       "hi": 0,
                       "lo": 300
                     }
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "approval_signers"
+                  },
+                  "val": {
+                    "vec": []
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "approval_weight_accrued"
+                  },
+                  "val": {
+                    "u32": 0
                   }
                 },
                 {

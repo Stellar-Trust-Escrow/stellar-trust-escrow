@@ -48,6 +48,7 @@ Thumbs.db
 # ── Test & coverage ────────────────────────────────────────────────────────────
 coverage/
 .nyc_output/
+**/test_snapshots/
 
 # ── Prisma generated ───────────────────────────────────────────────────────────
 backend/database/migrations/*.sql
@@ -67,4 +68,28 @@ backend/data/
 # ── Misc ───────────────────────────────────────────────────────────────────────
 .npm
 /ISSUES.md
-REEDME.md
+/ISSUES3_formatted.md
+/ISSUES3.md
+/ISSUES4.md
+/ISSUSE2.md
+
+/REEDME.md
+.codex
+TODO.md
+issues.json
+drips-wave-analysis.md
+clean-file-paths-with-branch.js
+convert_issues3_to_template.sh
+create-issue-1.js
+create-issues.js
+push-issues-drips.js
+push_issues.js
+push_issues.sh
+push_issues_formatted.sh
+push_issues_robust.sh
+push_issuses.sh
+update-all-issues-drips.sh
+update-issues-drips.js
+update_all_drips_issues.sh
+/pr_body.md
+/pr_body.txt

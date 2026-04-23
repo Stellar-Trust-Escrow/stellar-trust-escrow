@@ -1,8 +1,15 @@
 import express from 'express';
 import reputationController from '../controllers/reputationController.js';
 import { cacheResponse, TTL } from '../middleware/cache.js';
+import { reputationSearchRateLimit } from '../../middleware/rateLimit.js';
 
 const router = express.Router();
+
+/**
+ * @route  GET /api/reputation/search?q=<prefix>
+ * ES-backed address autocomplete + full-text search. Prisma fallback on outage.
+ */
+router.get('/search', reputationSearchRateLimit, reputationController.search);
 
 /**
  * @route  GET /api/reputation/leaderboard

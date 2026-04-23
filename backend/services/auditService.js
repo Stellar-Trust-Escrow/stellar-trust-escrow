@@ -8,7 +8,10 @@
  */
 
 import { stringify } from 'csv-stringify/sync';
+import { createModuleLogger } from '../config/logger.js';
 import prisma from '../lib/prisma.js';
+
+const auditLogger = createModuleLogger('auditService');
 
 // ── Categories & Actions ──────────────────────────────────────────────────────
 
@@ -94,7 +97,11 @@ export async function log(entry) {
       },
     });
   } catch (err) {
-    console.error('[AuditService] Failed to write audit log:', err.message);
+    auditLogger.error({
+      message: 'audit_write_failed',
+      error: err.message,
+      stack: err.stack,
+    });
   }
 }
 

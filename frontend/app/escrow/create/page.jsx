@@ -24,7 +24,10 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Button from '../../../components/ui/Button';
 import TemplateSelector from '../../../components/escrow/TemplateSelector';
+import StellarAddressInput from '../../../components/ui/StellarAddressInput';
+import XLMAmountInput from '../../../components/ui/XLMAmountInput';
 import templatesData from '../../../data/templates.json';
+import { useToast } from '../../../contexts/ToastContext';
 
 const STEPS = [
   { id: 1, label: 'Counterparty' },
@@ -34,6 +37,8 @@ const STEPS = [
 ];
 
 const DEFAULT_MILESTONE = { title: '', description: '', amount: '' };
+
+const DESCRIPTION_MIN_LENGTH = 10;
 
 function applyTemplateToForm(currentForm, template) {
   const milestones = Array.isArray(template.milestones) && template.milestones.length > 0
@@ -54,6 +59,12 @@ function applyTemplateToForm(currentForm, template) {
   };
 }
 
+/** Returns true when the amount string represents a positive number. */
+function isPositiveAmount(value) {
+  const n = Number(value);
+  return value !== '' && !Number.isNaN(n) && n > 0;
+}
+
 export default function CreateEscrowPage() {
   const searchParams = useSearchParams();
   const templateLibrary = templatesData.templates || [];
@@ -71,6 +82,11 @@ export default function CreateEscrowPage() {
   const [error, setError] = useState(null);
   const [templateNotice, setTemplateNotice] = useState('');
   const [appliedQueryTemplateId, setAppliedQueryTemplateId] = useState(null);
+
+  // Touched state tracks which fields the user has interacted with
+  const [touched, setTouched] = useState({ totalAmount: false, briefDescription: false });
+
+  const { showToast } = useToast();
 
   useEffect(() => {
     const templateId = searchParams.get('template');
@@ -107,6 +123,7 @@ export default function CreateEscrowPage() {
       throw new Error('Not implemented — see Issue #33');
     } catch (err) {
       setError(err.message);
+      showToast('Failed to create escrow', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -137,6 +154,19 @@ export default function CreateEscrowPage() {
       ),
     }));
   };
+
+  // Validation errors (only shown after field is touched)
+  const amountError =
+    touched.totalAmount && formData.totalAmount !== '' && !isPositiveAmount(formData.totalAmount)
+      ? 'Amount must be a positive number.'
+      : null;
+
+  const descriptionError =
+    touched.briefDescription &&
+    formData.briefDescription.length > 0 &&
+    formData.briefDescription.length < DESCRIPTION_MIN_LENGTH
+      ? `Description must be at least ${DESCRIPTION_MIN_LENGTH} characters.`
+      : null;
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
@@ -183,7 +213,15 @@ export default function CreateEscrowPage() {
 
       {/* Step Content */}
       <div className="card space-y-6">
-        {currentStep === 1 && <StepCounterparty formData={formData} setFormData={setFormData} />}
+        {currentStep === 1 && (
+          <StepCounterparty
+            formData={formData}
+            setFormData={setFormData}
+            setTouched={setTouched}
+            amountError={amountError}
+            descriptionError={descriptionError}
+          />
+        )}
         {currentStep === 2 && (
           <StepMilestones
             formData={formData}
@@ -208,7 +246,10 @@ export default function CreateEscrowPage() {
           Back
         </Button>
         {currentStep < 4 ? (
-          <Button variant="primary" onClick={() => setCurrentStep((step) => step + 1)}>
+          <Button
+            variant="primary"
+            onClick={() => setCurrentStep((step) => step + 1)}
+          >
             Next →
           </Button>
         ) : (
@@ -226,30 +267,25 @@ export default function CreateEscrowPage() {
 /**
  * Step 1: Enter counterparty details.
  */
-function StepCounterparty({ formData, setFormData }) {
+function StepCounterparty({ formData, setFormData, setTouched, amountError, descriptionError }) {
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-semibold text-white">Counterparty & Funds</h2>
 
-      <div>
-        <label className="block text-sm text-gray-400 mb-1">Freelancer Stellar Address</label>
-        <input
-          type="text"
-          placeholder="GABCD1234..."
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5
-                     text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
-          value={formData.freelancerAddress}
-          onChange={(event) =>
-            setFormData((data) => ({ ...data, freelancerAddress: event.target.value }))
-          }
-        />
-        {/* TODO (contributor): add validation error display */}
-      </div>
+      <StellarAddressInput
+        id="freelancer-address"
+        label="Freelancer Stellar Address"
+        placeholder="GABCD1234..."
+        value={formData.freelancerAddress}
+        onChange={(val) => setFormData((data) => ({ ...data, freelancerAddress: val }))}
+        required
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Token</label>
+          <label htmlFor="token" className="block text-sm text-gray-400 mb-1">Token</label>
           <select
+            id="token"
             className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white"
             value={formData.tokenAddress}
             onChange={(event) =>
@@ -262,32 +298,48 @@ function StepCounterparty({ formData, setFormData }) {
           </select>
         </div>
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Total Amount</label>
-          <input
-            type="number"
-            placeholder="0.00"
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5
-                       text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
+          <label htmlFor="total-amount" className="block text-sm text-gray-400 mb-1">
+            Total Amount
+          </label>
+          <XLMAmountInput
+            id="total-amount"
             value={formData.totalAmount}
-            onChange={(event) => setFormData((data) => ({ ...data, totalAmount: event.target.value }))}
+            onChange={(event) => {
+              setFormData((data) => ({ ...data, totalAmount: event.target.value }));
+              setTouched((t) => ({ ...t, totalAmount: true }));
+            }}
+            onBlur={() => setTouched((t) => ({ ...t, totalAmount: true }))}
+            error={amountError}
+            errorId="total-amount-error"
           />
         </div>
       </div>
 
       <div>
-        <label className="block text-sm text-gray-400 mb-1">
+        <label htmlFor="brief-description" className="block text-sm text-gray-400 mb-1">
           Project Brief <span className="text-gray-600">(optional)</span>
         </label>
         <textarea
+          id="brief-description"
           rows={3}
           placeholder="Briefly describe the project scope and deliverables…"
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5
-                     text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 resize-none"
+          className={`w-full bg-gray-800 border rounded-lg px-4 py-2.5
+                     text-white placeholder-gray-500 focus:outline-none resize-none transition-colors
+                     ${descriptionError ? 'border-red-500 focus:border-red-400' : 'border-gray-700 focus:border-indigo-500'}`}
           value={formData.briefDescription}
-          onChange={(event) =>
-            setFormData((data) => ({ ...data, briefDescription: event.target.value }))
-          }
+          aria-invalid={!!descriptionError}
+          aria-describedby={descriptionError ? 'brief-description-error' : undefined}
+          onChange={(event) => {
+            setFormData((data) => ({ ...data, briefDescription: event.target.value }));
+            setTouched((t) => ({ ...t, briefDescription: true }));
+          }}
+          onBlur={() => setTouched((t) => ({ ...t, briefDescription: true }))}
         />
+        {descriptionError && (
+          <p id="brief-description-error" className="mt-1 text-xs text-red-400" role="alert">
+            {descriptionError}
+          </p>
+        )}
         {/* TODO (contributor): upload to IPFS and store hash */}
       </div>
     </div>
@@ -338,16 +390,15 @@ function StepMilestones({ formData, onAdd, onRemove, onUpdate }) {
             value={milestone.description}
             onChange={(event) => onUpdate(index, 'description', event.target.value)}
           />
-          <div className="flex gap-2">
-            <input
-              type="number"
-              placeholder="Amount"
-              className="w-32 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2
-                         text-white placeholder-gray-500 text-sm focus:outline-none focus:border-indigo-500"
+          <div className="flex gap-2 items-center">
+            <XLMAmountInput
               value={milestone.amount}
+              placeholder="Amount"
               onChange={(event) => onUpdate(index, 'amount', event.target.value)}
+              inputClassName="w-32"
+              className="w-32"
             />
-            <span className="text-gray-500 text-sm self-center">
+            <span className="text-gray-500 text-sm">
               {String(formData.tokenAddress || 'USDC').toUpperCase()}
             </span>
           </div>
