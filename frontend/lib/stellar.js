@@ -10,9 +10,6 @@
  * @module stellar
  */
 
-/* eslint-disable no-undef */
-/* eslint-disable @typescript-eslint/no-unused-vars */
-
 // TODO (contributor — hard, Issue #35): uncomment and implement
 // import {
 //   SorobanRpc,

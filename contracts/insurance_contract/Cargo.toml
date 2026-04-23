@@ -1,0 +1,15 @@
+[package]
+name = "stellar-trust-insurance-contract"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Insurance fund contract for StellarTrustEscrow — protects users against contract failures and exploits"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+soroban-sdk = { version = "21.0.0", features = [] }
+
+[dev-dependencies]
+soroban-sdk = { version = "21.0.0", features = ["testutils"] }

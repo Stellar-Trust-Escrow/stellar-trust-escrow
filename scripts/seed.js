@@ -14,8 +14,6 @@
  * - Ensure seeded data is consistent with on-chain state (same IDs, amounts)
  */
 
-/* eslint-disable no-undef */
-
 import 'dotenv/config';
 // TODO (contributor): uncomment when Prisma is installed
 // const { PrismaClient } = require('@prisma/client');

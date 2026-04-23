@@ -1,4 +1,3 @@
-/* eslint-disable no-undef */
 /**
  * KYC Service — Sumsub integration
  *
@@ -8,6 +7,7 @@
 
 import crypto from 'crypto';
 import prisma from '../lib/prisma.js';
+import auditService, { AuditCategory, AuditAction } from './auditService.js';
 
 const {
   SUMSUB_APP_TOKEN,
@@ -106,7 +106,7 @@ async function handleWebhook(payload) {
   const newStatus = statusMap[type];
   if (!newStatus) return null; // unhandled event type
 
-  return prisma.kycVerification.upsert({
+  const record = await prisma.kycVerification.upsert({
     where: { address: externalUserId },
     update: {
       applicantId,
@@ -122,6 +122,22 @@ async function handleWebhook(payload) {
       rejectLabels: reviewResult?.rejectLabels ?? [],
     },
   });
+
+  const actionMap = {
+    applicantReviewed:
+      reviewResult?.reviewAnswer === 'GREEN' ? AuditAction.KYC_APPROVED : AuditAction.KYC_DECLINED,
+  };
+  const auditAction = actionMap[type] ?? AuditAction.KYC_SUBMITTED;
+
+  await auditService.log({
+    category: AuditCategory.KYC,
+    action: auditAction,
+    actor: externalUserId,
+    resourceId: applicantId,
+    metadata: { type, reviewResult },
+  });
+
+  return record;
 }
 
 /**

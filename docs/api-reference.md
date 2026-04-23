@@ -4,146 +4,63 @@ REST API documentation for the StellarTrustEscrow backend.
 
 Base URL: `http://localhost:4000` (development)
 
+> **Interactive docs** — A full Swagger UI is available at [`/api/docs`](http://localhost:4000/api/docs) when the server is running.
+> The raw OpenAPI 3.0 JSON spec is served at [`/api/docs/json`](http://localhost:4000/api/docs/json).
+
 ---
 
-## Escrows
+## Authentication
 
-### `GET /api/escrows`
+Most sensitive endpoints require a JWT Bearer token.
 
-List all escrows, paginated.
+```
+Authorization: Bearer <access_token>
+```
 
-**Query Parameters:**
+Obtain tokens via `POST /api/auth/login`. Access tokens expire in **15 minutes**; use `POST /api/auth/refresh` to renew.
 
-| Param        | Type   | Default | Description                                    |
-| ------------ | ------ | ------- | ---------------------------------------------- |
-| `page`       | number | 1       | Page number                                    |
-| `limit`      | number | 20      | Items per page (max 100)                       |
-| `status`     | string | —       | Filter: Active, Completed, Disputed, Cancelled |
-| `client`     | string | —       | Filter by client Stellar address               |
-| `freelancer` | string | —       | Filter by freelancer address                   |
+Admin-only endpoints require the `x-admin-api-key` header instead.
 
-**Response:**
+Wallet-scoped endpoints additionally enforce that the wallet address in the JWT
+matches the `:address` path segment or request body.
+
+---
+
+## Rate Limiting
+
+| Scope                             | Window   | Limit       |
+| --------------------------------- | -------- | ----------- |
+| All API endpoints                 | 1 minute | 60 requests |
+| `GET /api/reputation/leaderboard` | 1 minute | 30 requests |
+
+Exceeding the limit returns `429 Too Many Requests`:
 
 ```json
 {
-  "data": [
-    {
-      "id": 1,
-      "clientAddress": "GABC...",
-      "freelancerAddress": "GXYZ...",
-      "totalAmount": "2000000000",
-      "remainingBalance": "1500000000",
-      "status": "Active",
-      "milestoneCount": 3,
-      "approvedMilestones": 1,
-      "createdAt": "2025-03-01T00:00:00Z"
-    }
-  ],
-  "total": 42,
+  "error": "Too many API requests, please slow down and try again in a minute.",
+  "code": "RATE_LIMIT_EXCEEDED"
+}
+```
+
+---
+
+## Pagination
+
+All collection endpoints return a standard envelope:
+
+```json
+{
+  "data": [...],
   "page": 1,
-  "limit": 20
+  "limit": 20,
+  "total": 42,
+  "totalPages": 3,
+  "hasNextPage": true,
+  "hasPreviousPage": false
 }
 ```
 
----
-
-### `GET /api/escrows/:id`
-
-Get full escrow details including milestones.
-
-**Response:**
-
-```json
-{
-  "id": 1,
-  "clientAddress": "GABC...",
-  "freelancerAddress": "GXYZ...",
-  "arbiterAddress": null,
-  "tokenAddress": "USDC_CONTRACT",
-  "totalAmount": "2000000000",
-  "remainingBalance": "1500000000",
-  "status": "Active",
-  "briefHash": "QmIPFSHash...",
-  "deadline": null,
-  "createdAt": "2025-03-01T00:00:00Z",
-  "milestones": [
-    {
-      "id": 0,
-      "title": "Initial Designs",
-      "amount": "500000000",
-      "status": "Approved",
-      "submittedAt": "2025-03-05T00:00:00Z",
-      "resolvedAt": "2025-03-06T00:00:00Z"
-    }
-  ]
-}
-```
-
----
-
-### `POST /api/escrows/broadcast`
-
-Broadcast a pre-signed Stellar transaction.
-
-**Request Body:**
-
-```json
-{
-  "signedXdr": "AAAAAgAAAA..."
-}
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "hash": "abc123..."
-}
-```
-
----
-
-## Users
-
-### `GET /api/users/:address`
-
-Get user profile combining reputation + recent escrows.
-
-### `GET /api/users/:address/escrows`
-
-| Param    | Type   | Description                      |
-| -------- | ------ | -------------------------------- |
-| `role`   | string | `client`, `freelancer`, or `all` |
-| `status` | string | EscrowStatus filter              |
-
-### `GET /api/users/:address/stats`
-
-Returns: `total_volume`, `completion_rate`, `avg_milestone_approval_time_hours`
-
----
-
-## Reputation
-
-### `GET /api/reputation/:address`
-
-Returns the full on-chain reputation record.
-
-### `GET /api/reputation/leaderboard`
-
-Returns top users by score. Query params: `limit`, `page`.
-
----
-
-## Disputes
-
-### `GET /api/disputes`
-
-List all escrows in Disputed status.
-
-### `GET /api/disputes/:escrowId`
-
-Get dispute details for a specific escrow.
+Query parameters: `page` (default 1) and `limit` (default 20, max 100).
 
 ---
 
@@ -154,8 +71,88 @@ All errors follow this shape:
 ```json
 {
   "error": "Human-readable error message",
-  "code": "ESCROW_NOT_FOUND"
+  "code": "OPTIONAL_ERROR_CODE"
 }
 ```
 
-TODO (contributor — Issue #18): implement structured error codes matching the contract's `EscrowError` enum.
+---
+
+## Endpoints Overview
+
+| Tag           | Base Path            | Auth Required |
+| ------------- | -------------------- | ------------- |
+| Auth          | `/api/auth`          | Public except `POST /logout` |
+| Escrows       | `/api/escrows`       | Bearer JWT |
+| Users         | `/api/users`         | Bearer JWT, with wallet ownership on export/import |
+| Reputation    | `/api/reputation`    | Public |
+| Disputes      | `/api/disputes`      | Bearer JWT |
+| Payments      | `/api/payments`      | Bearer JWT, with wallet/payment ownership; webhook signed |
+| KYC           | `/api/kyc`           | Bearer JWT for user endpoints; webhook signed; admin uses API key |
+| Events        | `/api/events`        | Public |
+| Search        | `/api/search`        | Public, except admin analytics/reindex |
+| Notifications | `/api/notifications` | Admin API Key for internal queue/event endpoints; unsubscribe/resubscribe token for user email actions |
+| Relayer       | `/api/relayer`       | Bearer JWT for execution and fee estimate |
+| Audit         | `/api/audit`         | Admin API Key |
+| Admin         | `/api/admin`         | Admin API Key |
+| Health        | `/health`            | Public |
+
+For full request/response schemas, parameters, and code samples, see the **[interactive Swagger UI](http://localhost:4000/api/docs)**.
+
+For the full endpoint-by-endpoint audit matrix, see [docs/api-auth-audit.md](/home/json/Desktop/Drips/stellar-trust-escrow/docs/api-auth-audit.md).
+
+---
+
+## Code Samples
+
+### Register and login
+
+```bash
+# Register
+curl -X POST http://localhost:4000/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"S3cur3P@ss!"}'
+
+# Login
+curl -X POST http://localhost:4000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"S3cur3P@ss!"}'
+```
+
+### List escrows
+
+```bash
+curl http://localhost:4000/api/escrows \
+  -H "Authorization: Bearer <access_token>"
+```
+
+```javascript
+// JavaScript (fetch)
+const res = await fetch('http://localhost:4000/api/escrows', {
+  headers: { Authorization: `Bearer ${accessToken}` },
+});
+const { data, total } = await res.json();
+```
+
+```python
+# Python (requests)
+import requests
+resp = requests.get(
+    'http://localhost:4000/api/escrows',
+    headers={'Authorization': f'Bearer {access_token}'}
+)
+print(resp.json())
+```
+
+### Refresh access token
+
+```bash
+curl -X POST http://localhost:4000/api/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken":"<refresh_token>"}'
+```
+
+### Get reputation leaderboard
+
+```bash
+curl "http://localhost:4000/api/reputation/leaderboard?page=1&limit=10"
+```
