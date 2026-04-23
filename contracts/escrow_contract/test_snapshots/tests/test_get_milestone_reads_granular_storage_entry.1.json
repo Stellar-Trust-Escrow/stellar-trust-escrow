@@ -78,7 +78,36 @@
                 },
                 "void",
                 "void",
-                "void"
+                "void",
+                "void",
+                {
+                  "map": [
+                    {
+                      "key": {
+                        "symbol": "approvers"
+                      },
+                      "val": {
+                        "vec": []
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "threshold"
+                      },
+                      "val": {
+                        "u32": 0
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "weights"
+                      },
+                      "val": {
+                        "vec": []
+                      }
+                    }
+                  ]
+                }
               ]
             }
           },
@@ -370,6 +399,18 @@
                     },
                     {
                       "key": {
+                        "symbol": "buyer_signers"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "client"
                       },
                       "val": {
@@ -436,26 +477,10 @@
                     },
                     {
                       "key": {
-                        "symbol": "multisig_approvers"
-                      },
-                      "val": {
-                        "vec": []
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "multisig_threshold"
+                        "symbol": "released_count"
                       },
                       "val": {
                         "u32": 0
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "multisig_weights"
-                      },
-                      "val": {
-                        "vec": []
                       }
                     },
                     {
@@ -488,6 +513,26 @@
                         "vec": [
                           {
                             "symbol": "Active"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "submitted_count"
+                      },
+                      "val": {
+                        "u32": 0
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "timelock"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "symbol": "None"
                           }
                         ]
                       }
@@ -576,18 +621,10 @@
                     },
                     {
                       "key": {
-                        "symbol": "approval_signers"
+                        "symbol": "approvals"
                       },
                       "val": {
                         "vec": []
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "approval_weight_accrued"
-                      },
-                      "val": {
-                        "u32": 0
                       }
                     },
                     {
@@ -617,11 +654,7 @@
                         "symbol": "status"
                       },
                       "val": {
-                        "vec": [
-                          {
-                            "symbol": "Pending"
-                          }
-                        ]
+                        "u32": 1
                       }
                     },
                     {
@@ -1094,6 +1127,26 @@
       "event": {
         "ext": "v0",
         "contract_id": "0000000000000000000000000000000000000000000000000000000000000002",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "adm_init"
+              }
+            ],
+            "data": {
+              "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000002",
         "type_": "diagnostic",
         "body": {
           "v0": {
@@ -1360,7 +1413,36 @@
                 },
                 "void",
                 "void",
-                "void"
+                "void",
+                "void",
+                {
+                  "map": [
+                    {
+                      "key": {
+                        "symbol": "approvers"
+                      },
+                      "val": {
+                        "vec": []
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "threshold"
+                      },
+                      "val": {
+                        "u32": 0
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "weights"
+                      },
+                      "val": {
+                        "vec": []
+                      }
+                    }
+                  ]
+                }
               ]
             }
           }
@@ -1867,18 +1949,10 @@
                 },
                 {
                   "key": {
-                    "symbol": "approval_signers"
+                    "symbol": "approvals"
                   },
                   "val": {
                     "vec": []
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "approval_weight_accrued"
-                  },
-                  "val": {
-                    "u32": 0
                   }
                 },
                 {
@@ -1908,11 +1982,7 @@
                     "symbol": "status"
                   },
                   "val": {
-                    "vec": [
-                      {
-                        "symbol": "Pending"
-                      }
-                    ]
+                    "u32": 1
                   }
                 },
                 {

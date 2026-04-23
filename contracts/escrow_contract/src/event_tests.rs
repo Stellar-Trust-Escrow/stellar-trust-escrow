@@ -74,17 +74,17 @@ mod event_tests {
         let token = register_token(&env, &admin, &client_addr, 1_000);
 
         let escrow_id = client.create_escrow(
-                    &client_addr,
-                    &freelancer,
-                    &token,
-                    &1_000_i128,
-                    &BytesN::from_array(&env, &[1; 32]),
-                    &None,
-                    &None,
-                    &None,
-                    &None,
-                    &no_multisig(&env),
-                );
+            &client_addr,
+            &freelancer,
+            &token,
+            &1_000_i128,
+            &BytesN::from_array(&env, &[1; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
 
         let events = contract_events(&env, &contract_id);
         let (_, topics, data) = events
@@ -112,17 +112,17 @@ mod event_tests {
         let token = register_token(&env, &admin, &client_addr, 1_000);
 
         let escrow_id = client.create_escrow(
-                    &client_addr,
-                    &freelancer,
-                    &token,
-                    &1_000_i128,
-                    &BytesN::from_array(&env, &[1; 32]),
-                    &None,
-                    &None,
-                    &None,
-                    &None,
-                    &no_multisig(&env),
-                );
+            &client_addr,
+            &freelancer,
+            &token,
+            &1_000_i128,
+            &BytesN::from_array(&env, &[1; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
 
         let milestone_id = client.add_milestone(
             &client_addr,
@@ -155,17 +155,17 @@ mod event_tests {
         let token = register_token(&env, &admin, &client_addr, 500);
 
         let escrow_id = client.create_escrow(
-                    &client_addr,
-                    &freelancer,
-                    &token,
-                    &500_i128,
-                    &BytesN::from_array(&env, &[1; 32]),
-                    &None,
-                    &None,
-                    &None,
-                    &None,
-                    &no_multisig(&env),
-                );
+            &client_addr,
+            &freelancer,
+            &token,
+            &500_i128,
+            &BytesN::from_array(&env, &[1; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
         let mid = client.add_milestone(
             &client_addr,
             &escrow_id,
@@ -200,17 +200,17 @@ mod event_tests {
         let token = register_token(&env, &admin, &client_addr, 300);
 
         let escrow_id = client.create_escrow(
-                    &client_addr,
-                    &freelancer,
-                    &token,
-                    &300_i128,
-                    &BytesN::from_array(&env, &[1; 32]),
-                    &None,
-                    &None,
-                    &None,
-                    &None,
-                    &no_multisig(&env),
-                );
+            &client_addr,
+            &freelancer,
+            &token,
+            &300_i128,
+            &BytesN::from_array(&env, &[1; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
         let mid = client.add_milestone(
             &client_addr,
             &escrow_id,
@@ -261,17 +261,17 @@ mod event_tests {
         let token = register_token(&env, &admin, &client_addr, 600);
 
         let escrow_id = client.create_escrow(
-                    &client_addr,
-                    &freelancer,
-                    &token,
-                    &600_i128,
-                    &BytesN::from_array(&env, &[1; 32]),
-                    &None,
-                    &None,
-                    &None,
-                    &None,
-                    &no_multisig(&env),
-                );
+            &client_addr,
+            &freelancer,
+            &token,
+            &600_i128,
+            &BytesN::from_array(&env, &[1; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
         let mid = client.add_milestone(
             &client_addr,
             &escrow_id,
@@ -305,17 +305,17 @@ mod event_tests {
         let token = register_token(&env, &admin, &client_addr, 200);
 
         let escrow_id = client.create_escrow(
-                    &client_addr,
-                    &freelancer,
-                    &token,
-                    &200_i128,
-                    &BytesN::from_array(&env, &[1; 32]),
-                    &None,
-                    &None,
-                    &None,
-                    &None,
-                    &no_multisig(&env),
-                );
+            &client_addr,
+            &freelancer,
+            &token,
+            &200_i128,
+            &BytesN::from_array(&env, &[1; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
         client.cancel_escrow(&client_addr, &escrow_id);
 
         let events = contract_events(&env, &contract_id);
@@ -339,17 +339,17 @@ mod event_tests {
         let token = register_token(&env, &admin, &client_addr, 500);
 
         let escrow_id = client.create_escrow(
-                    &client_addr,
-                    &freelancer,
-                    &token,
-                    &500_i128,
-                    &BytesN::from_array(&env, &[1; 32]),
-                    &None,
-                    &None,
-                    &None,
-                    &None,
-                    &no_multisig(&env),
-                );
+            &client_addr,
+            &freelancer,
+            &token,
+            &500_i128,
+            &BytesN::from_array(&env, &[1; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
         let mid = client.add_milestone(
             &client_addr,
             &escrow_id,
@@ -382,17 +382,17 @@ mod event_tests {
         let token = register_token(&env, &admin, &client_addr, 500);
 
         let escrow_id = client.create_escrow(
-                    &client_addr,
-                    &freelancer,
-                    &token,
-                    &500_i128,
-                    &BytesN::from_array(&env, &[1; 32]),
-                    &Some(arbiter.clone()),
-                    &None,
-                    &None,
-                    &None,
-                    &no_multisig(&env),
-                );
+            &client_addr,
+            &freelancer,
+            &token,
+            &500_i128,
+            &BytesN::from_array(&env, &[1; 32]),
+            &Some(arbiter.clone()),
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
         let mid = client.add_milestone(
             &client_addr,
             &escrow_id,
@@ -495,17 +495,17 @@ mod event_tests {
         let lock_time: u64 = 2_000;
 
         let escrow_id = client.create_escrow(
-                    &client_addr,
-                    &freelancer,
-                    &token,
-                    &500_i128,
-                    &BytesN::from_array(&env, &[1; 32]),
-                    &None,
-                    &None,
-                    &Some(lock_time),
-                    &None,
-                    &no_multisig(&env),
-                );
+            &client_addr,
+            &freelancer,
+            &token,
+            &500_i128,
+            &BytesN::from_array(&env, &[1; 32]),
+            &None,
+            &None,
+            &Some(lock_time),
+            &None,
+            &no_multisig(&env),
+        );
         let mid = client.add_milestone(
             &client_addr,
             &escrow_id,
@@ -536,17 +536,17 @@ mod event_tests {
         let token = register_token(&env, &admin, &client_addr, 500);
 
         let escrow_id = client.create_escrow(
-                    &client_addr,
-                    &freelancer,
-                    &token,
-                    &500_i128,
-                    &BytesN::from_array(&env, &[3; 32]),
-                    &None,
-                    &None,
-                    &None,
-                    &None,
-                    &no_multisig(&env),
-                );
+            &client_addr,
+            &freelancer,
+            &token,
+            &500_i128,
+            &BytesN::from_array(&env, &[3; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
 
         let mid = client.add_milestone(
             &client_addr,
@@ -576,10 +576,7 @@ mod event_tests {
         let release_err = client
             .try_release_funds(&client_addr, &escrow_id, &mid)
             .unwrap_err();
-        assert!(matches!(
-            release_err,
-            Ok(EscrowError::TimelockNotExpired)
-        ));
+        assert!(matches!(release_err, Ok(EscrowError::TimelockNotExpired)));
 
         env.ledger().set_timestamp(env.ledger().timestamp() + 20);
 
@@ -597,23 +594,23 @@ mod event_tests {
 
     #[test]
     fn test_admin_override_release_funds_before_timelock_expires() {
-        let (env, admin, contract_id, client) = setup();
+        let (env, admin, _contract_id, client) = setup();
         let client_addr = Address::generate(&env);
         let freelancer = Address::generate(&env);
         let token = register_token(&env, &admin, &client_addr, 500);
 
         let escrow_id = client.create_escrow(
-                    &client_addr,
-                    &freelancer,
-                    &token,
-                    &500_i128,
-                    &BytesN::from_array(&env, &[5; 32]),
-                    &None,
-                    &None,
-                    &None,
-                    &None,
-                    &no_multisig(&env),
-                );
+            &client_addr,
+            &freelancer,
+            &token,
+            &500_i128,
+            &BytesN::from_array(&env, &[5; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
 
         let mid = client.add_milestone(
             &client_addr,
@@ -642,17 +639,17 @@ mod event_tests {
         let token = register_token(&env, &admin, &client_addr, 400);
 
         let escrow_id = client.create_escrow(
-                    &client_addr,
-                    &freelancer,
-                    &token,
-                    &400_i128,
-                    &BytesN::from_array(&env, &[1; 32]),
-                    &None,
-                    &None,
-                    &None,
-                    &None,
-                    &no_multisig(&env),
-                );
+            &client_addr,
+            &freelancer,
+            &token,
+            &400_i128,
+            &BytesN::from_array(&env, &[1; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
         let reason = String::from_str(&env, "No longer needed");
         client.request_cancellation(&client_addr, &escrow_id, &reason);
 
@@ -679,17 +676,17 @@ mod event_tests {
         let token = register_token(&env, &admin, &client_addr, 400);
 
         let escrow_id = client.create_escrow(
-                    &client_addr,
-                    &freelancer,
-                    &token,
-                    &400_i128,
-                    &BytesN::from_array(&env, &[1; 32]),
-                    &None,
-                    &None,
-                    &None,
-                    &None,
-                    &no_multisig(&env),
-                );
+            &client_addr,
+            &freelancer,
+            &token,
+            &400_i128,
+            &BytesN::from_array(&env, &[1; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
         client.request_cancellation(&client_addr, &escrow_id, &String::from_str(&env, "Done"));
 
         // Advance ledger past the dispute period
@@ -720,17 +717,17 @@ mod event_tests {
         let token = register_token(&env, &admin, &client_addr, 500);
 
         let escrow_id = client.create_escrow(
-                    &client_addr,
-                    &freelancer,
-                    &token,
-                    &500_i128,
-                    &BytesN::from_array(&env, &[1; 32]),
-                    &None,
-                    &None,
-                    &None,
-                    &None,
-                    &no_multisig(&env),
-                );
+            &client_addr,
+            &freelancer,
+            &token,
+            &500_i128,
+            &BytesN::from_array(&env, &[1; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
         let mid = client.add_milestone(
             &client_addr,
             &escrow_id,
@@ -763,17 +760,17 @@ mod event_tests {
         let token = register_token(&env, &admin, &client_addr, 500);
 
         let escrow_id = client.create_escrow(
-                    &client_addr,
-                    &freelancer,
-                    &token,
-                    &500_i128,
-                    &BytesN::from_array(&env, &[1; 32]),
-                    &None,
-                    &None,
-                    &None,
-                    &None,
-                    &no_multisig(&env),
-                );
+            &client_addr,
+            &freelancer,
+            &token,
+            &500_i128,
+            &BytesN::from_array(&env, &[1; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
         let mid = client.add_milestone(
             &client_addr,
             &escrow_id,

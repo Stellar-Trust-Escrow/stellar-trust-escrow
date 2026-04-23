@@ -20,20 +20,6 @@ const captureRawBody = (req, _res, next) => {
 };
 
 router.post('/webhook', captureRawBody, express.json(), paymentController.webhook);
-router.post(
-  '/checkout',
-  stellarAddressBody('address'),
-  handleValidationErrors,
-  paymentController.createCheckout,
-);
-router.get('/status/:sessionId', paymentController.getStatus);
-router.get(
-  '/:address',
-  stellarAddressParam('address'),
-  handleValidationErrors,
-  paymentController.listByAddress,
-);
-router.post('/:paymentId/refund', paymentController.refund);
 
 /**
  * @route  POST /api/payments/checkout
@@ -43,6 +29,8 @@ router.post('/:paymentId/refund', paymentController.refund);
 router.post(
   '/checkout',
   authMiddleware,
+  stellarAddressBody('address'),
+  handleValidationErrors,
   authorizeBodyAddress('address'),
   paymentController.createCheckout,
 );
@@ -57,7 +45,14 @@ router.get('/status/:sessionId', authMiddleware, paymentController.getStatus);
  * @route  GET /api/payments/:address
  * @desc   List all payments for a Stellar address.
  */
-router.get('/:address', authMiddleware, authorizeParamAddress('address'), paymentController.listByAddress);
+router.get(
+  '/:address',
+  authMiddleware,
+  stellarAddressParam('address'),
+  handleValidationErrors,
+  authorizeParamAddress('address'),
+  paymentController.listByAddress,
+);
 
 /**
  * @route  POST /api/payments/:paymentId/refund

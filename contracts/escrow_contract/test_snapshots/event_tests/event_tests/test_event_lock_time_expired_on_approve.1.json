@@ -80,6 +80,35 @@
                 "void",
                 {
                   "u64": 2000
+                },
+                "void",
+                {
+                  "map": [
+                    {
+                      "key": {
+                        "symbol": "approvers"
+                      },
+                      "val": {
+                        "vec": []
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "threshold"
+                      },
+                      "val": {
+                        "u32": 0
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "weights"
+                      },
+                      "val": {
+                        "vec": []
+                      }
+                    }
+                  ]
                 }
               ]
             }
@@ -420,6 +449,18 @@
                     },
                     {
                       "key": {
+                        "symbol": "buyer_signers"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "client"
                       },
                       "val": {
@@ -488,6 +529,14 @@
                     },
                     {
                       "key": {
+                        "symbol": "released_count"
+                      },
+                      "val": {
+                        "u32": 1
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "remaining_balance"
                       },
                       "val": {
@@ -516,6 +565,26 @@
                         "vec": [
                           {
                             "symbol": "Completed"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "submitted_count"
+                      },
+                      "val": {
+                        "u32": 1
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "timelock"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "symbol": "None"
                           }
                         ]
                       }
@@ -604,6 +673,14 @@
                     },
                     {
                       "key": {
+                        "symbol": "approvals"
+                      },
+                      "val": {
+                        "vec": []
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "description_hash"
                       },
                       "val": {
@@ -631,11 +708,7 @@
                         "symbol": "status"
                       },
                       "val": {
-                        "vec": [
-                          {
-                            "symbol": "Approved"
-                          }
-                        ]
+                        "u32": 8
                       }
                     },
                     {
@@ -1517,6 +1590,35 @@
                 "void",
                 {
                   "u64": 2000
+                },
+                "void",
+                {
+                  "map": [
+                    {
+                      "key": {
+                        "symbol": "approvers"
+                      },
+                      "val": {
+                        "vec": []
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "threshold"
+                      },
+                      "val": {
+                        "u32": 0
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "weights"
+                      },
+                      "val": {
+                        "vec": []
+                      }
+                    }
+                  ]
                 }
               ]
             }
@@ -2208,6 +2310,39 @@
           "v0": {
             "topics": [
               {
+                "symbol": "funds_rel"
+              },
+              {
+                "u64": 0
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                },
+                {
+                  "i128": {
+                    "hi": 0,
+                    "lo": 500
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000002",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "esc_done"
               },
               {
@@ -2239,39 +2374,6 @@
               "vec": [
                 {
                   "u32": 0
-                },
-                {
-                  "i128": {
-                    "hi": 0,
-                    "lo": 500
-                  }
-                }
-              ]
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": "0000000000000000000000000000000000000000000000000000000000000002",
-        "type_": "contract",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "funds_rel"
-              },
-              {
-                "u64": 0
-              }
-            ],
-            "data": {
-              "vec": [
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                 },
                 {
                   "i128": {

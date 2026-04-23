@@ -3,10 +3,9 @@ import express from 'express';
 import request from 'supertest';
 
 const prismaMock = {
-  $transaction: jest.fn(async (operations) => Promise.all(operations)),
   dispute: {
     findMany: jest.fn(),
-    findUnique: jest.fn(),
+    findFirst: jest.fn(),
     count: jest.fn(),
   },
 };
@@ -14,15 +13,29 @@ const prismaMock = {
 const cacheMock = {
   get: jest.fn(),
   set: jest.fn(),
+  setWithTags: jest.fn(),
+  invalidate: jest.fn(),
+  invalidateTags: jest.fn(),
+  invalidatePrefix: jest.fn(),
 };
 
 jest.unstable_mockModule('../lib/prisma.js', () => ({ default: prismaMock }));
 jest.unstable_mockModule('../lib/cache.js', () => ({ default: cacheMock }));
+jest.unstable_mockModule('../api/middleware/auth.js', () => ({
+  default: (req, _res, next) => {
+    req.user = { userId: 1, tenantId: 'tenant_default', type: 'access' };
+    next();
+  },
+}));
 
 const { default: disputeRoutes } = await import('../api/routes/disputeRoutes.js');
 
 function buildApp() {
   const app = express();
+  app.use((req, _res, next) => {
+    req.tenant = { id: 'tenant_default' };
+    next();
+  });
   app.use('/api/disputes', disputeRoutes);
   return app;
 }
@@ -32,7 +45,7 @@ beforeEach(() => {
   cacheMock.get.mockReturnValue(null);
   prismaMock.dispute.findMany.mockResolvedValue([]);
   prismaMock.dispute.count.mockResolvedValue(0);
-  prismaMock.dispute.findUnique.mockResolvedValue(null);
+  prismaMock.dispute.findFirst.mockResolvedValue(null);
 });
 
 describe('dispute route validation', () => {
@@ -40,7 +53,13 @@ describe('dispute route validation', () => {
     const app = buildApp();
     const res = await request(app).get('/api/disputes').query({ page: '2', limit: '10' });
     expect(res.status).toBe(200);
-    expect(prismaMock.$transaction).toHaveBeenCalled();
+    expect(prismaMock.dispute.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ tenantId: 'tenant_default' }),
+        skip: 10,
+        take: 10,
+      }),
+    );
   });
 
   it('accepts GET / with no query (defaults in controller)', async () => {
@@ -62,7 +81,7 @@ describe('dispute route validation', () => {
         }),
       ]),
     });
-    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(prismaMock.dispute.findMany).not.toHaveBeenCalled();
   });
 
   it('returns 400 when limit exceeds maximum (100)', async () => {
@@ -70,7 +89,7 @@ describe('dispute route validation', () => {
     const res = await request(app).get('/api/disputes').query({ limit: '500' });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('Validation failed');
-    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(prismaMock.dispute.findMany).not.toHaveBeenCalled();
   });
 
   it('returns 400 for page less than 1', async () => {
@@ -92,7 +111,7 @@ describe('dispute route validation', () => {
         }),
       ]),
     });
-    expect(prismaMock.dispute.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.dispute.findFirst).not.toHaveBeenCalled();
   });
 
   it('returns 400 for escrowId zero', async () => {
@@ -105,19 +124,22 @@ describe('dispute route validation', () => {
     const app = buildApp();
     // Use numeric escrowId in the mock so JSON.stringify (res.json) succeeds; Prisma
     // returns BigInt in production — serialization is handled separately if needed.
-    prismaMock.dispute.findUnique.mockResolvedValue({
+    prismaMock.dispute.findFirst.mockResolvedValue({
+      id: 99,
       escrowId: 42,
       raisedByAddress: 'GTEST',
       raisedAt: new Date(),
       resolvedAt: null,
       resolution: null,
       escrow: {},
+      evidence: [],
+      appeals: [],
     });
     const res = await request(app).get('/api/disputes/42');
     expect(res.status).toBe(200);
-    expect(prismaMock.dispute.findUnique).toHaveBeenCalledWith(
+    expect(prismaMock.dispute.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { escrowId: 42n },
+        where: { escrowId: 42n, tenantId: 'tenant_default' },
       }),
     );
   });
