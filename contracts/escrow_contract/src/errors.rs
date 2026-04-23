@@ -14,6 +14,8 @@ pub enum EscrowError {
     NotInitialized = 2,
 
     // ── Authorization ─────────────────────────────────────────────────────────
+    /// Caller is not authorised for the requested action, or the supplied
+    /// addresses are invalid for the role (e.g. freelancer == client).
     Unauthorized = 3,
     AdminOnly = 4,
     ClientOnly = 5,

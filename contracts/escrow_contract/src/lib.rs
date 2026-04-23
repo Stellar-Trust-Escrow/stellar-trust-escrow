@@ -56,6 +56,7 @@ mod event_tests;
 mod events;
 mod oracle;
 mod pause_tests;
+mod self_escrow_tests;
 mod transfer_client_tests;
 mod types;
 mod upgrade_tests;
@@ -911,6 +912,10 @@ impl EscrowContract {
         ContractStorage::require_initialized(&env)?;
         ContractStorage::require_not_paused(&env)?;
 
+        if client == freelancer {
+            return Err(EscrowError::Unauthorized);
+        }
+
         if total_amount <= 0 {
             return Err(EscrowError::InvalidEscrowAmount);
         }
@@ -998,6 +1003,10 @@ impl EscrowContract {
         client.require_auth();
         ContractStorage::require_initialized(&env)?;
         ContractStorage::require_not_paused(&env)?;
+
+        if client == freelancer {
+            return Err(EscrowError::Unauthorized);
+        }
 
         if payment_amount <= 0 {
             return Err(EscrowError::InvalidMilestoneAmount);
