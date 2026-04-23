@@ -9,7 +9,7 @@
 
 #![allow(dead_code)]
 
-use soroban_sdk::{symbol_short, Address, Env};
+use soroban_sdk::{symbol_short, Address, BytesN, Env};
 
 /// Emitted when a new escrow is created and funds are locked.
 ///
@@ -322,6 +322,12 @@ pub fn emit_cancellation_executed(
         (symbol_short!("can_exe"), escrow_id),
         (client_amount, slash_amount),
     );
+}
+
+/// Emitted when the counterparty approves a pending cancellation request.
+pub fn emit_cancellation_approved(env: &Env, escrow_id: u64, approver: &Address) {
+    env.events()
+        .publish((symbol_short!("can_apr"), escrow_id), approver.clone());
 }
 
 /// Emitted when a cancellation is requested.

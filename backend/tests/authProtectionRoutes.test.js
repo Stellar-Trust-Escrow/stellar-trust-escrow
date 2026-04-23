@@ -25,6 +25,13 @@ const emailServiceMock = {
   getQueueSnapshot: jest.fn(async () => ({ queue: [], deliveries: [] })),
 };
 
+const metricStub = () => ({
+  inc: jest.fn(),
+  observe: jest.fn(),
+  set: jest.fn(),
+  dec: jest.fn(),
+});
+
 const relayerMock = {
   executeMetaTransaction: jest.fn(async () => ({
     success: true,
@@ -42,6 +49,8 @@ jest.unstable_mockModule('../api/controllers/authController.js', () => ({
     login: okHandler,
     refresh: okHandler,
     logout: okHandler,
+    revokeAll: okHandler,
+    sessions: okHandler,
   },
 }));
 
@@ -53,6 +62,9 @@ jest.unstable_mockModule('../api/controllers/escrowController.js', () => ({
     getMilestone: okHandler,
     getEscrow: okHandler,
   },
+  validateBroadcast: [okHandler],
+  validateEscrowId: [okHandler],
+  validatePagination: [okHandler],
 }));
 
 jest.unstable_mockModule('../api/controllers/disputeController.js', () => ({
@@ -60,6 +72,7 @@ jest.unstable_mockModule('../api/controllers/disputeController.js', () => ({
     listDisputes: okHandler,
     getResolutionHistory: okHandler,
     getDispute: okHandler,
+    uploadEvidence: okHandler,
     postEvidence: okHandler,
     listEvidence: okHandler,
     autoResolve: okHandler,
@@ -126,7 +139,33 @@ jest.unstable_mockModule('../services/relayerService.js', () => ({
 }));
 
 jest.unstable_mockModule('../lib/metrics.js', () => ({
-  errorsTotal: { inc: jest.fn() },
+  register: { metrics: jest.fn(async () => '') },
+  httpRequestDuration: metricStub(),
+  httpRequestTotal: metricStub(),
+  httpRequestsInFlight: metricStub(),
+  dbQueryDuration: metricStub(),
+  dbQueryTotal: metricStub(),
+  dbSlowQueryTotal: metricStub(),
+  dbConnectionsTotal: metricStub(),
+  dbConnectionsActive: metricStub(),
+  dbConnectionsIdle: metricStub(),
+  dbConnectionErrorsTotal: metricStub(),
+  dbConnectionPoolExhaustionTotal: metricStub(),
+  cacheHitsTotal: metricStub(),
+  cacheMissesTotal: metricStub(),
+  cacheSize: metricStub(),
+  escrowsCreatedTotal: metricStub(),
+  disputesRaisedTotal: metricStub(),
+  milestonesCompletedTotal: metricStub(),
+  activeEscrowsGauge: metricStub(),
+  circuitBreakerState: metricStub(),
+  circuitBreakerCallsTotal: metricStub(),
+  circuitBreakerTransitionsTotal: metricStub(),
+  chaosInjectedTotal: metricStub(),
+  errorsTotal: metricStub(),
+  compressedResponsesTotal: metricStub(),
+  compressionBytesTotal: metricStub(),
+  compressionRatio: metricStub(),
 }));
 
 const { default: authRoutes } = await import('../api/routes/authRoutes.js');
@@ -140,7 +179,7 @@ const { default: relayerRoutes } = await import('../api/routes/relayerRoutes.js'
 
 function bearerToken(address = ADDRESS_A) {
   return `Bearer ${jwt.sign(
-    { userId: 1, tenantId: 'tenant_default', address },
+    { userId: 1, tenantId: 'tenant_default', address, type: 'access' },
     process.env.JWT_ACCESS_SECRET || 'fallback_access_secret',
   )}`;
 }
@@ -161,13 +200,14 @@ function createApp() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  process.env.RELAYER_SECRET_KEY = 'test-relayer-secret';
 });
 
 describe('API route protection', () => {
-  it('protects logout with bearer auth', async () => {
+  it('allows logout with a refresh token payload and also accepts bearer auth', async () => {
     const app = createApp();
 
-    await request(app).post('/api/auth/logout').send({ refreshToken: 'token' }).expect(401);
+    await request(app).post('/api/auth/logout').send({ refreshToken: 'token' }).expect(200);
 
     await request(app)
       .post('/api/auth/logout')
@@ -231,7 +271,10 @@ describe('API route protection', () => {
 
     await request(app)
       .post('/api/notifications/events')
-      .send({ eventType: 'escrow.status_changed', data: { recipients: [{ email: 'user@example.com' }] } })
+      .send({
+        eventType: 'escrow.status_changed',
+        data: { recipients: [{ email: 'user@example.com' }] },
+      })
       .expect(401);
 
     await request(app).get('/api/notifications/queue').expect(401);
@@ -239,7 +282,10 @@ describe('API route protection', () => {
     await request(app)
       .post('/api/notifications/events')
       .set('x-admin-api-key', ADMIN_API_KEY)
-      .send({ eventType: 'escrow.status_changed', data: { recipients: [{ email: 'user@example.com' }] } })
+      .send({
+        eventType: 'escrow.status_changed',
+        data: { recipients: [{ email: 'user@example.com' }] },
+      })
       .expect(202);
 
     await request(app)
@@ -270,7 +316,10 @@ describe('API route protection', () => {
   it('protects relayer execution endpoints with bearer auth', async () => {
     const app = createApp();
 
-    await request(app).post('/api/relayer/execute').send({ metaTx: { nonce: 1 } }).expect(401);
+    await request(app)
+      .post('/api/relayer/execute')
+      .send({ metaTx: { nonce: 1 } })
+      .expect(401);
 
     await request(app)
       .post('/api/relayer/execute')

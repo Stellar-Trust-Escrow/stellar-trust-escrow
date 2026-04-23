@@ -129,14 +129,24 @@ mod bridge_tests {
         let transfer_id = String::from_str(&env, "transfer-003");
 
         client.update_bridge_confirmation(&transfer_id, &BridgeProtocol::Wormhole, &5);
-        assert!(!client.get_bridge_confirmation(&transfer_id).unwrap().is_finalized);
+        assert!(
+            !client
+                .get_bridge_confirmation(&transfer_id)
+                .unwrap()
+                .is_finalized
+        );
 
         client.update_bridge_confirmation(
             &transfer_id,
             &BridgeProtocol::Wormhole,
             &MIN_BRIDGE_CONFIRMATIONS,
         );
-        assert!(client.get_bridge_confirmation(&transfer_id).unwrap().is_finalized);
+        assert!(
+            client
+                .get_bridge_confirmation(&transfer_id)
+                .unwrap()
+                .is_finalized
+        );
     }
 
     // ── AC: Cross-chain transfers work ────────────────────────────────────────
