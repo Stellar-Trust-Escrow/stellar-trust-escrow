@@ -1,4 +1,5 @@
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod tests {
     use crate::{
         BatchEscrowParams, EscrowExtensions, EscrowExtensionsClient, ExtError, FeeRecipient,
