@@ -56,6 +56,7 @@ mod event_tests;
 mod events;
 mod oracle;
 mod pause_tests;
+mod transfer_client_tests;
 mod types;
 mod upgrade_tests;
 mod bridge;
@@ -1776,6 +1777,42 @@ impl EscrowContract {
             events::emit_timelock_released(&env, escrow_id, env.ledger().timestamp());
         }
 
+        Ok(())
+    }
+
+    /// Transfers the client role to a new address.
+    ///
+    /// Only the current client may call this. The new client must not be the
+    /// freelancer or the arbiter, and the escrow must be Active.
+    pub fn transfer_client_role(
+        env: Env,
+        escrow_id: u64,
+        new_client: Address,
+    ) -> Result<(), EscrowError> {
+        ContractStorage::require_not_paused(&env)?;
+
+        let mut meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
+
+        meta.client.require_auth();
+
+        if meta.status != EscrowStatus::Active {
+            return Err(EscrowError::EscrowNotActive);
+        }
+
+        if new_client == meta.freelancer {
+            return Err(EscrowError::Unauthorized);
+        }
+        if let Some(ref arbiter) = meta.arbiter {
+            if new_client == *arbiter {
+                return Err(EscrowError::Unauthorized);
+            }
+        }
+
+        let old_client = meta.client.clone();
+        meta.client = new_client.clone();
+        ContractStorage::save_escrow_meta(&env, &meta);
+
+        events::emit_client_role_transferred(&env, escrow_id, &old_client, &new_client);
         Ok(())
     }
 
