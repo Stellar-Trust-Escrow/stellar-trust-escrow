@@ -3746,7 +3746,8 @@ mod tests {
     /// Full pause → mutation blocked → unpause → mutation succeeds cycle.
     #[test]
     fn test_pause_unpause_cycle_restores_mutations() {
-        let (env, admin, escrow_client, _freelancer, _, escrow_id, client) = setup_pause_escrow(100);
+        let (env, admin, escrow_client, _freelancer, _, escrow_id, client) =
+            setup_pause_escrow(100);
 
         client.pause(&admin);
         assert!(client.is_paused());
