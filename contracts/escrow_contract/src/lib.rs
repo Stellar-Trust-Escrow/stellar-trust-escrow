@@ -3618,7 +3618,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_pause_non_admin_rejected() {
-        let (_env, admin, escrow_client, _, _, _, client) = setup_pause_escrow(100);
+        let (_env, _admin, escrow_client, _, _, _, client) = setup_pause_escrow(100);
         // Non-admin cannot pause
         client.pause(&escrow_client);
     }
