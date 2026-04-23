@@ -2279,6 +2279,39 @@ impl EscrowContract {
         ContractStorage::load_slash_record(&env, escrow_id)
     }
 
+    /// Replaces the arbiter on an active escrow.
+    ///
+    /// Requires authorization from both the client and the freelancer.
+    /// The new arbiter must not be the client or freelancer themselves.
+    pub fn update_arbiter(
+        env: Env,
+        escrow_id: u64,
+        new_arbiter: Option<Address>,
+    ) -> Result<(), EscrowError> {
+        ContractStorage::require_not_paused(&env)?;
+
+        let mut meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
+        if meta.status != EscrowStatus::Active {
+            return Err(EscrowError::EscrowNotActive);
+        }
+
+        // Both parties must sign.
+        meta.client.require_auth();
+        meta.freelancer.require_auth();
+
+        // Validate: arbiter must not be client or freelancer.
+        if let Some(ref a) = new_arbiter {
+            if a == &meta.client || a == &meta.freelancer {
+                return Err(EscrowError::BadArbiter);
+            }
+        }
+
+        meta.arbiter = new_arbiter.clone();
+        ContractStorage::save_escrow_meta(&env, &meta);
+        events::emit_arbiter_updated(&env, escrow_id, &new_arbiter);
+        Ok(())
+    }
+
     // ── Cancellation Functions ─────────────────────────────────────────────────
 
     /// Requests cancellation of an escrow.
@@ -3863,5 +3896,107 @@ mod tests {
         let approvals = client.get_milestone_approvals(&escrow_id, &mid1);
         assert_eq!(approvals.len(), 1);
         assert_eq!(approvals.get(0).unwrap().signer, signer2);
+    }
+
+    // ── update_arbiter tests ──────────────────────────────────────────────────
+
+    fn setup_escrow_for_arbiter_tests() -> (
+        soroban_sdk::Env,
+        Address,
+        Address,
+        Address,
+        u64,
+        EscrowContractClient<'static>,
+    ) {
+        let (env, admin, _, client_contract) = setup();
+        client_contract.initialize(&admin);
+
+        let escrow_client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let arbiter = Address::generate(&env);
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_id = token_contract.address();
+        let token_admin = token::StellarAssetClient::new(&env, &token_id);
+
+        token_admin.mint(
+            &escrow_client,
+            &(100_i128 + (2 * ContractStorage::reserve_for_entries(1))),
+        );
+
+        let mut signers = soroban_sdk::Vec::new(&env);
+        signers.push_back(escrow_client.clone());
+
+        let escrow_id = client_contract.create_escrow_with_buyer_signers(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &100_i128,
+            &BytesN::from_array(&env, &[1; 32]),
+            &Some(arbiter.clone()),
+            &None,
+            &None,
+            &signers,
+        );
+
+        (env, escrow_client, freelancer, arbiter, escrow_id, client_contract)
+    }
+
+    #[test]
+    fn test_update_arbiter_success() {
+        let (env, _, _, _, escrow_id, client) = setup_escrow_for_arbiter_tests();
+
+        let new_arbiter = Address::generate(&env);
+        env.mock_all_auths();
+
+        client.update_arbiter(&escrow_id, &Some(new_arbiter.clone()));
+
+        let state = client.get_escrow(&escrow_id);
+        assert_eq!(state.arbiter, Some(new_arbiter));
+    }
+
+    #[test]
+    fn test_update_arbiter_remove_arbiter() {
+        let (env, _, _, _, escrow_id, client) = setup_escrow_for_arbiter_tests();
+        env.mock_all_auths();
+
+        client.update_arbiter(&escrow_id, &None);
+
+        let state = client.get_escrow(&escrow_id);
+        assert_eq!(state.arbiter, None);
+    }
+
+    #[test]
+    fn test_update_arbiter_rejects_client_as_arbiter() {
+        let (env, escrow_client, _, _, escrow_id, client) = setup_escrow_for_arbiter_tests();
+        env.mock_all_auths();
+
+        let err = client.try_update_arbiter(&escrow_id, &Some(escrow_client));
+        assert_eq!(err.unwrap_err().unwrap(), EscrowError::BadArbiter);
+    }
+
+    #[test]
+    fn test_update_arbiter_rejects_freelancer_as_arbiter() {
+        let (env, _, freelancer, _, escrow_id, client) = setup_escrow_for_arbiter_tests();
+        env.mock_all_auths();
+
+        let err = client.try_update_arbiter(&escrow_id, &Some(freelancer));
+        assert_eq!(err.unwrap_err().unwrap(), EscrowError::BadArbiter);
+    }
+
+    #[test]
+    fn test_update_arbiter_requires_both_auths() {
+        let (env, escrow_client, freelancer, _, escrow_id, client) =
+            setup_escrow_for_arbiter_tests();
+        let new_arbiter = Address::generate(&env);
+
+        // mock_all_auths is already active from setup(); call succeeds
+        client.update_arbiter(&escrow_id, &Some(new_arbiter.clone()));
+
+        // Verify that both client and freelancer auth were required
+        let auths = env.auths();
+        let client_authed = auths.iter().any(|(addr, _)| *addr == escrow_client);
+        let freelancer_authed = auths.iter().any(|(addr, _)| *addr == freelancer);
+        assert!(client_authed, "client auth was not required");
+        assert!(freelancer_authed, "freelancer auth was not required");
     }
 }

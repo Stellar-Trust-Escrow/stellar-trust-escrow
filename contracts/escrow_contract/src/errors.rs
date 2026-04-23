@@ -36,7 +36,6 @@ pub enum EscrowError {
     TransferFailed = 18,
     InvalidEscrowAmount = 19,
     AmountMismatch = 20,
-    InvalidEscrowState = 21,
 
     // ── Dispute ───────────────────────────────────────────────────────────────
     DisputeAlreadyExists = 23,
@@ -97,4 +96,8 @@ pub enum EscrowError {
     // ── Bridge / Cross-Chain ─────────────────────────────────────────────────
     /// Wrapped token not approved, transfer not found, or bridge not yet finalized.
     BridgeError = 54,
+
+    // ── Arbiter ──────────────────────────────────────────────────────────────
+    /// Arbiter cannot be client or freelancer.
+    BadArbiter = 7,
 }
