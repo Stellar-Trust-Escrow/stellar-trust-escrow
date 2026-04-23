@@ -354,6 +354,24 @@ pub struct ReputationRecord {
     pub last_updated: u64,
 }
 
+/// Lightweight summary of a recurring payment schedule for frontend display.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RecurringScheduleStatus {
+    /// True when the schedule is running (not paused and not cancelled).
+    pub is_active: bool,
+    /// True when the schedule has been paused.
+    pub is_paused: bool,
+    /// True when the schedule has been cancelled.
+    pub is_cancelled: bool,
+    /// Ledger timestamp of the next scheduled payment.
+    pub next_payment_at: u64,
+    /// Number of payments not yet released.
+    pub payments_remaining: u32,
+    /// Token amount released per payment.
+    pub payment_amount: i128,
+}
+
 /// A cancellation request for an escrow.
 #[contracttype]
 #[derive(Clone, Debug)]
@@ -375,6 +393,10 @@ pub struct CancellationRequest {
 
     /// Whether this cancellation has been disputed.
     pub disputed: bool,
+
+    /// Whether the counterparty (non-requester) has explicitly approved the cancellation.
+    /// When true, `execute_cancellation` skips the dispute window check.
+    pub counterparty_approved: bool,
 }
 
 /// A slash record for tracking penalties.

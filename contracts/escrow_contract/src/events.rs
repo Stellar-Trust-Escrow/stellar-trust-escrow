@@ -324,6 +324,12 @@ pub fn emit_cancellation_executed(
     );
 }
 
+/// Emitted when the counterparty approves a pending cancellation request.
+pub fn emit_cancellation_approved(env: &Env, escrow_id: u64, approver: &Address) {
+    env.events()
+        .publish((symbol_short!("can_apr"), escrow_id), approver.clone());
+}
+
 /// Emitted when a cancellation is requested.
 pub fn emit_cancellation_requested(
     env: &Env,
@@ -372,29 +378,20 @@ pub fn emit_slash_dispute_resolved(env: &Env, escrow_id: u64, upheld: bool, amou
         .publish((symbol_short!("slsh_res"), escrow_id), (upheld, amount));
 }
 
-/// Emitted when the admin updates the configurable milestone cap.
-pub fn emit_max_milestones_set(env: &Env, new_max: u32) {
-    env.events().publish((symbol_short!("max_mil"),), new_max);
-}
-
-/// Emitted when a milestone is rejected with an IPFS reason hash.
-pub fn emit_milestone_rejected_with_reason(
+/// Emitted when the client role is transferred to a new address.
+///
+/// # Arguments
+/// * `escrow_id`  - The escrow ID
+/// * `old_client` - The previous client address
+/// * `new_client` - The new client address
+pub fn emit_client_role_transferred(
     env: &Env,
     escrow_id: u64,
-    milestone_id: u32,
-    client: &Address,
-    reason_hash: &BytesN<32>,
+    old_client: &Address,
+    new_client: &Address,
 ) {
     env.events().publish(
-        (symbol_short!("mil_rejr"), escrow_id),
-        (milestone_id, client.clone(), reason_hash.clone()),
-    );
-}
-
-/// Emitted when a client withdraws excess rent from an escrow.
-pub fn emit_rent_withdrawn(env: &Env, escrow_id: u64, client: &Address, amount: i128) {
-    env.events().publish(
-        (symbol_short!("rent_wd"), escrow_id),
-        (client.clone(), amount),
+        (symbol_short!("cli_xfr"), escrow_id),
+        (old_client.clone(), new_client.clone()),
     );
 }
