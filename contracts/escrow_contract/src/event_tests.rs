@@ -594,7 +594,7 @@ mod event_tests {
 
     #[test]
     fn test_admin_override_release_funds_before_timelock_expires() {
-        let (env, admin, contract_id, client) = setup();
+        let (env, admin, _contract_id, client) = setup();
         let client_addr = Address::generate(&env);
         let freelancer = Address::generate(&env);
         let token = register_token(&env, &admin, &client_addr, 500);
