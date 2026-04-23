@@ -353,7 +353,7 @@ impl ContractStorage {
             deadline: meta.deadline,
             lock_time: meta.lock_time,
             lock_time_extension: meta.lock_time_extension,
-            timelock: meta.timelock.into(),
+            timelock: meta.timelock,
             brief_hash: meta.brief_hash,
             // EscrowMeta uses buyer_signers for multisig; expose via EscrowState view fields
             multisig_approvers: meta.buyer_signers.clone(),
@@ -3583,7 +3583,7 @@ mod tests {
 
     #[test]
     fn test_pause_sets_state_and_emits_event() {
-        let (env, admin, _, _, _, _, client) = setup_pause_escrow(100);
+        let (_env, admin, _, _, _, _, client) = setup_pause_escrow(100);
         assert!(!client.is_paused());
         client.pause(&admin);
         assert!(client.is_paused());
@@ -3591,7 +3591,7 @@ mod tests {
 
     #[test]
     fn test_unpause_clears_state_and_emits_event() {
-        let (env, admin, _, _, _, _, client) = setup_pause_escrow(100);
+        let (_env, admin, _, _, _, _, client) = setup_pause_escrow(100);
         client.pause(&admin);
         assert!(client.is_paused());
         client.unpause(&admin);
@@ -3600,7 +3600,7 @@ mod tests {
 
     #[test]
     fn test_pause_is_idempotent() {
-        let (env, admin, _, _, _, _, client) = setup_pause_escrow(100);
+        let (_env, admin, _, _, _, _, client) = setup_pause_escrow(100);
         client.pause(&admin);
         // Second pause should not panic
         client.pause(&admin);
@@ -3609,7 +3609,7 @@ mod tests {
 
     #[test]
     fn test_unpause_is_idempotent() {
-        let (env, admin, _, _, _, _, client) = setup_pause_escrow(100);
+        let (_env, admin, _, _, _, _, client) = setup_pause_escrow(100);
         // Unpause on already-unpaused contract should not panic
         client.unpause(&admin);
         assert!(!client.is_paused());
@@ -3618,7 +3618,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_pause_non_admin_rejected() {
-        let (env, admin, escrow_client, _, _, _, client) = setup_pause_escrow(100);
+        let (_env, admin, escrow_client, _, _, _, client) = setup_pause_escrow(100);
         // Non-admin cannot pause
         client.pause(&escrow_client);
     }
@@ -3626,7 +3626,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_unpause_non_admin_rejected() {
-        let (env, admin, escrow_client, _, _, _, client) = setup_pause_escrow(100);
+        let (_env, admin, escrow_client, _, _, _, client) = setup_pause_escrow(100);
         client.pause(&admin);
         // Non-admin cannot unpause
         client.unpause(&escrow_client);
@@ -3706,7 +3706,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_cancel_escrow_blocked_when_paused() {
-        let (env, admin, escrow_client, _, _, escrow_id, client) = setup_pause_escrow(100);
+        let (_env, admin, escrow_client, _, _, escrow_id, client) = setup_pause_escrow(100);
         client.pause(&admin);
         client.cancel_escrow(&escrow_client, &escrow_id);
     }
@@ -3714,7 +3714,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_raise_dispute_blocked_when_paused() {
-        let (env, admin, escrow_client, _, _, escrow_id, client) = setup_pause_escrow(100);
+        let (_env, admin, escrow_client, _, _, escrow_id, client) = setup_pause_escrow(100);
         client.pause(&admin);
         client.raise_dispute(&escrow_client, &escrow_id, &None);
     }
@@ -3734,7 +3734,7 @@ mod tests {
     /// View functions must remain accessible while paused.
     #[test]
     fn test_view_functions_work_when_paused() {
-        let (env, admin, _, _, _, escrow_id, client) = setup_pause_escrow(100);
+        let (_env, admin, _, _, _, escrow_id, client) = setup_pause_escrow(100);
         client.pause(&admin);
 
         // All reads should succeed
@@ -3746,7 +3746,7 @@ mod tests {
     /// Full pause → mutation blocked → unpause → mutation succeeds cycle.
     #[test]
     fn test_pause_unpause_cycle_restores_mutations() {
-        let (env, admin, escrow_client, freelancer, _, escrow_id, client) = setup_pause_escrow(100);
+        let (env, admin, escrow_client, _freelancer, _, escrow_id, client) = setup_pause_escrow(100);
 
         client.pause(&admin);
         assert!(client.is_paused());

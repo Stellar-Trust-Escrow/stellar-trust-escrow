@@ -63,9 +63,11 @@ pub const MS_REJECTED: MilestoneStatus = 0x10;
 pub const MS_DISPUTED: MilestoneStatus = 0x20;
 
 /// Mask of all terminal states (no further transitions expected).
+#[allow(dead_code)]
 pub const MS_TERMINAL: MilestoneStatus = MS_RELEASED | MS_DISPUTED;
 
 /// Mask of states that block escrow cancellation.
+#[allow(dead_code)]
 pub const MS_BLOCKS_CANCEL: MilestoneStatus = MS_SUBMITTED | MS_APPROVED;
 
 /// Timelock metadata for protecting buyers: no release until expiry.
