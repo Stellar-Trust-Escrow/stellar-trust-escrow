@@ -324,6 +324,14 @@ pub fn emit_cancellation_executed(
     );
 }
 
+/// Emitted when the deadline on an escrow is extended by the client or arbiter.
+pub fn emit_deadline_extended(env: &Env, escrow_id: u64, old_deadline: Option<u64>, new_deadline: u64) {
+    env.events().publish(
+        (symbol_short!("dl_ext"), escrow_id),
+        (old_deadline, new_deadline),
+    );
+}
+
 /// Emitted when the arbiter on an escrow is updated by mutual client+freelancer consent.
 pub fn emit_arbiter_updated(env: &Env, escrow_id: u64, new_arbiter: &Option<Address>) {
     env.events().publish(
