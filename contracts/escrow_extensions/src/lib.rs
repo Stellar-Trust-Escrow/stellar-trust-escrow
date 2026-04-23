@@ -189,11 +189,6 @@ impl EscrowExtensions {
         }
 
         // ── Read and reserve escrow IDs atomically ────────────────────────────
-        let start_id: u64 = env
-            .storage()
-            .instance()
-            .get(&DataKey::StorageVersion) // reuse as a simple counter seed
-            .unwrap_or(0_u64);
         // We use a dedicated batch counter stored in instance storage.
         // In production this would call into the core escrow contract's
         // counter; here we maintain our own for the extension contract.
@@ -206,7 +201,6 @@ impl EscrowExtensions {
         env.storage()
             .instance()
             .set(&batch_counter_key, &(base_id + u64::from(count)));
-        let _ = start_id; // suppress unused warning
 
         let mut ids = Vec::new(&env);
         let mut total_batch_amount: i128 = 0;

@@ -276,7 +276,6 @@ mod gas_profiling {
         );
         print("request_cancellation", env.budget().cpu_instruction_cost(), env.budget().memory_bytes_cost());
     }
-}
 
     // ── Batch operation benchmarks ────────────────────────────────────────────
 
