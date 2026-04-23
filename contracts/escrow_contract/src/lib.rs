@@ -53,6 +53,7 @@
 
 mod arbiter_validation_tests;
 mod errors;
+mod oracle_fallback_tests;
 mod event_tests;
 mod events;
 mod oracle;
