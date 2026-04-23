@@ -1,0 +1,23 @@
+# Rust formatting configuration for consistent code style across all workspace crates
+edition = "2021"
+
+# Maximum line width before wrapping
+max_width = 100
+
+# Use default heuristics for small code blocks
+use_small_heuristics = "Default"
+
+# Group imports by crate (std, external, internal)
+imports_granularity = "Crate"
+
+# Group imports: standard library, external crates, then internal crates
+group_imports = "StdExternalCrate"
+
+# Reorder imports alphabetically
+reorder_imports = true
+
+# Format code in doc comments
+format_code_in_doc_comments = true
+
+# Normalize doc attributes
+normalize_doc_attributes = true
