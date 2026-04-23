@@ -51,6 +51,7 @@
 #![no_std]
 #![allow(clippy::too_many_arguments)]
 
+mod arbiter_validation_tests;
 mod errors;
 mod event_tests;
 mod events;
@@ -914,6 +915,12 @@ impl EscrowContract {
 
         if client == freelancer {
             return Err(EscrowError::Unauthorized);
+        }
+
+        if let Some(ref a) = arbiter {
+            if a == &client || a == &freelancer {
+                return Err(EscrowError::Unauthorized);
+            }
         }
 
         if total_amount <= 0 {
