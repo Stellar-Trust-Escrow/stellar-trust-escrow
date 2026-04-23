@@ -1740,7 +1740,7 @@ impl EscrowContract {
         caller.require_auth();
         ContractStorage::require_admin(&env, &caller)?;
 
-        if new_max < 1 || new_max > 100 {
+        if new_max == 0 || new_max > 100 {
             return Err(EscrowError::InvalidMilestoneAmount);
         }
 
@@ -1822,9 +1822,7 @@ impl EscrowContract {
 
         let overpayment = meta
             .rent_balance
-            .checked_sub(min_reserve)
-            .unwrap_or(0)
-            .max(0);
+            .saturating_sub(min_reserve);
 
         if amount <= 0 || amount > overpayment {
             return Err(EscrowError::InvalidEscrowAmount);
