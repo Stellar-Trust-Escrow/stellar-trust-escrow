@@ -288,4 +288,6 @@ pub enum DataKey {
     CancellationRequest(u64),
     /// Slash record by escrow ID — key: u64, value: SlashRecord
     SlashRecord(u64),
+    /// Migration cursor for v1-to-v2 migration — value: u64 (last migrated escrow ID)
+    MigrationCursor,
 }
