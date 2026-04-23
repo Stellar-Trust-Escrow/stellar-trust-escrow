@@ -2,190 +2,561 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [develop]   # only active development
   pull_request:
-    branches: [main, develop]
+    branches: [develop, main]  # PRs into both branches
+
+permissions:
+  contents: read
+
+env:
+  HUSKY: 0
+  SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
 
 jobs:
+  # ─────────────────────────────────────────
+  # 🔒 Security Audit
+  # ─────────────────────────────────────────
+  audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install root dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Audit root dependencies
+        run: npm audit --audit-level=high --omit=dev
+        continue-on-error: true
+
+      - name: Audit backend dependencies
+        run: npm audit --audit-level=high --omit=dev
+        working-directory: backend
+        continue-on-error: true
+
+      - name: Audit frontend dependencies
+        run: npm audit --audit-level=high --omit=dev
+        working-directory: frontend
+        continue-on-error: true
+
+  # ─────────────────────────────────────────
+  # 🧱 Smart Contract (Rust / Soroban)
+  # ─────────────────────────────────────────
   contract:
     name: Smart Contract (Rust)
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      # Install Rust with wasm target
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Detect contract changes
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --no-tags --prune --depth=1 origin "${{ github.base_ref }}"
+            BASE_COMMIT=$(git merge-base HEAD "origin/${{ github.base_ref }}")
+            CHANGED=$(git diff --name-only "$BASE_COMMIT"...HEAD)
+          else
+            if git rev-parse HEAD^ >/dev/null 2>&1; then
+              CHANGED=$(git diff --name-only HEAD^ HEAD)
+            else
+              CHANGED=$(git ls-tree -r --name-only HEAD)
+            fi
+          fi
+          echo "$CHANGED"
+          if echo "$CHANGED" | grep -qE '^(contracts/|Cargo\.(toml|lock)|scripts/test-contract\.sh)'; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup Rust
+        if: steps.changes.outputs.changed == 'true'
+        uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
-          components: clippy, rustfmt
+          components: clippy, rustfmt, llvm-tools-preview
 
-      # Cache cargo dependencies; skip if missing
-      - name: Cache Cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          fail-on-cache-miss: false
+      - name: Install cargo-llvm-cov
+        if: steps.changes.outputs.changed == 'true'
+        uses: taiki-e/install-action@cargo-llvm-cov
 
-      # Format & lint
       - name: Format check
-        run: cd contracts/escrow_contract && cargo fmt -- --check
+        if: steps.changes.outputs.changed == 'true'
+        run: cargo fmt --all -- --check
+
       - name: Clippy
-        run: cd contracts/escrow_contract && cargo clippy -- -D warnings
+        if: steps.changes.outputs.changed == 'true'
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
-      # Run tests
-      - name: Test
-        run: cd contracts/escrow_contract && cargo test
-
-      # Build WASM
-      - name: Build WASM
-        run: cd contracts/escrow_contract && cargo build --release --target wasm32-unknown-unknown
-
-  backend:
-    name: Backend (Node.js)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      # Cache npm dependencies at root for entire monorepo
-      - name: Cache npm
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
-          fail-on-cache-miss: false
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Lint
-        run: cd backend && npm run lint
-
-      - name: Test
-        run: cd backend && npm test
-
-  frontend:
-    name: Frontend (Next.js)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      # Cache npm dependencies at root for entire monorepo
-      - name: Cache npm
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
-          fail-on-cache-miss: false
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Lint
-        run: cd frontend && npm run lint
+      - name: Test with coverage
+        if: steps.changes.outputs.changed == 'true'
+        run: bash scripts/test-contract.sh --gas --coverage --ci
         env:
-          NEXT_PUBLIC_API_URL: http://localhost:3001
+          ARTIFACTS_DIR: test-artifacts
+
+      - name: Build WASM
+        if: steps.changes.outputs.changed == 'true'
+        run: bash scripts/test-contract.sh --build
+        env:
+          ARTIFACTS_DIR: test-artifacts
+
+      - name: Upload coverage to Codecov
+        if: steps.changes.outputs.changed == 'true'
+        uses: codecov/codecov-action@v4
+        with:
+          files: test-artifacts/escrow_contract-lcov.info,test-artifacts/insurance_contract-lcov.info
+          flags: contracts
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+      - name: Coverage summary comment
+        if: steps.changes.outputs.changed == 'true' && github.event_name == 'pull_request'
+        uses: romeovs/lcov-reporter-action@v0.4.0
+        with:
+          lcov-file: test-artifacts/escrow_contract-lcov.info
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          title: 'Contract Coverage (escrow_contract)'
+
+      - name: Upload test artifacts
+        if: steps.changes.outputs.changed == 'true' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-test-artifacts-${{ github.sha }}
+          path: test-artifacts/
+          retention-days: 30
+
+      - name: Slack Notification on failure
+        if: ${{ failure() && env.SLACK_WEBHOOK != '' }}
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_COLOR: danger
+          SLACK_MESSAGE: "❌ Contract CI failed — ${{ github.ref }} (${{ github.sha }}) — ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+  # ─────────────────────────────────────────
+  # 🔬 Contract Fuzzing
+  # ─────────────────────────────────────────
+  contract-fuzz:
+    name: Smart Contract Fuzzing
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect contract changes
+        id: changes
+        run: |
+          if git rev-parse HEAD^ >/dev/null 2>&1; then
+            CHANGED=$(git diff --name-only HEAD^ HEAD)
+          else
+            CHANGED=$(git ls-tree -r --name-only HEAD)
+          fi
+          if echo "$CHANGED" | grep -qE '^(contracts/|Cargo\.(toml|lock))'; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - uses: dtolnay/rust-toolchain@nightly
+        if: steps.changes.outputs.changed == 'true'
+        with:
+          components: rustfmt
+
+      - name: Install cargo-fuzz
+        if: steps.changes.outputs.changed == 'true'
+        run: cargo install cargo-fuzz --quiet
+
+      - name: Run fuzz targets
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          FUZZ_SECS: '60'
+        run: |
+          mkdir -p test-artifacts
+          cd contracts/escrow_contract
+          if [ -d fuzz/fuzz_targets ]; then
+            for target in fuzz/fuzz_targets/*.rs; do
+              name=$(basename "$target" .rs)
+              echo "Fuzzing: $name (${FUZZ_SECS}s)"
+              cargo +nightly fuzz run "$name" -- \
+                -max_total_time="${FUZZ_SECS}" \
+                -artifact_prefix="../../test-artifacts/fuzz-${name}-" \
+                2>&1 | tee "../../test-artifacts/fuzz-${name}.txt"
+            done
+          else
+            echo "No fuzz targets found — skipping."
+          fi
+
+      - name: Upload fuzz artifacts
+        if: steps.changes.outputs.changed == 'true' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts-${{ github.sha }}
+          path: test-artifacts/fuzz-*
+          retention-days: 30
+
+      - name: Slack Notification on fuzz failure
+        if: ${{ failure() && env.SLACK_WEBHOOK != '' }}
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_COLOR: danger
+          SLACK_MESSAGE: "⚠️ Fuzz testing found a failure on ${{ github.ref }} (${{ github.sha }})"
+
+  # ─────────────────────────────────────────
+  # ⚙️ Backend (Node.js)
+  # ─────────────────────────────────────────
+  backend:
+    name: Backend (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [18, 20, 22]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect backend changes
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --no-tags --prune --depth=1 origin "${{ github.base_ref }}"
+            BASE_COMMIT=$(git merge-base HEAD "origin/${{ github.base_ref }}")
+            CHANGED=$(git diff --name-only "$BASE_COMMIT"...HEAD)
+          else
+            if git rev-parse HEAD^ >/dev/null 2>&1; then
+              CHANGED=$(git diff --name-only HEAD^ HEAD)
+            else
+              CHANGED=$(git ls-tree -r --name-only HEAD)
+            fi
+          fi
+          echo "$CHANGED"
+          if echo "$CHANGED" | grep -qE '^(backend/|package(-lock)?\.json)'; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup Node ${{ matrix.node-version }}
+        if: steps.changes.outputs.changed == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install dependencies
+        if: steps.changes.outputs.changed == 'true'
+        run: npm ci
+
+      - name: Lint
+        if: steps.changes.outputs.changed == 'true'
+        run: npm run lint
+        working-directory: backend
+
+      - name: Test
+        if: steps.changes.outputs.changed == 'true'
+        run: npm test
+        working-directory: backend
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          JWT_SECRET: test-secret-for-ci-only
+          STELLAR_NETWORK: testnet
+
+      - name: Slack Notification
+        if: ${{ failure() && matrix.node-version == 20 && env.SLACK_WEBHOOK != '' }}
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_COLOR: danger
+          SLACK_MESSAGE: "❌ Backend CI failed (Node ${{ matrix.node-version }}) — ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+  # ─────────────────────────────────────────
+  # 🎨 Frontend (Next.js)
+  # ─────────────────────────────────────────
+  frontend:
+    name: Frontend (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [18, 20, 22]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect frontend changes
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --no-tags --prune --depth=1 origin "${{ github.base_ref }}"
+            BASE_COMMIT=$(git merge-base HEAD "origin/${{ github.base_ref }}")
+            CHANGED=$(git diff --name-only "$BASE_COMMIT"...HEAD)
+          else
+            if git rev-parse HEAD^ >/dev/null 2>&1; then
+              CHANGED=$(git diff --name-only HEAD^ HEAD)
+            else
+              CHANGED=$(git ls-tree -r --name-only HEAD)
+            fi
+          fi
+          echo "$CHANGED"
+          if echo "$CHANGED" | grep -qE '^(frontend/|package(-lock)?\.json)'; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup Node ${{ matrix.node-version }}
+        if: steps.changes.outputs.changed == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install dependencies
+        if: steps.changes.outputs.changed == 'true'
+        run: npm ci
+
+      - name: Lint
+        if: steps.changes.outputs.changed == 'true'
+        run: npm run lint
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:4000
 
       - name: Build
-        run: cd frontend && npm run build
+        if: steps.changes.outputs.changed == 'true'
+        run: npm run build
+        working-directory: frontend
         env:
-          NEXT_PUBLIC_API_URL: http://localhost:3001
+          NEXT_PUBLIC_API_URL: http://localhost:4000
 
-  mobile:
-    name: Mobile (React Native / Expo)
+      - name: Unit Tests
+        if: steps.changes.outputs.changed == 'true'
+        run: npm run test:unit
+        working-directory: frontend
+
+      - name: Integration Tests
+        if: steps.changes.outputs.changed == 'true'
+        run: npm run test:integration
+        working-directory: frontend
+
+      - name: Accessibility Tests
+        if: steps.changes.outputs.changed == 'true'
+        run: npm run test:a11y
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:4000
+
+      - name: Slack Notification
+        if: ${{ failure() && matrix.node-version == 20 && env.SLACK_WEBHOOK != '' }}
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_COLOR: danger
+          SLACK_MESSAGE: "❌ Frontend CI failed (Node ${{ matrix.node-version }}) — ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+  # ─────────────────────────────────────────
+  # 🎭 E2E Tests (Playwright)
+  # ─────────────────────────────────────────
+  frontend-e2e:
+    name: E2E Tests (Playwright)
     runs-on: ubuntu-latest
+    needs: [frontend]
+
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          fetch-depth: 0
 
-      - name: Cache npm
-        uses: actions/cache@v4
+      - name: Detect frontend changes
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --no-tags --prune --depth=1 origin "${{ github.base_ref }}"
+            BASE_COMMIT=$(git merge-base HEAD "origin/${{ github.base_ref }}")
+            CHANGED=$(git diff --name-only "$BASE_COMMIT"...HEAD)
+          else
+            if git rev-parse HEAD^ >/dev/null 2>&1; then
+              CHANGED=$(git diff --name-only HEAD^ HEAD)
+            else
+              CHANGED=$(git ls-tree -r --name-only HEAD)
+            fi
+          fi
+          if echo "$CHANGED" | grep -qE '^(frontend/|package(-lock)?\.json)'; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup Node
+        if: steps.changes.outputs.changed == 'true'
+        uses: actions/setup-node@v4
         with:
-          path: ~/.npm
-          key: ${{ runner.os }}-node-mobile-${{ hashFiles('mobile/package.json') }}
-          fail-on-cache-miss: false
+          node-version: '20'
 
       - name: Install dependencies
-        run: cd mobile && npm install
-
-      - name: Type check
-        run: cd mobile && npx tsc --noEmit
-
-      - name: Test
-        run: cd mobile && npm test
-
-  bundle-analysis:
-    name: Frontend Bundle Analysis
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Cache npm
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
-          fail-on-cache-miss: false
-
-      - name: Install dependencies
+        if: steps.changes.outputs.changed == 'true'
         run: npm ci
 
-      # Build with analyzer enabled — generates HTML reports in frontend/.next/analyze/
-      - name: Build with bundle analyzer
-        run: cd frontend && npm run analyze
-        env:
-          NEXT_PUBLIC_API_URL: http://localhost:3001
+      - name: Install Playwright browsers
+        if: steps.changes.outputs.changed == 'true'
+        run: npx playwright install --with-deps chromium firefox
+        working-directory: frontend
 
-      # Upload the HTML analyzer reports as a build artifact
-      - name: Upload analyzer reports
+      - name: Build frontend
+        if: steps.changes.outputs.changed == 'true'
+        run: npm run build
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_URL: http://127.0.0.1:4000
+
+      - name: Run Playwright suite
+        if: steps.changes.outputs.changed == 'true'
+        run: npm run test:e2e
+        working-directory: frontend
+        env:
+          CI: 'true'
+          NEXT_PUBLIC_API_URL: http://127.0.0.1:4000
+
+      - name: Upload Playwright report
+        if: steps.changes.outputs.changed == 'true' && always()
         uses: actions/upload-artifact@v4
         with:
-          name: bundle-analyzer-report-${{ github.sha }}
-          path: frontend/.next/analyze/
-          retention-days: 90
+          name: playwright-report-${{ github.sha }}
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          retention-days: 14
 
-      # Capture a size snapshot and save it; restore previous history first
-      - name: Restore bundle stats history
-        uses: actions/cache@v4
+  # ─────────────────────────────────────────
+  # ♿ Accessibility (standalone)
+  # ─────────────────────────────────────────
+  accessibility:
+    name: Accessibility (a11y)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
         with:
-          path: bundle-stats.json
-          key: bundle-stats-${{ github.ref_name }}
-          restore-keys: bundle-stats-
+          fetch-depth: 0
 
-      - name: Record bundle snapshot
-        run: node scripts/bundle-report.js --save --trend
+      - name: Detect frontend changes
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --no-tags --prune --depth=1 origin "${{ github.base_ref }}"
+            BASE_COMMIT=$(git merge-base HEAD "origin/${{ github.base_ref }}")
+            CHANGED=$(git diff --name-only "$BASE_COMMIT"...HEAD)
+          else
+            if git rev-parse HEAD^ >/dev/null 2>&1; then
+              CHANGED=$(git diff --name-only HEAD^ HEAD)
+            else
+              CHANGED=$(git ls-tree -r --name-only HEAD)
+            fi
+          fi
+          if echo "$CHANGED" | grep -qE '^(frontend/|package(-lock)?\.json)'; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup Node
+        if: steps.changes.outputs.changed == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        if: steps.changes.outputs.changed == 'true'
+        run: npm ci
+
+      - name: Run Accessibility Tests
+        if: steps.changes.outputs.changed == 'true'
+        run: npm run test:a11y
+        working-directory: frontend
         env:
-          GITHUB_SHA: ${{ github.sha }}
-          GITHUB_REF_NAME: ${{ github.ref_name }}
+          NEXT_PUBLIC_API_URL: http://localhost:4000
 
-      # Persist updated history for future runs
-      - name: Save bundle stats history
-        uses: actions/cache/save@v4
-        with:
-          path: bundle-stats.json
-          key: bundle-stats-${{ github.ref_name }}-${{ github.sha }}
-
-      # Upload the JSON history as an artifact too
-      - name: Upload bundle stats
+      - name: Upload accessibility report
+        if: steps.changes.outputs.changed == 'true' && failure()
         uses: actions/upload-artifact@v4
         with:
-          name: bundle-stats-${{ github.sha }}
-          path: bundle-stats.json
-          retention-days: 90
+          name: accessibility-report-${{ github.sha }}
+          path: frontend/accessibility-report.html
+          retention-days: 30
+
+  # ─────────────────────────────────────────
+  # 🐳 Docker Build
+  # ─────────────────────────────────────────
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changes
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --no-tags --prune --depth=1 origin "${{ github.base_ref }}"
+            BASE_COMMIT=$(git merge-base HEAD "origin/${{ github.base_ref }}")
+            CHANGED=$(git diff --name-only "$BASE_COMMIT"...HEAD)
+          else
+            if git rev-parse HEAD^ >/dev/null 2>&1; then
+              CHANGED=$(git diff --name-only HEAD^ HEAD)
+            else
+              CHANGED=$(git ls-tree -r --name-only HEAD)
+            fi
+          fi
+          if echo "$CHANGED" | grep -qE '^(backend/|frontend/|Dockerfile|package(-lock)?\.json)'; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up Docker Buildx
+        if: steps.changes.outputs.changed == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Backend Image
+        if: steps.changes.outputs.changed == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: backend
+          push: false
+          tags: stellar-escrow-backend:${{ github.sha }}
+
+      - name: Build Frontend Image
+        if: steps.changes.outputs.changed == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: frontend
+          push: false
+          tags: stellar-escrow-frontend:${{ github.sha }}
+
+      - name: Slack Notification
+        if: ${{ always() && env.SLACK_WEBHOOK != '' }}
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_COLOR: ${{ job.status == 'success' && 'good' || 'danger' }}
+          SLACK_MESSAGE: 'Docker Build: ${{ job.status }} — ${{ github.ref }}'

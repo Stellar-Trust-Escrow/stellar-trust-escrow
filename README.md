@@ -173,6 +173,16 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide, or jump straight to [
 
 ---
 
+## 🔒 Security
+
+- **Security Model**: [`docs/SECURITY.md`](docs/SECURITY.md)
+- **Privacy Policy**: [`docs/PRIVACY.md`](docs/PRIVACY.md)
+- **Bug Bounty**: [`docs/BUG_BOUNTY.md`](docs/BUG_BOUNTY.md)
+
+Report vulnerabilities to security@stellartrustescrow.example.com.
+
+---
+
 ## 📄 License
 
 MIT — see [LICENSE](LICENSE).

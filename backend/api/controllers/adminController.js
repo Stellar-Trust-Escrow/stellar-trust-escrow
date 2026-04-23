@@ -7,9 +7,40 @@
  * @module controllers/adminController
  */
 
-import { PrismaClient } from '@prisma/client';
+import prisma from '../../lib/prisma.js';
+import { TIER_LIMITS } from '../../config/rateLimits.js';
+import { logControllerError } from '../../config/logger.js';
+import { getUserUsage } from '../middleware/rateLimiter.js';
 
-const prisma = new PrismaClient();
+// Mutable runtime overrides (resets on server restart)
+const runtimeTierLimits = { ...TIER_LIMITS };
+
+const getRateLimits = (_req, res) => {
+  res.json({ tiers: runtimeTierLimits });
+};
+
+const updateRateLimit = (req, res) => {
+  const { tier } = req.params;
+  const { max } = req.body;
+  if (!(tier in runtimeTierLimits)) {
+    return res.status(404).json({ error: `Unknown tier: ${tier}` });
+  }
+  const parsed = parseInt(max, 10);
+  if (isNaN(parsed) || parsed < 1) {
+    return res.status(400).json({ error: 'max must be a positive integer' });
+  }
+  runtimeTierLimits[tier] = parsed;
+  res.json({ tier, max: parsed });
+};
+
+const getUserRateLimitUsage = (req, res) => {
+  const { userId } = req.params;
+  const usage = getUserUsage(userId);
+  res.json({ userId, ...usage });
+};
+
+import cache from '../../lib/cache.js';
+import { buildPaginatedResponse, parsePagination } from '../../lib/pagination.js';
 
 // ── Users ──────────────────────────────────────────────────────────────────────
 
@@ -19,31 +50,39 @@ const prisma = new PrismaClient();
  */
 const listUsers = async (req, res) => {
   try {
-    const { page = 1, limit = 20, search = '' } = req.query;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const { page, limit, skip } = parsePagination(req.query);
+    const { search = '' } = req.query;
 
     const where = search ? { address: { contains: search, mode: 'insensitive' } } : {};
 
-    const [users, total] = await Promise.all([
+    const cacheKey = `admin:users:${JSON.stringify({ where, page, limit })}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) return res.json(cached);
+
+    const [users, total] = await prisma.$transaction([
       prisma.reputationRecord.findMany({
         where,
         skip,
-        take: parseInt(limit),
+        take: limit,
         orderBy: { totalScore: 'desc' },
+        select: {
+          address: true,
+          totalScore: true,
+          completedEscrows: true,
+          disputedEscrows: true,
+          disputesWon: true,
+          totalVolume: true,
+          lastUpdated: true,
+        },
       }),
       prisma.reputationRecord.count({ where }),
     ]);
 
-    res.json({
-      users,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / parseInt(limit)),
-      },
-    });
+    const result = buildPaginatedResponse(users, { total, page, limit });
+    await cache.set(cacheKey, result, 30);
+    res.json(result);
   } catch (err) {
+    logControllerError('admin.listUsers', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -56,6 +95,11 @@ const getUserDetail = async (req, res) => {
   try {
     const { address } = req.params;
 
+    const cacheKey = `admin:user:${address}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) return res.json(cached);
+
+    // Use two targeted queries instead of OR — leverages composite indexes
     const [reputation, escrowsAsClient, escrowsAsFreelancer] = await Promise.all([
       prisma.reputationRecord.findUnique({ where: { address } }),
       prisma.escrow.count({ where: { clientAddress: address } }),
@@ -66,12 +110,16 @@ const getUserDetail = async (req, res) => {
       return res.status(404).json({ error: 'User not found.' });
     }
 
-    res.json({
+    const result = {
       address,
       reputation,
       stats: { escrowsAsClient, escrowsAsFreelancer },
-    });
+    };
+
+    await cache.set(cacheKey, result, 60);
+    res.json(result);
   } catch (err) {
+    logControllerError('admin.getUserDetail', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -79,37 +127,41 @@ const getUserDetail = async (req, res) => {
 /**
  * POST /api/admin/users/:address/suspend
  * Suspends a user (sets a suspension flag in the audit log — placeholder).
- *
- * NOTE: The current schema does not have a `suspended` field on users.
- * This endpoint logs the action and returns the audit entry.
- * See Issue #23 for schema updates.
  */
 const suspendUser = async (req, res) => {
   try {
     const { address } = req.params;
     const { reason = 'No reason provided' } = req.body;
 
-    const user = await prisma.reputationRecord.findUnique({ where: { address } });
-    if (!user) {
+    // Use a transaction to atomically verify user existence and log the action
+    const result = await prisma.$transaction(async (tx) => {
+      const user = await tx.reputationRecord.findUnique({
+        where: { address },
+        select: { address: true },
+      });
+      if (!user) return null;
+
+      const auditEntry = await tx.adminAuditLog.create({
+        data: {
+          action: 'SUSPEND_USER',
+          targetAddress: address,
+          reason,
+          performedBy: 'admin',
+          performedAt: new Date(),
+        },
+      });
+
+      return auditEntry;
+    });
+
+    if (!result) {
       return res.status(404).json({ error: 'User not found.' });
     }
 
-    // Log the action for audit trail
-    const auditEntry = await prisma.adminAuditLog.create({
-      data: {
-        action: 'SUSPEND_USER',
-        targetAddress: address,
-        reason,
-        performedBy: 'admin',
-        performedAt: new Date(),
-      },
-    });
-
-    res.json({
-      message: `User ${address} suspended.`,
-      auditEntry,
-    });
+    await cache.invalidatePrefix(`admin:user:${address}`);
+    res.json({ message: `User ${address} suspended.`, auditEntry: result });
   } catch (err) {
+    logControllerError('admin.suspendUser', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -123,26 +175,35 @@ const banUser = async (req, res) => {
     const { address } = req.params;
     const { reason = 'No reason provided' } = req.body;
 
-    const user = await prisma.reputationRecord.findUnique({ where: { address } });
-    if (!user) {
+    // Use a transaction to atomically verify user existence and log the action
+    const result = await prisma.$transaction(async (tx) => {
+      const user = await tx.reputationRecord.findUnique({
+        where: { address },
+        select: { address: true },
+      });
+      if (!user) return null;
+
+      const auditEntry = await tx.adminAuditLog.create({
+        data: {
+          action: 'BAN_USER',
+          targetAddress: address,
+          reason,
+          performedBy: 'admin',
+          performedAt: new Date(),
+        },
+      });
+
+      return auditEntry;
+    });
+
+    if (!result) {
       return res.status(404).json({ error: 'User not found.' });
     }
 
-    const auditEntry = await prisma.adminAuditLog.create({
-      data: {
-        action: 'BAN_USER',
-        targetAddress: address,
-        reason,
-        performedBy: 'admin',
-        performedAt: new Date(),
-      },
-    });
-
-    res.json({
-      message: `User ${address} banned.`,
-      auditEntry,
-    });
+    await cache.invalidatePrefix(`admin:user:${address}`);
+    res.json({ message: `User ${address} banned.`, auditEntry: result });
   } catch (err) {
+    logControllerError('admin.banUser', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -155,8 +216,8 @@ const banUser = async (req, res) => {
  */
 const listDisputes = async (req, res) => {
   try {
-    const { page = 1, limit = 20, resolved } = req.query;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const { page, limit, skip } = parsePagination(req.query);
+    const { resolved } = req.query;
 
     const where =
       resolved === 'true'
@@ -165,11 +226,15 @@ const listDisputes = async (req, res) => {
           ? { resolvedAt: null }
           : {};
 
-    const [disputes, total] = await Promise.all([
+    const cacheKey = `admin:disputes:${JSON.stringify({ where, page, limit })}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) return res.json(cached);
+
+    const [disputes, total] = await prisma.$transaction([
       prisma.dispute.findMany({
         where,
         skip,
-        take: parseInt(limit),
+        take: limit,
         orderBy: { raisedAt: 'desc' },
         include: {
           escrow: {
@@ -185,16 +250,11 @@ const listDisputes = async (req, res) => {
       prisma.dispute.count({ where }),
     ]);
 
-    res.json({
-      disputes,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / parseInt(limit)),
-      },
-    });
+    const result = buildPaginatedResponse(disputes, { total, page, limit });
+    await cache.set(cacheKey, result, 15);
+    res.json(result);
   } catch (err) {
+    logControllerError('admin.listDisputes', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -209,46 +269,61 @@ const resolveDispute = async (req, res) => {
   try {
     const { id } = req.params;
     const { clientAmount, freelancerAmount, notes = '' } = req.body;
+    const tenantId = req.tenant?.id;
 
     if (clientAmount === undefined || freelancerAmount === undefined) {
       return res.status(400).json({ error: 'clientAmount and freelancerAmount are required.' });
     }
 
-    const dispute = await prisma.dispute.findUnique({
-      where: { id: parseInt(id) },
+    const disputeId = parseInt(id);
+
+    // Single transaction: read → validate → update → audit log
+    const result = await prisma.$transaction(async (tx) => {
+      const dispute = await tx.dispute.findFirst({
+        where: { id: disputeId, ...(tenantId ? { tenantId } : {}) },
+        select: { id: true, escrowId: true, resolvedAt: true },
+      });
+
+      if (!dispute) return { error: 'Dispute not found.', status: 404 };
+      if (dispute.resolvedAt) return { error: 'Dispute already resolved.', status: 409 };
+
+      await Promise.all([
+        tx.dispute.updateMany({
+          where: { id: disputeId, ...(tenantId ? { tenantId } : {}) },
+          data: {
+            resolvedAt: new Date(),
+            clientAmount: String(clientAmount),
+            freelancerAmount: String(freelancerAmount),
+            resolvedBy: 'admin',
+          },
+        }),
+        tx.adminAuditLog.create({
+          data: {
+            action: 'RESOLVE_DISPUTE',
+            targetAddress: dispute.escrowId.toString(),
+            reason: notes,
+            performedBy: 'admin',
+            performedAt: new Date(),
+          },
+        }),
+      ]);
+
+      const updated = await tx.dispute.findFirst({
+        where: { id: disputeId, ...(tenantId ? { tenantId } : {}) },
+      });
+
+      return { dispute: updated };
     });
 
-    if (!dispute) {
-      return res.status(404).json({ error: 'Dispute not found.' });
+    if (result.error) {
+      return res.status(result.status).json({ error: result.error });
     }
 
-    if (dispute.resolvedAt) {
-      return res.status(409).json({ error: 'Dispute already resolved.' });
-    }
-
-    const updated = await prisma.dispute.update({
-      where: { id: parseInt(id) },
-      data: {
-        resolvedAt: new Date(),
-        clientAmount: String(clientAmount),
-        freelancerAmount: String(freelancerAmount),
-        resolvedBy: 'admin',
-      },
-    });
-
-    // Audit log
-    await prisma.adminAuditLog.create({
-      data: {
-        action: 'RESOLVE_DISPUTE',
-        targetAddress: dispute.escrowId.toString(),
-        reason: notes,
-        performedBy: 'admin',
-        performedAt: new Date(),
-      },
-    });
-
-    res.json({ message: 'Dispute resolved.', dispute: updated });
+    await cache.invalidateTags(['escrows', `escrow:${result.dispute.escrowId}`]);
+    await cache.invalidatePrefix('admin:disputes');
+    res.json({ message: 'Dispute resolved.', dispute: result.dispute });
   } catch (err) {
+    logControllerError('admin.resolveDispute', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -258,36 +333,49 @@ const resolveDispute = async (req, res) => {
 /**
  * GET /api/admin/stats
  * Returns aggregated platform statistics.
+ * Optimized: uses groupBy to get all escrow status counts in one query
+ * instead of 4 separate COUNT queries.
  */
 const getStats = async (req, res) => {
   try {
-    const [
-      totalEscrows,
-      activeEscrows,
-      completedEscrows,
-      disputedEscrows,
-      totalUsers,
-      openDisputes,
-    ] = await Promise.all([
-      prisma.escrow.count(),
-      prisma.escrow.count({ where: { status: 'Active' } }),
-      prisma.escrow.count({ where: { status: 'Completed' } }),
-      prisma.escrow.count({ where: { status: 'Disputed' } }),
+    const cacheKey = 'admin:stats';
+    const cached = await cache.get(cacheKey);
+    if (cached) return res.json(cached);
+
+    // 3 queries instead of 6: groupBy replaces 4 separate escrow counts
+    const [escrowStatusCounts, totalUsers, openDisputes] = await Promise.all([
+      prisma.escrow.groupBy({
+        by: ['status'],
+        _count: { id: true },
+      }),
       prisma.reputationRecord.count(),
       prisma.dispute.count({ where: { resolvedAt: null } }),
     ]);
 
-    res.json({
+    const countsByStatus = Object.fromEntries(
+      escrowStatusCounts.map((r) => [r.status, r._count.id]),
+    );
+
+    const totalEscrows = escrowStatusCounts.reduce((sum, r) => sum + r._count.id, 0);
+
+    const result = {
       escrows: {
         total: totalEscrows,
-        active: activeEscrows,
-        completed: completedEscrows,
-        disputed: disputedEscrows,
+        active: countsByStatus.Active ?? 0,
+        completed: countsByStatus.Completed ?? 0,
+        disputed: countsByStatus.Disputed ?? 0,
       },
       users: { total: totalUsers },
-      disputes: { open: openDisputes, resolved: disputedEscrows - openDisputes },
-    });
+      disputes: {
+        open: openDisputes,
+        resolved: (countsByStatus.Disputed ?? 0) - openDisputes,
+      },
+    };
+
+    await cache.set(cacheKey, result, 30);
+    res.json(result);
   } catch (err) {
+    logControllerError('admin.getStats', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -300,28 +388,26 @@ const getStats = async (req, res) => {
  */
 const getAuditLogs = async (req, res) => {
   try {
-    const { page = 1, limit = 50 } = req.query;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const { page, limit, skip } = parsePagination(req.query);
 
-    const [logs, total] = await Promise.all([
+    const cacheKey = `admin:audit-logs:${page}:${limit}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) return res.json(cached);
+
+    const [logs, total] = await prisma.$transaction([
       prisma.adminAuditLog.findMany({
         skip,
-        take: parseInt(limit),
+        take: limit,
         orderBy: { performedAt: 'desc' },
       }),
       prisma.adminAuditLog.count(),
     ]);
 
-    res.json({
-      logs,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / parseInt(limit)),
-      },
-    });
+    const result = buildPaginatedResponse(logs, { total, page, limit });
+    await cache.set(cacheKey, result, 15);
+    res.json(result);
   } catch (err) {
+    logControllerError('admin.getAuditLogs', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -342,6 +428,7 @@ const getSettings = async (req, res) => {
       allowedOrigins: process.env.ALLOWED_ORIGINS || 'http://localhost:3000',
     });
   } catch (err) {
+    logControllerError('admin.getSettings', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -371,6 +458,7 @@ const updateSettings = async (req, res) => {
       received: req.body,
     });
   } catch (err) {
+    logControllerError('admin.updateSettings', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -386,4 +474,7 @@ export default {
   getAuditLogs,
   getSettings,
   updateSettings,
+  getRateLimits,
+  updateRateLimit,
+  getUserRateLimitUsage,
 };

@@ -31,6 +31,7 @@
 
 mod errors;
 mod events;
+mod gas_profiling;
 mod types;
 
 pub use errors::InsuranceError;
@@ -138,9 +139,11 @@ impl Storage {
     where
         K: soroban_sdk::IntoVal<Env, soroban_sdk::Val>,
     {
-        env.storage()
-            .persistent()
-            .extend_ttl(key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        env.storage().persistent().extend_ttl(
+            key,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
     }
 
     fn load_claim(env: &Env, claim_id: u32) -> Result<Claim, InsuranceError> {
@@ -484,7 +487,11 @@ impl InsuranceContract {
     // ── Governance management ─────────────────────────────────────────────────
 
     /// Admin registers a new governor.
-    pub fn add_governor(env: Env, caller: Address, governor: Address) -> Result<(), InsuranceError> {
+    pub fn add_governor(
+        env: Env,
+        caller: Address,
+        governor: Address,
+    ) -> Result<(), InsuranceError> {
         caller.require_auth();
         Storage::require_admin(&env, &caller)?;
 
@@ -544,9 +551,7 @@ impl InsuranceContract {
         if new_quorum == 0 {
             return Err(InsuranceError::InvalidAmount);
         }
-        env.storage()
-            .instance()
-            .set(&DataKey::Quorum, &new_quorum);
+        env.storage().instance().set(&DataKey::Quorum, &new_quorum);
         Storage::bump_instance(&env);
         Ok(())
     }
@@ -617,7 +622,13 @@ mod tests {
 
         client.initialize(&admin, &token_id, &10_i128, &10_000_i128, &2_u32);
 
-        Setup { env, admin, token_id, contract_id, client }
+        Setup {
+            env,
+            admin,
+            token_id,
+            contract_id,
+            client,
+        }
     }
 
     fn mint(env: &Env, _admin: &Address, token_id: &Address, to: &Address, amount: i128) {
@@ -638,9 +649,9 @@ mod tests {
     #[test]
     fn test_double_initialize_fails() {
         let s = setup();
-        let result = s.client.try_initialize(
-            &s.admin, &s.token_id, &10_i128, &10_000_i128, &2_u32,
-        );
+        let result = s
+            .client
+            .try_initialize(&s.admin, &s.token_id, &10_i128, &10_000_i128, &2_u32);
         assert!(result.is_err());
     }
 
@@ -841,6 +852,119 @@ mod tests {
         s.client.vote(&gov2, &id, &true);
 
         let result = s.client.try_execute_payout(&id);
+        assert!(result.is_err());
+    }
+
+    // ── Admin config ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_set_claim_cap_updates_cap() {
+        let s = setup();
+        // New cap should allow a claim that previously would exceed the old cap
+        s.client.set_claim_cap(&s.admin, &50_000_i128);
+
+        let claimant = Address::generate(&s.env);
+        let desc = String::from_str(&s.env, "Large claim");
+        // 20_000 > original cap of 10_000, should now succeed
+        let id = s.client.submit_claim(&claimant, &desc, &20_000_i128);
+        let claim = s.client.get_claim(&id);
+        assert_eq!(claim.amount, 20_000);
+    }
+
+    #[test]
+    fn test_set_claim_cap_zero_fails() {
+        let s = setup();
+        let result = s.client.try_set_claim_cap(&s.admin, &0_i128);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_set_claim_cap_non_admin_fails() {
+        let s = setup();
+        let non_admin = Address::generate(&s.env);
+        let result = s.client.try_set_claim_cap(&non_admin, &5_000_i128);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_set_quorum_updates_quorum() {
+        let s = setup();
+        // Lower quorum to 1 so a single governor vote reaches quorum
+        s.client.set_quorum(&s.admin, &1_u32);
+
+        let gov = Address::generate(&s.env);
+        s.client.add_governor(&s.admin, &gov);
+
+        let claimant = Address::generate(&s.env);
+        let desc = String::from_str(&s.env, "Single vote quorum");
+        let id = s.client.submit_claim(&claimant, &desc, &100_i128);
+
+        s.client.vote(&gov, &id, &true);
+
+        let claim = s.client.get_claim(&id);
+        assert_eq!(claim.status, ClaimStatus::Approved);
+    }
+
+    #[test]
+    fn test_set_quorum_zero_fails() {
+        let s = setup();
+        let result = s.client.try_set_quorum(&s.admin, &0_u32);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_set_quorum_non_admin_fails() {
+        let s = setup();
+        let non_admin = Address::generate(&s.env);
+        let result = s.client.try_set_quorum(&non_admin, &3_u32);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_add_duplicate_governor_fails() {
+        let s = setup();
+        let gov = Address::generate(&s.env);
+        s.client.add_governor(&s.admin, &gov);
+        let result = s.client.try_add_governor(&s.admin, &gov);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_remove_nonexistent_governor_fails() {
+        let s = setup();
+        let gov = Address::generate(&s.env);
+        let result = s.client.try_remove_governor(&s.admin, &gov);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_execute_payout_not_approved_fails() {
+        let s = setup();
+        let claimant = Address::generate(&s.env);
+        let desc = String::from_str(&s.env, "Pending claim");
+        let id = s.client.submit_claim(&claimant, &desc, &100_i128);
+        // No votes cast — claim is still Pending
+        let result = s.client.try_execute_payout(&id);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_vote_on_nonexistent_claim_fails() {
+        let s = setup();
+        let gov = Address::generate(&s.env);
+        s.client.add_governor(&s.admin, &gov);
+        let result = s.client.try_vote(&gov, &999_u32, &true);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_withdraw_claim_non_claimant_fails() {
+        let s = setup();
+        let claimant = Address::generate(&s.env);
+        let other = Address::generate(&s.env);
+        let desc = String::from_str(&s.env, "Claim");
+        let id = s.client.submit_claim(&claimant, &desc, &100_i128);
+        let result = s.client.try_withdraw_claim(&other, &id);
         assert!(result.is_err());
     }
 }
