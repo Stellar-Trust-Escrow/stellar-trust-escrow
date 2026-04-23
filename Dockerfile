@@ -6,7 +6,7 @@ ENV HUSKY=0
 COPY package*.json ./
 COPY backend/package*.json ./backend/
 COPY frontend/package*.json ./frontend/
-RUN npm ci
+RUN npm ci --ignore-scripts
 
 # Backend build stage
 FROM base AS backend-builder
