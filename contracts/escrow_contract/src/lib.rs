@@ -78,6 +78,12 @@ use soroban_sdk::{
 
 mod storage;
 
+/// Maximum allowed `total_amount` for a single escrow, in stroops.
+/// Equivalent to 100 billion XLM (100_000_000_000 * 10_000_000 stroops/XLM).
+/// Prevents misconfigured integrations from creating escrows with pathological
+/// amounts that could cause arithmetic edge cases in milestone accounting.
+pub const MAX_ESCROW_AMOUNT: i128 = 1_000_000_000_000_000_000i128;
+
 // ── TTL constants ─────────────────────────────────────────────────────────────
 const INSTANCE_TTL_THRESHOLD: u32 = 5_000;
 const INSTANCE_TTL_EXTEND_TO: u32 = 50_000;
@@ -923,7 +929,7 @@ impl EscrowContract {
             }
         }
 
-        if total_amount <= 0 {
+        if total_amount <= 0 || total_amount > MAX_ESCROW_AMOUNT {
             return Err(EscrowError::InvalidEscrowAmount);
         }
 
@@ -3826,5 +3832,62 @@ mod tests {
             &50_i128,
         );
         assert_eq!(mid, 0);
+    }
+
+    #[test]
+    fn test_create_escrow_rejects_amount_above_max() {
+        let (env, admin, _, client) = setup();
+        client.initialize(&admin);
+
+        let escrow_client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_id = token_contract.address();
+        let token_admin = token::StellarAssetClient::new(&env, &token_id);
+
+        let over_cap = MAX_ESCROW_AMOUNT + 1;
+        token_admin.mint(&escrow_client, &(over_cap + ContractStorage::reserve_for_entries(1)));
+
+        let result = client.try_create_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &over_cap,
+            &BytesN::from_array(&env, &[1; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
+        assert_eq!(result, Err(Ok(EscrowError::InvalidEscrowAmount)));
+    }
+
+    #[test]
+    fn test_create_escrow_accepts_amount_at_max() {
+        let (env, admin, _, client) = setup();
+        client.initialize(&admin);
+
+        let escrow_client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_id = token_contract.address();
+        let token_admin = token::StellarAssetClient::new(&env, &token_id);
+
+        token_admin.mint(&escrow_client, &(MAX_ESCROW_AMOUNT + ContractStorage::reserve_for_entries(1)));
+
+        let escrow_id = client.create_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &MAX_ESCROW_AMOUNT,
+            &BytesN::from_array(&env, &[1; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
+        assert_eq!(escrow_id, 0);
     }
 }
