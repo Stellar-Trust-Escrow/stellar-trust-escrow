@@ -324,6 +324,12 @@ pub fn emit_cancellation_executed(
     );
 }
 
+/// Emitted when the counterparty approves a pending cancellation request.
+pub fn emit_cancellation_approved(env: &Env, escrow_id: u64, approver: &Address) {
+    env.events()
+        .publish((symbol_short!("can_apr"), escrow_id), approver.clone());
+}
+
 /// Emitted when a cancellation is requested.
 pub fn emit_cancellation_requested(
     env: &Env,
