@@ -2206,6 +2206,23 @@ impl EscrowContract {
         Ok(meta)
     }
 
+    /// Returns the number of seconds until the escrow lock time expires.
+    /// - `Ok(None)` — no lock time is set.
+    /// - `Ok(Some(0))` — lock time has already expired.
+    /// - `Ok(Some(n))` — `n` seconds remain; accounts for `lock_time_extension`.
+    pub fn get_lock_time_remaining(
+        env: Env,
+        escrow_id: u64,
+    ) -> Result<Option<u64>, EscrowError> {
+        let meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
+        let Some(lock_time) = meta.lock_time else {
+            return Ok(None);
+        };
+        let effective = meta.lock_time_extension.unwrap_or(lock_time);
+        let now = env.ledger().timestamp();
+        Ok(Some(effective.saturating_sub(now)))
+    }
+
     pub fn collect_rent(env: Env, escrow_id: u64) -> Result<i128, EscrowError> {
         ContractStorage::require_initialized(&env)?;
         let mut meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
@@ -3845,5 +3862,63 @@ mod tests {
 
         let result = client.try_get_escrow_meta(&9999_u64);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_lock_time_remaining() {
+        let (env, admin, _, client) = setup();
+        client.initialize(&admin);
+
+        let escrow_client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_id = token_contract.address();
+        let token_admin = token::StellarAssetClient::new(&env, &token_id);
+        token_admin.mint(
+            &escrow_client,
+            &(100_i128 + 2 * ContractStorage::reserve_for_entries(1)),
+        );
+
+        // Case 1: no lock time set
+        let escrow_id = client.create_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &100_i128,
+            &BytesN::from_array(&env, &[1u8; 32]),
+            &None,
+            &None,
+            &None, // no lock_time
+            &None,
+            &no_multisig(&env),
+        );
+        assert_eq!(client.get_lock_time_remaining(&escrow_id), None);
+
+        // Case 2: active lock — 1000 seconds in the future
+        let now = env.ledger().timestamp();
+        let lock_at = now + 1000;
+        token_admin.mint(
+            &escrow_client,
+            &(100_i128 + 2 * ContractStorage::reserve_for_entries(1)),
+        );
+        let locked_id = client.create_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &100_i128,
+            &BytesN::from_array(&env, &[2u8; 32]),
+            &None,
+            &None,
+            &Some(lock_at),
+            &None,
+            &no_multisig(&env),
+        );
+        let remaining = client.get_lock_time_remaining(&locked_id).unwrap();
+        assert_eq!(remaining, 1000_u64);
+
+        // Case 3: expired lock — advance past lock_at
+        advance(&env, 1001);
+        let expired = client.get_lock_time_remaining(&locked_id).unwrap();
+        assert_eq!(expired, 0_u64);
     }
 }
