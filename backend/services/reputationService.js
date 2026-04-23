@@ -5,7 +5,7 @@ const BADGE_THRESHOLDS = {
   ELITE: 1000,
 };
 
-import prisma from '../../lib/prisma.js';
+import prisma from '../lib/prisma.js';
 
 const getReputationByAddress = async (address) => {
   const record = await prisma.reputationRecord.findUnique({

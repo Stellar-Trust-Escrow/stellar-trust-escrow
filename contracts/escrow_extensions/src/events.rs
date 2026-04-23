@@ -29,8 +29,10 @@ pub fn emit_batch_completed(env: &Env, count: u32, total_amount: i128) {
 /// Emitted when a protocol fee is collected on escrow release.
 /// topic: (fee_col, escrow_id)  data: (token, amount)
 pub fn emit_fee_collected(env: &Env, escrow_id: u64, token: &Address, amount: i128) {
-    env.events()
-        .publish((symbol_short!("fee_col"), escrow_id), (token.clone(), amount));
+    env.events().publish(
+        (symbol_short!("fee_col"), escrow_id),
+        (token.clone(), amount),
+    );
 }
 
 /// Emitted when accumulated fees are distributed to recipients.

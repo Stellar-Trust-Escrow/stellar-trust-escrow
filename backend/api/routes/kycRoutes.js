@@ -20,24 +20,19 @@ const captureRawBody = (req, _res, next) => {
   });
 };
 
-router.post(
-  '/token',
-  stellarAddressBody('address'),
-  handleValidationErrors,
-  kycController.getToken,
-);
-router.get(
-  '/status/:address',
-  stellarAddressParam('address'),
-  handleValidationErrors,
-  kycController.getStatus,
-);
 /**
  * @route  POST /api/kyc/token
  * @desc   Generate a Sumsub SDK access token for the frontend widget.
  * @body   { address: string }
  */
-router.post('/token', authMiddleware, authorizeBodyAddress('address'), kycController.getToken);
+router.post(
+  '/token',
+  authMiddleware,
+  stellarAddressBody('address'),
+  handleValidationErrors,
+  authorizeBodyAddress('address'),
+  kycController.getToken,
+);
 
 /**
  * @route  GET /api/kyc/status/:address
@@ -46,6 +41,8 @@ router.post('/token', authMiddleware, authorizeBodyAddress('address'), kycContro
 router.get(
   '/status/:address',
   authMiddleware,
+  stellarAddressParam('address'),
+  handleValidationErrors,
   authorizeParamAddress('address'),
   kycController.getStatus,
 );

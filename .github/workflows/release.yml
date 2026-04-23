@@ -1,0 +1,259 @@
+name: Release to Main
+
+# ─────────────────────────────────────────────────────────────────────────────
+# This workflow ONLY runs on PRs from develop → main.
+# Branch protection rules ensure only the repository owner can open this PR.
+# Contributors cannot push to main or target main in any PR.
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+env:
+  HUSKY: 0
+  SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+
+jobs:
+  # ─────────────────────────────────────────
+  # 🔒 Security Audit (release gate)
+  # ─────────────────────────────────────────
+  audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install root dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Audit root dependencies
+        run: npm audit --audit-level=high --omit=dev
+
+      - name: Audit backend dependencies
+        run: npm audit --audit-level=high --omit=dev
+        working-directory: backend
+
+      - name: Audit frontend dependencies
+        run: npm audit --audit-level=high --omit=dev
+        working-directory: frontend
+
+  # ─────────────────────────────────────────
+  # 🧱 Smart Contract Full Suite
+  # ─────────────────────────────────────────
+  contract:
+    name: Smart Contract (Full Release Suite)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: clippy, rustfmt, llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Test with coverage
+        run: bash scripts/test-contract.sh --gas --coverage --ci
+        env:
+          ARTIFACTS_DIR: test-artifacts
+
+      - name: Build WASM
+        run: bash scripts/test-contract.sh --build
+        env:
+          ARTIFACTS_DIR: test-artifacts
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: test-artifacts/escrow_contract-lcov.info,test-artifacts/insurance_contract-lcov.info
+          flags: release-contracts
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true     # stricter on release — fail hard if coverage upload breaks
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-contract-artifacts-${{ github.sha }}
+          path: test-artifacts/
+          retention-days: 90         # keep release artifacts longer
+
+  # ─────────────────────────────────────────
+  # ⚙️ Backend (Node 20 only for release)
+  # ─────────────────────────────────────────
+  backend:
+    name: Backend (Release Gate)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+        working-directory: backend
+
+      - name: Test
+        run: npm test
+        working-directory: backend
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          JWT_SECRET: test-secret-for-ci-only
+          STELLAR_NETWORK: testnet
+
+  # ─────────────────────────────────────────
+  # 🎨 Frontend (Node 20 only for release)
+  # ─────────────────────────────────────────
+  frontend:
+    name: Frontend (Release Gate)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:4000
+
+      - name: Build
+        run: npm run build
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:4000
+
+      - name: Unit Tests
+        run: npm run test:unit
+        working-directory: frontend
+
+      - name: Integration Tests
+        run: npm run test:integration
+        working-directory: frontend
+
+  # ─────────────────────────────────────────
+  # 🎭 E2E Tests (Playwright — release gate)
+  # ─────────────────────────────────────────
+  frontend-e2e:
+    name: E2E Tests (Release Gate)
+    runs-on: ubuntu-latest
+    needs: [frontend]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium firefox
+        working-directory: frontend
+
+      - name: Build frontend
+        run: npm run build
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_URL: http://127.0.0.1:4000
+
+      - name: Run Playwright suite
+        run: npm run test:e2e
+        working-directory: frontend
+        env:
+          CI: 'true'
+          NEXT_PUBLIC_API_URL: http://127.0.0.1:4000
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-playwright-report-${{ github.sha }}
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          retention-days: 90
+
+  # ─────────────────────────────────────────
+  # 🐳 Docker Build (release gate)
+  # ─────────────────────────────────────────
+  docker-build:
+    name: Docker Build (Release Gate)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Backend Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: backend
+          push: false
+          tags: stellar-escrow-backend:${{ github.sha }}
+
+      - name: Build Frontend Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: frontend
+          push: false
+          tags: stellar-escrow-frontend:${{ github.sha }}
+
+  # ─────────────────────────────────────────
+  # 📣 Release Slack Summary
+  # ─────────────────────────────────────────
+  notify-release:
+    name: Notify Release Status
+    runs-on: ubuntu-latest
+    needs: [audit, contract, backend, frontend, frontend-e2e, docker-build]
+    if: always()
+
+    steps:
+      - name: Slack release summary
+        if: ${{ env.SLACK_WEBHOOK != '' }}
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_COLOR: ${{ contains(needs.*.result, 'failure') && 'danger' || 'good' }}
+          SLACK_MESSAGE: "${{ contains(needs.*.result, 'failure') && '❌ Release gate FAILED' || '✅ Release gate PASSED' }} — develop → main — ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

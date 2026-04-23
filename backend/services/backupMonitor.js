@@ -10,7 +10,6 @@
  */
 
 import fs from 'fs';
-import { glob } from 'glob';
 
 const BACKUP_DIR = process.env.BACKUP_DIR || '/var/backups/stellar-trust';
 const MAX_BACKUP_AGE_HOURS = Number(process.env.BACKUP_MAX_AGE_HOURS || 26); // alert if no backup in 26h
@@ -22,7 +21,10 @@ const MAX_BACKUP_AGE_HOURS = Number(process.env.BACKUP_MAX_AGE_HOURS || 26); // 
 export async function getBackupStatus() {
   let files = [];
   try {
-    files = await glob(`${BACKUP_DIR}/backup_*.dump`);
+    files = fs
+      .readdirSync(BACKUP_DIR)
+      .filter((name) => /^backup_.*\.dump$/.test(name))
+      .map((name) => `${BACKUP_DIR}/${name}`);
   } catch {
     return { ok: false, lastBackupAt: null, backupCount: 0, ageHours: null };
   }
