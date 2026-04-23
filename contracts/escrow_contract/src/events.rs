@@ -324,6 +324,14 @@ pub fn emit_cancellation_executed(
     );
 }
 
+/// Emitted when the arbiter on an escrow is updated by mutual client+freelancer consent.
+pub fn emit_arbiter_updated(env: &Env, escrow_id: u64, new_arbiter: &Option<Address>) {
+    env.events().publish(
+        (symbol_short!("arb_upd"), escrow_id),
+        new_arbiter.clone(),
+    );
+}
+
 /// Emitted when a cancellation is requested.
 pub fn emit_cancellation_requested(
     env: &Env,
