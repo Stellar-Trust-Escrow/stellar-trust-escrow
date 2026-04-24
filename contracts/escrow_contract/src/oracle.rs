@@ -66,7 +66,7 @@ pub fn get_price_usd(env: &Env, asset: &Address) -> Result<i128, EscrowError> {
     let oracle_addr = get_oracle(env)?;
     let now = env.ledger().timestamp();
 
-    if let Some(data) = OracleClient::new(env, &oracle_addr).lastprice(&asset.clone()) {
+    if let Some(data) = OracleClient::new(env, &oracle_addr).lastprice(asset) {
         if is_fresh(&data, now) {
             return Ok(data.price);
         }
@@ -74,7 +74,7 @@ pub fn get_price_usd(env: &Env, asset: &Address) -> Result<i128, EscrowError> {
 
     // Primary stale or missing — try fallback
     if let Some(fallback_addr) = get_fallback_oracle(env) {
-        if let Some(data) = OracleClient::new(env, &fallback_addr).lastprice(&asset.clone()) {
+        if let Some(data) = OracleClient::new(env, &fallback_addr).lastprice(asset) {
             if is_fresh(&data, now) {
                 return Ok(data.price);
             }
