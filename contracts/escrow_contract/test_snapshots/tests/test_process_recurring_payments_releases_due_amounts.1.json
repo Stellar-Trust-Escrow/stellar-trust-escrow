@@ -596,6 +596,18 @@
                     },
                     {
                       "key": {
+                        "symbol": "rejection_reason"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "symbol": "None"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "resolved_at"
                       },
                       "val": {
@@ -711,6 +723,18 @@
                       },
                       "val": {
                         "u32": 1
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "rejection_reason"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "symbol": "None"
+                          }
+                        ]
                       }
                     },
                     {
@@ -1445,6 +1469,26 @@
               },
               {
                 "symbol": "initialize"
+              }
+            ],
+            "data": {
+              "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000002",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "adm_init"
               }
             ],
             "data": {
@@ -2541,6 +2585,18 @@
                           },
                           {
                             "key": {
+                              "symbol": "rejection_reason"
+                            },
+                            "val": {
+                              "vec": [
+                                {
+                                  "symbol": "None"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "key": {
                               "symbol": "resolved_at"
                             },
                             "val": {
@@ -3241,6 +3297,18 @@
                           },
                           {
                             "key": {
+                              "symbol": "rejection_reason"
+                            },
+                            "val": {
+                              "vec": [
+                                {
+                                  "symbol": "None"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "key": {
                               "symbol": "resolved_at"
                             },
                             "val": {
@@ -3308,6 +3376,18 @@
                             },
                             "val": {
                               "u32": 1
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "rejection_reason"
+                            },
+                            "val": {
+                              "vec": [
+                                {
+                                  "symbol": "None"
+                                }
+                              ]
                             }
                           },
                           {

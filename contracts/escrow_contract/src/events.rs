@@ -371,3 +371,9 @@ pub fn emit_slash_dispute_resolved(env: &Env, escrow_id: u64, upheld: bool, amou
     env.events()
         .publish((symbol_short!("slsh_res"), escrow_id), (upheld, amount));
 }
+
+/// Emitted when the contract admin is initialized.
+pub fn emit_admin_initialized(env: &Env, admin: &Address) {
+    env.events()
+        .publish((symbol_short!("adm_init"),), admin.clone());
+}

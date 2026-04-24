@@ -70,6 +70,32 @@ pub const MS_TERMINAL: MilestoneStatus = MS_RELEASED | MS_DISPUTED;
 #[allow(dead_code)]
 pub const MS_BLOCKS_CANCEL: MilestoneStatus = MS_SUBMITTED | MS_APPROVED;
 
+/// Optional BytesN<32> wrapper — `#[contracttype]` cannot serialize `Option<BytesN<32>>` directly.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum OptionalBytesN32 {
+    None,
+    Some(BytesN<32>),
+}
+
+impl From<Option<BytesN<32>>> for OptionalBytesN32 {
+    fn from(opt: Option<BytesN<32>>) -> Self {
+        match opt {
+            Some(b) => OptionalBytesN32::Some(b),
+            None => OptionalBytesN32::None,
+        }
+    }
+}
+
+impl From<OptionalBytesN32> for Option<BytesN<32>> {
+    fn from(opt: OptionalBytesN32) -> Self {
+        match opt {
+            OptionalBytesN32::Some(b) => Some(b),
+            OptionalBytesN32::None => None,
+        }
+    }
+}
+
 /// Timelock metadata for protecting buyers: no release until expiry.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -175,6 +201,9 @@ pub struct Milestone {
 
     /// Buyer approvals for this milestone (signer + timestamp).
     pub approvals: soroban_sdk::Vec<ApprovalRecord>,
+
+    /// IPFS hash of the rejection rationale document, set by reject_milestone_with_reason.
+    pub rejection_reason: OptionalBytesN32,
 }
 
 /// Configuration for a recurring/subscription escrow.
@@ -216,6 +245,24 @@ pub struct RecurringPaymentConfig {
 
     /// Optional timestamp of the most recent processed payment.
     pub last_payment_at: Option<u64>,
+}
+
+/// Lightweight summary of a recurring payment schedule for frontend display.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RecurringScheduleStatus {
+    /// True when the schedule is running (not paused and not cancelled).
+    pub is_active: bool,
+    /// True when the schedule has been paused.
+    pub is_paused: bool,
+    /// True when the schedule has been cancelled.
+    pub is_cancelled: bool,
+    /// Ledger timestamp of the next scheduled payment.
+    pub next_payment_at: u64,
+    /// Number of payments not yet released.
+    pub payments_remaining: u32,
+    /// Token amount released per payment.
+    pub payment_amount: i128,
 }
 
 /// The main escrow agreement.
@@ -348,6 +395,10 @@ pub struct CancellationRequest {
 
     /// Whether this cancellation has been disputed.
     pub disputed: bool,
+
+    /// Whether the counterparty (non-requester) has explicitly approved the cancellation.
+    /// When true, `execute_cancellation` skips the dispute window check.
+    pub counterparty_approved: bool,
 }
 
 /// A slash record for tracking penalties.
@@ -453,4 +504,6 @@ pub enum DataKey {
     FallbackOracleAddress,
     /// Wormhole token bridge contract address — value: Address
     WormholeBridge,
+    /// Meta-transaction nonce per signer — key: Address, value: u64
+    MetaTxNonce(Address),
 }

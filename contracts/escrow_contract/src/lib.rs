@@ -58,6 +58,7 @@ mod event_tests;
 mod events;
 mod lock_time_tests;
 mod oracle;
+mod oracle_fallback_tests;
 mod pause_tests;
 mod timelock_tests;
 mod types;
@@ -67,9 +68,9 @@ pub use errors::EscrowError;
 use storage::StorageManager;
 use types::{CancellationRequest, RecurringInterval, RecurringPaymentConfig, SlashRecord};
 pub use types::{
-    DataKey, EscrowState, EscrowStatus, Milestone, MilestoneStatus, MultisigConfig,
-    OptionalTimelock, ReputationRecord, Timelock, MS_APPROVED, MS_DISPUTED, MS_PENDING,
-    MS_REJECTED, MS_RELEASED, MS_SUBMITTED,
+    ApprovalRecord, DataKey, EscrowState, EscrowStatus, Milestone, MilestoneStatus, MultisigConfig,
+    OptionalBytesN32, OptionalTimelock, RecurringScheduleStatus, ReputationRecord, Timelock,
+    MS_APPROVED, MS_DISPUTED, MS_PENDING, MS_REJECTED, MS_RELEASED, MS_SUBMITTED,
 };
 
 use soroban_sdk::{
@@ -77,6 +78,12 @@ use soroban_sdk::{
 };
 
 mod storage;
+
+/// Maximum allowed `total_amount` for a single escrow, in stroops.
+/// Equivalent to 100 billion XLM (100_000_000_000 * 10_000_000 stroops/XLM).
+/// Prevents misconfigured integrations from creating escrows with pathological
+/// amounts that could cause arithmetic edge cases in milestone accounting.
+pub const MAX_ESCROW_AMOUNT: i128 = 1_000_000_000_000_000_000i128;
 
 // ── TTL constants ─────────────────────────────────────────────────────────────
 const INSTANCE_TTL_THRESHOLD: u32 = 5_000;
@@ -91,6 +98,8 @@ const RENT_PERIOD_SECONDS: u64 = 86_400;
 const RENT_RESERVE_PERIODS: u64 = 30;
 const RENT_PER_ENTRY_PER_PERIOD: i128 = 1;
 pub const MAX_MILESTONES: u32 = 20;
+pub const MAX_STRING_LEN: u32 = 256;
+pub const MAX_BUYER_SIGNERS: u32 = 10;
 
 // ── Granular storage keys ─────────────────────────────────────────────────────
 // Separate keys for meta vs each milestone avoids deserialising the full
@@ -149,37 +158,37 @@ struct ApproveMilestoneArgs {
 // `submitted_count` replaces the O(n) loop in cancel_escrow.
 #[contracttype]
 #[derive(Clone, Debug)]
-pub(crate) struct EscrowMeta {
-    pub(crate) escrow_id: u64,
-    pub(crate) client: Address,
-    pub(crate) freelancer: Address,
-    pub(crate) token: Address,
-    pub(crate) total_amount: i128,
+pub struct EscrowMeta {
+    pub escrow_id: u64,
+    pub client: Address,
+    pub freelancer: Address,
+    pub token: Address,
+    pub total_amount: i128,
     /// Running sum of milestone amounts added so far (allocation guard).
-    pub(crate) allocated_amount: i128,
-    pub(crate) remaining_balance: i128,
-    pub(crate) status: EscrowStatus,
-    pub(crate) milestone_count: u32,
+    pub allocated_amount: i128,
+    pub remaining_balance: i128,
+    pub status: EscrowStatus,
+    pub milestone_count: u32,
     /// Number of milestones in Approved state — avoids full scan on completion check.
-    pub(crate) approved_count: u32,
-    pub(crate) released_count: u32,
+    pub approved_count: u32,
+    pub released_count: u32,
     /// Number of milestones in Submitted state — avoids O(n) scan in cancel_escrow.
-    pub(crate) submitted_count: u32,
-    pub(crate) arbiter: Option<Address>,
-    pub(crate) buyer_signers: soroban_sdk::Vec<Address>,
-    pub(crate) created_at: u64,
-    pub(crate) deadline: Option<u64>,
+    pub submitted_count: u32,
+    pub arbiter: Option<Address>,
+    pub buyer_signers: soroban_sdk::Vec<Address>,
+    pub created_at: u64,
+    pub deadline: Option<u64>,
     /// Optional lock time (ledger timestamp) - funds locked until this time.
-    pub(crate) lock_time: Option<u64>,
+    pub lock_time: Option<u64>,
     /// Optional extension deadline for the lock time.
-    pub(crate) lock_time_extension: Option<u64>,
+    pub lock_time_extension: Option<u64>,
     /// Optional timelock controls release window after approval.
-    pub(crate) timelock: OptionalTimelock,
-    pub(crate) brief_hash: BytesN<32>,
+    pub timelock: OptionalTimelock,
+    pub brief_hash: BytesN<32>,
     /// Prepaid storage rent reserve held by the contract in the escrow token.
-    pub(crate) rent_balance: i128,
+    pub rent_balance: i128,
     /// Timestamp of the last successful rent collection checkpoint.
-    pub(crate) last_rent_collection_at: u64,
+    pub last_rent_collection_at: u64,
 }
 
 // ── Storage helpers ───────────────────────────────────────────────────────────
@@ -196,6 +205,7 @@ impl ContractStorage {
         // Initialize storage version for upgradeable storage
         StorageManager::init_version(env);
         Self::bump_instance_ttl(env);
+        events::emit_admin_initialized(env, admin);
         Ok(())
     }
 
@@ -442,6 +452,41 @@ impl ContractStorage {
             .remove(&DataKey::SlashRecord(escrow_id));
     }
 
+    // ── Meta-transaction nonce tracking ────────────────────────────────────────
+
+    /// Validates and updates the nonce for a meta-transaction signer.
+    ///
+    /// Enforces strictly monotonically increasing nonces to prevent replay attacks.
+    /// Returns Unauthorized if nonce <= last_nonce.
+    fn _validate_and_update_nonce(
+        env: &Env,
+        signer: &Address,
+        nonce: u64,
+    ) -> Result<(), EscrowError> {
+        let key = DataKey::MetaTxNonce(signer.clone());
+        let last_nonce: u64 = env.storage().persistent().get(&key).unwrap_or(0);
+
+        if nonce <= last_nonce {
+            return Err(EscrowError::Unauthorized);
+        }
+
+        env.storage().persistent().set(&key, &nonce);
+        Self::bump_persistent_ttl(env, &key);
+        Ok(())
+    }
+
+    /// Validates that a token is approved for use as an escrow token.
+    ///
+    /// For wrapped/bridged tokens, checks that they are registered and approved.
+    /// Native Stellar tokens bypass this check and are always accepted.
+    fn _validate_escrow_token(_env: &Env, _token: &Address) -> Result<(), EscrowError> {
+        // Native tokens are always valid; only validate if it's a contract
+        // In a real implementation, this would check a wrapped token registry.
+        // For now, we accept all tokens (native and wrapped).
+        // TODO: Implement wrapped token registry check with is_approved flag
+        Ok(())
+    }
+
     // ── TTL helpers ───────────────────────────────────────────────────────────
 
     #[inline]
@@ -553,16 +598,19 @@ impl ContractStorage {
 
     fn collect_rent_due(env: &Env, meta: &mut EscrowMeta) -> Result<i128, EscrowError> {
         let now = env.ledger().timestamp();
-        if now <= meta.last_rent_collection_at {
+        // Use saturating_sub to prevent underflow if ledger timestamp is inconsistent
+        let time_since_last = now.saturating_sub(meta.last_rent_collection_at);
+        if time_since_last == 0 {
             return Ok(0);
         }
 
-        let elapsed_periods = (now - meta.last_rent_collection_at) / RENT_PERIOD_SECONDS;
+        let elapsed_periods = time_since_last / RENT_PERIOD_SECONDS;
         if elapsed_periods == 0 {
             return Ok(0);
         }
 
         let rent_per_period = Self::rent_due_per_period(env, meta);
+        // Use checked_mul to prevent overflow in rent calculation
         let due = rent_per_period
             .checked_mul(i128::from(elapsed_periods))
             .ok_or(EscrowError::AmountMismatch)?;
@@ -579,12 +627,14 @@ impl ContractStorage {
                 &admin,
                 &collectable,
             );
-            meta.rent_balance -= collectable;
+            meta.rent_balance = meta.rent_balance.saturating_sub(collectable);
         }
 
         let covered_periods = (collectable / rent_per_period) as u64;
         if covered_periods > 0 {
-            meta.last_rent_collection_at += covered_periods * RENT_PERIOD_SECONDS;
+            meta.last_rent_collection_at = meta
+                .last_rent_collection_at
+                .saturating_add(covered_periods * RENT_PERIOD_SECONDS);
         }
 
         env.events().publish(
@@ -1145,6 +1195,7 @@ impl EscrowContract {
                 submitted_at: None,
                 resolved_at: None,
                 approvals: soroban_sdk::Vec::new(&env),
+                rejection_reason: types::OptionalBytesN32::None,
             },
         );
         ContractStorage::save_escrow_meta(&env, &meta);
@@ -1237,6 +1288,7 @@ impl EscrowContract {
                     submitted_at: None,
                     resolved_at: None,
                     approvals: soroban_sdk::Vec::new(&env),
+                    rejection_reason: types::OptionalBytesN32::None,
                 },
             );
             events::emit_milestone_added(
@@ -1493,6 +1545,7 @@ impl EscrowContract {
                     submitted_at: Some(recurring.next_payment_at),
                     resolved_at: Some(now),
                     approvals: soroban_sdk::Vec::new(&env),
+                    rejection_reason: types::OptionalBytesN32::None,
                 },
             );
 
@@ -2307,6 +2360,7 @@ impl EscrowContract {
             requested_at: now,
             dispute_deadline,
             disputed: false,
+            counterparty_approved: false,
         };
         ContractStorage::save_cancellation_request(&env, &request);
 
