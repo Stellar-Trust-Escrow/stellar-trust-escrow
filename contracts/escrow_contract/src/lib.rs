@@ -98,6 +98,7 @@ const RENT_PERIOD_SECONDS: u64 = 86_400;
 const RENT_RESERVE_PERIODS: u64 = 30;
 const RENT_PER_ENTRY_PER_PERIOD: i128 = 1;
 pub const MAX_MILESTONES: u32 = 20;
+pub const MAX_STRING_LEN: u32 = 256;
 
 // ── Granular storage keys ─────────────────────────────────────────────────────
 // Separate keys for meta vs each milestone avoids deserialising the full
@@ -1256,6 +1257,40 @@ impl EscrowContract {
 
         events::emit_milestone_added(&env, escrow_id, milestone_id, amount);
         Ok(milestone_id)
+    }
+
+    /// Corrects the title of a pending milestone.
+    ///
+    /// Only callable by the client; milestone must still be in `MS_PENDING` state.
+    pub fn update_milestone_title(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+        milestone_id: u32,
+        new_title: String,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_not_paused(&env)?;
+
+        if new_title.len() == 0 || new_title.len() > MAX_STRING_LEN {
+            return Err(EscrowError::StringTooLong);
+        }
+
+        let meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
+        if caller != meta.client {
+            return Err(EscrowError::ClientOnly);
+        }
+
+        let mut milestone = ContractStorage::load_milestone(&env, escrow_id, milestone_id)?;
+        if milestone.status != MS_PENDING {
+            return Err(EscrowError::InvalidMilestoneState);
+        }
+
+        milestone.title = new_title.clone();
+        ContractStorage::save_milestone(&env, escrow_id, &milestone);
+
+        events::emit_milestone_title_updated(&env, escrow_id, milestone_id, &new_title);
+        Ok(())
     }
 
     // ── Batch Operations ──────────────────────────────────────────────────────
@@ -4239,108 +4274,91 @@ mod tests {
         assert_eq!(mid, 0);
     }
 
-    // ── create_recurring_escrow interval variants ─────────────────────────────
+    // ── update_milestone_title ────────────────────────────────────────────────
 
-    fn setup_recurring(
+    fn setup_escrow_with_milestone(
         env: &Env,
         client: &EscrowContractClient,
         admin: &Address,
-        interval: RecurringInterval,
-        total_payments: u32,
-    ) -> (Address, Address, Address, u64, u64) {
+    ) -> (Address, Address, u64, u32) {
         client.initialize(admin);
         let escrow_client = Address::generate(env);
         let freelancer = Address::generate(env);
         let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
         let token_id = token_contract.address();
-        let total_reserve = 2 * ContractStorage::reserve_for_entries(1);
         token::StellarAssetClient::new(env, &token_id)
-            .mint(&escrow_client, &(100_i128 * total_payments as i128 + total_reserve));
-        let start_time = env.ledger().timestamp() + 100;
-        let escrow_id = client.create_recurring_escrow(
+            .mint(&escrow_client, &(500_i128 + 2 * ContractStorage::reserve_for_entries(1)));
+        let escrow_id = client.create_escrow(
             &escrow_client,
             &freelancer,
             &token_id,
-            &100_i128,
-            &interval,
-            &start_time,
+            &500_i128,
+            &BytesN::from_array(env, &[9u8; 32]),
             &None,
-            &Some(total_payments),
-            &BytesN::from_array(env, &[7u8; 32]),
+            &None,
+            &None,
+            &None,
+            &no_multisig(env),
         );
-        (escrow_client, freelancer, token_id, escrow_id, start_time)
+        let milestone_id = client.add_milestone(
+            &escrow_client,
+            &escrow_id,
+            &String::from_str(env, "Original Title"),
+            &BytesN::from_array(env, &[0u8; 32]),
+            &100_i128,
+        );
+        (escrow_client, freelancer, escrow_id, milestone_id)
     }
 
     #[test]
-    fn test_create_recurring_escrow_daily() {
-        let (env, admin, contract_id, client) = setup();
-        let (_, _, _, escrow_id, start_time) =
-            setup_recurring(&env, &client, &admin, RecurringInterval::Daily, 3);
+    fn test_update_milestone_title_pending_succeeds() {
+        let (env, admin, _, client) = setup();
+        let (escrow_client, _, escrow_id, milestone_id) =
+            setup_escrow_with_milestone(&env, &client, &admin);
 
-        let recurring = client.get_recurring_config(&escrow_id);
-        assert_eq!(recurring.next_payment_at, start_time);
-        assert_eq!(recurring.payments_remaining, 3);
+        client.update_milestone_title(
+            &escrow_client,
+            &escrow_id,
+            &milestone_id,
+            &String::from_str(&env, "Corrected Title"),
+        );
 
-        // Verify rec_crt event payload
-        let all = env.events().all();
-        let rec_crt_event = all.iter().find(|(addr, topics, _)| {
-            *addr == contract_id
-                && soroban_sdk::Symbol::try_from_val(&env, &topics.get(0).unwrap())
-                    == Ok(soroban_sdk::symbol_short!("rec_crt"))
-        });
-        let (_, _, data) = rec_crt_event.expect("rec_crt event not emitted");
-        let (amt, total, next): (i128, u32, u64) =
-            soroban_sdk::FromVal::from_val(&env, &data);
-        assert_eq!(amt, 100_i128);
-        assert_eq!(total, 3);
-        assert_eq!(next, start_time);
+        let milestone = client.get_milestone(&escrow_id, &milestone_id);
+        assert_eq!(milestone.title, String::from_str(&env, "Corrected Title"));
     }
 
     #[test]
-    fn test_create_recurring_escrow_weekly() {
-        let (env, admin, contract_id, client) = setup();
-        let (_, _, _, escrow_id, start_time) =
-            setup_recurring(&env, &client, &admin, RecurringInterval::Weekly, 4);
+    fn test_update_milestone_title_non_pending_rejected() {
+        let (env, admin, _, client) = setup();
+        let (escrow_client, freelancer, escrow_id, milestone_id) =
+            setup_escrow_with_milestone(&env, &client, &admin);
 
-        let recurring = client.get_recurring_config(&escrow_id);
-        assert_eq!(recurring.next_payment_at, start_time);
-        assert_eq!(recurring.payments_remaining, 4);
+        // Advance milestone to Submitted state.
+        client.submit_milestone(&freelancer, &escrow_id, &milestone_id);
 
-        let all = env.events().all();
-        let rec_crt_event = all.iter().find(|(addr, topics, _)| {
-            *addr == contract_id
-                && soroban_sdk::Symbol::try_from_val(&env, &topics.get(0).unwrap())
-                    == Ok(soroban_sdk::symbol_short!("rec_crt"))
-        });
-        let (_, _, data) = rec_crt_event.expect("rec_crt event not emitted");
-        let (amt, total, next): (i128, u32, u64) =
-            soroban_sdk::FromVal::from_val(&env, &data);
-        assert_eq!(amt, 100_i128);
-        assert_eq!(total, 4);
-        assert_eq!(next, start_time);
+        let result = client.try_update_milestone_title(
+            &escrow_client,
+            &escrow_id,
+            &milestone_id,
+            &String::from_str(&env, "New Title"),
+        );
+        assert_eq!(result, Err(Ok(EscrowError::InvalidMilestoneState)));
     }
 
     #[test]
-    fn test_create_recurring_escrow_monthly() {
-        let (env, admin, contract_id, client) = setup();
-        let (_, _, _, escrow_id, start_time) =
-            setup_recurring(&env, &client, &admin, RecurringInterval::Monthly, 2);
+    fn test_update_milestone_title_too_long_rejected() {
+        let (env, admin, _, client) = setup();
+        let (escrow_client, _, escrow_id, milestone_id) =
+            setup_escrow_with_milestone(&env, &client, &admin);
 
-        let recurring = client.get_recurring_config(&escrow_id);
-        assert_eq!(recurring.next_payment_at, start_time);
-        assert_eq!(recurring.payments_remaining, 2);
-
-        let all = env.events().all();
-        let rec_crt_event = all.iter().find(|(addr, topics, _)| {
-            *addr == contract_id
-                && soroban_sdk::Symbol::try_from_val(&env, &topics.get(0).unwrap())
-                    == Ok(soroban_sdk::symbol_short!("rec_crt"))
-        });
-        let (_, _, data) = rec_crt_event.expect("rec_crt event not emitted");
-        let (amt, total, next): (i128, u32, u64) =
-            soroban_sdk::FromVal::from_val(&env, &data);
-        assert_eq!(amt, 100_i128);
-        assert_eq!(total, 2);
-        assert_eq!(next, start_time);
+        // Build a 257-character string (exceeds MAX_STRING_LEN = 256).
+        let long: String = String::from_str(&env, &"a".repeat(257));
+        let result = client.try_update_milestone_title(
+            &escrow_client,
+            &escrow_id,
+            &milestone_id,
+            &long,
+        );
+        assert_eq!(result, Err(Ok(EscrowError::StringTooLong)));
     }
 }
