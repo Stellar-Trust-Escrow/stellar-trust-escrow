@@ -9,7 +9,7 @@
 
 #![allow(dead_code)]
 
-use soroban_sdk::{symbol_short, Address, Env};
+use soroban_sdk::{symbol_short, Address, BytesN, Env};
 
 /// Emitted when a new escrow is created and funds are locked.
 ///
@@ -324,20 +324,10 @@ pub fn emit_cancellation_executed(
     );
 }
 
-/// Emitted when the deadline on an escrow is extended by the client or arbiter.
-pub fn emit_deadline_extended(env: &Env, escrow_id: u64, old_deadline: Option<u64>, new_deadline: u64) {
-    env.events().publish(
-        (symbol_short!("dl_ext"), escrow_id),
-        (old_deadline, new_deadline),
-    );
-}
-
-/// Emitted when the arbiter on an escrow is updated by mutual client+freelancer consent.
-pub fn emit_arbiter_updated(env: &Env, escrow_id: u64, new_arbiter: &Option<Address>) {
-    env.events().publish(
-        (symbol_short!("arb_upd"), escrow_id),
-        new_arbiter.clone(),
-    );
+/// Emitted when the counterparty approves a pending cancellation request.
+pub fn emit_cancellation_approved(env: &Env, escrow_id: u64, approver: &Address) {
+    env.events()
+        .publish((symbol_short!("can_apr"), escrow_id), approver.clone());
 }
 
 /// Emitted when a cancellation is requested.
@@ -386,4 +376,22 @@ pub fn emit_slash_disputed(env: &Env, escrow_id: u64, disputer: &Address, amount
 pub fn emit_slash_dispute_resolved(env: &Env, escrow_id: u64, upheld: bool, amount: i128) {
     env.events()
         .publish((symbol_short!("slsh_res"), escrow_id), (upheld, amount));
+}
+
+/// Emitted when a client updates a pending milestone's title.
+///
+/// # Arguments
+/// * `escrow_id`    - The escrow ID
+/// * `milestone_id` - The milestone whose title was updated
+/// * `new_title`    - The corrected title
+pub fn emit_milestone_title_updated(
+    env: &Env,
+    escrow_id: u64,
+    milestone_id: u32,
+    new_title: &soroban_sdk::String,
+) {
+    env.events().publish(
+        (symbol_short!("mil_tup"), escrow_id),
+        (milestone_id, new_title.clone()),
+    );
 }

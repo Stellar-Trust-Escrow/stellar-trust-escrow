@@ -80,7 +80,10 @@ for CONTRACT in "${CONTRACTS[@]}"; do
   if [ "$BUILD" = true ]; then
     echo "🔨 Building optimized WASM…"
     (cd "$CONTRACT_DIR" && cargo build --release --target wasm32-unknown-unknown)
-    WASM_FILE=$(find "$CONTRACT_DIR/target/wasm32-unknown-unknown/release" -maxdepth 1 -name "*.wasm" | head -1)
+    WASM_FILE=$(find "target/wasm32-unknown-unknown/release" -maxdepth 1 -name "*.wasm" 2>/dev/null | head -1)
+    if [ -z "$WASM_FILE" ]; then
+      WASM_FILE=$(find "$CONTRACT_DIR/target/wasm32-unknown-unknown/release" -maxdepth 1 -name "*.wasm" 2>/dev/null | head -1)
+    fi
     if [ -n "$WASM_FILE" ]; then
       WASM_SIZE=$(du -sh "$WASM_FILE" | cut -f1)
       echo "   ✅ WASM built: $(basename "$WASM_FILE") ($WASM_SIZE)"
