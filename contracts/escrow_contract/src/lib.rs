@@ -2804,6 +2804,58 @@ mod tests {
     }
 
     #[test]
+    fn test_process_recurring_payments_multi_period_catchup() {
+        let (env, admin, _, client) = setup();
+        client.initialize(&admin);
+
+        let escrow_client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_id = token_contract.address();
+        let token_admin = token::StellarAssetClient::new(&env, &token_id);
+        let token_client = token::Client::new(&env, &token_id);
+
+        let payment_amount = 100_i128;
+        let total_payments = 5_u32;
+        let total_reserve = 2 * ContractStorage::reserve_for_entries(1);
+        token_admin.mint(
+            &escrow_client,
+            &(payment_amount * total_payments as i128 + total_reserve),
+        );
+
+        let interval_seconds: u64 = 86_400; // Daily
+        let start_time = env.ledger().timestamp() + 10;
+        let escrow_id = client.create_recurring_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &payment_amount,
+            &RecurringInterval::Daily,
+            &start_time,
+            &None,
+            &Some(total_payments),
+            &BytesN::from_array(&env, &[99; 32]),
+        );
+
+        // Advance ledger so exactly 3 periods have elapsed (strictly before the 4th boundary)
+        env.ledger()
+            .with_mut(|l| l.timestamp = start_time + 3 * interval_seconds - 1);
+
+        let processed = client.process_recurring_payments(&escrow_id);
+        assert_eq!(processed, 3);
+
+        let recurring = client.get_recurring_config(&escrow_id);
+        assert_eq!(recurring.payments_remaining, total_payments - 3);
+        assert_eq!(recurring.processed_payments, 3);
+        assert_eq!(
+            recurring.next_payment_at,
+            start_time + 3 * interval_seconds
+        );
+
+        assert_eq!(token_client.balance(&freelancer), payment_amount * 3);
+    }
+
+    #[test]
     fn test_pause_and_resume_recurring_schedule() {
         let (env, admin, _, client) = setup();
         client.initialize(&admin);
