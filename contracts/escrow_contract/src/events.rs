@@ -9,7 +9,7 @@
 
 #![allow(dead_code)]
 
-use soroban_sdk::{symbol_short, Address, Env};
+use soroban_sdk::{symbol_short, Address, BytesN, Env};
 
 /// Emitted when a new escrow is created and funds are locked.
 ///
@@ -324,6 +324,12 @@ pub fn emit_cancellation_executed(
     );
 }
 
+/// Emitted when the counterparty approves a pending cancellation request.
+pub fn emit_cancellation_approved(env: &Env, escrow_id: u64, approver: &Address) {
+    env.events()
+        .publish((symbol_short!("can_apr"), escrow_id), approver.clone());
+}
+
 /// Emitted when a cancellation is requested.
 pub fn emit_cancellation_requested(
     env: &Env,
@@ -370,4 +376,64 @@ pub fn emit_slash_disputed(env: &Env, escrow_id: u64, disputer: &Address, amount
 pub fn emit_slash_dispute_resolved(env: &Env, escrow_id: u64, upheld: bool, amount: i128) {
     env.events()
         .publish((symbol_short!("slsh_res"), escrow_id), (upheld, amount));
+}
+
+/// Emitted when a client updates a pending milestone's title.
+///
+/// # Arguments
+/// * `escrow_id`    - The escrow ID
+/// * `milestone_id` - The milestone whose title was updated
+/// * `new_title`    - The corrected title
+pub fn emit_milestone_title_updated(
+    env: &Env,
+    escrow_id: u64,
+    milestone_id: u32,
+    new_title: &soroban_sdk::String,
+) {
+    env.events().publish(
+        (symbol_short!("mil_tup"), escrow_id),
+        (milestone_id, new_title.clone()),
+    );
+}
+
+/// Emitted when the contract is initialized with an admin address.
+pub fn emit_admin_initialized(env: &Env, admin: &Address) {
+    env.events()
+        .publish((symbol_short!("adm_init"),), admin.clone());
+}
+
+/// Emitted when the admin updates the maximum milestone cap.
+pub fn emit_max_milestones_set(env: &Env, new_max: u32) {
+    env.events()
+        .publish((symbol_short!("mil_cap"),), new_max);
+}
+
+/// Emitted when a milestone is rejected with an IPFS reason hash.
+pub fn emit_milestone_rejected_with_reason(
+    env: &Env,
+    escrow_id: u64,
+    milestone_id: u32,
+    client: &Address,
+    reason_hash: &soroban_sdk::BytesN<32>,
+) {
+    env.events().publish(
+        (symbol_short!("mil_rej_r"), escrow_id),
+        (milestone_id, client.clone(), reason_hash.clone()),
+    );
+}
+
+/// Emitted when a client withdraws excess rent overpayment.
+pub fn emit_rent_withdrawn(env: &Env, escrow_id: u64, recipient: &Address, amount: i128) {
+    env.events().publish(
+        (symbol_short!("rent_out"), escrow_id),
+        (recipient.clone(), amount),
+    );
+}
+
+/// Emitted when the arbiter is updated on an escrow.
+pub fn emit_arbiter_updated(env: &Env, escrow_id: u64, new_arbiter: &Option<Address>) {
+    env.events().publish(
+        (symbol_short!("arb_upd"), escrow_id),
+        new_arbiter.clone(),
+    );
 }
