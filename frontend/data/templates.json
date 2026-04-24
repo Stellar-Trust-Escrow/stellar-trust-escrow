@@ -1,0 +1,198 @@
+{
+  "templates": [
+    {
+      "id": "freelance-website-launch",
+      "name": "Freelance Website Launch",
+      "description": "A complete website build with discovery, build, and launch milestones.",
+      "category": "Freelance",
+      "tokenAddress": "usdc",
+      "totalAmount": "4800",
+      "briefDescription": "Design and develop a responsive marketing website with CMS handoff.",
+      "deadline": "",
+      "milestones": [
+        {
+          "title": "Discovery & Sitemap",
+          "description": "Finalize scope, pages, and wireframes.",
+          "amount": "1200"
+        },
+        {
+          "title": "UI Implementation",
+          "description": "Build approved UI screens and interactions.",
+          "amount": "2200"
+        },
+        {
+          "title": "QA & Launch",
+          "description": "Cross-browser QA, content upload, and launch support.",
+          "amount": "1400"
+        }
+      ]
+    },
+    {
+      "id": "freelance-product-milestones",
+      "name": "Freelance Product Milestones",
+      "description": "For product feature delivery with milestone-based payouts.",
+      "category": "Freelance",
+      "tokenAddress": "usdc",
+      "totalAmount": "7200",
+      "briefDescription": "Deliver a scoped product feature in three release phases.",
+      "deadline": "",
+      "milestones": [
+        {
+          "title": "Phase 1: Prototype",
+          "description": "Clickable prototype and technical approach review.",
+          "amount": "1800"
+        },
+        {
+          "title": "Phase 2: Feature Build",
+          "description": "Implementation and integration of approved feature scope.",
+          "amount": "3600"
+        },
+        {
+          "title": "Phase 3: Stabilization",
+          "description": "Testing, fixes, and production handoff.",
+          "amount": "1800"
+        }
+      ]
+    },
+    {
+      "id": "creative-content-batch",
+      "name": "Creative Content Batch",
+      "description": "Ideal for content creators delivering assets in batches.",
+      "category": "Creative",
+      "tokenAddress": "usdc",
+      "totalAmount": "2600",
+      "briefDescription": "Produce and deliver monthly creative assets for social channels.",
+      "deadline": "",
+      "milestones": [
+        {
+          "title": "Content Calendar",
+          "description": "Approve concept list and publishing schedule.",
+          "amount": "600"
+        },
+        {
+          "title": "Draft Assets",
+          "description": "Deliver first draft batch for review.",
+          "amount": "1000"
+        },
+        {
+          "title": "Final Delivery",
+          "description": "Submit final edited assets and source files.",
+          "amount": "1000"
+        }
+      ]
+    },
+    {
+      "id": "retainer-monthly-support",
+      "name": "Monthly Retainer Support",
+      "description": "Retainer structure for ongoing product or engineering support.",
+      "category": "Retainer",
+      "tokenAddress": "usdc",
+      "totalAmount": "5000",
+      "briefDescription": "Provide monthly product support, bug fixes, and maintenance.",
+      "deadline": "",
+      "milestones": [
+        {
+          "title": "Week 1 Deliverables",
+          "description": "Backlog grooming and initial execution.",
+          "amount": "1250"
+        },
+        {
+          "title": "Week 2 Deliverables",
+          "description": "Mid-cycle implementation and reporting.",
+          "amount": "1250"
+        },
+        {
+          "title": "Week 3 Deliverables",
+          "description": "Second sprint delivery and validation.",
+          "amount": "1250"
+        },
+        {
+          "title": "Week 4 Deliverables",
+          "description": "Final sprint closeout and monthly handoff.",
+          "amount": "1250"
+        }
+      ]
+    },
+    {
+      "id": "retainer-growth-marketing",
+      "name": "Growth Marketing Retainer",
+      "description": "For recurring campaign planning, execution, and optimization.",
+      "category": "Retainer",
+      "tokenAddress": "usdc",
+      "totalAmount": "3600",
+      "briefDescription": "Run recurring campaigns with weekly optimization cadence.",
+      "deadline": "",
+      "milestones": [
+        {
+          "title": "Campaign Setup",
+          "description": "Audience setup, tracking, and creative launch.",
+          "amount": "1200"
+        },
+        {
+          "title": "Optimization Cycle",
+          "description": "A/B tests and budget optimization.",
+          "amount": "1200"
+        },
+        {
+          "title": "Reporting & Next Plan",
+          "description": "Performance report and next-month strategy.",
+          "amount": "1200"
+        }
+      ]
+    },
+    {
+      "id": "audit-security-review",
+      "name": "Security Audit",
+      "description": "Smart contract or application security review with findings report.",
+      "category": "Audit",
+      "tokenAddress": "usdc",
+      "totalAmount": "6000",
+      "briefDescription": "Conduct a thorough security audit and deliver a findings report with remediation guidance.",
+      "deadline": "",
+      "milestones": [
+        {
+          "title": "Scope & Kickoff",
+          "description": "Define audit scope, access credentials, and threat model.",
+          "amount": "1000"
+        },
+        {
+          "title": "Audit Execution",
+          "description": "Manual review, automated scanning, and vulnerability analysis.",
+          "amount": "3500"
+        },
+        {
+          "title": "Report & Remediation Review",
+          "description": "Deliver findings report and verify fixes for critical issues.",
+          "amount": "1500"
+        }
+      ]
+    },
+    {
+      "id": "consulting-strategy-sprint",
+      "name": "Strategy Consulting Sprint",
+      "description": "Short-term consulting engagement with defined deliverables.",
+      "category": "Consulting",
+      "tokenAddress": "usdc",
+      "totalAmount": "3000",
+      "briefDescription": "Deliver strategic recommendations through research, workshops, and a final roadmap.",
+      "deadline": "",
+      "milestones": [
+        {
+          "title": "Discovery & Research",
+          "description": "Stakeholder interviews, market research, and current-state analysis.",
+          "amount": "1000"
+        },
+        {
+          "title": "Workshop & Synthesis",
+          "description": "Facilitated workshop and synthesis of key insights.",
+          "amount": "1000"
+        },
+        {
+          "title": "Roadmap Delivery",
+          "description": "Final strategic roadmap presentation and handoff.",
+          "amount": "1000"
+        }
+      ]
+    }
+  ]
+}

@@ -7,10 +7,16 @@
  * Docs: https://stripe.com/docs/api
  */
 
-import Stripe from 'stripe';
 import prisma from '../lib/prisma.js';
+import { getCurrentTenantId, withTenantScopeBypassed } from '../lib/tenantContext.js';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-04-10' });
+let stripeClient;
+async function getStripeClient() {
+  if (stripeClient) return stripeClient;
+  const { default: Stripe } = await import('stripe');
+  stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-04-10' });
+  return stripeClient;
+}
 
 const STELLAR_HORIZON = process.env.STELLAR_HORIZON_URL || 'https://horizon-testnet.stellar.org';
 
@@ -37,7 +43,9 @@ async function getXlmUsdPrice() {
  * @returns {{ sessionId, url, paymentId }}
  */
 async function createCheckoutSession({ address, amountUsd, escrowId }) {
+  const stripe = await getStripeClient();
   const amountCents = Math.round(amountUsd * 100);
+  const tenantId = getCurrentTenantId();
 
   const session = await stripe.checkout.sessions.create({
     payment_method_types: ['card'],
@@ -55,7 +63,11 @@ async function createCheckoutSession({ address, amountUsd, escrowId }) {
         quantity: 1,
       },
     ],
-    metadata: { address, escrowId: escrowId?.toString() ?? '' },
+    metadata: {
+      address,
+      escrowId: escrowId?.toString() ?? '',
+      tenantId: tenantId ?? '',
+    },
     success_url: `${process.env.FRONTEND_URL}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${process.env.FRONTEND_URL}/payment/cancel`,
   });
@@ -77,16 +89,54 @@ async function createCheckoutSession({ address, amountUsd, escrowId }) {
  * Get payment record by Stripe session ID.
  */
 async function getBySessionId(sessionId) {
-  return prisma.payment.findUnique({ where: { stripeSessionId: sessionId } });
+  return prisma.payment.findUnique({
+    where: { stripeSessionId: sessionId },
+    select: {
+      id: true,
+      address: true,
+      escrowId: true,
+      amountFiat: true,
+      amountCrypto: true,
+      currency: true,
+      status: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+}
+
+async function getById(paymentId) {
+  return prisma.payment.findUnique({
+    where: { id: paymentId },
+    select: {
+      id: true,
+      address: true,
+      status: true,
+      stripePaymentIntent: true,
+      refundId: true,
+    },
+  });
 }
 
 /**
- * Get all payments for a Stellar address.
+ * Get payments for a Stellar address — paginated with a safe default limit.
+ * Uses the @@index([address, createdAt(sort: Desc)]) composite index.
  */
-async function getByAddress(address) {
+async function getByAddress(address, { take = 50, skip = 0 } = {}) {
   return prisma.payment.findMany({
     where: { address },
     orderBy: { createdAt: 'desc' },
+    take,
+    skip,
+    select: {
+      id: true,
+      escrowId: true,
+      amountFiat: true,
+      amountCrypto: true,
+      currency: true,
+      status: true,
+      createdAt: true,
+    },
   });
 }
 
@@ -95,7 +145,11 @@ async function getByAddress(address) {
  * @param {string} paymentId - internal Payment.id
  */
 async function refund(paymentId) {
-  const payment = await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } });
+  const stripe = await getStripeClient();
+  const payment = await prisma.payment.findUniqueOrThrow({
+    where: { id: paymentId },
+    select: { id: true, status: true, stripePaymentIntent: true },
+  });
 
   if (payment.status !== 'Completed') {
     throw new Error(`Cannot refund payment in status: ${payment.status}`);
@@ -116,6 +170,7 @@ async function refund(paymentId) {
  * Returns the updated payment record or null for unhandled events.
  */
 async function handleWebhook(rawBody, signature) {
+  const stripe = await getStripeClient();
   const event = stripe.webhooks.constructEvent(
     rawBody,
     signature,
@@ -125,6 +180,7 @@ async function handleWebhook(rawBody, signature) {
   switch (event.type) {
     case 'checkout.session.completed': {
       const session = event.data.object;
+      const tenantId = session.metadata?.tenantId || getCurrentTenantId();
       // Compute crypto equivalent
       let amountCrypto = null;
       try {
@@ -135,33 +191,47 @@ async function handleWebhook(rawBody, signature) {
         // non-fatal — conversion is informational
       }
 
-      return prisma.payment.update({
-        where: { stripeSessionId: session.id },
-        data: {
-          status: 'Completed',
-          stripePaymentIntent: session.payment_intent,
-          amountCrypto,
-        },
-      });
+      const where = {
+        stripeSessionId: session.id,
+        ...(tenantId ? { tenantId } : {}),
+      };
+
+      await withTenantScopeBypassed(() =>
+        prisma.payment.updateMany({
+          where,
+          data: {
+            status: 'Completed',
+            stripePaymentIntent: session.payment_intent,
+            amountCrypto,
+          },
+        }),
+      );
+
+      return withTenantScopeBypassed(() => prisma.payment.findFirst({ where }));
     }
 
     case 'checkout.session.expired':
     case 'payment_intent.payment_failed': {
       const obj = event.data.object;
+      const tenantId = obj.metadata?.tenantId || getCurrentTenantId();
       const where =
         obj.object === 'checkout.session'
-          ? { stripeSessionId: obj.id }
-          : { stripePaymentIntent: obj.id };
-      return prisma.payment.updateMany({ where, data: { status: 'Failed' } });
+          ? { stripeSessionId: obj.id, ...(tenantId ? { tenantId } : {}) }
+          : { stripePaymentIntent: obj.id, ...(tenantId ? { tenantId } : {}) };
+      return withTenantScopeBypassed(() =>
+        prisma.payment.updateMany({ where, data: { status: 'Failed' } }),
+      );
     }
 
     case 'charge.refunded': {
       const refundId = event.data.object.refunds?.data?.[0]?.id;
       if (refundId) {
-        return prisma.payment.updateMany({
-          where: { refundId },
-          data: { status: 'Refunded' },
-        });
+        return withTenantScopeBypassed(() =>
+          prisma.payment.updateMany({
+            where: { refundId },
+            data: { status: 'Refunded' },
+          }),
+        );
       }
       return null;
     }
@@ -171,4 +241,11 @@ async function handleWebhook(rawBody, signature) {
   }
 }
 
-export default { createCheckoutSession, getBySessionId, getByAddress, refund, handleWebhook };
+export default {
+  createCheckoutSession,
+  getById,
+  getBySessionId,
+  getByAddress,
+  refund,
+  handleWebhook,
+};

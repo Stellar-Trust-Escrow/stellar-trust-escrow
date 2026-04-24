@@ -10,81 +10,140 @@ use soroban_sdk::contracterror;
 #[repr(u32)]
 pub enum EscrowError {
     // ── Initialization ────────────────────────────────────────────────────────
-    /// Contract has already been initialized.
+    /// Contract `initialize` was called more than once.
     AlreadyInitialized = 1,
-    /// Contract has not been initialized yet.
+    /// A function that requires initialization was called before `initialize`.
     NotInitialized = 2,
 
     // ── Authorization ─────────────────────────────────────────────────────────
-    /// Caller is not authorized to perform this action.
+    /// Caller is not authorized for this operation (not client, freelancer, or a buyer signer).
     Unauthorized = 3,
-    /// Only the contract admin can perform this action.
+    /// Operation requires the contract admin address.
     AdminOnly = 4,
-    /// Only the client of this escrow can perform this action.
+    /// Operation requires the escrow client address.
     ClientOnly = 5,
-    /// Only the freelancer of this escrow can perform this action.
+    /// Operation requires the escrow freelancer address.
     FreelancerOnly = 6,
-    /// Only the designated arbiter can perform this action.
-    ArbiterOnly = 7,
 
     // ── Escrow State ──────────────────────────────────────────────────────────
-    /// The escrow ID does not exist.
+    // Note: discriminants 7 is reserved / unused.
+    /// No escrow exists for the given `escrow_id`.
     EscrowNotFound = 8,
-    /// The escrow is not in the Active state required for this operation.
+    /// Operation requires the escrow to be in `Active` status.
     EscrowNotActive = 9,
-    /// The escrow is not in a Disputed state.
+    /// Operation requires the escrow to be in `Disputed` status.
     EscrowNotDisputed = 10,
-    /// The escrow has already been completed or cancelled.
-    EscrowFinalized = 11,
-    /// Cannot cancel escrow with unreleased approved milestones.
+    // Note: discriminant 11 is reserved / unused.
+    /// Escrow cannot be cancelled while milestone funds are pending release.
     CannotCancelWithPendingFunds = 12,
 
     // ── Milestone ─────────────────────────────────────────────────────────────
-    /// The milestone ID does not exist in this escrow.
+    /// No milestone exists for the given `milestone_id` within this escrow.
     MilestoneNotFound = 13,
-    /// The milestone is not in the correct state for this operation.
+    /// The milestone is not in the required state for this operation.
     InvalidMilestoneState = 14,
-    /// Total milestone amounts exceed the escrow's total amount.
+    /// The sum of milestone amounts would exceed the escrow's `total_amount`.
     MilestoneAmountExceedsEscrow = 15,
-    /// Cannot add more milestones; maximum limit reached.
-    /// TODO (contributor): define and enforce max milestone count
+    /// Adding this milestone would exceed the maximum allowed milestone count.
     TooManyMilestones = 16,
-    /// Milestone amount must be greater than zero.
+    /// Milestone amount is zero or negative.
     InvalidMilestoneAmount = 17,
 
     // ── Funds ─────────────────────────────────────────────────────────────────
-    /// Token transfer failed.
+    /// Token transfer via the SAC client failed.
     TransferFailed = 18,
-    /// Escrow amount must be greater than zero.
+    /// Escrow `total_amount` is zero or negative.
     InvalidEscrowAmount = 19,
-    /// The deposited amount does not match the sum of milestone amounts.
-    /// TODO (contributor): decide whether to enforce strict matching
+    /// Deposited amount does not match the sum of milestone amounts.
     AmountMismatch = 20,
-
-    // ── Reputation ────────────────────────────────────────────────────────────
-    /// Reputation record not found for this address.
-    ReputationNotFound = 21,
+    /// Escrow is in an unexpected state for this funds operation.
+    InvalidEscrowState = 21,
 
     // ── Dispute ───────────────────────────────────────────────────────────────
-    /// A dispute has already been raised on this escrow.
-    DisputeAlreadyExists = 22,
-    /// Cannot raise a dispute on an escrow with no active milestones.
-    NoActiveDisputableMilestone = 23,
+    // Note: discriminant 22 is reserved / unused.
+    // Note: discriminant 24 is reserved / unused.
+    /// A dispute already exists for this escrow; only one active dispute is allowed.
+    DisputeAlreadyExists = 23,
 
     // ── Deadline ──────────────────────────────────────────────────────────────
-    /// The specified deadline is in the past.
-    InvalidDeadline = 24,
-    /// The escrow deadline has passed.
-    /// TODO (contributor): implement deadline enforcement
-    DeadlineExpired = 25,
+    /// Provided deadline is in the past or otherwise invalid.
+    InvalidDeadline = 25,
+    /// The escrow deadline has already passed.
+    DeadlineExpired = 26,
 
-    // ── Time Lock ───────────────────────────────────────────────────────────────
+    // ── Time Lock ─────────────────────────────────────────────────────────────
     /// The specified lock time is in the past.
-    InvalidLockTime = 26,
+    InvalidLockTime = 27,
     /// Funds are still locked until the lock time expires.
-    LockTimeNotExpired = 27,
+    LockTimeNotExpired = 28,
     /// The lock time has expired.
-    LockTimeExpired = 28,
+    LockTimeExpired = 29,
     /// Cannot extend lock time to the past.
-    InvalidLockTimeExtension = 29,
+    InvalidLockTimeExtension = 30,
+    /// The contract is currently paused.
+    ContractPaused = 31,
+
+    // ── Cancellation ──────────────────────────────────────────────────────────
+    /// No cancellation request exists for this escrow.
+    CancellationNotFound = 32,
+    /// A cancellation request already exists for this escrow.
+    CancellationAlreadyExists = 33,
+    /// The cancellation request has already been disputed.
+    CancellationAlreadyDisputed = 34,
+    /// The dispute window for this cancellation is still open.
+    CancellationDisputePeriodActive = 35,
+    /// The dispute deadline for this cancellation has passed.
+    CancellationDisputeDeadlineExpired = 36,
+    /// Cancellation is blocked because a dispute was raised against it.
+    CancellationDisputed = 37,
+
+    // ── Slashing ─────────────────────────────────────────────────────────────
+    /// No slash record exists for this escrow.
+    SlashNotFound = 38,
+    /// The slash has already been disputed.
+    SlashAlreadyDisputed = 39,
+    /// The dispute deadline for this slash has passed.
+    SlashDisputeDeadlineExpired = 40,
+    /// Slash amount is zero or negative.
+    InvalidSlashAmount = 41,
+
+    // ── Storage Migration ───────────────────────────────────────────────────────
+    /// An error occurred during a storage schema migration.
+    StorageMigrationFailed = 42,
+
+    // ── Recurring Payments ───────────────────────────────────────────────────
+    /// No recurring payment config exists for the given `escrow_id`.
+    RecurringConfigNotFound = 43,
+    /// Recurring schedule parameters are invalid (e.g. `start_time` in the past, no termination condition).
+    InvalidRecurringSchedule = 44,
+    /// No payment is currently due (`now < next_payment_at` or `payments_remaining == 0`).
+    NoRecurringPaymentDue = 45,
+    /// The recurring schedule is paused; call `resume_recurring_schedule` first.
+    RecurringSchedulePaused = 46,
+    /// The recurring schedule has been cancelled; no further payments can be processed.
+    RecurringScheduleCancelled = 47,
+
+    // ── Oracle ───────────────────────────────────────────────────────────────
+    /// No oracle address has been configured on the contract.
+    OracleNotConfigured = 48,
+    /// The oracle price feed has not been updated within the acceptable staleness window.
+    OraclePriceStale = 49,
+    /// The oracle returned a zero or negative price.
+    OracleInvalidPrice = 50,
+
+    // ── Timelock ─────────────────────────────────────────────────────────────
+    /// The specified timelock duration is invalid.
+    InvalidTimelockDuration = 51,
+    /// The timelock is already active.
+    TimelockAlreadyActive = 52,
+    /// The timelock has not yet expired.
+    TimelockNotExpired = 53,
+
+    // ── Bridge / Cross-Chain ─────────────────────────────────────────────────
+    /// Wrapped token not approved, transfer not found, or bridge not yet finalized.
+    BridgeError = 54,
+
+    // ── Input Validation ─────────────────────────────────────────────────────
+    /// A string argument exceeds MAX_STRING_LEN or is empty.
+    StringTooLong = 55,
 }
