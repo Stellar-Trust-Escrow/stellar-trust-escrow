@@ -9,7 +9,7 @@
 
 #![allow(dead_code)]
 
-use soroban_sdk::{symbol_short, Address, BytesN, Env};
+use soroban_sdk::{symbol_short, Address, Env};
 
 /// Emitted when a new escrow is created and funds are locked.
 ///
@@ -378,6 +378,24 @@ pub fn emit_slash_dispute_resolved(env: &Env, escrow_id: u64, upheld: bool, amou
         .publish((symbol_short!("slsh_res"), escrow_id), (upheld, amount));
 }
 
+/// Emitted when the client role is transferred to a new address.
+///
+/// # Arguments
+/// * `escrow_id`   - The escrow ID
+/// * `old_client`  - The previous client address
+/// * `new_client`  - The new client address
+pub fn emit_client_role_transferred(
+    env: &Env,
+    escrow_id: u64,
+    old_client: &Address,
+    new_client: &Address,
+) {
+    env.events().publish(
+        (symbol_short!("cl_role"), escrow_id),
+        (old_client.clone(), new_client.clone()),
+    );
+}
+
 /// Emitted when a client updates a pending milestone's title.
 ///
 /// # Arguments
@@ -404,8 +422,7 @@ pub fn emit_admin_initialized(env: &Env, admin: &Address) {
 
 /// Emitted when the admin updates the maximum milestone cap.
 pub fn emit_max_milestones_set(env: &Env, new_max: u32) {
-    env.events()
-        .publish((symbol_short!("mil_cap"),), new_max);
+    env.events().publish((symbol_short!("mil_cap"),), new_max);
 }
 
 /// Emitted when a milestone is rejected with an IPFS reason hash.
@@ -432,8 +449,6 @@ pub fn emit_rent_withdrawn(env: &Env, escrow_id: u64, recipient: &Address, amoun
 
 /// Emitted when the arbiter is updated on an escrow.
 pub fn emit_arbiter_updated(env: &Env, escrow_id: u64, new_arbiter: &Option<Address>) {
-    env.events().publish(
-        (symbol_short!("arb_upd"), escrow_id),
-        new_arbiter.clone(),
-    );
+    env.events()
+        .publish((symbol_short!("arb_upd"), escrow_id), new_arbiter.clone());
 }
