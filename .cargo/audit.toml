@@ -1,0 +1,10 @@
+# Cargo audit configuration for dependency vulnerability scanning
+# Add advisory IDs to the `ignore` list to suppress specific advisories if needed
+# Example:
+# ignore = [
+#     "RUSTSEC-2024-XXXXX",  # Description of why this advisory is ignored
+# ]
+
+[advisories]
+# Vulnerability database source
+db-urls = ["https://github.com/rustsec/advisory-db/raw/main/db.json.gz"]

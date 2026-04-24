@@ -143,11 +143,7 @@ pub enum EscrowError {
     /// Wrapped token not approved, transfer not found, or bridge not yet finalized.
     BridgeError = 54,
 
-    // ── Brief Hash ───────────────────────────────────────────────────────────
-    /// brief_hash must not be the all-zero BytesN<32>; both parties must agree to a documented brief.
-    InvalidBriefHash = 55,
-
-    // ── Buyer Signers ────────────────────────────────────────────────────────
-    /// buyer_signers list exceeds MAX_BUYER_SIGNERS; cap enforced to prevent gas exhaustion.
-    TooManyBuyerSigners = 56,
+    // ── Input Validation ─────────────────────────────────────────────────────
+    /// A string argument exceeds MAX_STRING_LEN or is empty.
+    StringTooLong = 55,
 }
