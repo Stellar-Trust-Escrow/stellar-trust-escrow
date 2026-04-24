@@ -2,8 +2,8 @@
 #[allow(clippy::module_inception)]
 mod bridge_tests {
     use crate::bridge::{BridgeProtocol, WrappedTokenInfo, MIN_BRIDGE_CONFIRMATIONS};
-    use crate::{EscrowContract, EscrowContractClient};
-    use soroban_sdk::{testutils::Address as _, Address, Env, String};
+    use crate::{EscrowContract, EscrowContractClient, EscrowError};
+    use soroban_sdk::{testutils::{Address as _, Events}, Address, Env, String, Symbol, TryFromVal, Val};
 
     fn setup() -> (Env, Address, EscrowContractClient<'static>) {
         let env = Env::default();
@@ -27,6 +27,17 @@ mod bridge_tests {
             bridge: BridgeProtocol::Wormhole,
             is_approved,
         }
+    }
+
+    fn has_topic_symbol(env: &Env, topics: &soroban_sdk::Vec<Val>, expected: Symbol) -> bool {
+        topics
+            .get(0)
+            .map(|val| {
+                Symbol::try_from_val(env, &val)
+                    .expect("event topic[0] should be a symbol")
+                    == expected
+            })
+            .unwrap_or(false)
     }
 
     // ── AC: Wrapped tokens are recognized ────────────────────────────────────
@@ -94,15 +105,15 @@ mod bridge_tests {
     #[test]
     fn test_bridge_confirmation_tracked_below_threshold() {
         let (env, _, client) = setup();
-        let transfer_id = String::from_str(&env, "transfer-001");
+        let transfer_token = Address::generate(&env);
 
         client.update_bridge_confirmation(
-            &transfer_id,
+            &transfer_token,
             &BridgeProtocol::Wormhole,
             &(MIN_BRIDGE_CONFIRMATIONS - 1),
         );
 
-        let conf = client.get_bridge_confirmation(&transfer_id).unwrap();
+        let conf = client.get_bridge_confirmation(&transfer_token).unwrap();
         assert_eq!(conf.confirmations, MIN_BRIDGE_CONFIRMATIONS - 1);
         assert!(!conf.is_finalized);
     }
@@ -110,15 +121,15 @@ mod bridge_tests {
     #[test]
     fn test_bridge_confirmation_finalized_at_threshold() {
         let (env, _, client) = setup();
-        let transfer_id = String::from_str(&env, "transfer-002");
+        let transfer_token = Address::generate(&env);
 
         client.update_bridge_confirmation(
-            &transfer_id,
+            &transfer_token,
             &BridgeProtocol::Allbridge,
             &MIN_BRIDGE_CONFIRMATIONS,
         );
 
-        let conf = client.get_bridge_confirmation(&transfer_id).unwrap();
+        let conf = client.get_bridge_confirmation(&transfer_token).unwrap();
         assert_eq!(conf.confirmations, MIN_BRIDGE_CONFIRMATIONS);
         assert!(conf.is_finalized);
         assert_eq!(conf.bridge, BridgeProtocol::Allbridge);
@@ -127,24 +138,24 @@ mod bridge_tests {
     #[test]
     fn test_bridge_confirmation_updated_incrementally() {
         let (env, _, client) = setup();
-        let transfer_id = String::from_str(&env, "transfer-003");
+        let transfer_token = Address::generate(&env);
 
-        client.update_bridge_confirmation(&transfer_id, &BridgeProtocol::Wormhole, &5);
+        client.update_bridge_confirmation(&transfer_token, &BridgeProtocol::Wormhole, &5);
         assert!(
             !client
-                .get_bridge_confirmation(&transfer_id)
+                .get_bridge_confirmation(&transfer_token)
                 .unwrap()
                 .is_finalized
         );
 
         client.update_bridge_confirmation(
-            &transfer_id,
+            &transfer_token,
             &BridgeProtocol::Wormhole,
             &MIN_BRIDGE_CONFIRMATIONS,
         );
         assert!(
             client
-                .get_bridge_confirmation(&transfer_id)
+                .get_bridge_confirmation(&transfer_token)
                 .unwrap()
                 .is_finalized
         );
@@ -153,7 +164,7 @@ mod bridge_tests {
     // ── AC: Cross-chain transfers work ────────────────────────────────────────
 
     #[test]
-    fn test_approved_wrapped_token_accepted_in_escrow() {
+    fn test_approved_wrapped_token_rejected_without_finalization() {
         let (env, admin, client) = setup();
         let token_admin = Address::generate(&env);
         let token_id = env.register_stellar_asset_contract_v2(token_admin.clone());
@@ -187,10 +198,107 @@ mod bridge_tests {
             &None,
             &multisig,
         );
-        assert!(result.is_ok());
+        assert!(matches!(result, Err(Ok(EscrowError::BridgeError))));
     }
 
     // ── AC: Token representation is canonical ────────────────────────────────
+
+    #[test]
+    fn test_bridge_confirmation_threshold_enforcement() {
+        let (env, admin, client) = setup();
+        let token_admin = Address::generate(&env);
+        let token_id = env.register_stellar_asset_contract_v2(token_admin.clone());
+        let token_addr = token_id.address();
+
+        let info = make_wrapped_token_info(&env, token_addr.clone(), true);
+        client.register_wrapped_token(&admin, &info);
+
+        let escrow_client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        soroban_sdk::token::StellarAssetClient::new(&env, &token_addr).mint(&escrow_client, &1030);
+
+        client.update_bridge_confirmation(
+            &token_addr,
+            &BridgeProtocol::Wormhole,
+            &(MIN_BRIDGE_CONFIRMATIONS - 1),
+        );
+
+        let conf = client.get_bridge_confirmation(&token_addr).unwrap();
+        assert_eq!(conf.confirmations, MIN_BRIDGE_CONFIRMATIONS - 1);
+        assert!(!conf.is_finalized);
+
+        let events = env.events().all();
+        let event = events
+            .iter()
+            .find(|(_, topics, _)| {
+                has_topic_symbol(&env, topics, soroban_sdk::symbol_short!("brg_cnf"))
+                    && Address::try_from_val(&env, &topics.get(1).unwrap()).unwrap() == token_addr
+            })
+            .expect("expected brg_cnf event for 14 confirmations");
+        let (emitted_confirmations, emitted_is_finalized): (u32, bool) =
+            soroban_sdk::FromVal::from_val(&env, &event.2);
+        assert_eq!(emitted_confirmations, MIN_BRIDGE_CONFIRMATIONS - 1);
+        assert!(!emitted_is_finalized);
+
+        let brief_hash = soroban_sdk::BytesN::from_array(&env, &[0u8; 32]);
+        let multisig = crate::MultisigConfig {
+            approvers: soroban_sdk::Vec::new(&env),
+            weights: soroban_sdk::Vec::new(&env),
+            threshold: 0,
+        };
+
+        let result = client.try_create_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_addr,
+            &1000i128,
+            &brief_hash,
+            &None,
+            &None,
+            &None,
+            &None,
+            &multisig,
+        );
+        assert!(matches!(result, Err(Ok(EscrowError::BridgeError))));
+
+        client.update_bridge_confirmation(
+            &token_addr,
+            &BridgeProtocol::Wormhole,
+            &MIN_BRIDGE_CONFIRMATIONS,
+        );
+
+        let conf = client.get_bridge_confirmation(&token_addr).unwrap();
+        assert_eq!(conf.confirmations, MIN_BRIDGE_CONFIRMATIONS);
+        assert!(conf.is_finalized);
+
+        let events = env.events().all();
+        let event = events
+            .iter()
+            .rev()
+            .find(|(_, topics, _)| {
+                has_topic_symbol(&env, topics, soroban_sdk::symbol_short!("brg_cnf"))
+                    && Address::try_from_val(&env, &topics.get(1).unwrap()).unwrap() == token_addr
+            })
+            .expect("expected brg_cnf event for 15 confirmations");
+        let (emitted_confirmations, emitted_is_finalized): (u32, bool) =
+            soroban_sdk::FromVal::from_val(&env, &event.2);
+        assert_eq!(emitted_confirmations, MIN_BRIDGE_CONFIRMATIONS);
+        assert!(emitted_is_finalized);
+
+        let result = client.try_create_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_addr,
+            &1000i128,
+            &brief_hash,
+            &None,
+            &None,
+            &None,
+            &None,
+            &multisig,
+        );
+        assert!(result.is_ok());
+    }
 
     #[test]
     fn test_canonical_token_metadata_preserved() {
