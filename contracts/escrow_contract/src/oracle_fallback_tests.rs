@@ -2,7 +2,7 @@
 mod oracle_fallback_tests {
     use crate::oracle::{PriceData, PRICE_STALENESS_THRESHOLD};
     use crate::{EscrowContract, EscrowContractClient, EscrowError};
-    use soroban_sdk::{
+    use soroban_sdk::{testutils::Ledger as _,
         contract, contractimpl, testutils::Address as _, Address, Env,
     };
 
@@ -64,7 +64,7 @@ mod oracle_fallback_tests {
         client.set_oracle(&admin, &primary);
         client.set_fallback_oracle(&admin, &fallback);
 
-        env.ledger().set_timestamp(now);
+        env.ledger().with_mut(|l| l.timestamp = now);
 
         let asset = Address::generate(&env);
         let price = client.get_price(&asset);
@@ -85,7 +85,7 @@ mod oracle_fallback_tests {
         client.set_oracle(&admin, &primary);
         client.set_fallback_oracle(&admin, &fallback);
 
-        env.ledger().set_timestamp(now);
+        env.ledger().with_mut(|l| l.timestamp = now);
 
         let asset = Address::generate(&env);
         let result = client.try_get_price(&asset);
@@ -111,7 +111,7 @@ mod oracle_fallback_tests {
         client.set_oracle(&admin, &primary);
         client.set_fallback_oracle(&admin, &fallback);
 
-        env.ledger().set_timestamp(now);
+        env.ledger().with_mut(|l| l.timestamp = now);
 
         let asset = Address::generate(&env);
         let price = client.get_price(&asset);

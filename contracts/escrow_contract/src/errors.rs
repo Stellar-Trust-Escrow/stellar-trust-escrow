@@ -56,9 +56,6 @@ pub enum EscrowError {
     InvalidEscrowAmount = 19,
     /// Deposited amount does not match the sum of milestone amounts.
     AmountMismatch = 20,
-    /// Escrow is in an unexpected state for this funds operation.
-    InvalidEscrowState = 21,
-
     // ── Dispute ───────────────────────────────────────────────────────────────
     // Note: discriminant 22 is reserved / unused.
     // Note: discriminant 24 is reserved / unused.
@@ -104,8 +101,6 @@ pub enum EscrowError {
     SlashAlreadyDisputed = 39,
     /// The dispute deadline for this slash has passed.
     SlashDisputeDeadlineExpired = 40,
-    /// Slash amount is zero or negative.
-    InvalidSlashAmount = 41,
 
     // ── Storage Migration ───────────────────────────────────────────────────────
     /// An error occurred during a storage schema migration.

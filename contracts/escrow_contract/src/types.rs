@@ -512,4 +512,8 @@ pub enum DataKey {
     WormholeBridge,
     /// Configurable milestone cap set by admin — value: u32
     MaxMilestones,
+    /// Meta-transaction nonce per signer — key: Address, value: u64
+    MetaTxNonce(Address),
+    /// Storage migration cursor — value: u64
+    MigrationCursor,
 }
