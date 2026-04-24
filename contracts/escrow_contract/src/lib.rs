@@ -4246,6 +4246,68 @@ mod tests {
         assert_eq!(mid, 0);
     }
 
+    // ── Issue #660: Pause tests for remaining mutating functions ─────────────
+
+    #[test]
+    #[should_panic]
+    fn test_reject_milestone_blocked_when_paused() {
+        let (env, admin, escrow_client, freelancer, _, escrow_id, client) =
+            setup_pause_escrow(100);
+        let mid = client.add_milestone(
+            &escrow_client,
+            &escrow_id,
+            &String::from_str(&env, "M1"),
+            &BytesN::from_array(&env, &[0u8; 32]),
+            &50_i128,
+        );
+        client.submit_milestone(&freelancer, &escrow_id, &mid);
+        client.pause(&admin);
+        client.reject_milestone(&escrow_client, &escrow_id, &mid);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_release_funds_blocked_when_paused() {
+        let (env, admin, escrow_client, freelancer, _, escrow_id, client) =
+            setup_pause_escrow(100);
+        let mid = client.add_milestone(
+            &escrow_client,
+            &escrow_id,
+            &String::from_str(&env, "M1"),
+            &BytesN::from_array(&env, &[0u8; 32]),
+            &50_i128,
+        );
+        client.submit_milestone(&freelancer, &escrow_id, &mid);
+        client.approve_milestone(&escrow_client, &escrow_id, &mid);
+        client.pause(&admin);
+        client.release_funds(&escrow_client, &escrow_id, &mid);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_start_timelock_blocked_when_paused() {
+        let (_env, admin, escrow_client, _, _, escrow_id, client) = setup_pause_escrow(100);
+        client.pause(&admin);
+        client.start_timelock(&escrow_client, &escrow_id, &3600_u64);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_extend_lock_time_blocked_when_paused() {
+        let (env, admin, escrow_client, _, _, escrow_id, client) = setup_pause_escrow(100);
+        client.pause(&admin);
+        let future = env.ledger().timestamp() + 7200;
+        client.extend_lock_time(&escrow_client, &escrow_id, &future);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_process_recurring_payments_blocked_when_paused() {
+        let (_env, admin, _, _, _, escrow_id, client) = setup_pause_escrow(100);
+        client.pause(&admin);
+        client.process_recurring_payments(&escrow_id);
+    }
+
     // ── Task 1: get_recurring_schedule_status ─────────────────────────────────
 
     #[test]
