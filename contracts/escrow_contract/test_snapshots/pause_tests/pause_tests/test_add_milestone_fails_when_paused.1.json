@@ -78,7 +78,36 @@
                 },
                 "void",
                 "void",
-                "void"
+                "void",
+                "void",
+                {
+                  "map": [
+                    {
+                      "key": {
+                        "symbol": "approvers"
+                      },
+                      "val": {
+                        "vec": []
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "threshold"
+                      },
+                      "val": {
+                        "u32": 0
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "weights"
+                      },
+                      "val": {
+                        "vec": []
+                      }
+                    }
+                  ]
+                }
               ]
             }
           },
@@ -363,6 +392,18 @@
                     },
                     {
                       "key": {
+                        "symbol": "buyer_signers"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "client"
                       },
                       "val": {
@@ -429,6 +470,14 @@
                     },
                     {
                       "key": {
+                        "symbol": "released_count"
+                      },
+                      "val": {
+                        "u32": 0
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "remaining_balance"
                       },
                       "val": {
@@ -457,6 +506,26 @@
                         "vec": [
                           {
                             "symbol": "Active"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "submitted_count"
+                      },
+                      "val": {
+                        "u32": 0
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "timelock"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "symbol": "None"
                           }
                         ]
                       }
@@ -1181,7 +1250,36 @@
                 },
                 "void",
                 "void",
-                "void"
+                "void",
+                "void",
+                {
+                  "map": [
+                    {
+                      "key": {
+                        "symbol": "approvers"
+                      },
+                      "val": {
+                        "vec": []
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "threshold"
+                      },
+                      "val": {
+                        "u32": 0
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "weights"
+                      },
+                      "val": {
+                        "vec": []
+                      }
+                    }
+                  ]
+                }
               ]
             }
           }

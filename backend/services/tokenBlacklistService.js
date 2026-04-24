@@ -1,12 +1,14 @@
 /**
  * Token Blacklist Service
- * 
+ *
  * Provides Redis-based token blacklisting for immediate revocation of compromised tokens.
  * Supports both access tokens and refresh tokens with TTL-based expiration.
  */
 
 import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
 import cacheService from './cacheService.js';
+import { withTenantScopeBypassed } from '../lib/tenantContext.js';
 
 const BLACKLIST_PREFIX = 'blacklist:';
 const ACCESS_TOKEN_TTL = 15 * 60; // 15 minutes
@@ -28,17 +30,17 @@ function hashToken(token) {
 async function blacklistToken(token, type = 'access', reason = 'compromised') {
   const tokenHash = hashToken(token);
   const key = `${BLACKLIST_PREFIX}${type}:${tokenHash}`;
-  
+
   const ttl = type === 'access' ? ACCESS_TOKEN_TTL : REFRESH_TOKEN_TTL;
   const metadata = {
     blacklistedAt: new Date().toISOString(),
     reason,
     type,
-    expiresAt: new Date(Date.now() + ttl * 1000).toISOString()
+    expiresAt: new Date(Date.now() + ttl * 1000).toISOString(),
   };
 
-  await cacheService.set(key, metadata, ttl);
-  
+  await withTenantScopeBypassed(() => cacheService.set(key, metadata, ttl));
+
   console.log(`[TokenBlacklist] Token blacklisted: ${type} - ${reason}`);
   return true;
 }
@@ -51,9 +53,18 @@ async function blacklistToken(token, type = 'access', reason = 'compromised') {
 async function isTokenBlacklisted(token, type = 'access') {
   const tokenHash = hashToken(token);
   const key = `${BLACKLIST_PREFIX}${type}:${tokenHash}`;
-  
-  const blacklisted = await cacheService.get(key);
-  return blacklisted !== null;
+
+  const blacklisted = await withTenantScopeBypassed(() => cacheService.get(key));
+  if (blacklisted !== null) {
+    return true;
+  }
+
+  const decoded = jwt.decode(token);
+  if (type === 'refresh' && decoded?.userId && decoded?.tenantId) {
+    return areAllUserTokensBlacklisted(decoded.userId, decoded.tenantId);
+  }
+
+  return false;
 }
 
 /**
@@ -64,8 +75,24 @@ async function isTokenBlacklisted(token, type = 'access') {
 async function getBlacklistMetadata(token, type = 'access') {
   const tokenHash = hashToken(token);
   const key = `${BLACKLIST_PREFIX}${type}:${tokenHash}`;
-  
-  return await cacheService.get(key);
+
+  const metadata = await withTenantScopeBypassed(() => cacheService.get(key));
+  if (metadata) {
+    return metadata;
+  }
+
+  const decoded = jwt.decode(token);
+  if (type === 'refresh' && decoded?.userId && decoded?.tenantId) {
+    const allTokensMetadata = await withTenantScopeBypassed(() =>
+      cacheService.get(`${BLACKLIST_PREFIX}user:${decoded.tenantId}:${decoded.userId}`),
+    );
+
+    if (allTokensMetadata) {
+      return allTokensMetadata;
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -76,8 +103,8 @@ async function getBlacklistMetadata(token, type = 'access') {
 async function removeFromBlacklist(token, type = 'access') {
   const tokenHash = hashToken(token);
   const key = `${BLACKLIST_PREFIX}${type}:${tokenHash}`;
-  
-  await cacheService.invalidate(key);
+
+  await withTenantScopeBypassed(() => cacheService.invalidate(key));
   console.log(`[TokenBlacklist] Token removed from blacklist: ${type}`);
   return true;
 }
@@ -95,10 +122,10 @@ async function blacklistAllUserTokens(userId, tenantId, reason = 'security_incid
   const metadata = {
     blacklistedAt: new Date().toISOString(),
     reason,
-    allTokens: true
+    allTokens: true,
   };
-  
-  await cacheService.set(key, metadata, REFRESH_TOKEN_TTL);
+
+  await withTenantScopeBypassed(() => cacheService.set(key, metadata, REFRESH_TOKEN_TTL));
   console.log(`[TokenBlacklist] All tokens blacklisted for user ${userId} in tenant ${tenantId}`);
   return true;
 }
@@ -110,7 +137,7 @@ async function blacklistAllUserTokens(userId, tenantId, reason = 'security_incid
  */
 async function areAllUserTokensBlacklisted(userId, tenantId) {
   const key = `${BLACKLIST_PREFIX}user:${tenantId}:${userId}`;
-  const blacklisted = await cacheService.get(key);
+  const blacklisted = await withTenantScopeBypassed(() => cacheService.get(key));
   return blacklisted !== null;
 }
 
@@ -130,7 +157,7 @@ async function getBlacklistStats() {
   // For now, return basic info
   return {
     backend: cacheService.analytics().backend,
-    message: 'Stats available through Redis monitoring tools'
+    message: 'Stats available through Redis monitoring tools',
   };
 }
 
@@ -143,5 +170,5 @@ export default {
   areAllUserTokensBlacklisted,
   cleanupExpiredEntries,
   getBlacklistStats,
-  hashToken
+  hashToken,
 };

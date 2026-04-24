@@ -513,6 +513,97 @@ mod tests {
         assert!(result.is_err());
     }
 
+    // ── Issue #658: Quorum not reached → Defeated ─────────────────────────────
+
+    #[test]
+    fn test_governance_quorum_not_reached_defeated() {
+        let (env, admin, ta, token, client) = setup();
+
+        // Raise quorum to 10%
+        let mut config = client.get_config();
+        config.quorum_bps = 1_000;
+        client.update_config(&admin, &config);
+
+        let proposer = Address::generate(&env);
+        let voter = Address::generate(&env);
+        let whale = Address::generate(&env);
+
+        // total supply = 100_000; 10% quorum = 10_000; voter only has 500 (< 10%)
+        mint(&env, &ta, &token, &proposer, THRESHOLD);
+        mint(&env, &ta, &token, &voter, 500);
+        mint(&env, &ta, &token, &whale, 99_400);
+
+        let id = client.create_proposal(
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
+            &100_000i128,
+        );
+
+        advance(&env, VOTING_DELAY + 1);
+        client.cast_vote(&voter, &id, &true);
+
+        advance(&env, VOTING_PERIOD);
+        let status = client.finalize_proposal(&id);
+        assert_eq!(status, ProposalStatus::Defeated);
+
+        let p = client.get_proposal(&id);
+        assert_eq!(p.status, ProposalStatus::Defeated);
+
+        // execute_proposal on a Defeated proposal must fail
+        let result = client.try_execute_proposal(&id);
+        assert!(result.is_err());
+    }
+
+    // ── Issue #659: cancel_proposal edge cases ────────────────────────────────
+
+    #[test]
+    fn test_cast_vote_after_cancel_fails() {
+        let (env, _admin, ta, token, client) = setup();
+        let proposer = Address::generate(&env);
+        let voter = Address::generate(&env);
+        mint(&env, &ta, &token, &proposer, THRESHOLD);
+        mint(&env, &ta, &token, &voter, 1_000);
+
+        let id = client.create_proposal(
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
+            &10_000i128,
+        );
+
+        client.cancel_proposal(&proposer, &id);
+        assert_eq!(client.get_proposal(&id).status, ProposalStatus::Cancelled);
+
+        advance(&env, VOTING_DELAY + 1);
+        let result = client.try_cast_vote(&voter, &id, &true);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_double_cancel_fails() {
+        let (env, _admin, ta, token, client) = setup();
+        let proposer = Address::generate(&env);
+        mint(&env, &ta, &token, &proposer, THRESHOLD);
+
+        let id = client.create_proposal(
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
+            &10_000i128,
+        );
+
+        client.cancel_proposal(&proposer, &id);
+        let result = client.try_cancel_proposal(&proposer, &id);
+        assert!(result.is_err());
+    }
+
     // ── Config update ─────────────────────────────────────────────────────────
 
     #[test]
