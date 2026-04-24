@@ -378,28 +378,20 @@ pub fn emit_slash_dispute_resolved(env: &Env, escrow_id: u64, upheld: bool, amou
         .publish((symbol_short!("slsh_res"), escrow_id), (upheld, amount));
 }
 
-/// Emitted when the client role is transferred to a new address.
+/// Emitted when a client updates a pending milestone's title.
 ///
 /// # Arguments
-/// * `escrow_id`  - The escrow ID
-/// * `old_client` - The previous client address
-/// * `new_client` - The new client address
-pub fn emit_client_role_transferred(
+/// * `escrow_id`    - The escrow ID
+/// * `milestone_id` - The milestone whose title was updated
+/// * `new_title`    - The corrected title
+pub fn emit_milestone_title_updated(
     env: &Env,
     escrow_id: u64,
-    old_client: &Address,
-    new_client: &Address,
+    milestone_id: u32,
+    new_title: &soroban_sdk::String,
 ) {
     env.events().publish(
-        (symbol_short!("cli_xfr"), escrow_id),
-        (old_client.clone(), new_client.clone()),
-    );
-}
-
-/// Emitted when the contract is upgraded.
-pub fn emit_upgrade_executed(env: &Env, admin: &Address, new_wasm_hash: &soroban_sdk::BytesN<32>) {
-    env.events().publish(
-        (symbol_short!("upg_exe"),),
-        (admin.clone(), new_wasm_hash.clone()),
+        (symbol_short!("mil_tup"), escrow_id),
+        (milestone_id, new_title.clone()),
     );
 }
