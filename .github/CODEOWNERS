@@ -1,0 +1,9 @@
+# CODEOWNERS
+#
+# This file makes you a required reviewer on every PR automatically.
+# Combined with branch protection rules, nothing reaches `main` without
+# your explicit approval — and contributors cannot push to main at all.
+#
+# Replace @your-github-username with your actual GitHub handle.
+
+* @your-github-username

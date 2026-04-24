@@ -12,12 +12,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import {
-  RadialBarChart,
-  RadialBar,
-  ResponsiveContainer,
-  Tooltip,
-} from 'recharts';
+import { RadialBarChart, RadialBar, ResponsiveContainer, Tooltip } from 'recharts';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -58,7 +53,12 @@ function SuccessRateChart({ rate }) {
                 <RadialBar dataKey="value" cornerRadius={4} />
                 <Tooltip
                   formatter={(v) => [`${v}%`, 'Success']}
-                  contentStyle={{ background: '#1f2937', border: 'none', borderRadius: 8, fontSize: 12 }}
+                  contentStyle={{
+                    background: '#1f2937',
+                    border: 'none',
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
                   itemStyle={{ color: '#e5e7eb' }}
                 />
               </RadialBarChart>
@@ -78,7 +78,9 @@ function StatWidget({ label, value, icon, color = 'text-white', sub }) {
     <div className="card flex flex-col gap-2 group hover:border-indigo-500/40 transition-colors duration-200">
       <div className="flex items-center justify-between">
         <p className="text-xs text-gray-500 uppercase tracking-wider">{label}</p>
-        <span className="text-lg opacity-60 group-hover:opacity-100 transition-opacity">{icon}</span>
+        <span className="text-lg opacity-60 group-hover:opacity-100 transition-opacity">
+          {icon}
+        </span>
       </div>
       <p className={`text-2xl font-bold ${color}`}>{value ?? '—'}</p>
       {sub && <p className="text-xs text-gray-600">{sub}</p>}
@@ -94,7 +96,10 @@ export default function StatWidgets({ address }) {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!address) { setLoading(false); return; }
+    if (!address) {
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     fetch(`${API_BASE}/api/escrows/stats/${address}`)
@@ -109,8 +114,10 @@ export default function StatWidgets({ address }) {
 
   if (loading) {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <SkeletonCard key={i} />
+        ))}
       </div>
     );
   }
@@ -126,7 +133,7 @@ export default function StatWidgets({ address }) {
   // Empty state — user has no escrows yet
   if (!stats || stats.total === 0) {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <StatWidget label="Total Escrows" value={0} icon="📦" />
         <StatWidget label="Active" value={0} icon="🔒" color="text-indigo-400" />
         <StatWidget label="Completed" value={0} icon="✅" color="text-emerald-400" />
@@ -138,14 +145,18 @@ export default function StatWidgets({ address }) {
   }
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
       <StatWidget label="Total Escrows" value={stats.total} icon="📦" />
       <StatWidget label="Active" value={stats.active} icon="🔒" color="text-indigo-400" />
       <StatWidget label="Completed" value={stats.completed} icon="✅" color="text-emerald-400" />
       <StatWidget label="Disputed" value={stats.disputed} icon="⚠️" color="text-amber-400" />
       <StatWidget
         label="Total Locked"
-        value={stats.totalValueLocked ? Number(BigInt(stats.totalValueLocked) / BigInt(1e7)).toLocaleString() : '0'}
+        value={
+          stats.totalValueLocked
+            ? Number(BigInt(stats.totalValueLocked) / BigInt(1e7)).toLocaleString()
+            : '0'
+        }
         icon="💰"
         sub="stroops → tokens"
       />
