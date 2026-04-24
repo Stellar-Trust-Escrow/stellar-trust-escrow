@@ -1,4 +1,5 @@
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod transfer_client_tests {
     use crate::{EscrowContract, EscrowContractClient, EscrowError, MultisigConfig};
     use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
@@ -88,8 +89,13 @@ mod transfer_client_tests {
         let freelancer = Address::generate(&env);
         let arbiter = Address::generate(&env);
 
-        let escrow_id =
-            create_escrow(&env, &client, &escrow_client, &freelancer, Some(arbiter.clone()));
+        let escrow_id = create_escrow(
+            &env,
+            &client,
+            &escrow_client,
+            &freelancer,
+            Some(arbiter.clone()),
+        );
 
         let result = client.try_transfer_client_role(&escrow_id, &arbiter);
         assert!(

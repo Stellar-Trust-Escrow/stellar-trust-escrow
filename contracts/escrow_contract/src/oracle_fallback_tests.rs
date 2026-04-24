@@ -1,9 +1,10 @@
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod oracle_fallback_tests {
     use crate::oracle::{PriceData, PRICE_STALENESS_THRESHOLD};
     use crate::{EscrowContract, EscrowContractClient, EscrowError};
-    use soroban_sdk::{testutils::Ledger as _,
-        contract, contractimpl, testutils::Address as _, Address, Env,
+    use soroban_sdk::{
+        contract, contractimpl, testutils::Address as _, testutils::Ledger as _, Address, Env,
     };
 
     // ── Mock oracle contracts ─────────────────────────────────────────────────
@@ -56,7 +57,7 @@ mod oracle_fallback_tests {
 
         let now: u64 = 10_000;
         let stale_ts = now - PRICE_STALENESS_THRESHOLD - 1; // older than threshold
-        let fresh_ts = now - 1;                              // within threshold
+        let fresh_ts = now - 1; // within threshold
 
         let primary = register_mock_oracle(&env, 1_000_000, stale_ts);
         let fallback = register_mock_oracle(&env, 2_000_000, fresh_ts);
@@ -68,7 +69,10 @@ mod oracle_fallback_tests {
 
         let asset = Address::generate(&env);
         let price = client.get_price(&asset);
-        assert_eq!(price, 2_000_000, "should return fallback price when primary is stale");
+        assert_eq!(
+            price, 2_000_000,
+            "should return fallback price when primary is stale"
+        );
     }
 
     /// Both oracles return stale prices → get_price must return OraclePriceStale.
@@ -115,6 +119,9 @@ mod oracle_fallback_tests {
 
         let asset = Address::generate(&env);
         let price = client.get_price(&asset);
-        assert_eq!(price, 5_000_000, "should return primary price when it is fresh");
+        assert_eq!(
+            price, 5_000_000,
+            "should return primary price when it is fresh"
+        );
     }
 }
