@@ -1,0 +1,12 @@
+[package]
+name = "stellar-trust-shared"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Shared constants and configuration for StellarTrustEscrow contracts"
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+# No external deps — pure constants only
