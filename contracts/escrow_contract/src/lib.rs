@@ -56,6 +56,7 @@ mod bridge_tests;
 mod errors;
 mod event_tests;
 mod events;
+mod lock_time_tests;
 mod oracle;
 mod pause_tests;
 mod types;
