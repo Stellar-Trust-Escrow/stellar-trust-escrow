@@ -884,34 +884,34 @@ impl EscrowContract {
         bridge::get_wrapped_token_info(&env, &token)
     }
 
-    /// Record or update bridge confirmation state for a cross-chain transfer.
+    /// Record or update bridge confirmation state for a bridged token.
     /// Anyone may call this; finality is determined by `MIN_BRIDGE_CONFIRMATIONS`.
     pub fn update_bridge_confirmation(
         env: Env,
-        transfer_id: String,
+        token: Address,
         bridge_protocol: bridge::BridgeProtocol,
         confirmations: u32,
     ) -> Result<(), EscrowError> {
         ContractStorage::require_initialized(&env)?;
         let is_finalized = confirmations >= bridge::MIN_BRIDGE_CONFIRMATIONS;
         let conf = bridge::BridgeConfirmation {
-            transfer_id: transfer_id.clone(),
+            token: token.clone(),
             bridge: bridge_protocol,
             confirmations,
             is_finalized,
             updated_at: env.ledger().timestamp(),
         };
         bridge::record_bridge_confirmation(&env, &conf);
-        bridge::emit_bridge_confirmation_updated(&env, &transfer_id, confirmations, is_finalized);
+        bridge::emit_bridge_confirmation_updated(&env, &token, confirmations, is_finalized);
         Ok(())
     }
 
-    /// Return bridge confirmation state for a transfer ID.
+    /// Return bridge confirmation state for a bridged token.
     pub fn get_bridge_confirmation(
         env: Env,
-        transfer_id: String,
+        token: Address,
     ) -> Option<bridge::BridgeConfirmation> {
-        bridge::get_bridge_confirmation(&env, &transfer_id)
+        bridge::get_bridge_confirmation(&env, &token)
     }
 
     // ── Escrow Lifecycle ──────────────────────────────────────────────────────
