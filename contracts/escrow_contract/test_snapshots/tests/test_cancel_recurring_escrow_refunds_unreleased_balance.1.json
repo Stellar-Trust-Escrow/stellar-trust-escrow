@@ -616,6 +616,18 @@
                     },
                     {
                       "key": {
+                        "symbol": "price_condition"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "symbol": "None"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "resolved_at"
                       },
                       "val": {
@@ -2577,6 +2589,18 @@
                             },
                             "val": {
                               "u32": 0
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "price_condition"
+                            },
+                            "val": {
+                              "vec": [
+                                {
+                                  "symbol": "None"
+                                }
+                              ]
                             }
                           },
                           {

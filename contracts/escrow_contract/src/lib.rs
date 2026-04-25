@@ -57,6 +57,7 @@ mod errors;
 mod event_tests;
 mod events;
 mod oracle;
+mod oracle_tests;
 mod pause_tests;
 mod types;
 mod upgrade_tests;
@@ -66,8 +67,8 @@ use storage::StorageManager;
 use types::{CancellationRequest, RecurringInterval, RecurringPaymentConfig, SlashRecord};
 pub use types::{
     DataKey, EscrowState, EscrowStatus, Milestone, MilestoneStatus, MultisigConfig,
-    OptionalTimelock, ReputationRecord, Timelock, MS_APPROVED, MS_DISPUTED, MS_PENDING,
-    MS_REJECTED, MS_RELEASED, MS_SUBMITTED,
+    OptionalPriceCondition, OptionalTimelock, PriceCondition, PriceDirection, ReputationRecord,
+    Timelock, MS_APPROVED, MS_DISPUTED, MS_PENDING, MS_REJECTED, MS_RELEASED, MS_SUBMITTED,
 };
 
 use soroban_sdk::{
@@ -892,6 +893,160 @@ impl EscrowContract {
         )
     }
 
+    /// Adds a milestone with a price-based release condition.
+    ///
+    /// Identical to `add_milestone` but stores a `PriceCondition` on the
+    /// milestone. Funds are released automatically when `trigger_oracle_release`
+    /// is called and the condition is satisfied.
+    pub fn create_price_indexed_milestone(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+        title: String,
+        description_hash: BytesN<32>,
+        amount: i128,
+        price_condition: PriceCondition,
+    ) -> Result<u32, EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_not_paused(&env)?;
+
+        if amount <= 0 {
+            return Err(EscrowError::InvalidMilestoneAmount);
+        }
+
+        let mut meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
+
+        if caller != meta.client {
+            return Err(EscrowError::ClientOnly);
+        }
+        if meta.status != EscrowStatus::Active {
+            return Err(EscrowError::EscrowNotActive);
+        }
+        if meta.allocated_amount + amount > meta.total_amount {
+            return Err(EscrowError::MilestoneAmountExceedsEscrow);
+        }
+
+        let milestone_id = meta.milestone_count;
+        meta.milestone_count = meta
+            .milestone_count
+            .checked_add(1)
+            .ok_or(EscrowError::AmountMismatch)?;
+        meta.allocated_amount = meta
+            .allocated_amount
+            .checked_add(amount)
+            .ok_or(EscrowError::AmountMismatch)?;
+
+        ContractStorage::save_milestone(
+            &env,
+            escrow_id,
+            &Milestone {
+                id: milestone_id,
+                title,
+                description_hash,
+                amount,
+                status: MS_PENDING,
+                submitted_at: None,
+                resolved_at: None,
+                approvals: soroban_sdk::Vec::new(&env),
+                price_condition: OptionalPriceCondition::Some(price_condition),
+            },
+        );
+        ContractStorage::save_escrow_meta(&env, &meta);
+
+        events::emit_milestone_added(&env, escrow_id, milestone_id, amount);
+        Ok(milestone_id)
+    }
+
+    /// Checks the oracle price for a price-indexed milestone and releases funds
+    /// if the condition is met.
+    ///
+    /// Returns `EscrowError::InvalidMilestoneState` if the price condition
+    /// is not yet satisfied, or if the milestone has no price condition.
+    pub fn trigger_oracle_release(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+        milestone_id: u32,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_initialized(&env)?;
+        ContractStorage::require_not_paused(&env)?;
+
+        let mut meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
+        if meta.status != EscrowStatus::Active {
+            return Err(EscrowError::EscrowNotActive);
+        }
+
+        let mut milestone = ContractStorage::load_milestone(&env, escrow_id, milestone_id)?;
+        if milestone.status != MS_PENDING {
+            return Err(EscrowError::InvalidMilestoneState);
+        }
+
+        let condition = match milestone.price_condition.clone() {
+            OptionalPriceCondition::Some(c) => c,
+            OptionalPriceCondition::None => return Err(EscrowError::InvalidMilestoneState),
+        };
+
+        let current_price = oracle::get_price_usd(&env, &condition.asset)?;
+
+        let condition_met = match condition.direction {
+            PriceDirection::Above => current_price >= condition.target_price_usd,
+            PriceDirection::Below => current_price <= condition.target_price_usd,
+        };
+
+        if !condition_met {
+            return Err(EscrowError::InvalidMilestoneState);
+        }
+
+        let now = env.ledger().timestamp();
+        let amount = milestone.amount;
+
+        milestone.status = MS_RELEASED;
+        milestone.submitted_at = Some(now);
+        milestone.resolved_at = Some(now);
+        ContractStorage::save_milestone(&env, escrow_id, &milestone);
+
+        meta.remaining_balance = meta
+            .remaining_balance
+            .checked_sub(amount)
+            .ok_or(EscrowError::AmountMismatch)?;
+        meta.approved_count = meta
+            .approved_count
+            .checked_add(1)
+            .ok_or(EscrowError::AmountMismatch)?;
+        meta.released_count = meta
+            .released_count
+            .checked_add(1)
+            .ok_or(EscrowError::AmountMismatch)?;
+
+        token::Client::new(&env, &meta.token).transfer(
+            &env.current_contract_address(),
+            &meta.freelancer,
+            &amount,
+        );
+
+        events::emit_milestone_approved(&env, escrow_id, milestone_id, amount);
+        events::emit_funds_released(&env, escrow_id, &meta.freelancer, amount);
+
+        if meta.released_count == meta.milestone_count && meta.milestone_count > 0 {
+            meta.status = EscrowStatus::Completed;
+            Self::remove_from_vec_index(
+                &env,
+                &DataKey::EscrowsByStatus(EscrowStatus::Active),
+                escrow_id,
+            );
+            Self::append_to_vec_index(
+                &env,
+                &DataKey::EscrowsByStatus(EscrowStatus::Completed),
+                escrow_id,
+            );
+            events::emit_escrow_completed(&env, escrow_id);
+        }
+
+        ContractStorage::save_escrow_meta(&env, &meta);
+        Ok(())
+    }
+
     fn create_escrow_internal(
         env: Env,
         client: Address,
@@ -1150,6 +1305,7 @@ impl EscrowContract {
                 submitted_at: None,
                 resolved_at: None,
                 approvals: soroban_sdk::Vec::new(&env),
+                price_condition: OptionalPriceCondition::None,
             },
         );
         ContractStorage::save_escrow_meta(&env, &meta);
@@ -1242,6 +1398,7 @@ impl EscrowContract {
                     submitted_at: None,
                     resolved_at: None,
                     approvals: soroban_sdk::Vec::new(&env),
+                    price_condition: OptionalPriceCondition::None,
                 },
             );
             events::emit_milestone_added(
@@ -1498,6 +1655,7 @@ impl EscrowContract {
                     submitted_at: Some(recurring.next_payment_at),
                     resolved_at: Some(now),
                     approvals: soroban_sdk::Vec::new(&env),
+                    price_condition: OptionalPriceCondition::None,
                 },
             );
 
