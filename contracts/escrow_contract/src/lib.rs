@@ -89,6 +89,8 @@ const RENT_PERIOD_SECONDS: u64 = 86_400;
 const RENT_RESERVE_PERIODS: u64 = 30;
 const RENT_PER_ENTRY_PER_PERIOD: i128 = 1;
 pub const MAX_MILESTONES: u32 = 20;
+/// Minimum escrow amount in stroops (1 XLM).
+pub const MIN_ESCROW_AMOUNT: i128 = 10_000_000i128;
 
 // ── Granular storage keys ─────────────────────────────────────────────────────
 // Separate keys for meta vs each milestone avoids deserialising the full
@@ -909,7 +911,7 @@ impl EscrowContract {
         ContractStorage::require_initialized(&env)?;
         ContractStorage::require_not_paused(&env)?;
 
-        if total_amount <= 0 {
+        if total_amount < MIN_ESCROW_AMOUNT {
             return Err(EscrowError::InvalidEscrowAmount);
         }
 
@@ -1004,8 +1006,8 @@ impl EscrowContract {
         ContractStorage::require_initialized(&env)?;
         ContractStorage::require_not_paused(&env)?;
 
-        if payment_amount <= 0 {
-            return Err(EscrowError::InvalidMilestoneAmount);
+        if payment_amount < MIN_ESCROW_AMOUNT {
+            return Err(EscrowError::InvalidEscrowAmount);
         }
 
         let now = env.ledger().timestamp();
@@ -2899,14 +2901,14 @@ mod tests {
         let token_admin = token::StellarAssetClient::new(&env, &token_id);
 
         let total_reserve = 2 * ContractStorage::reserve_for_entries(1);
-        token_admin.mint(&escrow_client, &(300_i128 + total_reserve));
+        token_admin.mint(&escrow_client, &((3 * MIN_ESCROW_AMOUNT) + total_reserve));
 
         let start_time = env.ledger().timestamp() + 100;
         let escrow_id = client.create_recurring_escrow(
             &escrow_client,
             &freelancer,
             &token_id,
-            &100_i128,
+            &MIN_ESCROW_AMOUNT,
             &RecurringInterval::Weekly,
             &start_time,
             &None,
@@ -2917,7 +2919,7 @@ mod tests {
         let state = client.get_escrow(&escrow_id);
         let recurring = client.get_recurring_config(&escrow_id);
 
-        assert_eq!(state.total_amount, 300_i128);
+        assert_eq!(state.total_amount, 3 * MIN_ESCROW_AMOUNT);
         assert_eq!(recurring.total_payments, 3);
         assert_eq!(recurring.payments_remaining, 3);
         assert_eq!(recurring.next_payment_at, start_time);
@@ -2936,14 +2938,14 @@ mod tests {
         let token_client = token::Client::new(&env, &token_id);
 
         let total_reserve = 2 * ContractStorage::reserve_for_entries(1);
-        token_admin.mint(&escrow_client, &(200_i128 + total_reserve));
+        token_admin.mint(&escrow_client, &((2 * MIN_ESCROW_AMOUNT) + total_reserve));
 
         let start_time = env.ledger().timestamp() + 10;
         let escrow_id = client.create_recurring_escrow(
             &escrow_client,
             &freelancer,
             &token_id,
-            &100_i128,
+            &MIN_ESCROW_AMOUNT,
             &RecurringInterval::Daily,
             &start_time,
             &None,
@@ -2953,12 +2955,15 @@ mod tests {
 
         advance(&env, 10);
         assert_eq!(client.process_recurring_payments(&escrow_id), 1);
-        assert_eq!(token_client.balance(&freelancer), 100_i128);
-        assert_eq!(client.get_escrow(&escrow_id).remaining_balance, 100_i128);
+        assert_eq!(token_client.balance(&freelancer), MIN_ESCROW_AMOUNT);
+        assert_eq!(
+            client.get_escrow(&escrow_id).remaining_balance,
+            MIN_ESCROW_AMOUNT
+        );
 
         advance(&env, 86_400);
         assert_eq!(client.process_recurring_payments(&escrow_id), 1);
-        assert_eq!(token_client.balance(&freelancer), 200_i128);
+        assert_eq!(token_client.balance(&freelancer), 2 * MIN_ESCROW_AMOUNT);
         assert_eq!(
             client.get_escrow(&escrow_id).status,
             EscrowStatus::Completed
@@ -2977,14 +2982,14 @@ mod tests {
         let token_admin = token::StellarAssetClient::new(&env, &token_id);
 
         let total_reserve = 2 * ContractStorage::reserve_for_entries(1);
-        token_admin.mint(&escrow_client, &(200_i128 + total_reserve));
+        token_admin.mint(&escrow_client, &((2 * MIN_ESCROW_AMOUNT) + total_reserve));
 
         let start_time = env.ledger().timestamp() + 10;
         let escrow_id = client.create_recurring_escrow(
             &escrow_client,
             &freelancer,
             &token_id,
-            &100_i128,
+            &MIN_ESCROW_AMOUNT,
             &RecurringInterval::Daily,
             &start_time,
             &None,
@@ -3019,14 +3024,14 @@ mod tests {
         let token_client = token::Client::new(&env, &token_id);
 
         let total_reserve = 2 * ContractStorage::reserve_for_entries(1);
-        token_admin.mint(&escrow_client, &(300_i128 + total_reserve));
+        token_admin.mint(&escrow_client, &((3 * MIN_ESCROW_AMOUNT) + total_reserve));
 
         let start_time = env.ledger().timestamp() + 10;
         let escrow_id = client.create_recurring_escrow(
             &escrow_client,
             &freelancer,
             &token_id,
-            &100_i128,
+            &MIN_ESCROW_AMOUNT,
             &RecurringInterval::Daily,
             &start_time,
             &None,
@@ -3038,7 +3043,7 @@ mod tests {
         client.process_recurring_payments(&escrow_id);
         client.cancel_recurring_escrow(&escrow_client, &escrow_id);
 
-        assert_eq!(token_client.balance(&escrow_client), 200_i128);
+        assert_eq!(token_client.balance(&escrow_client), 2 * MIN_ESCROW_AMOUNT);
         assert_eq!(
             client.get_escrow(&escrow_id).status,
             EscrowStatus::Cancelled
@@ -3056,6 +3061,82 @@ mod tests {
             assert!(!env.storage().persistent().has(&DataKey::Admin));
             assert!(!env.storage().persistent().has(&DataKey::EscrowCounter));
         });
+    }
+
+    #[test]
+    fn test_create_escrow_min_amount_boundary() {
+        let (env, admin, _, client) = setup();
+        client.initialize(&admin);
+
+        let escrow_client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_id = token_contract.address();
+        let token_admin = token::StellarAssetClient::new(&env, &token_id);
+        let reserve = ContractStorage::reserve_for_entries(1);
+
+        token_admin.mint(
+            &escrow_client,
+            &((2 * MIN_ESCROW_AMOUNT) + (2 * reserve)),
+        );
+
+        let below_min = MIN_ESCROW_AMOUNT - 1;
+        let rejected = client.try_create_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &below_min,
+            &BytesN::from_array(&env, &[21; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
+        assert_eq!(rejected.unwrap_err().unwrap(), EscrowError::InvalidEscrowAmount);
+
+        let accepted_id = client.create_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &MIN_ESCROW_AMOUNT,
+            &BytesN::from_array(&env, &[22; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
+        assert_eq!(client.get_escrow(&accepted_id).total_amount, MIN_ESCROW_AMOUNT);
+    }
+
+    #[test]
+    fn test_create_recurring_escrow_rejects_below_min_payment_amount() {
+        let (env, admin, _, client) = setup();
+        client.initialize(&admin);
+
+        let escrow_client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_id = token_contract.address();
+        let token_admin = token::StellarAssetClient::new(&env, &token_id);
+
+        let total_reserve = 2 * ContractStorage::reserve_for_entries(1);
+        token_admin.mint(&escrow_client, &(MIN_ESCROW_AMOUNT + total_reserve));
+
+        let start_time = env.ledger().timestamp() + 100;
+        let result = client.try_create_recurring_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &(MIN_ESCROW_AMOUNT - 1),
+            &RecurringInterval::Daily,
+            &start_time,
+            &None,
+            &Some(1_u32),
+            &BytesN::from_array(&env, &[23; 32]),
+        );
+        assert_eq!(result.unwrap_err().unwrap(), EscrowError::InvalidEscrowAmount);
     }
 
     #[test]
