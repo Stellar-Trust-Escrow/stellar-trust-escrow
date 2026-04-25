@@ -892,6 +892,39 @@ impl EscrowContract {
         )
     }
 
+    /// Validates all scalar inputs for escrow creation.
+    ///
+    /// Checks performed (in order):
+    /// 1. `total_amount` must be positive (`InvalidEscrowAmount`)
+    /// 2. `deadline`, if provided, must be in the future (`InvalidDeadline`)
+    /// 3. `lock_time`, if provided, must be in the future (`InvalidLockTime`)
+    fn validate_escrow_inputs(
+        env: &Env,
+        total_amount: i128,
+        deadline: Option<u64>,
+        lock_time: Option<u64>,
+    ) -> Result<(), EscrowError> {
+        if total_amount <= 0 {
+            return Err(EscrowError::InvalidEscrowAmount);
+        }
+
+        let now = env.ledger().timestamp();
+
+        if let Some(dl) = deadline {
+            if dl <= now {
+                return Err(EscrowError::InvalidDeadline);
+            }
+        }
+
+        if let Some(lt) = lock_time {
+            if lt <= now {
+                return Err(EscrowError::InvalidLockTime);
+            }
+        }
+
+        Ok(())
+    }
+
     fn create_escrow_internal(
         env: Env,
         client: Address,
@@ -909,23 +942,9 @@ impl EscrowContract {
         ContractStorage::require_initialized(&env)?;
         ContractStorage::require_not_paused(&env)?;
 
-        if total_amount <= 0 {
-            return Err(EscrowError::InvalidEscrowAmount);
-        }
+        Self::validate_escrow_inputs(&env, total_amount, deadline, lock_time)?;
 
         let now = env.ledger().timestamp();
-        if let Some(dl) = deadline {
-            if dl <= now {
-                return Err(EscrowError::InvalidDeadline);
-            }
-        }
-
-        // Validate lock_time if provided
-        if let Some(lt) = lock_time {
-            if lt <= now {
-                return Err(EscrowError::InvalidLockTime);
-            }
-        }
 
         // Reject unapproved wrapped/bridged tokens
         bridge::validate_escrow_token(&env, &token)?;
