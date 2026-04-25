@@ -52,6 +52,7 @@
 #![allow(clippy::too_many_arguments)]
 
 mod batch_add_milestones_cap_tests;
+mod batch_approve_release_e2e_tests;
 mod bridge;
 mod bridge_tests;
 mod errors;
