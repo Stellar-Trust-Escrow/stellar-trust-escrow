@@ -56,6 +56,8 @@ mod bridge_tests;
 mod errors;
 mod event_tests;
 mod events;
+mod nft;
+mod nft_tests;
 mod oracle;
 mod pause_tests;
 mod types;
@@ -890,6 +892,44 @@ impl EscrowContract {
             lock_time,
             Some(buyer_signers),
         )
+    }
+
+    /// Creates an escrow gated by NFT ownership.
+    ///
+    /// The `caller` must hold at least one token of `token_id` in `nft_contract`.
+    /// If the balance check passes, delegates to `create_escrow_internal` and
+    /// emits an additional `nft_esc` event.
+    pub fn create_escrow_with_nft_gate(
+        env: Env,
+        caller: Address,
+        nft_contract: Address,
+        token_id: u64,
+        freelancer: Address,
+        token: Address,
+        total_amount: i128,
+        brief_hash: BytesN<32>,
+        arbiter: Option<Address>,
+        deadline: Option<u64>,
+        lock_time: Option<u64>,
+    ) -> Result<u64, EscrowError> {
+        let balance = nft::NftClient::new(&env, &nft_contract).balance(&caller, &token_id);
+        if balance == 0 {
+            return Err(EscrowError::Unauthorized);
+        }
+        let escrow_id = Self::create_escrow_internal(
+            env.clone(),
+            caller,
+            freelancer,
+            token,
+            total_amount,
+            brief_hash,
+            arbiter,
+            deadline,
+            lock_time,
+            None,
+        )?;
+        events::emit_nft_gated_escrow_created(&env, escrow_id, &nft_contract, token_id);
+        Ok(escrow_id)
     }
 
     fn create_escrow_internal(
