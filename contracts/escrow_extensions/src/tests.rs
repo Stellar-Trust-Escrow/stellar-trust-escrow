@@ -197,18 +197,48 @@ mod tests {
     }
 
     #[test]
-    fn test_emergency_withdraw() {
-        let s = setup_with_fee(100);
-        s.client.collect_fee(&1_u64, &s.token_id, &10_000_i128); // fee = 100
-        mint(&s.env, &s.admin, &s.token_id, &s.contract_id, 100);
+    fn test_emergency_withdraw_fees_full_transfer() {
+        let s = setup_with_fee(100); // 1 %
+        let (_net, fee) = s.client.collect_fee(&1_u64, &s.token_id, &50_000_i128); // fee = 500
+        assert_eq!(fee, 500);
 
-        let to = soroban_sdk::Address::generate(&s.env);
-        let withdrawn = s.client.emergency_withdraw_fees(&s.admin, &s.token_id, &to);
-        assert_eq!(withdrawn, 100);
+        // Fund contract with the exact fee amount to make token transfer possible.
+        mint(&s.env, &s.admin, &s.token_id, &s.contract_id, 500);
 
+        let recipient = soroban_sdk::Address::generate(&s.env);
         let token_client = token::Client::new(&s.env, &s.token_id);
-        assert_eq!(token_client.balance(&to), 100);
+        let before = token_client.balance(&recipient);
+
+        let withdrawn = s
+            .client
+            .emergency_withdraw_fees(&s.admin, &s.token_id, &recipient);
+        assert_eq!(withdrawn, 500);
+        assert_eq!(token_client.balance(&recipient) - before, 500);
         assert_eq!(s.client.get_fee_balance(&s.token_id), 0);
+    }
+
+    #[test]
+    fn test_emergency_withdraw_fees_unauthorized() {
+        let s = setup_with_fee(100);
+        s.client.collect_fee(&1_u64, &s.token_id, &50_000_i128); // fee = 500
+        mint(&s.env, &s.admin, &s.token_id, &s.contract_id, 500);
+
+        let non_admin = soroban_sdk::Address::generate(&s.env);
+        let recipient = soroban_sdk::Address::generate(&s.env);
+        let result = s
+            .client
+            .try_emergency_withdraw_fees(&non_admin, &s.token_id, &recipient);
+        assert_eq!(result.unwrap_err().unwrap(), ExtError::AdminOnly);
+    }
+
+    #[test]
+    fn test_emergency_withdraw_fees_zero_balance() {
+        let s = setup_with_fee(100);
+        let recipient = soroban_sdk::Address::generate(&s.env);
+        let result = s
+            .client
+            .try_emergency_withdraw_fees(&s.admin, &s.token_id, &recipient);
+        assert_eq!(result.unwrap_err().unwrap(), ExtError::NoFeesAccumulated);
     }
 
     // ── Dispute arbitration ───────────────────────────────────────────────────
