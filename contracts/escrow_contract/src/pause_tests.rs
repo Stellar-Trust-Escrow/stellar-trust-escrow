@@ -12,7 +12,7 @@ mod pause_tests {
             threshold: 0,
         }
     }
-    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String};
+    use soroban_sdk::{testutils::{Address as _, Events}, Address, BytesN, Env, String, Symbol, TryFromVal};
 
     fn setup() -> (Env, Address, Address, EscrowContractClient<'static>) {
         let env = Env::default();
@@ -169,5 +169,72 @@ mod pause_tests {
 
         let escrow = client.get_escrow(&escrow_id);
         assert_eq!(escrow.status, EscrowStatus::Active);
+    }
+
+    #[test]
+    fn test_pause_unpause_restores_add_milestone() {
+        let (env, admin, _, client) = setup();
+        let client_addr = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_addr = register_token(&env, &admin, &client_addr, 2000);
+
+        let escrow_id = client.create_escrow(
+            &client_addr,
+            &freelancer,
+            &token_addr,
+            &1000,
+            &BytesN::from_array(&env, &[1; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
+
+        client.pause(&admin);
+        assert!(client.is_paused());
+
+        let result = client.try_add_milestone(
+            &client_addr,
+            &escrow_id,
+            &String::from_str(&env, "Test"),
+            &BytesN::from_array(&env, &[2; 32]),
+            &500,
+        );
+        assert!(
+            matches!(result, Err(Ok(EscrowError::ContractPaused))),
+            "Should fail with ContractPaused error"
+        );
+
+        client.unpause(&admin);
+        assert!(!client.is_paused());
+
+        client.add_milestone(
+            &client_addr,
+            &escrow_id,
+            &String::from_str(&env, "Test2"),
+            &BytesN::from_array(&env, &[3; 32]),
+            &500,
+        );
+
+        let events = env.events().all();
+        let mut has_paused = false;
+        let mut has_unpaused = false;
+
+        for event in events.iter() {
+            let topics = event.1;
+            if topics.len() > 0 {
+                if let Ok(sym) = Symbol::try_from_val(&env, &topics.get_unchecked(0)) {
+                    if sym == soroban_sdk::symbol_short!("paused") {
+                        has_paused = true;
+                    } else if sym == soroban_sdk::symbol_short!("unpaused") {
+                        has_unpaused = true;
+                    }
+                }
+            }
+        }
+
+        assert!(has_paused, "paused event must be emitted");
+        assert!(has_unpaused, "unpaused event must be emitted");
     }
 }
