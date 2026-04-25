@@ -1,23 +1,9 @@
-//! # Contract Events
-//!
-//! Helper functions for emitting structured events from the escrow contract.
-//! Events are indexed by the backend `escrowIndexer` service to keep the
-//! database in sync without requiring direct contract reads.
-//!
-//! Event topics follow the pattern: `(event_name, primary_identifier)`
-//! Event data carries the payload relevant to that event type.
-
 #![allow(dead_code)]
 
-use soroban_sdk::{symbol_short, Address, Env};
+use soroban_sdk::{Address, Env};
 
-/// Emitted when a new escrow is created and funds are locked.
-///
-/// # Arguments
-/// * `escrow_id` - The newly assigned escrow ID
-/// * `client`    - The client's address
-/// * `freelancer`- The freelancer's address
-/// * `amount`    - Total locked amount
+use crate::event_names as ev;
+
 pub fn emit_escrow_created(
     env: &Env,
     escrow_id: u64,
@@ -26,30 +12,16 @@ pub fn emit_escrow_created(
     amount: i128,
 ) {
     env.events().publish(
-        (symbol_short!("esc_crt"), escrow_id),
+        (ev::ESCROW_CREATED, escrow_id),
         (client.clone(), freelancer.clone(), amount),
     );
 }
 
-/// Emitted when a new milestone is added to an escrow.
-///
-/// # Arguments
-/// * `escrow_id`    - The escrow this milestone belongs to
-/// * `milestone_id` - The new milestone's ID
-/// * `amount`       - Funds allocated to this milestone
 pub fn emit_milestone_added(env: &Env, escrow_id: u64, milestone_id: u32, amount: i128) {
-    env.events().publish(
-        (symbol_short!("mil_add"), escrow_id),
-        (milestone_id, amount),
-    );
+    env.events()
+        .publish((ev::MILESTONE_ADDED, escrow_id), (milestone_id, amount));
 }
 
-/// Emitted when a freelancer submits work on a milestone.
-///
-/// # Arguments
-/// * `escrow_id`    - The escrow ID
-/// * `milestone_id` - The submitted milestone
-/// * `freelancer`   - Freelancer's address
 pub fn emit_milestone_submitted(
     env: &Env,
     escrow_id: u64,
@@ -57,28 +29,16 @@ pub fn emit_milestone_submitted(
     freelancer: &Address,
 ) {
     env.events().publish(
-        (symbol_short!("mil_sub"), escrow_id),
+        (ev::MILESTONE_SUBMITTED, escrow_id),
         (milestone_id, freelancer.clone()),
     );
 }
 
-/// Emitted when a client approves a milestone submission.
-///
-/// # Arguments
-/// * `escrow_id`    - The escrow ID
-/// * `milestone_id` - The approved milestone
-/// * `amount`       - Amount being released
 pub fn emit_milestone_approved(env: &Env, escrow_id: u64, milestone_id: u32, amount: i128) {
-    env.events().publish(
-        (symbol_short!("mil_apr"), escrow_id),
-        (milestone_id, amount),
-    );
+    env.events()
+        .publish((ev::MILESTONE_APPROVED, escrow_id), (milestone_id, amount));
 }
 
-/// Emitted when a multisig approver records a vote; escrow may still be below threshold.
-///
-/// * `accrued_weight` — running sum of weights after this vote
-/// * `threshold`      — configured threshold for final approval
 pub fn emit_multisig_approval_recorded(
     env: &Env,
     escrow_id: u64,
@@ -88,62 +48,35 @@ pub fn emit_multisig_approval_recorded(
     threshold: u32,
 ) {
     env.events().publish(
-        (symbol_short!("msig_apr"), escrow_id),
+        (ev::MULTISIG_APPROVAL_RECORDED, escrow_id),
         (milestone_id, signer.clone(), accrued_weight, threshold),
     );
 }
 
-/// Emitted when a client rejects a milestone submission, returning it to Pending.
-///
-/// # Arguments
-/// * `escrow_id`    - The escrow ID
-/// * `milestone_id` - The rejected milestone
-/// * `client`       - Client's address
 pub fn emit_milestone_rejected(env: &Env, escrow_id: u64, milestone_id: u32, client: &Address) {
     env.events().publish(
-        (symbol_short!("mil_rej"), escrow_id),
+        (ev::MILESTONE_REJECTED, escrow_id),
         (milestone_id, client.clone()),
     );
 }
 
-/// Emitted when a dispute is raised on a specific milestone.
-///
-/// # Arguments
-/// * `escrow_id`    - The escrow ID
-/// * `milestone_id` - The disputed milestone
-/// * `raised_by`    - Address of the party raising the dispute
 pub fn emit_milestone_disputed(env: &Env, escrow_id: u64, milestone_id: u32, raised_by: &Address) {
     env.events().publish(
-        (symbol_short!("mil_dis"), escrow_id),
+        (ev::MILESTONE_DISPUTED, escrow_id),
         (milestone_id, raised_by.clone()),
     );
 }
 
-/// Emitted when funds are released to the freelancer for an approved milestone.
-///
-/// # Arguments
-/// * `escrow_id`  - The escrow ID
-/// * `to`         - Recipient (freelancer) address
-/// * `amount`     - Amount released
 pub fn emit_funds_released(env: &Env, escrow_id: u64, to: &Address, amount: i128) {
-    env.events().publish(
-        (symbol_short!("funds_rel"), escrow_id),
-        (to.clone(), amount),
-    );
+    env.events()
+        .publish((ev::FUNDS_RELEASED, escrow_id), (to.clone(), amount));
 }
 
-/// Emitted when all milestones are approved and the escrow is completed.
-///
-/// # Arguments
-/// * `escrow_id` - The completed escrow ID
-///
-/// Added to fix STE-03: indexer needs this event to update escrow status.
 pub fn emit_escrow_completed(env: &Env, escrow_id: u64) {
     env.events()
-        .publish((symbol_short!("esc_done"), escrow_id), ());
+        .publish((ev::ESCROW_COMPLETED, escrow_id), ());
 }
 
-/// Emitted when a recurring payment schedule is configured for an escrow.
 pub fn emit_recurring_schedule_created(
     env: &Env,
     escrow_id: u64,
@@ -152,12 +85,11 @@ pub fn emit_recurring_schedule_created(
     next_payment_at: u64,
 ) {
     env.events().publish(
-        (symbol_short!("rec_crt"), escrow_id),
+        (ev::RECURRING_SCHEDULE_CREATED, escrow_id),
         (payment_amount, total_payments, next_payment_at),
     );
 }
 
-/// Emitted when one or more recurring payments are processed.
 pub fn emit_recurring_payments_processed(
     env: &Env,
     escrow_id: u64,
@@ -166,18 +98,16 @@ pub fn emit_recurring_payments_processed(
     next_payment_at: Option<u64>,
 ) {
     env.events().publish(
-        (symbol_short!("rec_pay"), escrow_id),
+        (ev::RECURRING_PAYMENTS_PROCESSED, escrow_id),
         (processed_count, total_released, next_payment_at),
     );
 }
 
-/// Emitted when a recurring schedule is paused.
 pub fn emit_recurring_schedule_paused(env: &Env, escrow_id: u64, paused_by: &Address) {
     env.events()
-        .publish((symbol_short!("rec_pau"), escrow_id), paused_by.clone());
+        .publish((ev::RECURRING_SCHEDULE_PAUSED, escrow_id), paused_by.clone());
 }
 
-/// Emitted when a recurring schedule is resumed.
 pub fn emit_recurring_schedule_resumed(
     env: &Env,
     escrow_id: u64,
@@ -185,12 +115,11 @@ pub fn emit_recurring_schedule_resumed(
     next_payment_at: u64,
 ) {
     env.events().publish(
-        (symbol_short!("rec_res"), escrow_id),
+        (ev::RECURRING_SCHEDULE_RESUMED, escrow_id),
         (resumed_by.clone(), next_payment_at),
     );
 }
 
-/// Emitted when a recurring schedule is cancelled.
 pub fn emit_recurring_schedule_cancelled(
     env: &Env,
     escrow_id: u64,
@@ -198,38 +127,21 @@ pub fn emit_recurring_schedule_cancelled(
     refunded_amount: i128,
 ) {
     env.events().publish(
-        (symbol_short!("rec_can"), escrow_id),
+        (ev::RECURRING_SCHEDULE_CANCELLED, escrow_id),
         (cancelled_by.clone(), refunded_amount),
     );
 }
 
-/// Emitted when an escrow is cancelled and remaining funds returned to client.
-///
-/// # Arguments
-/// * `escrow_id`         - The escrow ID
-/// * `returned_amount`   - Amount returned to the client
 pub fn emit_escrow_cancelled(env: &Env, escrow_id: u64, returned_amount: i128) {
     env.events()
-        .publish((symbol_short!("esc_can"), escrow_id), returned_amount);
+        .publish((ev::ESCROW_CANCELLED, escrow_id), returned_amount);
 }
 
-/// Emitted when a dispute is raised on an escrow.
-///
-/// # Arguments
-/// * `escrow_id`   - The escrow ID
-/// * `raised_by`   - Address of the party raising the dispute
-/// * `reason_hash` - IPFS hash of the dispute reason document
 pub fn emit_dispute_raised(env: &Env, escrow_id: u64, raised_by: &Address) {
     env.events()
-        .publish((symbol_short!("dis_rai"), escrow_id), raised_by.clone());
+        .publish((ev::DISPUTE_RAISED, escrow_id), raised_by.clone());
 }
 
-/// Emitted when a dispute is resolved and funds are distributed.
-///
-/// # Arguments
-/// * `escrow_id`           - The escrow ID
-/// * `client_amount`       - Amount returned to client
-/// * `freelancer_amount`   - Amount sent to freelancer
 pub fn emit_dispute_resolved(
     env: &Env,
     escrow_id: u64,
@@ -237,48 +149,31 @@ pub fn emit_dispute_resolved(
     freelancer_amount: i128,
 ) {
     env.events().publish(
-        (symbol_short!("dis_res"), escrow_id),
+        (ev::DISPUTE_RESOLVED, escrow_id),
         (client_amount, freelancer_amount),
     );
 }
 
-/// Emitted when a user's reputation score is updated.
-///
-/// # Arguments
-/// * `address`   - The user whose reputation changed
-/// * `new_score` - Their updated total reputation score
 pub fn emit_reputation_updated(env: &Env, address: &Address, new_score: u64) {
     env.events()
-        .publish((symbol_short!("rep_upd"),), (address.clone(), new_score));
+        .publish((ev::REPUTATION_UPDATED,), (address.clone(), new_score));
 }
 
-/// Emitted when a time lock expires on an escrow.
-///
-/// # Arguments
-/// * `escrow_id` - The escrow ID
-/// * `lock_time` - The timestamp when the lock expired
 pub fn emit_lock_time_expired(env: &Env, escrow_id: u64, lock_time: u64) {
     env.events()
-        .publish((symbol_short!("lock_exp"), escrow_id), lock_time);
+        .publish((ev::LOCK_TIME_EXPIRED, escrow_id), lock_time);
 }
 
-/// Emitted when a time lock is extended.
-///
-/// # Arguments
-/// * `escrow_id`       - The escrow ID
-/// * `old_lock_time`  - The previous lock time
-/// * `new_lock_time`  - The new lock time
-/// * `extended_by`     - Address of the party that extended the lock
 pub fn emit_timelock_started(env: &Env, escrow_id: u64, duration_ledger: u64, start_ledger: u64) {
     env.events().publish(
-        (symbol_short!("tl_start"), escrow_id),
+        (ev::TIMELOCK_STARTED, escrow_id),
         (duration_ledger, start_ledger),
     );
 }
 
 pub fn emit_timelock_released(env: &Env, escrow_id: u64, released_ledger: u64) {
     env.events()
-        .publish((symbol_short!("tl_rel"), escrow_id), released_ledger);
+        .publish((ev::TIMELOCK_RELEASED, escrow_id), released_ledger);
 }
 
 pub fn emit_lock_time_extended(
@@ -289,29 +184,21 @@ pub fn emit_lock_time_extended(
     extended_by: &Address,
 ) {
     env.events().publish(
-        (symbol_short!("lock_ext"), escrow_id),
+        (ev::LOCK_TIME_EXTENDED, escrow_id),
         (old_lock_time, new_lock_time, extended_by.clone()),
     );
 }
 
-/// Emitted when the contract is paused.
 pub fn emit_contract_paused(env: &Env, admin: &Address) {
     env.events()
-        .publish((symbol_short!("paused"),), admin.clone());
+        .publish((ev::CONTRACT_PAUSED,), admin.clone());
 }
 
-/// Emitted when the contract is unpaused.
 pub fn emit_contract_unpaused(env: &Env, admin: &Address) {
     env.events()
-        .publish((symbol_short!("unpaused"),), admin.clone());
+        .publish((ev::CONTRACT_UNPAUSED,), admin.clone());
 }
 
-/// Emitted when a cancellation is executed after the dispute period.
-///
-/// # Arguments
-/// * `escrow_id`      - The escrow ID
-/// * `client_amount`  - Amount returned to the requester
-/// * `slash_amount`   - Amount slashed as penalty
 pub fn emit_cancellation_executed(
     env: &Env,
     escrow_id: u64,
@@ -319,12 +206,11 @@ pub fn emit_cancellation_executed(
     slash_amount: i128,
 ) {
     env.events().publish(
-        (symbol_short!("can_exe"), escrow_id),
+        (ev::CANCELLATION_EXECUTED, escrow_id),
         (client_amount, slash_amount),
     );
 }
 
-/// Emitted when a cancellation is requested.
 pub fn emit_cancellation_requested(
     env: &Env,
     escrow_id: u64,
@@ -333,12 +219,11 @@ pub fn emit_cancellation_requested(
     dispute_deadline: u64,
 ) {
     env.events().publish(
-        (symbol_short!("can_req"), escrow_id),
+        (ev::CANCELLATION_REQUESTED, escrow_id),
         (requester.clone(), reason.clone(), dispute_deadline),
     );
 }
 
-/// Emitted when a slash is applied to a user.
 pub fn emit_slash_applied(
     env: &Env,
     escrow_id: u64,
@@ -348,7 +233,7 @@ pub fn emit_slash_applied(
     reason: &soroban_sdk::String,
 ) {
     env.events().publish(
-        (symbol_short!("slsh_app"), escrow_id),
+        (ev::SLASH_APPLIED, escrow_id),
         (
             slashed_user.clone(),
             recipient.clone(),
@@ -358,16 +243,26 @@ pub fn emit_slash_applied(
     );
 }
 
-/// Emitted when a slash is disputed.
 pub fn emit_slash_disputed(env: &Env, escrow_id: u64, disputer: &Address, amount: i128) {
     env.events().publish(
-        (symbol_short!("slsh_dis"), escrow_id),
+        (ev::SLASH_DISPUTED, escrow_id),
         (disputer.clone(), amount),
     );
 }
 
-/// Emitted when a slash dispute is resolved.
 pub fn emit_slash_dispute_resolved(env: &Env, escrow_id: u64, upheld: bool, amount: i128) {
     env.events()
-        .publish((symbol_short!("slsh_res"), escrow_id), (upheld, amount));
+        .publish((ev::SLASH_DISPUTE_RESOLVED, escrow_id), (upheld, amount));
+}
+
+pub fn emit_nft_gated_escrow_created(
+    env: &Env,
+    escrow_id: u64,
+    nft_contract: &Address,
+    token_id: u64,
+) {
+    env.events().publish(
+        (ev::NFT_GATED_ESCROW_CREATED, escrow_id),
+        (nft_contract.clone(), token_id),
+    );
 }

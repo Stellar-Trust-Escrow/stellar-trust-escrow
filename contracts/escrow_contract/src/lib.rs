@@ -54,6 +54,7 @@
 mod bridge;
 mod bridge_tests;
 mod errors;
+mod event_names;
 mod event_tests;
 mod events;
 mod oracle;
@@ -71,7 +72,7 @@ pub use types::{
 };
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, token, Address, BytesN, Env, String, Vec,
+    contract, contractimpl, contracttype, token, Address, BytesN, Env, String, Vec,
 };
 
 mod storage;
@@ -586,7 +587,7 @@ impl ContractStorage {
         }
 
         env.events().publish(
-            (symbol_short!("rent_col"), meta.escrow_id),
+            (event_names::RENT_COLLECTED, meta.escrow_id),
             (
                 collectable,
                 meta.rent_balance,
@@ -642,7 +643,7 @@ impl ContractStorage {
         Self::remove_escrow_meta(env, meta.escrow_id);
 
         env.events().publish(
-            (symbol_short!("rent_exp"), meta.escrow_id),
+            (event_names::RENT_EXPIRED, meta.escrow_id),
             (refund_amount, meta.remaining_balance),
         );
         Ok(())
