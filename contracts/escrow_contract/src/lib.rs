@@ -54,16 +54,16 @@
 mod batch_add_milestones_cap_tests;
 mod batch_approve_release_e2e_tests;
 mod bridge;
-mod lock_time_enforcement_tests;
-mod timelock_enforcement_tests;
 mod bridge_tests;
 mod errors;
 mod event_tests;
 mod events;
+mod lock_time_enforcement_tests;
 mod oracle;
 mod oracle_fallback_tests;
 mod pause_tests;
 mod self_escrow_tests;
+mod timelock_enforcement_tests;
 mod transfer_client_tests;
 mod types;
 mod upgrade_tests;
@@ -910,10 +910,7 @@ impl EscrowContract {
     }
 
     /// Return bridge confirmation state for a bridged token.
-    pub fn get_bridge_confirmation(
-        env: Env,
-        token: Address,
-    ) -> Option<bridge::BridgeConfirmation> {
+    pub fn get_bridge_confirmation(env: Env, token: Address) -> Option<bridge::BridgeConfirmation> {
         bridge::get_bridge_confirmation(&env, &token)
     }
 
@@ -981,6 +978,39 @@ impl EscrowContract {
         )
     }
 
+    /// Validates all scalar inputs for escrow creation.
+    ///
+    /// Checks performed (in order):
+    /// 1. `total_amount` must be positive and within `MAX_ESCROW_AMOUNT` (`InvalidEscrowAmount`)
+    /// 2. `deadline`, if provided, must be in the future (`InvalidDeadline`)
+    /// 3. `lock_time`, if provided, must be in the future (`InvalidLockTime`)
+    fn validate_escrow_inputs(
+        env: &Env,
+        total_amount: i128,
+        deadline: Option<u64>,
+        lock_time: Option<u64>,
+    ) -> Result<(), EscrowError> {
+        if total_amount <= 0 || total_amount > MAX_ESCROW_AMOUNT {
+            return Err(EscrowError::InvalidEscrowAmount);
+        }
+
+        let now = env.ledger().timestamp();
+
+        if let Some(dl) = deadline {
+            if dl <= now {
+                return Err(EscrowError::InvalidDeadline);
+            }
+        }
+
+        if let Some(lt) = lock_time {
+            if lt <= now {
+                return Err(EscrowError::InvalidLockTime);
+            }
+        }
+
+        Ok(())
+    }
+
     fn create_escrow_internal(
         env: Env,
         client: Address,
@@ -1008,27 +1038,13 @@ impl EscrowContract {
             }
         }
 
-        if total_amount <= 0 || total_amount > MAX_ESCROW_AMOUNT {
-            return Err(EscrowError::InvalidEscrowAmount);
-        }
+        Self::validate_escrow_inputs(&env, total_amount, deadline, lock_time)?;
 
         if brief_hash == BytesN::from_array(&env, &[0u8; 32]) {
             // TODO: return Err(EscrowError::InvalidBriefHash);
         }
 
         let now = env.ledger().timestamp();
-        if let Some(dl) = deadline {
-            if dl <= now {
-                return Err(EscrowError::InvalidDeadline);
-            }
-        }
-
-        // Validate lock_time if provided
-        if let Some(lt) = lock_time {
-            if lt <= now {
-                return Err(EscrowError::InvalidLockTime);
-            }
-        }
 
         // Reject unapproved wrapped/bridged tokens
         bridge::validate_escrow_token(&env, &token)?;
@@ -4754,7 +4770,7 @@ mod tests {
         let rent_reserve = 2 * ContractStorage::reserve_for_entries(1);
         token_admin.mint(&escrow_client, &(escrow_amount + rent_reserve));
 
-        let initial_client_balance = token_client.balance(&escrow_client);
+        let _initial_client_balance = token_client.balance(&escrow_client);
 
         let escrow_id = client.create_escrow(
             &escrow_client,

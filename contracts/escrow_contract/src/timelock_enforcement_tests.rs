@@ -1,4 +1,5 @@
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod timelock_enforcement_tests {
     use soroban_sdk::{
         testutils::{Address as _, Events, Ledger as _},
@@ -122,7 +123,10 @@ mod timelock_enforcement_tests {
                     })
                     .unwrap_or(false)
         });
-        assert!(tl_rel_event.is_some(), "tl_rel event must be emitted on release");
+        assert!(
+            tl_rel_event.is_some(),
+            "tl_rel event must be emitted on release"
+        );
 
         // Verify tl_start event was emitted with correct escrow_id.
         let tl_start_sym = soroban_sdk::symbol_short!("tl_start");
@@ -137,7 +141,10 @@ mod timelock_enforcement_tests {
                     })
                     .unwrap_or(false)
         });
-        assert!(tl_start_event.is_some(), "tl_start event must be emitted on start_timelock");
+        assert!(
+            tl_start_event.is_some(),
+            "tl_start event must be emitted on start_timelock"
+        );
     }
 
     /// start_timelock called a second time on the same escrow must return
