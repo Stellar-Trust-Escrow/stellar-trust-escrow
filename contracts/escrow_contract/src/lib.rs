@@ -58,6 +58,7 @@ mod event_tests;
 mod events;
 mod oracle;
 mod pause_tests;
+mod partial_cancel_tests;
 mod types;
 mod upgrade_tests;
 
@@ -1829,6 +1830,51 @@ impl EscrowContract {
 
         events::emit_escrow_cancelled(&env, escrow_id, returned);
         Ok(())
+    }
+
+    /// Partially cancels an escrow by refunding only the unallocated balance.
+    ///
+    /// This allows the client to retrieve funds that haven't been allocated to
+    /// milestones while keeping the escrow active for allocated milestones.
+    ///
+    /// # Arguments
+    /// * `escrow_id` - The ID of the escrow to partially cancel
+    ///
+    /// # Returns
+    /// The amount refunded to the client (unallocated balance)
+    pub fn partial_cancel(env: Env, caller: Address, escrow_id: u64) -> Result<i128, EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_not_paused(&env)?;
+
+        let mut meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
+        if caller != meta.client {
+            return Err(EscrowError::ClientOnly);
+        }
+        if meta.status != EscrowStatus::Active {
+            return Err(EscrowError::EscrowNotActive);
+        }
+
+        // Calculate unallocated balance (remaining - allocated)
+        let unallocated = meta.remaining_balance.saturating_sub(meta.allocated_amount);
+        if unallocated <= 0 {
+            return Ok(0);
+        }
+
+        // Refund unallocated amount to client
+        token::Client::new(&env, &meta.token).transfer(
+            &env.current_contract_address(),
+            &meta.client,
+            &unallocated,
+        );
+
+        // Update remaining balance
+        meta.remaining_balance -= unallocated;
+        ContractStorage::save_escrow_meta(&env, &meta);
+
+        // Emit partial cancellation event
+        events::emit_partial_cancellation(&env, escrow_id, unallocated);
+
+        Ok(unallocated)
     }
 
     /// Starts a timed release window for the escrow.

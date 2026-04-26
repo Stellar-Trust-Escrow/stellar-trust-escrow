@@ -371,3 +371,15 @@ pub fn emit_slash_dispute_resolved(env: &Env, escrow_id: u64, upheld: bool, amou
     env.events()
         .publish((symbol_short!("slsh_res"), escrow_id), (upheld, amount));
 }
+
+/// Emitted when a partial cancellation is performed.
+///
+/// # Arguments
+/// * `escrow_id` - The escrow ID
+/// * `refunded_amount` - The amount refunded to the client
+pub fn emit_partial_cancellation(env: &Env, escrow_id: u64, refunded_amount: i128) {
+    env.events().publish(
+        (symbol_short!("prt_can"), escrow_id),
+        refunded_amount,
+    );
+}
