@@ -196,6 +196,52 @@ mod tests {
         assert_eq!(token_client.balance(&r2), 120); // 400 * 30%
     }
 
+    /// Verifies that `distribute_fees` correctly splits 1000 stroops across two
+    /// recipients using a 70/30 basis-point split:
+    ///   - addr1 (7000 bps) must receive exactly 700 stroops
+    ///   - addr2 (3000 bps) must receive exactly 300 stroops
+    ///   - `get_fee_balance` must return 0 after distribution (no dust in this case)
+    #[test]
+    fn test_distribute_fees_proportional_split() {
+        // Initialize with 10 % fee so collect_fee accumulates predictable amounts.
+        // 10 % of 10_000 = 1_000 stroops in one call.
+        let s = setup_with_fee(100); // 1 % fee — we'll use gross=100_000 → fee=1_000
+
+        let addr1 = soroban_sdk::Address::generate(&s.env);
+        let addr2 = soroban_sdk::Address::generate(&s.env);
+
+        // Set up a 70/30 split
+        let mut recipients = Vec::new(&s.env);
+        recipients.push_back(FeeRecipient {
+            address: addr1.clone(),
+            share_bps: 7_000, // 70 %
+        });
+        recipients.push_back(FeeRecipient {
+            address: addr2.clone(),
+            share_bps: 3_000, // 30 %
+        });
+        s.client.set_fee_recipients(&s.admin, &recipients);
+
+        // Accumulate exactly 1_000 stroops: 1 % of 100_000
+        s.client.collect_fee(&1_u64, &s.token_id, &100_000_i128);
+        assert_eq!(s.client.get_fee_balance(&s.token_id), 1_000);
+
+        // Fund the contract so it can transfer tokens to recipients
+        mint(&s.env, &s.admin, &s.token_id, &s.contract_id, 1_000);
+
+        // Distribute and verify the returned total
+        let distributed = s.client.distribute_fees(&s.token_id);
+        assert_eq!(distributed, 1_000);
+
+        // Verify each recipient received the correct stroop amount
+        let token_client = token::Client::new(&s.env, &s.token_id);
+        assert_eq!(token_client.balance(&addr1), 700); // 1_000 * 70 % = 700
+        assert_eq!(token_client.balance(&addr2), 300); // 1_000 * 30 % = 300
+
+        // FeeBalance must be zeroed after a clean split (no dust)
+        assert_eq!(s.client.get_fee_balance(&s.token_id), 0);
+    }
+
     #[test]
     fn test_emergency_withdraw() {
         let s = setup_with_fee(100);
