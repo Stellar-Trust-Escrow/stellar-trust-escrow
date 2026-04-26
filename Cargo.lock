@@ -1309,6 +1309,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "stellar-trust-shared"
+version = "0.1.0"
+
+[[package]]
 name = "stellar-xdr"
 version = "21.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
