@@ -18,18 +18,18 @@ This guide is the fastest path from clone to first PR. It covers local setup, te
 
 Install these before you start:
 
-| Tool | Version | Why it is needed |
-| --- | --- | --- |
-| Node.js | 20 LTS recommended, 18+ supported | Frontend, backend, linting, and Jest/Playwright tests |
-| npm | Bundled with Node.js | Workspace installs and scripts |
-| Rust | 1.74+ | Soroban smart contracts |
-| `wasm32-unknown-unknown` target | Latest | Contract builds |
-| Visual Studio Build Tools (Windows only) | Current | Required for native Rust linking on Windows |
-| Soroban CLI | 21+ | Local contract workflows |
-| Docker Desktop or Docker Engine | Latest | Fast local Postgres and full-stack smoke tests |
-| PostgreSQL | 14+ if not using Docker | Backend development and Prisma migrations |
-| Git | Latest | Branching and pull requests |
-| Playwright browsers | Current | Frontend end-to-end tests |
+| Tool                                     | Version                           | Why it is needed                                      |
+| ---------------------------------------- | --------------------------------- | ----------------------------------------------------- |
+| Node.js                                  | 20 LTS recommended, 18+ supported | Frontend, backend, linting, and Jest/Playwright tests |
+| npm                                      | Bundled with Node.js              | Workspace installs and scripts                        |
+| Rust                                     | 1.74+                             | Soroban smart contracts                               |
+| `wasm32-unknown-unknown` target          | Latest                            | Contract builds                                       |
+| Visual Studio Build Tools (Windows only) | Current                           | Required for native Rust linking on Windows           |
+| Soroban CLI                              | 21+                               | Local contract workflows                              |
+| Docker Desktop or Docker Engine          | Latest                            | Fast local Postgres and full-stack smoke tests        |
+| PostgreSQL                               | 14+ if not using Docker           | Backend development and Prisma migrations             |
+| Git                                      | Latest                            | Branching and pull requests                           |
+| Playwright browsers                      | Current                           | Frontend end-to-end tests                             |
 
 Recommended install commands:
 
@@ -37,6 +37,140 @@ Recommended install commands:
 rustup toolchain install stable
 rustup target add wasm32-unknown-unknown
 cargo install --locked --force soroban-cli
+```
+
+## Soroban Development Environment
+
+This section covers everything specific to the Rust/Soroban layer. Skip it if you are only working on the frontend or backend.
+
+### Rust toolchain and Soroban CLI
+
+```bash
+# Install stable Rust (1.74+ required)
+rustup toolchain install stable
+rustup default stable
+
+# Add the WASM compilation target
+rustup target add wasm32-unknown-unknown
+
+# Install the Soroban CLI (pin to a known-good version)
+cargo install --locked soroban-cli --version 21.0.0
+```
+
+Verify:
+
+```bash
+rustc --version        # rustc 1.74.0 or later
+soroban --version      # soroban 21.x.x
+```
+
+### Configure a Stellar testnet identity
+
+```bash
+# Generate a new keypair and fund it from Friendbot
+soroban keys generate --global contributor --network testnet
+soroban keys fund contributor --network testnet
+```
+
+### Workspace structure
+
+The Cargo workspace (`Cargo.toml` at the repository root) contains four contract crates:
+
+| Crate                | Path                           | Purpose                        |
+| -------------------- | ------------------------------ | ------------------------------ |
+| `escrow_contract`    | `contracts/escrow_contract`    | Core milestone escrow logic    |
+| `governance`         | `contracts/governance`         | On-chain governance and voting |
+| `insurance_contract` | `contracts/insurance_contract` | Dispute insurance pool         |
+| `escrow_extensions`  | `contracts/escrow_extensions`  | Optional escrow add-ons        |
+
+All four share a single `[profile.release]` in the root `Cargo.toml`:
+
+```toml
+[profile.release]
+opt-level        = "z"
+overflow-checks  = true   # integer overflow panics instead of wrapping — critical for financial logic
+debug            = 0
+strip            = "symbols"
+debug-assertions = false
+panic            = "abort"
+codegen-units    = 1
+lto              = true
+```
+
+`overflow-checks = true` is intentional. Any arithmetic that would silently wrap in a standard release build will instead abort the contract, preventing fund-accounting bugs. Do not disable it.
+
+### Running contract tests
+
+Run tests for a single crate to keep feedback fast:
+
+```bash
+# Core escrow contract
+cargo test -p escrow_contract
+
+# Governance contract
+cargo test -p governance
+
+# Escrow extensions
+cargo test -p escrow_extensions
+
+# All crates at once
+cargo test --workspace
+```
+
+Run a specific test by name:
+
+```bash
+cargo test -p escrow_contract test_approve_milestone_o1_completion_check
+```
+
+### Soroban test harness patterns
+
+Soroban tests use an in-process mock environment rather than a live network. The patterns below appear throughout the test suite.
+
+**`Env::default()`** — creates an isolated in-memory Soroban environment:
+
+```rust
+let env = Env::default();
+```
+
+**`mock_all_auths()`** — bypasses `require_auth()` checks so tests can call any function without real signatures:
+
+```rust
+env.mock_all_auths();
+```
+
+Call this once at the top of a test. Remove it if you are specifically testing authorisation failures.
+
+**`Address::generate(&env)`** — generates a deterministic test address:
+
+```rust
+let client     = Address::generate(&env);
+let freelancer = Address::generate(&env);
+```
+
+**`env.ledger().with_mut()`** — advances the ledger clock to simulate time passing:
+
+```rust
+// Jump forward 7 days
+env.ledger().with_mut(|l| {
+    l.timestamp += 7 * 24 * 60 * 60;
+});
+```
+
+Use this to test deadline expiry, timelock release, and recurring payment scheduling.
+
+A minimal test skeleton:
+
+```rust
+#[test]
+fn test_example() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let client     = Address::generate(&env);
+    let freelancer = Address::generate(&env);
+    // ... register contract, call functions, assert state
+}
 ```
 
 ## 15-Minute Quickstart
@@ -160,8 +294,25 @@ Run the checks that match the layer you touched. If your PR crosses multiple lay
 
 ### Smart contracts
 
+Run the full workspace:
+
 ```bash
 cargo test --workspace
+```
+
+Run a single crate for faster iteration:
+
+```bash
+cargo test -p escrow_contract
+cargo test -p governance
+cargo test -p escrow_extensions
+cargo test -p insurance_contract
+```
+
+Run a specific test by name:
+
+```bash
+cargo test -p escrow_contract <test_name>
 ```
 
 For deeper contract verification on macOS, Linux, or WSL:
@@ -169,6 +320,8 @@ For deeper contract verification on macOS, Linux, or WSL:
 ```bash
 bash scripts/test-contract.sh --gas --coverage
 ```
+
+PRs that touch contract logic must include at least one new test. Use `Env::default()` and `mock_all_auths()` (see [Soroban test harness patterns](#soroban-test-harness-patterns) above). Time-sensitive behaviour must be covered with `env.ledger().with_mut()`.
 
 ### Backend
 
@@ -269,14 +422,14 @@ Minimum checklist before requesting review:
 
 Use GitHub labels to find a good starting point:
 
-| Label | What it usually means |
-| --- | --- |
-| `good-first-issue` | Beginner-friendly tasks with a clear path to completion |
-| `documentation` | Docs cleanups, onboarding, examples, and guides |
-| `frontend` | Next.js UI, accessibility, and interaction work |
-| `backend` | API, services, Prisma, and operational tooling |
-| `smart-contract` | Rust and Soroban work |
-| `testing` | Unit, integration, accessibility, or end-to-end coverage |
+| Label              | What it usually means                                    |
+| ------------------ | -------------------------------------------------------- |
+| `good-first-issue` | Beginner-friendly tasks with a clear path to completion  |
+| `documentation`    | Docs cleanups, onboarding, examples, and guides          |
+| `frontend`         | Next.js UI, accessibility, and interaction work          |
+| `backend`          | API, services, Prisma, and operational tooling           |
+| `smart-contract`   | Rust and Soroban work                                    |
+| `testing`          | Unit, integration, accessibility, or end-to-end coverage |
 
 Useful searches:
 
