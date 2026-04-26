@@ -54,6 +54,8 @@
 mod batch_add_milestones_cap_tests;
 mod batch_approve_release_e2e_tests;
 mod bridge;
+mod lock_time_enforcement_tests;
+mod timelock_enforcement_tests;
 mod bridge_tests;
 mod errors;
 mod event_tests;
