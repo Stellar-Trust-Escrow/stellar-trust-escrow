@@ -141,4 +141,9 @@ pub enum EscrowError {
     // ── Input Validation ─────────────────────────────────────────────────────
     /// A string argument exceeds MAX_STRING_LEN or is empty.
     StringTooLong = 55,
+
+    // ── Admin Transfer ───────────────────────────────────────────────────────
+    /// `accept_admin` was called but no pending admin transfer has been proposed,
+    /// or `accept_admin` was called by an address that is not the pending admin.
+    NoPending = 56,
 }

@@ -572,4 +572,6 @@ pub enum DataKey {
     MetaTxNonce(Address),
     /// Storage migration cursor — value: u64
     MigrationCursor,
+    /// Pending admin address during a two-step admin transfer — value: Address
+    PendingAdmin,
 }

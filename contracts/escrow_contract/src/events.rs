@@ -287,6 +287,16 @@ pub fn emit_admin_initialized(env: &Env, admin: &Address) {
         .publish((ev::ADMIN_INITIALIZED,), admin.clone());
 }
 
+pub fn emit_admin_proposed(env: &Env, current_admin: &Address, pending_admin: &Address) {
+    env.events()
+        .publish((ev::ADMIN_PROPOSED,), (current_admin.clone(), pending_admin.clone()));
+}
+
+pub fn emit_admin_changed(env: &Env, old_admin: &Address, new_admin: &Address) {
+    env.events()
+        .publish((ev::ADMIN_CHANGED,), (old_admin.clone(), new_admin.clone()));
+}
+
 pub fn emit_max_milestones_set(env: &Env, new_max: u32) {
     env.events().publish((ev::MAX_MILESTONES_SET,), new_max);
 }

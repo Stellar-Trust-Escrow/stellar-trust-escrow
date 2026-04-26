@@ -72,6 +72,7 @@ mod timelock_enforcement_tests;
 mod transfer_client_tests;
 mod types;
 mod upgrade_tests;
+mod admin_transfer_tests;
 
 pub use errors::EscrowError;
 use storage::StorageManager;
@@ -2604,6 +2605,65 @@ impl EscrowContract {
             .get(&DataKey::Admin)
             .ok_or(EscrowError::NotInitialized)?;
         Ok(admin)
+    }
+
+    /// Step 1 of two-step admin transfer: propose a new admin.
+    ///
+    /// Only the current admin may call this. Stores `new_admin` under
+    /// `DataKey::PendingAdmin`. The transfer is not complete until the
+    /// proposed admin calls `accept_admin`.
+    pub fn propose_admin(
+        env: Env,
+        caller: Address,
+        new_admin: Address,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_admin(&env, &caller)?;
+
+        env.storage()
+            .instance()
+            .set(&DataKey::PendingAdmin, &new_admin);
+        ContractStorage::bump_instance_ttl(&env);
+
+        events::emit_admin_proposed(&env, &caller, &new_admin);
+        Ok(())
+    }
+
+    /// Step 2 of two-step admin transfer: accept the pending admin role.
+    ///
+    /// Only the address stored as `DataKey::PendingAdmin` may call this.
+    /// On success, `DataKey::Admin` is updated to the caller and
+    /// `DataKey::PendingAdmin` is cleared.
+    pub fn accept_admin(env: Env, caller: Address) -> Result<(), EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_initialized(&env)?;
+
+        let pending: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::PendingAdmin)
+            .ok_or(EscrowError::NoPending)?;
+
+        if caller != pending {
+            return Err(EscrowError::Unauthorized);
+        }
+
+        let old_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(EscrowError::NotInitialized)?;
+
+        env.storage()
+            .instance()
+            .set(&DataKey::Admin, &caller);
+        env.storage()
+            .instance()
+            .remove(&DataKey::PendingAdmin);
+        ContractStorage::bump_instance_ttl(&env);
+
+        events::emit_admin_changed(&env, &old_admin, &caller);
+        Ok(())
     }
 
     /// Pauses scheduled recurring releases for an escrow.
