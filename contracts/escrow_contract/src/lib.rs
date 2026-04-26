@@ -54,16 +54,18 @@
 mod batch_add_milestones_cap_tests;
 mod batch_approve_release_e2e_tests;
 mod bridge;
-mod lock_time_enforcement_tests;
-mod timelock_enforcement_tests;
 mod bridge_tests;
 mod errors;
 mod event_tests;
 mod events;
+mod lock_time_enforcement_tests;
+mod nft;
+mod nft_tests;
 mod oracle;
 mod oracle_fallback_tests;
 mod pause_tests;
 mod self_escrow_tests;
+mod timelock_enforcement_tests;
 mod transfer_client_tests;
 mod types;
 mod upgrade_tests;
@@ -910,10 +912,7 @@ impl EscrowContract {
     }
 
     /// Return bridge confirmation state for a bridged token.
-    pub fn get_bridge_confirmation(
-        env: Env,
-        token: Address,
-    ) -> Option<bridge::BridgeConfirmation> {
+    pub fn get_bridge_confirmation(env: Env, token: Address) -> Option<bridge::BridgeConfirmation> {
         bridge::get_bridge_confirmation(&env, &token)
     }
 
@@ -950,6 +949,44 @@ impl EscrowContract {
             lock_time,
             None,
         )
+    }
+
+    /// Creates an escrow gated by NFT ownership.
+    ///
+    /// The `caller` must hold at least one token of `token_id` in `nft_contract`.
+    /// If the balance check passes, delegates to `create_escrow_internal` and
+    /// emits an additional `nft_esc` event.
+    pub fn create_escrow_with_nft_gate(
+        env: Env,
+        caller: Address,
+        nft_contract: Address,
+        token_id: u64,
+        freelancer: Address,
+        token: Address,
+        total_amount: i128,
+        brief_hash: BytesN<32>,
+        arbiter: Option<Address>,
+        deadline: Option<u64>,
+        lock_time: Option<u64>,
+    ) -> Result<u64, EscrowError> {
+        let balance = nft::NftClient::new(&env, &nft_contract).balance(&caller, &token_id);
+        if balance == 0 {
+            return Err(EscrowError::Unauthorized);
+        }
+        let escrow_id = Self::create_escrow_internal(
+            env.clone(),
+            caller,
+            freelancer,
+            token,
+            total_amount,
+            brief_hash,
+            arbiter,
+            deadline,
+            lock_time,
+            None,
+        )?;
+        events::emit_nft_gated_escrow_created(&env, escrow_id, &nft_contract, token_id);
+        Ok(escrow_id)
     }
 
     pub fn create_escrow_with_buyer_signers(
@@ -4754,7 +4791,7 @@ mod tests {
         let rent_reserve = 2 * ContractStorage::reserve_for_entries(1);
         token_admin.mint(&escrow_client, &(escrow_amount + rent_reserve));
 
-        let initial_client_balance = token_client.balance(&escrow_client);
+        let _initial_client_balance = token_client.balance(&escrow_client);
 
         let escrow_id = client.create_escrow(
             &escrow_client,

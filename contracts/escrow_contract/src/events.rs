@@ -452,3 +452,21 @@ pub fn emit_arbiter_updated(env: &Env, escrow_id: u64, new_arbiter: &Option<Addr
     env.events()
         .publish((symbol_short!("arb_upd"), escrow_id), new_arbiter.clone());
 }
+
+/// Emitted when an NFT-gated escrow is created.
+///
+/// # Arguments
+/// * `escrow_id`    - The newly assigned escrow ID
+/// * `nft_contract` - The NFT contract address used for gating
+/// * `token_id`     - The NFT token ID that was checked
+pub fn emit_nft_gated_escrow_created(
+    env: &Env,
+    escrow_id: u64,
+    nft_contract: &Address,
+    token_id: u64,
+) {
+    env.events().publish(
+        (symbol_short!("nft_esc"), escrow_id),
+        (nft_contract.clone(), token_id),
+    );
+}

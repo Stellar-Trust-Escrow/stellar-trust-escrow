@@ -1,4 +1,5 @@
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod lock_time_enforcement_tests {
     use soroban_sdk::{
         testutils::{Address as _, Events, Ledger as _},
