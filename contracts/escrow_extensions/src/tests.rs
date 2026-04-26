@@ -329,6 +329,72 @@ mod tests {
         );
     }
 
+    // ── Batch fee deduction ───────────────────────────────────────────────────
+
+    #[test]
+    fn test_batch_create_fee_deduction() {
+        // Initialize with fee_bps = 100 (1%)
+        let s = setup_with_fee(100);
+        let client_addr = soroban_sdk::Address::generate(&s.env);
+
+        // Mint enough tokens for 3 × 1000 stroops
+        mint(&s.env, &s.admin, &s.token_id, &client_addr, 3_000);
+
+        let fl1 = soroban_sdk::Address::generate(&s.env);
+        let fl2 = soroban_sdk::Address::generate(&s.env);
+        let fl3 = soroban_sdk::Address::generate(&s.env);
+
+        let mut params = Vec::new(&s.env);
+        params.push_back(BatchEscrowParams {
+            freelancer: fl1,
+            token: s.token_id.clone(),
+            total_amount: 1_000,
+            brief_hash: make_hash(&s.env, 1),
+            arbiter: None,
+            deadline: None,
+        });
+        params.push_back(BatchEscrowParams {
+            freelancer: fl2,
+            token: s.token_id.clone(),
+            total_amount: 1_000,
+            brief_hash: make_hash(&s.env, 2),
+            arbiter: None,
+            deadline: None,
+        });
+        params.push_back(BatchEscrowParams {
+            freelancer: fl3,
+            token: s.token_id.clone(),
+            total_amount: 1_000,
+            brief_hash: make_hash(&s.env, 3),
+            arbiter: None,
+            deadline: None,
+        });
+
+        let ids = s.client.create_batch(&client_addr, &params);
+        assert_eq!(ids.len(), 3);
+
+        // batch_escrow_count must equal 3 after the batch
+        assert_eq!(s.client.batch_escrow_count(), 3);
+
+        // Simulate fee collection on release for each escrow (1% of 1000 = 10 per escrow)
+        let (net0, fee0) = s.client.collect_fee(&ids.get(0).unwrap(), &s.token_id, &1_000_i128);
+        let (net1, fee1) = s.client.collect_fee(&ids.get(1).unwrap(), &s.token_id, &1_000_i128);
+        let (net2, fee2) = s.client.collect_fee(&ids.get(2).unwrap(), &s.token_id, &1_000_i128);
+
+        // Each escrow's net amount after fee deduction must be 990 (1000 - 10)
+        assert_eq!(net0, 990);
+        assert_eq!(net1, 990);
+        assert_eq!(net2, 990);
+
+        // Each fee must be 10 (1% of 1000)
+        assert_eq!(fee0, 10);
+        assert_eq!(fee1, 10);
+        assert_eq!(fee2, 10);
+
+        // get_fee_balance must accumulate 3 × 10 = 30 stroops
+        assert_eq!(s.client.get_fee_balance(&s.token_id), 30);
+    }
+
     #[test]
     fn test_isqrt_values() {
         // Verify quadratic voting weights
