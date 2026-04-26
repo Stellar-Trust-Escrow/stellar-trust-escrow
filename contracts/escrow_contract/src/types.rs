@@ -62,6 +62,56 @@ pub const MS_REJECTED: MilestoneStatus = 0x10;
 /// A dispute has been raised on this milestone. Funds are frozen.
 pub const MS_DISPUTED: MilestoneStatus = 0x20;
 
+/// Direction for a price-indexed release condition.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum PriceDirection {
+    /// Release when price is at or above the target.
+    Above,
+    /// Release when price is at or below the target.
+    Below,
+}
+
+/// A price-based release condition attached to a milestone.
+/// The oracle is queried at trigger time; funds release if the condition is met.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PriceCondition {
+    /// The asset whose USD price is checked.
+    pub asset: Address,
+    /// Target price in USD with `oracle::PRICE_DECIMALS` decimal places.
+    pub target_price_usd: i128,
+    /// Whether the current price must be above or below the target.
+    pub direction: PriceDirection,
+}
+
+/// Optional price condition wrapper — mirrors `OptionalTimelock` to work around
+/// Soroban's lack of `Option<CustomContractType>` support in `#[contracttype]`.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum OptionalPriceCondition {
+    None,
+    Some(PriceCondition),
+}
+
+impl From<Option<PriceCondition>> for OptionalPriceCondition {
+    fn from(opt: Option<PriceCondition>) -> Self {
+        match opt {
+            Some(c) => OptionalPriceCondition::Some(c),
+            None => OptionalPriceCondition::None,
+        }
+    }
+}
+
+impl From<OptionalPriceCondition> for Option<PriceCondition> {
+    fn from(opt: OptionalPriceCondition) -> Self {
+        match opt {
+            OptionalPriceCondition::Some(c) => Some(c),
+            OptionalPriceCondition::None => None,
+        }
+    }
+}
+
 /// Mask of all terminal states (no further transitions expected).
 #[allow(dead_code)]
 pub const MS_TERMINAL: MilestoneStatus = MS_RELEASED | MS_DISPUTED;
@@ -204,6 +254,10 @@ pub struct Milestone {
 
     /// IPFS hash of the rejection rationale document, set by reject_milestone_with_reason.
     pub rejection_reason: OptionalBytesN32,
+
+    /// Optional price-based release condition. When set, funds are released
+    /// automatically via `trigger_oracle_release` once the condition is met.
+    pub price_condition: OptionalPriceCondition,
 }
 
 /// Configuration for a recurring/subscription escrow.

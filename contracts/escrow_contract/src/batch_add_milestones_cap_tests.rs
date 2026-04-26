@@ -1,7 +1,9 @@
 #[cfg(test)]
 #[allow(clippy::module_inception)]
 mod batch_add_milestones_cap_tests {
-    use crate::{EscrowContract, EscrowContractClient, EscrowError, MultisigConfig, MAX_MILESTONES};
+    use crate::{
+        EscrowContract, EscrowContractClient, EscrowError, MultisigConfig, MAX_MILESTONES,
+    };
     use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String};
 
     fn setup() -> (Env, Address, EscrowContractClient<'static>) {
@@ -85,14 +87,16 @@ mod batch_add_milestones_cap_tests {
         // batch_add_milestones charges reserve_for_entries(n) = n * 30
         let extra_rent = i128::from(n) * 30;
 
-        let (escrow_client, escrow_id) = make_escrow(&env, &admin, &client, total_amount, extra_rent);
+        let (escrow_client, escrow_id) =
+            make_escrow(&env, &admin, &client, total_amount, extra_rent);
         let (titles, hashes, amounts) = make_batch(&env, n, amount_each);
 
         client.batch_add_milestones(&escrow_client, &escrow_id, &titles, &hashes, &amounts);
 
         let state = client.get_escrow(&escrow_id);
         assert_eq!(
-            state.milestones.len(), n,
+            state.milestones.len(),
+            n,
             "milestone_count must equal MAX_MILESTONES after at-cap batch"
         );
     }
@@ -109,7 +113,8 @@ mod batch_add_milestones_cap_tests {
         // Rent for n milestones (the rejected batch doesn't charge rent).
         let extra_rent = i128::from(n) * 30;
 
-        let (escrow_client, escrow_id) = make_escrow(&env, &admin, &client, total_amount, extra_rent);
+        let (escrow_client, escrow_id) =
+            make_escrow(&env, &admin, &client, total_amount, extra_rent);
 
         // Add n milestones to reach the cap.
         let (titles, hashes, amounts) = make_batch(&env, n, amount_each);
@@ -132,7 +137,8 @@ mod batch_add_milestones_cap_tests {
         // No partial additions — count must still be MAX_MILESTONES.
         let state = client.get_escrow(&escrow_id);
         assert_eq!(
-            state.milestones.len(), n,
+            state.milestones.len(),
+            n,
             "milestone_count must remain MAX_MILESTONES after rejected batch"
         );
     }
