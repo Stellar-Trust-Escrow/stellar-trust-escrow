@@ -3,7 +3,10 @@
 mod bridge_tests {
     use crate::bridge::{BridgeProtocol, WrappedTokenInfo, MIN_BRIDGE_CONFIRMATIONS};
     use crate::{EscrowContract, EscrowContractClient, EscrowError};
-    use soroban_sdk::{testutils::{Address as _, Events}, Address, Env, String, Symbol, TryFromVal, Val};
+    use soroban_sdk::{
+        testutils::{Address as _, Events},
+        Address, Env, String, Symbol, TryFromVal, Val,
+    };
 
     fn setup() -> (Env, Address, EscrowContractClient<'static>) {
         let env = Env::default();
@@ -33,8 +36,7 @@ mod bridge_tests {
         topics
             .get(0)
             .map(|val| {
-                Symbol::try_from_val(env, &val)
-                    .expect("event topic[0] should be a symbol")
+                Symbol::try_from_val(env, &val).expect("event topic[0] should be a symbol")
                     == expected
             })
             .unwrap_or(false)
