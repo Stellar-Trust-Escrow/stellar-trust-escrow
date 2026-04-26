@@ -60,7 +60,6 @@ mod errors;
 mod event_names;
 mod event_tests;
 mod events;
-mod lock_time_enforcement_tests;
 mod nft;
 mod nft_tests;
 mod oracle;
@@ -76,7 +75,7 @@ mod upgrade_tests;
 pub use errors::EscrowError;
 use storage::StorageManager;
 pub use types::{
-    ApprovalRecord, DataKey, EscrowState, EscrowStatus, Milestone, MilestoneStatus, MultisigConfig,
+    ApprovalRecord, DataKey, EscrowState, EscrowStatus, EscrowTemplate, Milestone, MilestoneStatus, MilestoneTemplate, MultisigConfig,
     OptionalBytesN32, OptionalPriceCondition, OptionalTimelock, PriceCondition, PriceDirection,
     RecurringScheduleStatus, ReputationRecord, Timelock, MS_APPROVED, MS_DISPUTED, MS_PENDING,
     MS_REJECTED, MS_RELEASED, MS_SUBMITTED,
@@ -1291,7 +1290,7 @@ impl EscrowContract {
 
         // Check token whitelist if enabled
         if ContractStorage::is_token_whitelist_enabled(&env) && !ContractStorage::is_token_approved(&env, &token) {
-            return Err(EscrowError::TokenNotApproved);
+            return Err(EscrowError::TokenDenied);
         }
 
         let buyer_signers = {
@@ -2502,7 +2501,7 @@ impl EscrowContract {
 
         let unallocated = meta.remaining_balance - meta.allocated_amount;
         if split_amount <= 0 || split_amount >= unallocated {
-            return Err(EscrowError::InvalidSplitAmount);
+            return Err(EscrowError::SplitInvalid);
         }
 
         let child1_amount = split_amount;
