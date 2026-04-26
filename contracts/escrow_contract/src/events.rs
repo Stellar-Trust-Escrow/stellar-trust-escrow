@@ -89,6 +89,20 @@ pub fn emit_recurring_schedule_created(
     );
 }
 
+pub fn emit_vesting_schedule_created(
+    env: &Env,
+    escrow_id: u64,
+    cliff_seconds: u64,
+    duration_seconds: u64,
+    monthly_amount: i128,
+    final_amount: i128,
+) {
+    env.events().publish(
+        (ev::VESTING_SCHEDULE_CREATED, escrow_id),
+        (cliff_seconds, duration_seconds, monthly_amount, final_amount),
+    );
+}
+
 pub fn emit_recurring_payments_processed(
     env: &Env,
     escrow_id: u64,
@@ -326,4 +340,44 @@ pub fn emit_nft_gated_escrow_created(
     );
 }
 
+/// Emitted when an NFT-gated escrow is created.
+///
+/// # Arguments
+/// * `escrow_id`    - The newly assigned escrow ID
+/// * `nft_contract` - The NFT contract address used for gating
+/// * `token_id`     - The NFT token ID that was checked
+pub fn emit_nft_gated_escrow_created(
+    env: &Env,
+    escrow_id: u64,
+    nft_contract: &Address,
+    token_id: u64,
+) {
+    env.events().publish(
+        (symbol_short!("nft_esc"), escrow_id),
+        (nft_contract.clone(), token_id),
+    );
+}
 
+pub fn emit_escrow_split(
+    env: &Env,
+    parent_escrow_id: u64,
+    child_escrow_id_1: u64,
+    child_escrow_id_2: u64,
+) {
+    env.events().publish(
+        (ev::ESCROW_SPLIT, parent_escrow_id),
+        (child_escrow_id_1, child_escrow_id_2),
+    );
+}
+
+pub fn emit_deadline_extended(
+    env: &Env,
+    escrow_id: u64,
+    old_deadline: u64,
+    new_deadline: u64,
+) {
+    env.events().publish(
+        (ev::DEADLINE_EXTENDED, escrow_id),
+        (old_deadline, new_deadline),
+    );
+}

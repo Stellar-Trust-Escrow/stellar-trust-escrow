@@ -192,6 +192,25 @@ pub enum RecurringInterval {
     Monthly,
 }
 
+/// Template for a milestone in an escrow template.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MilestoneTemplate {
+    pub title: String,
+    pub description_hash: BytesN<32>,
+    pub amount: i128,
+}
+
+/// Reusable escrow template with predefined milestones.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EscrowTemplate {
+    pub id: u64,
+    pub creator: Address,
+    pub name: String,
+    pub milestones: soroban_sdk::Vec<MilestoneTemplate>,
+}
+
 /// Single approval by a buyer signer, recorded with timestamp.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -287,6 +306,9 @@ pub struct RecurringPaymentConfig {
 
     /// Number of payments already processed.
     pub processed_payments: u32,
+
+    /// Amount for the final payment, if the total is not evenly divisible.
+    pub final_payment_amount: Option<i128>,
 
     /// Whether scheduled releases are currently paused.
     pub paused: bool,
@@ -572,4 +594,12 @@ pub enum DataKey {
     MetaTxNonce(Address),
     /// Storage migration cursor — value: u64
     MigrationCursor,
+    /// Approved token for whitelist — key: Address, value: bool
+    ApprovedToken(Address),
+    /// Whether token whitelist is enabled — value: bool
+    TokenWhitelistEnabled,
+    /// Escrow template by ID — key: u64, value: EscrowTemplate
+    Template(u64),
+    /// Template counter — value: u64
+    TemplateCounter,
 }
