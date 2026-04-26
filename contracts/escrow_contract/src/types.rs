@@ -461,4 +461,6 @@ pub enum DataKey {
     CancellationsByRequester(Address),
     /// Escrow IDs indexed by slashed user address — key: Address, value: Vec<u64>
     SlashsByAddress(Address),
+    /// Minimum arbiter reputation score threshold — value: u64
+    MinArbiterReputation,
 }
