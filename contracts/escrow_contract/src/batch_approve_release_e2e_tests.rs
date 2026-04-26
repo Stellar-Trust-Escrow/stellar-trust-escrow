@@ -26,11 +26,7 @@ mod batch_approve_release_e2e_tests {
         (env, admin, contract_id, client)
     }
 
-    fn count_events_with_symbol(
-        env: &Env,
-        contract_id: &Address,
-        sym: Symbol,
-    ) -> u32 {
+    fn count_events_with_symbol(env: &Env, contract_id: &Address, sym: Symbol) -> u32 {
         env.events()
             .all()
             .iter()
@@ -68,7 +64,8 @@ mod batch_approve_release_e2e_tests {
         let total_amount: i128 = amounts.iter().sum(); // 600
         let sac = env.register_stellar_asset_contract_v2(admin.clone());
         let token_addr = sac.address();
-        token::StellarAssetClient::new(&env, &token_addr).mint(&client_addr, &(total_amount + 30 + 3 * 30));
+        token::StellarAssetClient::new(&env, &token_addr)
+            .mint(&client_addr, &(total_amount + 30 + 3 * 30));
 
         let escrow_id = client.create_escrow(
             &client_addr,
@@ -116,19 +113,26 @@ mod batch_approve_release_e2e_tests {
 
         let state = client.get_escrow(&escrow_id);
 
-        assert_eq!(state.remaining_balance, 0, "remaining_balance must be 0 after full release");
-        assert_eq!(state.status, EscrowStatus::Completed, "escrow must be Completed");
+        assert_eq!(
+            state.remaining_balance, 0,
+            "remaining_balance must be 0 after full release"
+        );
+        assert_eq!(
+            state.status,
+            EscrowStatus::Completed,
+            "escrow must be Completed"
+        );
 
         // esc_done emitted exactly once.
-        let done_count = count_events_with_symbol(
-            &env,
-            &contract_id,
-            soroban_sdk::symbol_short!("esc_done"),
-        );
+        let done_count =
+            count_events_with_symbol(&env, &contract_id, soroban_sdk::symbol_short!("esc_done"));
         assert_eq!(done_count, 1, "esc_done must be emitted exactly once");
 
         // Freelancer received the full total_amount.
         let freelancer_balance = token::Client::new(&env, &token_addr).balance(&freelancer);
-        assert_eq!(freelancer_balance, total_amount, "freelancer balance must equal total_amount");
+        assert_eq!(
+            freelancer_balance, total_amount,
+            "freelancer balance must equal total_amount"
+        );
     }
 }

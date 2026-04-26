@@ -12,7 +12,10 @@ mod pause_tests {
             threshold: 0,
         }
     }
-    use soroban_sdk::{testutils::{Address as _, Events}, Address, BytesN, Env, String, Symbol, TryFromVal};
+    use soroban_sdk::{
+        testutils::{Address as _, Events},
+        Address, BytesN, Env, String, Symbol, TryFromVal,
+    };
 
     fn setup() -> (Env, Address, Address, EscrowContractClient<'static>) {
         let env = Env::default();
@@ -223,7 +226,7 @@ mod pause_tests {
 
         for event in events.iter() {
             let topics = event.1;
-            if topics.len() > 0 {
+            if !topics.is_empty() {
                 if let Ok(sym) = Symbol::try_from_val(&env, &topics.get_unchecked(0)) {
                     if sym == soroban_sdk::symbol_short!("paused") {
                         has_paused = true;

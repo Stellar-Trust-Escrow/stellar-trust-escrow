@@ -57,12 +57,18 @@ mod bridge;
 mod lock_time_enforcement_tests;
 mod bridge_tests;
 mod errors;
+mod event_names;
 mod event_tests;
 mod events;
+mod lock_time_enforcement_tests;
+mod nft;
+mod nft_tests;
 mod oracle;
 mod oracle_fallback_tests;
+mod oracle_tests;
 mod pause_tests;
 mod self_escrow_tests;
+mod timelock_enforcement_tests;
 mod transfer_client_tests;
 mod types;
 mod upgrade_tests;
@@ -71,14 +77,13 @@ pub use errors::EscrowError;
 use storage::StorageManager;
 pub use types::{
     ApprovalRecord, DataKey, EscrowState, EscrowStatus, Milestone, MilestoneStatus, MultisigConfig,
-    OptionalBytesN32, OptionalTimelock, RecurringScheduleStatus, ReputationRecord, Timelock,
-    MS_APPROVED, MS_DISPUTED, MS_PENDING, MS_REJECTED, MS_RELEASED, MS_SUBMITTED,
+    OptionalBytesN32, OptionalPriceCondition, OptionalTimelock, PriceCondition, PriceDirection,
+    RecurringScheduleStatus, ReputationRecord, Timelock, MS_APPROVED, MS_DISPUTED, MS_PENDING,
+    MS_REJECTED, MS_RELEASED, MS_SUBMITTED,
 };
 use types::{CancellationRequest, RecurringInterval, RecurringPaymentConfig, SlashRecord};
 
-use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, token, Address, BytesN, Env, String, Vec,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, token, Address, BytesN, Env, String, Vec};
 
 mod storage;
 
@@ -641,7 +646,7 @@ impl ContractStorage {
         }
 
         env.events().publish(
-            (symbol_short!("rent_col"), meta.escrow_id),
+            (event_names::RENT_COLLECTED, meta.escrow_id),
             (
                 collectable,
                 meta.rent_balance,
@@ -713,7 +718,7 @@ impl ContractStorage {
         Self::remove_escrow_meta(env, meta.escrow_id);
 
         env.events().publish(
-            (symbol_short!("rent_exp"), meta.escrow_id),
+            (event_names::RENT_EXPIRED, meta.escrow_id),
             (refund_amount, meta.remaining_balance),
         );
         Ok(())
@@ -852,6 +857,152 @@ impl EscrowContract {
         oracle::convert_amount(&env, amount, &from_asset, &to_asset)
     }
 
+    /// Adds a milestone with a price-based release condition.
+    ///
+    /// Identical to `add_milestone` but stores a `PriceCondition` on the
+    /// milestone. Funds are released automatically when `trigger_oracle_release`
+    /// is called and the condition is satisfied.
+    pub fn create_price_indexed_milestone(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+        title: String,
+        description_hash: BytesN<32>,
+        amount: i128,
+        price_condition: PriceCondition,
+    ) -> Result<u32, EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_not_paused(&env)?;
+
+        if amount <= 0 {
+            return Err(EscrowError::InvalidMilestoneAmount);
+        }
+
+        let mut meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
+
+        if caller != meta.client {
+            return Err(EscrowError::ClientOnly);
+        }
+        if meta.status != EscrowStatus::Active {
+            return Err(EscrowError::EscrowNotActive);
+        }
+        if meta.allocated_amount + amount > meta.total_amount {
+            return Err(EscrowError::MilestoneAmountExceedsEscrow);
+        }
+
+        let milestone_id = meta.milestone_count;
+        meta.milestone_count = meta
+            .milestone_count
+            .checked_add(1)
+            .ok_or(EscrowError::AmountMismatch)?;
+        meta.allocated_amount = meta
+            .allocated_amount
+            .checked_add(amount)
+            .ok_or(EscrowError::AmountMismatch)?;
+
+        ContractStorage::save_milestone(
+            &env,
+            escrow_id,
+            &Milestone {
+                id: milestone_id,
+                title,
+                description_hash,
+                amount,
+                status: MS_PENDING,
+                submitted_at: None,
+                resolved_at: None,
+                approvals: soroban_sdk::Vec::new(&env),
+                rejection_reason: OptionalBytesN32::None,
+                price_condition: OptionalPriceCondition::Some(price_condition),
+            },
+        );
+        ContractStorage::save_escrow_meta(&env, &meta);
+
+        events::emit_milestone_added(&env, escrow_id, milestone_id, amount);
+        Ok(milestone_id)
+    }
+
+    /// Checks the oracle price for a price-indexed milestone and releases funds
+    /// if the condition is met.
+    ///
+    /// Returns `EscrowError::InvalidMilestoneState` if the price condition
+    /// is not yet satisfied, or if the milestone has no price condition.
+    pub fn trigger_oracle_release(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+        milestone_id: u32,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_initialized(&env)?;
+        ContractStorage::require_not_paused(&env)?;
+
+        let mut meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
+        if meta.status != EscrowStatus::Active {
+            return Err(EscrowError::EscrowNotActive);
+        }
+
+        let mut milestone = ContractStorage::load_milestone(&env, escrow_id, milestone_id)?;
+        if milestone.status != MS_PENDING {
+            return Err(EscrowError::InvalidMilestoneState);
+        }
+
+        let condition = match milestone.price_condition.clone() {
+            OptionalPriceCondition::Some(c) => c,
+            OptionalPriceCondition::None => return Err(EscrowError::InvalidMilestoneState),
+        };
+
+        let current_price = oracle::get_price_usd(&env, &condition.asset)?;
+
+        let condition_met = match condition.direction {
+            PriceDirection::Above => current_price >= condition.target_price_usd,
+            PriceDirection::Below => current_price <= condition.target_price_usd,
+        };
+
+        if !condition_met {
+            return Err(EscrowError::InvalidMilestoneState);
+        }
+
+        let now = env.ledger().timestamp();
+        let amount = milestone.amount;
+
+        milestone.status = MS_RELEASED;
+        milestone.submitted_at = Some(now);
+        milestone.resolved_at = Some(now);
+        ContractStorage::save_milestone(&env, escrow_id, &milestone);
+
+        meta.remaining_balance = meta
+            .remaining_balance
+            .checked_sub(amount)
+            .ok_or(EscrowError::AmountMismatch)?;
+        meta.approved_count = meta
+            .approved_count
+            .checked_add(1)
+            .ok_or(EscrowError::AmountMismatch)?;
+        meta.released_count = meta
+            .released_count
+            .checked_add(1)
+            .ok_or(EscrowError::AmountMismatch)?;
+
+        token::Client::new(&env, &meta.token).transfer(
+            &env.current_contract_address(),
+            &meta.freelancer,
+            &amount,
+        );
+
+        events::emit_milestone_approved(&env, escrow_id, milestone_id, amount);
+        events::emit_funds_released(&env, escrow_id, &meta.freelancer, amount);
+
+        if meta.released_count == meta.milestone_count && meta.milestone_count > 0 {
+            meta.status = EscrowStatus::Completed;
+            events::emit_escrow_completed(&env, escrow_id);
+        }
+
+        ContractStorage::save_escrow_meta(&env, &meta);
+        ContractStorage::bump_instance_ttl(&env);
+        Ok(())
+    }
+
     // ── Bridge / Cross-Chain ──────────────────────────────────────────────────
 
     /// Set the Wormhole bridge contract address. Admin only.
@@ -909,10 +1060,7 @@ impl EscrowContract {
     }
 
     /// Return bridge confirmation state for a bridged token.
-    pub fn get_bridge_confirmation(
-        env: Env,
-        token: Address,
-    ) -> Option<bridge::BridgeConfirmation> {
+    pub fn get_bridge_confirmation(env: Env, token: Address) -> Option<bridge::BridgeConfirmation> {
         bridge::get_bridge_confirmation(&env, &token)
     }
 
@@ -951,6 +1099,44 @@ impl EscrowContract {
         )
     }
 
+    /// Creates an escrow gated by NFT ownership.
+    ///
+    /// The `caller` must hold at least one token of `token_id` in `nft_contract`.
+    /// If the balance check passes, delegates to `create_escrow_internal` and
+    /// emits an additional `nft_esc` event.
+    pub fn create_escrow_with_nft_gate(
+        env: Env,
+        caller: Address,
+        nft_contract: Address,
+        token_id: u64,
+        freelancer: Address,
+        token: Address,
+        total_amount: i128,
+        brief_hash: BytesN<32>,
+        arbiter: Option<Address>,
+        deadline: Option<u64>,
+        lock_time: Option<u64>,
+    ) -> Result<u64, EscrowError> {
+        let balance = nft::NftClient::new(&env, &nft_contract).balance(&caller, &token_id);
+        if balance == 0 {
+            return Err(EscrowError::Unauthorized);
+        }
+        let escrow_id = Self::create_escrow_internal(
+            env.clone(),
+            caller,
+            freelancer,
+            token,
+            total_amount,
+            brief_hash,
+            arbiter,
+            deadline,
+            lock_time,
+            None,
+        )?;
+        events::emit_nft_gated_escrow_created(&env, escrow_id, &nft_contract, token_id);
+        Ok(escrow_id)
+    }
+
     pub fn create_escrow_with_buyer_signers(
         env: Env,
         client: Address,
@@ -980,6 +1166,39 @@ impl EscrowContract {
         )
     }
 
+    /// Validates all scalar inputs for escrow creation.
+    ///
+    /// Checks performed (in order):
+    /// 1. `total_amount` must be positive and within `MAX_ESCROW_AMOUNT` (`InvalidEscrowAmount`)
+    /// 2. `deadline`, if provided, must be in the future (`InvalidDeadline`)
+    /// 3. `lock_time`, if provided, must be in the future (`InvalidLockTime`)
+    fn validate_escrow_inputs(
+        env: &Env,
+        total_amount: i128,
+        deadline: Option<u64>,
+        lock_time: Option<u64>,
+    ) -> Result<(), EscrowError> {
+        if total_amount <= 0 || total_amount > MAX_ESCROW_AMOUNT {
+            return Err(EscrowError::InvalidEscrowAmount);
+        }
+
+        let now = env.ledger().timestamp();
+
+        if let Some(dl) = deadline {
+            if dl <= now {
+                return Err(EscrowError::InvalidDeadline);
+            }
+        }
+
+        if let Some(lt) = lock_time {
+            if lt <= now {
+                return Err(EscrowError::InvalidLockTime);
+            }
+        }
+
+        Ok(())
+    }
+
     fn create_escrow_internal(
         env: Env,
         client: Address,
@@ -1007,27 +1226,13 @@ impl EscrowContract {
             }
         }
 
-        if total_amount <= 0 || total_amount > MAX_ESCROW_AMOUNT {
-            return Err(EscrowError::InvalidEscrowAmount);
-        }
+        Self::validate_escrow_inputs(&env, total_amount, deadline, lock_time)?;
 
         if brief_hash == BytesN::from_array(&env, &[0u8; 32]) {
             // TODO: return Err(EscrowError::InvalidBriefHash);
         }
 
         let now = env.ledger().timestamp();
-        if let Some(dl) = deadline {
-            if dl <= now {
-                return Err(EscrowError::InvalidDeadline);
-            }
-        }
-
-        // Validate lock_time if provided
-        if let Some(lt) = lock_time {
-            if lt <= now {
-                return Err(EscrowError::InvalidLockTime);
-            }
-        }
 
         // Reject unapproved wrapped/bridged tokens
         bridge::validate_escrow_token(&env, &token)?;
@@ -1263,6 +1468,7 @@ impl EscrowContract {
                 resolved_at: None,
                 approvals: soroban_sdk::Vec::new(&env),
                 rejection_reason: OptionalBytesN32::None,
+                price_condition: OptionalPriceCondition::None,
             },
         );
         ContractStorage::save_escrow_meta(&env, &meta);
@@ -1403,6 +1609,7 @@ impl EscrowContract {
                     resolved_at: None,
                     approvals: soroban_sdk::Vec::new(&env),
                     rejection_reason: OptionalBytesN32::None,
+                    price_condition: OptionalPriceCondition::None,
                 },
             );
             events::emit_milestone_added(
@@ -1660,6 +1867,7 @@ impl EscrowContract {
                     resolved_at: Some(now),
                     approvals: soroban_sdk::Vec::new(&env),
                     rejection_reason: OptionalBytesN32::None,
+                    price_condition: OptionalPriceCondition::None,
                 },
             );
 
@@ -4753,7 +4961,7 @@ mod tests {
         let rent_reserve = 2 * ContractStorage::reserve_for_entries(1);
         token_admin.mint(&escrow_client, &(escrow_amount + rent_reserve));
 
-        let initial_client_balance = token_client.balance(&escrow_client);
+        let _initial_client_balance = token_client.balance(&escrow_client);
 
         let escrow_id = client.create_escrow(
             &escrow_client,
