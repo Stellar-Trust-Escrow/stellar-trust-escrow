@@ -141,4 +141,10 @@ pub enum EscrowError {
     // ── Input Validation ─────────────────────────────────────────────────────
     /// A string argument exceeds MAX_STRING_LEN or is empty.
     StringTooLong = 55,
+    /// The token is not on the approved whitelist.
+    TokenDenied = 56,
+    /// The split amount is invalid (zero, negative, or exceeds unallocated balance).
+    SplitInvalid = 57,
+    /// The requested escrow template does not exist.
+    TemplateNotFound = 58,
 }

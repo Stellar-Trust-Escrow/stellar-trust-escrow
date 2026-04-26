@@ -1,0 +1,6 @@
+workspace = true
+packages = ["contracts/escrow_contract", "contracts/escrow_extensions", "contracts/governance"]
+run_types = ["Tests"]
+output-dir = "target/tarpaulin"
+out = ["Html", "Xml"]
+exclude-files = ["*/tests/*", "*/*/tests/*", "*/benches/*"]

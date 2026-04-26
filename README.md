@@ -6,6 +6,7 @@
 [![Contributors Welcome](https://img.shields.io/badge/contributors-welcome-brightgreen)](CONTRIBUTING.md)
 [![Built on Stellar](https://img.shields.io/badge/built%20on-Stellar-blueviolet)](https://stellar.org)
 [![Soroban](https://img.shields.io/badge/Soroban-Smart%20Contracts-orange)](https://soroban.stellar.org)
+[![Coverage](https://img.shields.io/github/actions/workflow/status/Stellar-Trust-Escrow/stellar-trust-escrow/coverage.yml?label=coverage&style=flat-square)](https://github.com/Stellar-Trust-Escrow/stellar-trust-escrow/actions/workflows/coverage.yml)
 
 ---
 
