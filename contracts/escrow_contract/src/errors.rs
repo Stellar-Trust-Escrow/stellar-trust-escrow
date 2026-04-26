@@ -69,7 +69,8 @@ pub enum EscrowError {
     SlashNotFound = 38,
     SlashAlreadyDisputed = 39,
     SlashDisputeDeadlineExpired = 40,
-    InvalidSlashAmount = 41,
+    /// A SlashRecord already exists for this escrow; duplicate slash rejected.
+    SlashAlreadyApplied = 41,
 
     // ── Storage Migration ───────────────────────────────────────────────────────
     StorageMigrationFailed = 42,
