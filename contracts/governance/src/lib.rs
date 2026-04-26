@@ -470,6 +470,10 @@ impl GovernanceContract {
             return Err(GovError::ProposalAlreadyExecuted);
         }
 
+        if proposal.status == ProposalStatus::Cancelled {
+            return Err(GovError::ProposalAlreadyCancelled);
+        }
+
         proposal.status = ProposalStatus::Cancelled;
         Storage::save_proposal(&env, &proposal);
         events::emit_proposal_cancelled(&env, proposal_id, &caller);
