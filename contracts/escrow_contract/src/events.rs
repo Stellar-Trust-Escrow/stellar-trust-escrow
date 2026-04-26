@@ -343,3 +343,27 @@ pub fn emit_nft_gated_escrow_created(
         (nft_contract.clone(), token_id),
     );
 }
+
+pub fn emit_escrow_split(
+    env: &Env,
+    parent_escrow_id: u64,
+    child_escrow_id_1: u64,
+    child_escrow_id_2: u64,
+) {
+    env.events().publish(
+        (ev::ESCROW_SPLIT, parent_escrow_id),
+        (child_escrow_id_1, child_escrow_id_2),
+    );
+}
+
+pub fn emit_deadline_extended(
+    env: &Env,
+    escrow_id: u64,
+    old_deadline: u64,
+    new_deadline: u64,
+) {
+    env.events().publish(
+        (ev::DEADLINE_EXTENDED, escrow_id),
+        (old_deadline, new_deadline),
+    );
+}
