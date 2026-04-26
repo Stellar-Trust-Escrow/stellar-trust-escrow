@@ -71,7 +71,8 @@ pub use types::{
 };
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, token, Address, BytesN, Env, String, Vec,
+    contract, contractimpl, contracttype, panic_with_error, symbol_short, token, Address, BytesN,
+    Env, String, Vec,
 };
 
 mod storage;
@@ -2787,6 +2788,11 @@ impl EscrowContract {
         reason: &String,
         escrow_id: u64,
     ) {
+        // Guard: reject duplicate slash — a SlashRecord already exists for this escrow.
+        if ContractStorage::load_slash_record(env, escrow_id).is_ok() {
+            panic_with_error!(env, EscrowError::InvalidSlashAmount);
+        }
+
         // Update reputation
         let mut reputation = ContractStorage::load_reputation(env, slashed_user);
         reputation.total_score = reputation.total_score.saturating_sub(10);
@@ -4258,5 +4264,48 @@ mod tests {
         let unknown = Address::generate(&env);
         let records = client.get_slash_records_by_address(&unknown);
         assert_eq!(records.len(), 0);
+    }
+
+    // ── Per-escrow slash rate limit ───────────────────────────────────────────
+
+    #[test]
+    fn test_slash_rate_limit_per_escrow_rejects_second_slash() {
+        let (env, admin, _, client) = setup();
+        client.initialize(&admin);
+
+        let (escrow_client, _, _, escrow_id) =
+            setup_funded_escrow(&env, &admin, &client, 100_i128);
+
+        // First cancellation — creates a SlashRecord for this escrow
+        client.request_cancellation(
+            &escrow_client,
+            &escrow_id,
+            &String::from_str(&env, "first cancellation"),
+        );
+        advance(&env, CANCELLATION_DISPUTE_PERIOD + 1);
+        client.execute_cancellation(&escrow_id);
+
+        // Escrow is now Cancelled and a SlashRecord exists.
+        // Any further call that would invoke apply_slash must be rejected.
+        let result = client.try_execute_cancellation(&escrow_id);
+        assert!(result.is_err());
+
+        // Finalize the slash to clear the SlashRecord
+        advance(&env, SLASH_DISPUTE_PERIOD + 1);
+        client.finalize_slash(&escrow_id);
+
+        // A fresh escrow with no existing SlashRecord must still be slashable —
+        // the guard is strictly per-escrow, not per-user.
+        let (escrow_client2, _, _, escrow_id2) =
+            setup_funded_escrow(&env, &admin, &client, 100_i128);
+        client.request_cancellation(
+            &escrow_client2,
+            &escrow_id2,
+            &String::from_str(&env, "second escrow cancellation"),
+        );
+        advance(&env, CANCELLATION_DISPUTE_PERIOD + 1);
+        client.execute_cancellation(&escrow_id2);
+        let rep = client.get_reputation(&escrow_client2);
+        assert_eq!(rep.slash_count, 1);
     }
 }
