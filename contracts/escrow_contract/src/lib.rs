@@ -1066,6 +1066,13 @@ impl EscrowContract {
             },
         );
 
+        // Update participant index for client and freelancer (issue #635)
+        Self::append_to_address_index(&env, &DataKey::EscrowsByParticipant(client.clone()), escrow_id);
+        Self::append_to_address_index(&env, &DataKey::EscrowsByParticipant(freelancer.clone()), escrow_id);
+
+        // Update status index: new escrow starts as Active (issue #636)
+        Self::append_to_vec_index(&env, &DataKey::EscrowsByStatus(EscrowStatus::Active), escrow_id);
+
         events::emit_escrow_created(&env, escrow_id, &client, &freelancer, total_amount);
         Ok(escrow_id)
     }
@@ -1816,6 +1823,9 @@ impl EscrowContract {
             && meta.released_count == meta.milestone_count
         {
             meta.status = EscrowStatus::Completed;
+            // Update status index: Active → Completed (issue #636)
+            Self::remove_from_vec_index(&env, &DataKey::EscrowsByStatus(EscrowStatus::Active), escrow_id);
+            Self::append_to_vec_index(&env, &DataKey::EscrowsByStatus(EscrowStatus::Completed), escrow_id);
             events::emit_escrow_completed(&env, escrow_id);
         }
 
@@ -2034,6 +2044,9 @@ impl EscrowContract {
 
         if meta.released_count == meta.milestone_count && meta.milestone_count > 0 {
             meta.status = EscrowStatus::Completed;
+            // Update status index: Active → Completed (issue #636)
+            Self::remove_from_vec_index(&env, &DataKey::EscrowsByStatus(EscrowStatus::Active), escrow_id);
+            Self::append_to_vec_index(&env, &DataKey::EscrowsByStatus(EscrowStatus::Completed), escrow_id);
             events::emit_escrow_completed(&env, escrow_id);
         }
 
@@ -2113,6 +2126,10 @@ impl EscrowContract {
         meta.remaining_balance = 0;
         meta.status = EscrowStatus::Cancelled;
         ContractStorage::save_escrow_meta(&env, &meta);
+
+        // Update status index: Active → Cancelled (issue #636)
+        Self::remove_from_vec_index(&env, &DataKey::EscrowsByStatus(EscrowStatus::Active), escrow_id);
+        Self::append_to_vec_index(&env, &DataKey::EscrowsByStatus(EscrowStatus::Cancelled), escrow_id);
 
         events::emit_escrow_cancelled(&env, escrow_id, returned);
         Ok(())
@@ -2230,6 +2247,10 @@ impl EscrowContract {
         ContractStorage::save_escrow_meta(&env, &meta);
         events::emit_dispute_raised(&env, escrow_id, &caller);
 
+        // Update status index: Active → Disputed (issue #636)
+        Self::remove_from_vec_index(&env, &DataKey::EscrowsByStatus(EscrowStatus::Active), escrow_id);
+        Self::append_to_vec_index(&env, &DataKey::EscrowsByStatus(EscrowStatus::Disputed), escrow_id);
+
         if let Some(mid) = milestone_id {
             let mut milestone = ContractStorage::load_milestone(&env, escrow_id, mid)?;
             let was_submitted = milestone.status == MS_SUBMITTED;
@@ -2294,6 +2315,10 @@ impl EscrowContract {
         meta.remaining_balance = 0;
         meta.status = EscrowStatus::Completed;
         ContractStorage::save_escrow_meta(&env, &meta);
+
+        // Update status index: Disputed → Completed (issue #636)
+        Self::remove_from_vec_index(&env, &DataKey::EscrowsByStatus(EscrowStatus::Disputed), escrow_id);
+        Self::append_to_vec_index(&env, &DataKey::EscrowsByStatus(EscrowStatus::Completed), escrow_id);
 
         events::emit_dispute_resolved(&env, escrow_id, client_amount, freelancer_amount);
 
@@ -2640,6 +2665,83 @@ impl EscrowContract {
         ContractStorage::save_escrow_meta(&env, &meta);
         events::emit_arbiter_updated(&env, escrow_id, &new_arbiter);
         Ok(())
+    /// Returns all escrow IDs where `participant` is client or freelancer (issue #635).
+    ///
+    /// Results are paginated: `offset` skips the first N entries, `limit` caps at 50.
+    pub fn get_escrow_ids_by_participant(
+        env: Env,
+        participant: Address,
+        offset: u32,
+        limit: u32,
+    ) -> soroban_sdk::Vec<u64> {
+        let capped_limit = limit.min(50) as usize;
+        let ids: soroban_sdk::Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::EscrowsByParticipant(participant))
+            .unwrap_or_else(|| soroban_sdk::Vec::new(&env));
+        let start = (offset as usize).min(ids.len() as usize);
+        let end = (start + capped_limit).min(ids.len() as usize);
+        let mut result = soroban_sdk::Vec::new(&env);
+        for i in start..end {
+            result.push_back(ids.get(i as u32).unwrap());
+        }
+        result
+    }
+
+    /// Returns all escrow IDs in the given `status` (issue #636).
+    ///
+    /// Results are paginated: `offset` skips the first N entries, `limit` caps at 50.
+    pub fn get_escrow_ids_by_status(
+        env: Env,
+        status: EscrowStatus,
+        offset: u32,
+        limit: u32,
+    ) -> soroban_sdk::Vec<u64> {
+        let capped_limit = limit.min(50) as usize;
+        let ids: soroban_sdk::Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::EscrowsByStatus(status))
+            .unwrap_or_else(|| soroban_sdk::Vec::new(&env));
+        let start = (offset as usize).min(ids.len() as usize);
+        let end = (start + capped_limit).min(ids.len() as usize);
+        let mut result = soroban_sdk::Vec::new(&env);
+        for i in start..end {
+            result.push_back(ids.get(i as u32).unwrap());
+        }
+        result
+    }
+
+    /// Returns all escrow IDs with active cancellation requests by `requester` (issue #634).
+    pub fn list_cancellations_by_requester(
+        env: Env,
+        requester: Address,
+    ) -> soroban_sdk::Vec<u64> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::CancellationsByRequester(requester))
+            .unwrap_or_else(|| soroban_sdk::Vec::new(&env))
+    }
+
+    /// Returns all `SlashRecord`s for the given `slashed_user` address (issue #637).
+    pub fn get_slash_records_by_address(
+        env: Env,
+        slashed_user: Address,
+    ) -> soroban_sdk::Vec<SlashRecord> {
+        let escrow_ids: soroban_sdk::Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::SlashsByAddress(slashed_user))
+            .unwrap_or_else(|| soroban_sdk::Vec::new(&env));
+        let mut records = soroban_sdk::Vec::new(&env);
+        for i in 0..escrow_ids.len() {
+            let eid = escrow_ids.get(i).unwrap();
+            if let Ok(record) = ContractStorage::load_slash_record(&env, eid) {
+                records.push_back(record);
+            }
+        }
+        records
     }
 
     // ── Cancellation Functions ─────────────────────────────────────────────────
@@ -2695,9 +2797,16 @@ impl EscrowContract {
         };
         ContractStorage::save_cancellation_request(&env, &request);
 
+        // Update cancellation requester index (issue #634)
+        Self::append_to_address_index(&env, &DataKey::CancellationsByRequester(caller.clone()), escrow_id);
+
         // Update escrow status
         meta.status = EscrowStatus::CancellationPending;
         ContractStorage::save_escrow_meta(&env, &meta);
+
+        // Update status index: Active → CancellationPending (issue #636)
+        Self::remove_from_vec_index(&env, &DataKey::EscrowsByStatus(EscrowStatus::Active), escrow_id);
+        Self::append_to_vec_index(&env, &DataKey::EscrowsByStatus(EscrowStatus::CancellationPending), escrow_id);
 
         // Emit event
         events::emit_cancellation_requested(&env, escrow_id, &caller, &reason, dispute_deadline);
@@ -2798,8 +2907,13 @@ impl EscrowContract {
         meta.remaining_balance = 0;
         ContractStorage::save_escrow_meta(&env, &meta);
 
-        // Clean up cancellation request
+        // Clean up cancellation request and requester index (issue #634)
+        Self::remove_from_address_index(&env, &DataKey::CancellationsByRequester(request.requester.clone()), escrow_id);
         ContractStorage::remove_cancellation_request(&env, escrow_id);
+
+        // Update status index: CancellationPending → Cancelled (issue #636)
+        Self::remove_from_vec_index(&env, &DataKey::EscrowsByStatus(EscrowStatus::CancellationPending), escrow_id);
+        Self::append_to_vec_index(&env, &DataKey::EscrowsByStatus(EscrowStatus::Cancelled), escrow_id);
 
         // Emit event
         events::emit_cancellation_executed(&env, escrow_id, client_amount, slash_amount);
@@ -2845,6 +2959,10 @@ impl EscrowContract {
         // Raise dispute on escrow
         meta.status = EscrowStatus::Disputed;
         ContractStorage::save_escrow_meta(&env, &meta);
+
+        // Update status index: CancellationPending → Disputed (issue #636)
+        Self::remove_from_vec_index(&env, &DataKey::EscrowsByStatus(EscrowStatus::CancellationPending), escrow_id);
+        Self::append_to_vec_index(&env, &DataKey::EscrowsByStatus(EscrowStatus::Disputed), escrow_id);
 
         events::emit_dispute_raised(&env, escrow_id, &caller);
 
@@ -3105,6 +3223,9 @@ impl EscrowContract {
         };
         ContractStorage::save_slash_record(env, &slash_record);
 
+        // Update slash address index (issue #637)
+        Self::append_to_address_index(env, &DataKey::SlashsByAddress(slashed_user.clone()), escrow_id);
+
         // Emit slash event
         events::emit_slash_applied(env, escrow_id, slashed_user, recipient, amount, reason);
     }
@@ -3115,6 +3236,43 @@ impl EscrowContract {
     pub fn get_contract_balance(env: Env, token: Address) -> i128 {
         ContractStorage::bump_instance_ttl(&env);
         token::Client::new(&env, &token).balance(&env.current_contract_address())
+    // ── Index helpers ─────────────────────────────────────────────────────────
+
+    /// Appends `escrow_id` to a persistent `Vec<u64>` stored under `key`.
+    fn append_to_vec_index(env: &Env, key: &DataKey, escrow_id: u64) {
+        let mut ids: soroban_sdk::Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(key)
+            .unwrap_or_else(|| soroban_sdk::Vec::new(env));
+        ids.push_back(escrow_id);
+        env.storage().persistent().set(key, &ids);
+    }
+
+    /// Removes `escrow_id` from a persistent `Vec<u64>` stored under `key`.
+    fn remove_from_vec_index(env: &Env, key: &DataKey, escrow_id: u64) {
+        let ids: soroban_sdk::Vec<u64> = match env.storage().persistent().get(key) {
+            Some(v) => v,
+            None => return,
+        };
+        let mut updated = soroban_sdk::Vec::new(env);
+        for i in 0..ids.len() {
+            let id = ids.get(i).unwrap();
+            if id != escrow_id {
+                updated.push_back(id);
+            }
+        }
+        env.storage().persistent().set(key, &updated);
+    }
+
+    /// Appends `escrow_id` to an address-keyed persistent `Vec<u64>`.
+    fn append_to_address_index(env: &Env, key: &DataKey, escrow_id: u64) {
+        Self::append_to_vec_index(env, key, escrow_id);
+    }
+
+    /// Removes `escrow_id` from an address-keyed persistent `Vec<u64>`.
+    fn remove_from_address_index(env: &Env, key: &DataKey, escrow_id: u64) {
+        Self::remove_from_vec_index(env, key, escrow_id);
     }
 }
 
@@ -4290,6 +4448,26 @@ mod tests {
             &token_id,
             &500_i128,
             &BytesN::from_array(env, &[9u8; 32]),
+    // ── Issue #635: get_escrow_ids_by_participant ─────────────────────────────
+
+    #[test]
+    fn test_get_escrow_ids_by_participant_indexes_client_and_freelancer() {
+        let (env, admin, _contract_id, client) = setup();
+        let escrow_client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_id = env.register_stellar_asset_contract_v2(admin.clone()).address();
+        let token_admin = token::StellarAssetClient::new(&env, &token_id);
+        let reserve = ContractStorage::reserve_for_entries(1);
+        token_admin.mint(&escrow_client, &(200_i128 + 2 * reserve));
+
+        client.initialize(&admin);
+
+        let eid1 = client.create_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &100_i128,
+            &BytesN::from_array(&env, &[1u8; 32]),
             &None,
             &None,
             &None,
@@ -4462,6 +4640,154 @@ mod tests {
             &token_id,
             &amount,
             &BytesN::from_array(&env, &[30; 32]),
+            &no_multisig(&env),
+        );
+        let eid2 = client.create_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &100_i128,
+            &BytesN::from_array(&env, &[2u8; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
+
+        let client_ids = client.get_escrow_ids_by_participant(&escrow_client, &0, &50);
+        assert_eq!(client_ids.len(), 2);
+        assert_eq!(client_ids.get(0).unwrap(), eid1);
+        assert_eq!(client_ids.get(1).unwrap(), eid2);
+
+        let freelancer_ids = client.get_escrow_ids_by_participant(&freelancer, &0, &50);
+        assert_eq!(freelancer_ids.len(), 2);
+    }
+
+    #[test]
+    fn test_get_escrow_ids_by_participant_pagination() {
+        let (env, admin, _contract_id, client) = setup();
+        let escrow_client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_id = env.register_stellar_asset_contract_v2(admin.clone()).address();
+        let token_admin = token::StellarAssetClient::new(&env, &token_id);
+        let reserve = ContractStorage::reserve_for_entries(1);
+        token_admin.mint(&escrow_client, &(500_i128 + 5 * reserve));
+
+        client.initialize(&admin);
+
+        for i in 0u8..5 {
+            client.create_escrow(
+                &escrow_client,
+                &freelancer,
+                &token_id,
+                &100_i128,
+                &BytesN::from_array(&env, &[i; 32]),
+                &None,
+                &None,
+                &None,
+                &None,
+                &no_multisig(&env),
+            );
+        }
+
+        // offset=2, limit=2 → should return ids at index 2 and 3
+        let page = client.get_escrow_ids_by_participant(&escrow_client, &2, &2);
+        assert_eq!(page.len(), 2);
+
+        // limit capped at 50
+        let all = client.get_escrow_ids_by_participant(&escrow_client, &0, &100);
+        assert_eq!(all.len(), 5);
+    }
+
+    #[test]
+    fn test_get_escrow_ids_by_participant_empty_for_unknown_address() {
+        let (env, admin, _contract_id, client) = setup();
+        client.initialize(&admin);
+        let unknown = Address::generate(&env);
+        let ids = client.get_escrow_ids_by_participant(&unknown, &0, &50);
+        assert_eq!(ids.len(), 0);
+    }
+
+    // ── Issue #636: get_escrow_ids_by_status ─────────────────────────────────
+
+    #[test]
+    fn test_get_escrow_ids_by_status_active_on_creation() {
+        let (env, admin, _contract_id, client) = setup();
+        let escrow_client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_id = env.register_stellar_asset_contract_v2(admin.clone()).address();
+        let reserve = ContractStorage::reserve_for_entries(1);
+        token::StellarAssetClient::new(&env, &token_id).mint(&escrow_client, &(100_i128 + reserve));
+
+        client.initialize(&admin);
+        let eid = client.create_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &100_i128,
+            &BytesN::from_array(&env, &[1u8; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
+
+        let active = client.get_escrow_ids_by_status(&EscrowStatus::Active, &0, &50);
+        assert_eq!(active.len(), 1);
+        assert_eq!(active.get(0).unwrap(), eid);
+    }
+
+    #[test]
+    fn test_get_escrow_ids_by_status_disputed_after_raise_dispute() {
+        let (env, admin, _contract_id, client) = setup();
+        let escrow_client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_id = env.register_stellar_asset_contract_v2(admin.clone()).address();
+        let reserve = ContractStorage::reserve_for_entries(1);
+        token::StellarAssetClient::new(&env, &token_id).mint(&escrow_client, &(100_i128 + reserve));
+
+        client.initialize(&admin);
+        let eid = client.create_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &100_i128,
+            &BytesN::from_array(&env, &[1u8; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
+
+        client.raise_dispute(&escrow_client, &eid, &None);
+
+        let active = client.get_escrow_ids_by_status(&EscrowStatus::Active, &0, &50);
+        assert_eq!(active.len(), 0);
+
+        let disputed = client.get_escrow_ids_by_status(&EscrowStatus::Disputed, &0, &50);
+        assert_eq!(disputed.len(), 1);
+        assert_eq!(disputed.get(0).unwrap(), eid);
+    }
+
+    #[test]
+    fn test_get_escrow_ids_by_status_completed_after_all_milestones() {
+        let (env, admin, _contract_id, client) = setup();
+        let escrow_client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_id = env.register_stellar_asset_contract_v2(admin.clone()).address();
+        let reserve = ContractStorage::reserve_for_entries(1);
+        token::StellarAssetClient::new(&env, &token_id).mint(&escrow_client, &(100_i128 + 2 * reserve));
+
+        client.initialize(&admin);
+        let eid = client.create_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &100_i128,
+            &BytesN::from_array(&env, &[1u8; 32]),
             &None,
             &None,
             &None,
@@ -4593,5 +4919,146 @@ mod tests {
         advance(&env, SLASH_DISPUTE_PERIOD + 1);
         client.finalize_slash(&escrow_id);
         assert_eq!(token_client.balance(&freelancer), 20_i128);
+        client.add_milestone(
+            &escrow_client,
+            &eid,
+            &String::from_str(&env, "M1"),
+            &BytesN::from_array(&env, &[0u8; 32]),
+            &100_i128,
+        );
+        client.submit_milestone(&freelancer, &eid, &0);
+        client.approve_milestone(&escrow_client, &eid, &0);
+
+        let completed = client.get_escrow_ids_by_status(&EscrowStatus::Completed, &0, &50);
+        assert_eq!(completed.len(), 1);
+        assert_eq!(completed.get(0).unwrap(), eid);
+
+        let active = client.get_escrow_ids_by_status(&EscrowStatus::Active, &0, &50);
+        assert_eq!(active.len(), 0);
+    }
+
+    // ── Issue #634: list_cancellations_by_requester ───────────────────────────
+
+    #[test]
+    fn test_list_cancellations_by_requester_populated_after_request() {
+        let (env, admin, _contract_id, client) = setup();
+        let escrow_client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_id = env.register_stellar_asset_contract_v2(admin.clone()).address();
+        let reserve = ContractStorage::reserve_for_entries(1);
+        token::StellarAssetClient::new(&env, &token_id).mint(&escrow_client, &(100_i128 + 2 * reserve));
+
+        client.initialize(&admin);
+        let eid = client.create_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &100_i128,
+            &BytesN::from_array(&env, &[1u8; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
+
+        client.request_cancellation(&escrow_client, &eid, &String::from_str(&env, "reason"));
+
+        let ids = client.list_cancellations_by_requester(&escrow_client);
+        assert_eq!(ids.len(), 1);
+        assert_eq!(ids.get(0).unwrap(), eid);
+    }
+
+    #[test]
+    fn test_list_cancellations_by_requester_cleared_after_execute() {
+        let (env, admin, _contract_id, client) = setup();
+        let escrow_client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_id = env.register_stellar_asset_contract_v2(admin.clone()).address();
+        let reserve = ContractStorage::reserve_for_entries(1);
+        token::StellarAssetClient::new(&env, &token_id).mint(&escrow_client, &(100_i128 + 2 * reserve));
+
+        client.initialize(&admin);
+        let eid = client.create_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &100_i128,
+            &BytesN::from_array(&env, &[1u8; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
+
+        client.request_cancellation(&escrow_client, &eid, &String::from_str(&env, "reason"));
+
+        // Advance time past dispute deadline
+        env.ledger().with_mut(|l| {
+            l.timestamp += 8 * 24 * 60 * 60; // 8 days
+        });
+
+        client.execute_cancellation(&eid);
+
+        let ids = client.list_cancellations_by_requester(&escrow_client);
+        assert_eq!(ids.len(), 0);
+    }
+
+    #[test]
+    fn test_list_cancellations_by_requester_empty_for_unknown() {
+        let (env, admin, _contract_id, client) = setup();
+        client.initialize(&admin);
+        let unknown = Address::generate(&env);
+        let ids = client.list_cancellations_by_requester(&unknown);
+        assert_eq!(ids.len(), 0);
+    }
+
+    // ── Issue #637: get_slash_records_by_address ──────────────────────────────
+
+    #[test]
+    fn test_get_slash_records_by_address_after_cancellation() {
+        let (env, admin, _contract_id, client) = setup();
+        let escrow_client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_id = env.register_stellar_asset_contract_v2(admin.clone()).address();
+        let reserve = ContractStorage::reserve_for_entries(1);
+        token::StellarAssetClient::new(&env, &token_id).mint(&escrow_client, &(100_i128 + 2 * reserve));
+
+        client.initialize(&admin);
+        let eid = client.create_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &100_i128,
+            &BytesN::from_array(&env, &[1u8; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
+
+        client.request_cancellation(&escrow_client, &eid, &String::from_str(&env, "reason"));
+
+        env.ledger().with_mut(|l| {
+            l.timestamp += 8 * 24 * 60 * 60;
+        });
+
+        client.execute_cancellation(&eid);
+
+        // The requester (escrow_client) is slashed on execute_cancellation
+        let records = client.get_slash_records_by_address(&escrow_client);
+        assert_eq!(records.len(), 1);
+        assert_eq!(records.get(0).unwrap().escrow_id, eid);
+    }
+
+    #[test]
+    fn test_get_slash_records_by_address_empty_for_no_slashes() {
+        let (env, admin, _contract_id, client) = setup();
+        client.initialize(&admin);
+        let unknown = Address::generate(&env);
+        let records = client.get_slash_records_by_address(&unknown);
+        assert_eq!(records.len(), 0);
     }
 }
