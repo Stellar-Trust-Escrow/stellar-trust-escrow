@@ -63,6 +63,7 @@ mod events;
 mod nft;
 mod nft_tests;
 mod oracle;
+mod meta_snapshot_tests;
 mod oracle_fallback_tests;
 mod oracle_tests;
 mod pause_tests;
