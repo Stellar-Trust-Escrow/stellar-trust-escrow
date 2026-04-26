@@ -57,6 +57,7 @@ mod errors;
 mod event_tests;
 mod events;
 mod oracle;
+mod meta_snapshot_tests;
 mod pause_tests;
 mod types;
 mod upgrade_tests;
