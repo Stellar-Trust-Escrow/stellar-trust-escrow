@@ -4060,8 +4060,149 @@ mod tests {
     fn test_full_escrow_lifecycle() {}
 
     #[test]
-    #[ignore = "implement dispute flow — Issues #9–#10"]
-    fn test_dispute_resolution() {}
+    fn test_dispute_resolution() {
+        use soroban_sdk::{
+            testutils::Events,
+            Symbol, TryFromVal, Val,
+        };
+
+        let (env, admin, contract_id, client) = setup();
+        client.initialize(&admin);
+
+        // ── Participants ──────────────────────────────────────────────────────
+        let escrow_client = Address::generate(&env);
+        let freelancer    = Address::generate(&env);
+        let arbiter       = Address::generate(&env);
+
+        // ── Token setup ───────────────────────────────────────────────────────
+        let total_amount: i128 = 1_000;
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_id       = token_contract.address();
+        let token_admin    = token::StellarAssetClient::new(&env, &token_id);
+
+        // Mint enough for escrow amount + rent reserves (meta entry + 1 milestone)
+        let rent_reserve = ContractStorage::reserve_for_entries(2);
+        token_admin.mint(&escrow_client, &(total_amount + rent_reserve));
+
+        let token_client = token::Client::new(&env, &token_id);
+
+        // ── Create escrow with arbiter ────────────────────────────────────────
+        let escrow_id = client.create_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &total_amount,
+            &BytesN::from_array(&env, &[1u8; 32]),
+            &Some(arbiter.clone()),
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
+
+        // ── Add a milestone for the full amount ───────────────────────────────
+        let milestone_id = client.add_milestone(
+            &escrow_client,
+            &escrow_id,
+            &String::from_str(&env, "Deliver feature"),
+            &BytesN::from_array(&env, &[2u8; 32]),
+            &total_amount,
+        );
+
+        // ── Freelancer submits the milestone ──────────────────────────────────
+        client.submit_milestone(&freelancer, &escrow_id, &milestone_id);
+
+        // ── Client raises a dispute on the submitted milestone ────────────────
+        client.raise_dispute(&escrow_client, &escrow_id, &Some(milestone_id));
+
+        // Verify escrow is now in Disputed state
+        let state_after_dispute = client.get_escrow(&escrow_id);
+        assert_eq!(state_after_dispute.status, EscrowStatus::Disputed);
+
+        // ── Capture balances before resolution ────────────────────────────────
+        let client_balance_before     = token_client.balance(&escrow_client);
+        let freelancer_balance_before = token_client.balance(&freelancer);
+
+        // remaining_balance at this point equals total_amount (no funds released yet)
+        let remaining = state_after_dispute.remaining_balance;
+        assert_eq!(remaining, total_amount);
+
+        // ── Arbiter resolves with 60 / 40 split ───────────────────────────────
+        let client_share     = remaining * 60 / 100; // 600
+        let freelancer_share = remaining - client_share; // 400
+
+        client.resolve_dispute(
+            &arbiter,
+            &escrow_id,
+            &client_share,
+            &freelancer_share,
+        );
+
+        // ── Verify final escrow state ─────────────────────────────────────────
+        let state_final = client.get_escrow(&escrow_id);
+        assert_eq!(state_final.status, EscrowStatus::Completed);
+        assert_eq!(state_final.remaining_balance, 0);
+
+        // ── Verify token balances ─────────────────────────────────────────────
+        let client_balance_after     = token_client.balance(&escrow_client);
+        let freelancer_balance_after = token_client.balance(&freelancer);
+
+        assert_eq!(
+            client_balance_after - client_balance_before,
+            client_share,
+            "client should receive 60% of remaining balance"
+        );
+        assert_eq!(
+            freelancer_balance_after - freelancer_balance_before,
+            freelancer_share,
+            "freelancer should receive 40% of remaining balance"
+        );
+
+        // ── Verify dis_rai and dis_res events ─────────────────────────────────
+        let all_events = env.events().all();
+
+        // Filter to contract events only
+        let contract_events: soroban_sdk::Vec<(Address, soroban_sdk::Vec<Val>, Val)> = {
+            let mut out = soroban_sdk::Vec::new(&env);
+            for ev in all_events.iter() {
+                if ev.0 == contract_id {
+                    out.push_back(ev);
+                }
+            }
+            out
+        };
+
+        let find_event = |sym: Symbol| -> Option<(soroban_sdk::Vec<Val>, Val)> {
+            for (_, topics, data) in contract_events.iter() {
+                if let Some(v) = topics.get(0) {
+                    if let Ok(s) = Symbol::try_from_val(&env, &v) {
+                        if s == sym {
+                            return Some((topics, data));
+                        }
+                    }
+                }
+            }
+            None
+        };
+
+        // dis_rai: topic[0]=dis_rai, topic[1]=escrow_id, data=raised_by
+        let (dis_rai_topics, dis_rai_data) = find_event(soroban_sdk::symbol_short!("dis_rai"))
+            .expect("dis_rai event not emitted");
+        let emitted_escrow_id: u64 = soroban_sdk::FromVal::from_val(&env, &dis_rai_topics.get(1).unwrap());
+        assert_eq!(emitted_escrow_id, escrow_id);
+        let raised_by: Address = soroban_sdk::FromVal::from_val(&env, &dis_rai_data);
+        assert_eq!(raised_by, escrow_client);
+
+        // dis_res: topic[0]=dis_res, topic[1]=escrow_id, data=(client_amount, freelancer_amount)
+        let (dis_res_topics, dis_res_data) = find_event(soroban_sdk::symbol_short!("dis_res"))
+            .expect("dis_res event not emitted");
+        let resolved_escrow_id: u64 = soroban_sdk::FromVal::from_val(&env, &dis_res_topics.get(1).unwrap());
+        assert_eq!(resolved_escrow_id, escrow_id);
+        let (emitted_client_amt, emitted_freelancer_amt): (i128, i128) =
+            soroban_sdk::FromVal::from_val(&env, &dis_res_data);
+        assert_eq!(emitted_client_amt, client_share);
+        assert_eq!(emitted_freelancer_amt, freelancer_share);
+    }
 
     // ── Cancellation + Slash tests ────────────────────────────────────────────
 
