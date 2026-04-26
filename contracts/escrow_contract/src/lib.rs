@@ -54,16 +54,17 @@
 mod batch_add_milestones_cap_tests;
 mod batch_approve_release_e2e_tests;
 mod bridge;
-mod lock_time_enforcement_tests;
-mod timelock_enforcement_tests;
 mod bridge_tests;
 mod errors;
+mod event_names;
 mod event_tests;
 mod events;
+mod lock_time_enforcement_tests;
 mod oracle;
 mod oracle_fallback_tests;
 mod pause_tests;
 mod self_escrow_tests;
+mod timelock_enforcement_tests;
 mod transfer_client_tests;
 mod types;
 mod upgrade_tests;
@@ -77,9 +78,7 @@ pub use types::{
 };
 use types::{CancellationRequest, RecurringInterval, RecurringPaymentConfig, SlashRecord};
 
-use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, token, Address, BytesN, Env, String, Vec,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, token, Address, BytesN, Env, String, Vec};
 
 mod storage;
 
@@ -642,7 +641,7 @@ impl ContractStorage {
         }
 
         env.events().publish(
-            (symbol_short!("rent_col"), meta.escrow_id),
+            (event_names::RENT_COLLECTED, meta.escrow_id),
             (
                 collectable,
                 meta.rent_balance,
@@ -714,7 +713,7 @@ impl ContractStorage {
         Self::remove_escrow_meta(env, meta.escrow_id);
 
         env.events().publish(
-            (symbol_short!("rent_exp"), meta.escrow_id),
+            (event_names::RENT_EXPIRED, meta.escrow_id),
             (refund_amount, meta.remaining_balance),
         );
         Ok(())
@@ -910,10 +909,7 @@ impl EscrowContract {
     }
 
     /// Return bridge confirmation state for a bridged token.
-    pub fn get_bridge_confirmation(
-        env: Env,
-        token: Address,
-    ) -> Option<bridge::BridgeConfirmation> {
+    pub fn get_bridge_confirmation(env: Env, token: Address) -> Option<bridge::BridgeConfirmation> {
         bridge::get_bridge_confirmation(&env, &token)
     }
 
@@ -4754,7 +4750,7 @@ mod tests {
         let rent_reserve = 2 * ContractStorage::reserve_for_entries(1);
         token_admin.mint(&escrow_client, &(escrow_amount + rent_reserve));
 
-        let initial_client_balance = token_client.balance(&escrow_client);
+        let _initial_client_balance = token_client.balance(&escrow_client);
 
         let escrow_id = client.create_escrow(
             &escrow_client,
