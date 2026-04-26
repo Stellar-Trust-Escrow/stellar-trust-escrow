@@ -558,6 +558,68 @@ pub struct FeeDelegation {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GOVERNANCE TYPES
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Types of governance proposals.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub enum ProposalType {
+    /// Parameter change proposal
+    ParameterChange,
+    /// Contract upgrade proposal
+    ContractUpgrade,
+    /// Fund allocation proposal
+    FundAllocation,
+    /// Text proposal (non-binding)
+    TextProposal,
+}
+
+/// Payload for fund allocation proposals.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct FundPayload {
+    /// Recipient address
+    pub recipient: Address,
+    /// Token contract address
+    pub token: Address,
+    /// Amount to allocate
+    pub amount: i128,
+}
+
+/// Payload for parameter change proposals.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct ParameterPayload {
+    /// Parameter name
+    pub name: String,
+    /// New parameter value
+    pub value: String,
+}
+
+/// Payload for contract upgrade proposals.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct UpgradePayload {
+    /// New WASM hash
+    pub wasm_hash: BytesN<32>,
+}
+
+/// Complete proposal payload for governance.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub enum ProposalPayload {
+    /// Fund allocation
+    FundAllocation(FundPayload),
+    /// Parameter change
+    ParameterChange(ParameterPayload),
+    /// Contract upgrade
+    ContractUpgrade(UpgradePayload),
+    /// Text proposal
+    Text(String),
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // STORAGE KEYS
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -614,4 +676,6 @@ pub enum DataKey {
     SlashsByAddress(Address),
     /// Minimum arbiter reputation score threshold — value: u64
     MinArbiterReputation,
+    /// Governance contract address for dispute escalation — value: Address
+    GovernanceContract,
 }

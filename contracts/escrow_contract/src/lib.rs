@@ -68,6 +68,7 @@ mod oracle_fallback_tests;
 mod oracle_tests;
 mod pause_tests;
 mod arbiter_reputation_tests;
+mod governance_escalation_tests;
 mod partial_cancel_tests;
 mod self_escrow_tests;
 mod timelock_enforcement_tests;
@@ -79,6 +80,7 @@ mod max_escrow_amount_tests;
 
 pub use errors::EscrowError;
 use storage::StorageManager;
+use types::{FundPayload, ProposalPayload, ProposalType};
 pub use types::{
     ApprovalRecord, DataKey, EscrowState, EscrowStatus, EscrowTemplate, Milestone, MilestoneStatus, MilestoneTemplate, MultisigConfig,
     OptionalBytesN32, OptionalPriceCondition, OptionalTimelock, PriceCondition, PriceDirection,
@@ -87,7 +89,10 @@ pub use types::{
 };
 use types::{CancellationRequest, RecurringInterval, RecurringPaymentConfig, SlashRecord};
 
-use soroban_sdk::{contract, contractimpl, contracttype, token, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{
+    contract, contractimpl, contracttype, symbol_short, token, Address, BytesN, Env, String, Vec,
+    IntoVal,
+};
 
 mod storage;
 
@@ -132,6 +137,9 @@ pub const MIN_ESCROW_AMOUNT: i128 = 10_000_000i128;
 /// This prevents sybil attacks where fresh addresses with zero reputation
 /// could be used to gain control over dispute resolution.
 pub const MIN_ARBITER_REPUTATION_SCORE: u64 = 100;
+
+/// Threshold for high-value escrows that can be escalated to governance (1000 XLM in stroops).
+pub const HIGH_VALUE_THRESHOLD: i128 = 10_000_000_000i128;
 
 // ── Granular storage keys ─────────────────────────────────────────────────────
 // Separate keys for meta vs each milestone avoids deserialising the full
@@ -1166,6 +1174,32 @@ impl EscrowContract {
             .instance()
             .get(&DataKey::MinArbiterReputation)
             .unwrap_or(MIN_ARBITER_REPUTATION_SCORE)
+    }
+
+    // ── Governance Contract Configuration ─────────────────────────────────────
+
+    /// Sets the governance contract address for dispute escalation.
+    /// Admin only.
+    pub fn set_governance_contract(
+        env: Env,
+        caller: Address,
+        governance_addr: Address,
+    ) -> Result<(), EscrowError> {
+        ContractStorage::require_admin(&env, &caller)?;
+        caller.require_auth();
+
+        env.storage()
+            .instance()
+            .set(&DataKey::GovernanceContract, &governance_addr);
+        ContractStorage::bump_instance_ttl(&env);
+        Ok(())
+    }
+
+    /// Returns the governance contract address if configured.
+    pub fn get_governance_contract(env: Env) -> Option<Address> {
+        env.storage()
+            .instance()
+            .get(&DataKey::GovernanceContract)
     }
 
     // ── Escrow Lifecycle ──────────────────────────────────────────────────────
@@ -2842,6 +2876,79 @@ impl EscrowContract {
         Self::_update_reputation_internal(&env, &meta.freelancer, false, true, freelancer_amount);
 
         Ok(())
+    }
+
+    /// Escalates a disputed escrow to governance for DAO resolution.
+    ///
+    /// This is available for high-value disputes that require community governance
+    /// rather than arbiter resolution. The escrow must be in Disputed status and
+    /// exceed the HIGH_VALUE_THRESHOLD.
+    ///
+    /// # Arguments
+    /// * `escrow_id` - The ID of the disputed escrow
+    ///
+    /// # Returns
+    /// The proposal ID created in the governance contract
+    pub fn escalate_dispute_to_governance(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+    ) -> Result<u64, EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_not_paused(&env)?;
+
+        let meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
+
+        // Only client or freelancer can escalate
+        if caller != meta.client && caller != meta.freelancer {
+            return Err(EscrowError::Unauthorized);
+        }
+
+        // Escrow must be in disputed status
+        if meta.status != EscrowStatus::Disputed {
+            return Err(EscrowError::EscrowNotDisputed);
+        }
+
+        // Must meet high-value threshold
+        if meta.total_amount < HIGH_VALUE_THRESHOLD {
+            return Err(EscrowError::InvalidEscrowAmount);
+        }
+
+        // Get governance contract address
+        let governance_addr: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::GovernanceContract)
+            .ok_or(EscrowError::NotInitialized)?;
+
+        // Create proposal payload for fund allocation
+        let proposal_type = ProposalType::FundAllocation;
+        let title = String::from_str(&env, "Escalated Dispute");
+        let description = String::from_str(&env, "High-value dispute requiring DAO resolution");
+
+        let payload = ProposalPayload::FundAllocation(FundPayload {
+            recipient: env.current_contract_address(),
+            token: meta.token.clone(),
+            amount: meta.remaining_balance,
+        });
+
+        // Call governance contract to create proposal
+        let proposal_id: u64 = env.invoke_contract(
+            &governance_addr,
+            &symbol_short!("create"),
+            (proposal_type, title, description, payload).into_val(&env),
+        );
+
+        // Emit escalation event
+        events::emit_dispute_escalated_to_governance(
+            &env,
+            escrow_id,
+            &caller,
+            proposal_id,
+            meta.total_amount,
+        );
+
+        Ok(proposal_id)
     }
 
     // ── Reputation ────────────────────────────────────────────────────────────
