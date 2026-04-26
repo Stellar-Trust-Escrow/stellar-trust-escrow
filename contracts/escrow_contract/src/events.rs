@@ -371,3 +371,35 @@ pub fn emit_slash_dispute_resolved(env: &Env, escrow_id: u64, upheld: bool, amou
     env.events()
         .publish((symbol_short!("slsh_res"), escrow_id), (upheld, amount));
 }
+
+/// Emitted when a partial cancellation is performed.
+///
+/// # Arguments
+/// * `escrow_id` - The escrow ID
+/// * `refunded_amount` - The amount refunded to the client
+pub fn emit_partial_cancellation(env: &Env, escrow_id: u64, refunded_amount: i128) {
+    env.events().publish(
+        (symbol_short!("prt_can"), escrow_id),
+        refunded_amount,
+    );
+}
+
+/// Emitted when a dispute is escalated to governance.
+///
+/// # Arguments
+/// * `escrow_id` - The escrow ID
+/// * `initiator` - Who initiated the escalation
+/// * `proposal_id` - The governance proposal ID created
+/// * `amount` - The escrow amount
+pub fn emit_dispute_escalated_to_governance(
+    env: &Env,
+    escrow_id: u64,
+    initiator: &Address,
+    proposal_id: u64,
+    amount: i128,
+) {
+    env.events().publish(
+        (symbol_short!("gov_esc"), escrow_id),
+        (initiator.clone(), proposal_id, amount),
+    );
+}

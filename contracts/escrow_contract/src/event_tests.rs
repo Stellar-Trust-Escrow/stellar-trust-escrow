@@ -381,6 +381,11 @@ mod event_tests {
         let arbiter = Address::generate(&env);
         let token = register_token(&env, &admin, &client_addr, 500);
 
+        // Give arbiter sufficient reputation to pass the MIN_ARBITER_REPUTATION_SCORE check
+        for _ in 0..10 {
+            client.update_reputation(&arbiter, &true, &false, &1000_i128);
+        }
+
         let escrow_id = client.create_escrow(
             &client_addr,
             &freelancer,
