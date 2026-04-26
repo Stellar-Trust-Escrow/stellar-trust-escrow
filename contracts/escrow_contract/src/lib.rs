@@ -73,6 +73,7 @@ mod transfer_client_tests;
 mod types;
 mod upgrade_tests;
 mod admin_transfer_tests;
+mod max_escrow_amount_tests;
 
 pub use errors::EscrowError;
 use storage::StorageManager;
@@ -89,10 +90,19 @@ use soroban_sdk::{contract, contractimpl, contracttype, token, Address, BytesN, 
 mod storage;
 
 /// Maximum allowed `total_amount` for a single escrow, in stroops.
-/// Equivalent to 100 billion XLM (100_000_000_000 * 10_000_000 stroops/XLM).
-/// Prevents misconfigured integrations from creating escrows with pathological
-/// amounts that could cause arithmetic edge cases in milestone accounting.
-pub const MAX_ESCROW_AMOUNT: i128 = 1_000_000_000_000_000_000i128;
+///
+/// Equivalent to 10 billion XLM (10_000_000_000 XLM × 10_000_000 stroops/XLM).
+///
+/// # Rationale
+/// While Rust's `overflow-checks = true` catches wrapping arithmetic at runtime,
+/// an uncapped `total_amount` near `i128::MAX` creates downstream risk in
+/// expressions such as `allocated_amount + milestone.amount` and
+/// `remaining_balance - release_amount` where intermediate values can still
+/// produce unexpected results before the overflow trap fires.  A domain-meaningful
+/// cap of 10 billion XLM allows all legitimate large escrows while bounding the
+/// protocol's arithmetic attack surface.  Exported as `pub` so integrators can
+/// validate amounts client-side before submitting a transaction.
+pub const MAX_ESCROW_AMOUNT: i128 = 100_000_000_000_000_000i128;
 
 // ── TTL constants ─────────────────────────────────────────────────────────────
 const INSTANCE_TTL_THRESHOLD: u32 = 5_000;
@@ -1330,6 +1340,9 @@ impl EscrowContract {
         let total_amount = payment_amount
             .checked_mul(i128::from(total_payments))
             .ok_or(EscrowError::AmountMismatch)?;
+        if total_amount > MAX_ESCROW_AMOUNT {
+            return Err(EscrowError::InvalidEscrowAmount);
+        }
         let escrow_id = ContractStorage::next_escrow_id(&env)?;
         let base_rent_reserve = ContractStorage::reserve_for_entries(1);
 
