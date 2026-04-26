@@ -288,6 +288,9 @@ pub struct RecurringPaymentConfig {
     /// Number of payments already processed.
     pub processed_payments: u32,
 
+    /// Amount for the final payment, if the total is not evenly divisible.
+    pub final_payment_amount: Option<i128>,
+
     /// Whether scheduled releases are currently paused.
     pub paused: bool,
 

@@ -89,6 +89,20 @@ pub fn emit_recurring_schedule_created(
     );
 }
 
+pub fn emit_vesting_schedule_created(
+    env: &Env,
+    escrow_id: u64,
+    cliff_seconds: u64,
+    duration_seconds: u64,
+    monthly_amount: i128,
+    final_amount: i128,
+) {
+    env.events().publish(
+        (ev::VESTING_SCHEDULE_CREATED, escrow_id),
+        (cliff_seconds, duration_seconds, monthly_amount, final_amount),
+    );
+}
+
 pub fn emit_recurring_payments_processed(
     env: &Env,
     escrow_id: u64,

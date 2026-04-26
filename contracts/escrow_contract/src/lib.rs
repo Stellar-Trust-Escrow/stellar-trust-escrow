@@ -1380,6 +1380,7 @@ impl EscrowContract {
             total_payments,
             payments_remaining: total_payments,
             processed_payments: 0,
+            final_payment_amount: None,
             paused: false,
             cancelled: false,
             paused_at: None,
@@ -1831,6 +1832,11 @@ impl EscrowContract {
         let mut total_released: i128 = 0;
 
         while recurring.payments_remaining > 0 && now >= recurring.next_payment_at {
+            let current_payment_amount = if recurring.payments_remaining == 1 {
+                recurring.final_payment_amount.unwrap_or(recurring.payment_amount)
+            } else {
+                recurring.payment_amount
+            };
             let milestone_id = meta.milestone_count;
             meta.milestone_count = meta
                 .milestone_count
@@ -1842,11 +1848,11 @@ impl EscrowContract {
                 .ok_or(EscrowError::TooManyMilestones)?;
             meta.allocated_amount = meta
                 .allocated_amount
-                .checked_add(recurring.payment_amount)
+                .checked_add(current_payment_amount)
                 .ok_or(EscrowError::AmountMismatch)?;
             meta.remaining_balance = meta
                 .remaining_balance
-                .checked_sub(recurring.payment_amount)
+                .checked_sub(current_payment_amount)
                 .ok_or(EscrowError::AmountMismatch)?;
 
             let payment_number = recurring
@@ -1861,34 +1867,27 @@ impl EscrowContract {
                     id: milestone_id,
                     title,
                     description_hash: meta.brief_hash.clone(),
-                    amount: recurring.payment_amount,
-                    status: MS_APPROVED,
-                    submitted_at: Some(recurring.next_payment_at),
-                    resolved_at: Some(now),
-                    approvals: soroban_sdk::Vec::new(&env),
-                    rejection_reason: OptionalBytesN32::None,
-                    price_condition: OptionalPriceCondition::None,
-                },
-            );
+                            amount: current_payment_amount,
+                            status: MS_APPROVED,
+                            submitted_at: Some(recurring.next_payment_at),
+                            resolved_at: Some(now),
+                            approvals: soroban_sdk::Vec::new(&env),
+                            rejection_reason: OptionalBytesN32::None,
+                            price_condition: OptionalPriceCondition::None,
+                        },
+                    );
 
             token::Client::new(&env, &meta.token).transfer(
                 &env.current_contract_address(),
                 &meta.freelancer,
-                &recurring.payment_amount,
+                &current_payment_amount,
             );
 
             recurring.processed_payments = payment_number;
             recurring.payments_remaining -= 1;
             recurring.last_payment_at = Some(now);
             total_released = total_released
-                .checked_add(recurring.payment_amount)
-                .ok_or(EscrowError::AmountMismatch)?;
-            processed_count += 1;
-
-            if recurring.payments_remaining == 0 {
-                recurring.next_payment_at = 0;
-                break;
-            }
+                .checked_add(current_payment_amount)
 
             recurring.next_payment_at =
                 Self::next_schedule_time(recurring.next_payment_at, &recurring.interval)?;

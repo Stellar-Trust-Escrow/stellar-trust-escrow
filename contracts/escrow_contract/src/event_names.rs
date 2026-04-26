@@ -13,6 +13,7 @@ pub const MILESTONE_TITLE_UPDATED: Symbol = symbol_short!("mil_tup");
 pub const MULTISIG_APPROVAL_RECORDED: Symbol = symbol_short!("msig_apr");
 pub const FUNDS_RELEASED: Symbol = symbol_short!("funds_rel");
 pub const RECURRING_SCHEDULE_CREATED: Symbol = symbol_short!("rec_crt");
+pub const VESTING_SCHEDULE_CREATED: Symbol = symbol_short!("vest_crt");
 pub const RECURRING_PAYMENTS_PROCESSED: Symbol = symbol_short!("rec_pay");
 pub const RECURRING_SCHEDULE_PAUSED: Symbol = symbol_short!("rec_pau");
 pub const RECURRING_SCHEDULE_RESUMED: Symbol = symbol_short!("rec_res");

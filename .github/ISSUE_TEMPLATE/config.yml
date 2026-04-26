@@ -1,0 +1,18 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security disclosure
+    about: Report a security vulnerability privately via email.
+    url: mailto:security@stellartrustescrow.dev
+issue_templates:
+  - name: Bug report
+    about: Report a bug in the contract, backend, or frontend.
+    title: '[BUG] '
+    labels: bug
+  - name: Feature request
+    about: Suggest a new feature or improvement.
+    title: '[FEAT] '
+    labels: enhancement
+  - name: Security disclosure
+    about: Report a security issue privately.
+    title: '[SECURITY] '
+    labels: security
