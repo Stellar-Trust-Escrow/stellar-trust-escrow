@@ -60,7 +60,7 @@ mod errors;
 mod event_names;
 mod event_tests;
 mod events;
-mod lock_time_enforcement_tests;
+mod multisig_lifecycle_tests;
 mod nft;
 mod nft_tests;
 mod oracle;
