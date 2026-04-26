@@ -535,6 +535,91 @@ mod tests {
         assert!(result.is_err());
     }
 
+    // ── Full governance lifecycle ─────────────────────────────────────────────
+
+    /// End-to-end test: create_proposal → cast_vote (for + against) →
+    /// finalize_proposal → execute_proposal, verifying every status transition
+    /// and the ParameterChange payload.
+    ///
+    /// Note: finalize_proposal transitions Active → Queued directly (the
+    /// `Passed` variant is defined in ProposalStatus but the contract skips it,
+    /// going straight to Queued when quorum + threshold are met).
+    #[test]
+    fn test_governance_full_lifecycle() {
+        let (env, _admin, ta, token, client) = setup();
+
+        let proposer = Address::generate(&env);
+        let voter_for = Address::generate(&env);
+        let voter_against = Address::generate(&env);
+
+        // Supply: proposer=100, for=8_000, against=1_000 → total=9_100
+        // Quorum required: 9_100 * 4% = 364 → total votes 9_000 ≥ 364 ✓
+        // Approval: 8_000 / 9_000 ≈ 88.9% ≥ 51% ✓
+        mint(&env, &ta, &token, &proposer, THRESHOLD);
+        mint(&env, &ta, &token, &voter_for, 8_000);
+        mint(&env, &ta, &token, &voter_against, 1_000);
+
+        let payload = ProposalPayload::Parameter(ParameterPayload {
+            key: str(&env, "platform_fee_bps"),
+            value: 150,
+        });
+
+        // 1. create_proposal — status must be Active
+        let proposal_id = client.create_proposal(
+            &proposer,
+            &str(&env, "Lower platform fee"),
+            &str(&env, "Reduce platform fee to 1.5%"),
+            &ProposalType::ParameterChange,
+            &payload,
+            &9_100i128,
+        );
+        assert_eq!(proposal_id, 0);
+
+        let p = client.get_proposal(&proposal_id);
+        assert_eq!(p.status, ProposalStatus::Active);
+        assert_eq!(p.votes_for, 0);
+        assert_eq!(p.votes_against, 0);
+
+        // 2. cast_vote — advance past voting_delay, then vote for and against
+        advance(&env, VOTING_DELAY + 1);
+
+        client.cast_vote(&voter_for, &proposal_id, &true);
+        client.cast_vote(&voter_against, &proposal_id, &false);
+
+        let p = client.get_proposal(&proposal_id);
+        assert_eq!(p.votes_for, 8_000);
+        assert_eq!(p.votes_against, 1_000);
+        assert!(client.has_voted(&proposal_id, &voter_for));
+        assert!(client.has_voted(&proposal_id, &voter_against));
+
+        // 3. finalize_proposal — advance past voting_period; expect Queued
+        advance(&env, VOTING_PERIOD);
+
+        let status = client.finalize_proposal(&proposal_id);
+        assert_eq!(status, ProposalStatus::Queued);
+
+        let p = client.get_proposal(&proposal_id);
+        assert_eq!(p.status, ProposalStatus::Queued);
+
+        // 4. execute_proposal — advance past timelock_delay; expect Executed
+        advance(&env, TIMELOCK_DELAY + 1);
+
+        client.execute_proposal(&proposal_id);
+
+        let p = client.get_proposal(&proposal_id);
+        assert_eq!(p.status, ProposalStatus::Executed);
+        assert!(p.executed_at.is_some());
+
+        // Verify the ParameterChange payload is intact and readable
+        match p.payload {
+            ProposalPayload::Parameter(ref pp) => {
+                assert_eq!(pp.key, str(&env, "platform_fee_bps"));
+                assert_eq!(pp.value, 150);
+            }
+            _ => panic!("unexpected payload variant"),
+        }
+    }
+
     // ── Parameter change proposal ─────────────────────────────────────────────
 
     #[test]
