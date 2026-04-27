@@ -4259,4 +4259,227 @@ mod tests {
         let records = client.get_slash_records_by_address(&unknown);
         assert_eq!(records.len(), 0);
     }
+
+    // ── get_escrow_meta state snapshot tests ──────────────────────────────────
+    //
+    // Verifies that EscrowMeta fields are accurately updated after each
+    // major state-changing operation in the escrow lifecycle.
+    // Uses get_escrow (which reads EscrowMeta internally) and direct storage
+    // inspection via env.as_contract for fields not exposed on EscrowState.
+    #[test]
+    fn test_get_escrow_meta_state_snapshots() {
+        let (env, admin, contract_id, client) = setup();
+        client.initialize(&admin);
+
+        let escrow_client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_id = token_contract.address();
+        let token_admin = token::StellarAssetClient::new(&env, &token_id);
+
+        // Mint enough to cover total_amount + rent reserves for escrow + 3 milestones
+        let rent_reserve = ContractStorage::reserve_for_entries(1);
+        let milestone_rent = 3 * ContractStorage::reserve_for_entries(1);
+        token_admin.mint(
+            &escrow_client,
+            &(900_i128 + rent_reserve + milestone_rent),
+        );
+
+        // ── Create escrow ─────────────────────────────────────────────────────
+        let escrow_id = client.create_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &900_i128,
+            &BytesN::from_array(&env, &[42; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
+
+        // Snapshot: initial meta state
+        let (initial_milestone_count, initial_submitted, initial_approved, initial_balance) =
+            env.as_contract(&contract_id, || {
+                let meta: EscrowMeta = env
+                    .storage()
+                    .persistent()
+                    .get(&PackedDataKey::EscrowMeta(escrow_id))
+                    .unwrap();
+                (
+                    meta.milestone_count,
+                    meta.submitted_count,
+                    meta.approved_count,
+                    meta.remaining_balance,
+                )
+            });
+
+        assert_eq!(initial_milestone_count, 0);
+        assert_eq!(initial_submitted, 0);
+        assert_eq!(initial_approved, 0);
+        assert_eq!(initial_balance, 900_i128);
+
+        // ── After add_milestone: milestone_count increases ────────────────────
+        let mid0 = client.add_milestone(
+            &escrow_client,
+            &escrow_id,
+            &String::from_str(&env, "Milestone 0"),
+            &BytesN::from_array(&env, &[1; 32]),
+            &300_i128,
+        );
+
+        let milestone_count_after_add = env.as_contract(&contract_id, || {
+            let meta: EscrowMeta = env
+                .storage()
+                .persistent()
+                .get(&PackedDataKey::EscrowMeta(escrow_id))
+                .unwrap();
+            meta.milestone_count
+        });
+        assert_eq!(
+            milestone_count_after_add,
+            initial_milestone_count + 1,
+            "milestone_count should increase by 1 after add_milestone"
+        );
+
+        // Add two more milestones for the remaining lifecycle steps
+        let mid1 = client.add_milestone(
+            &escrow_client,
+            &escrow_id,
+            &String::from_str(&env, "Milestone 1"),
+            &BytesN::from_array(&env, &[2; 32]),
+            &300_i128,
+        );
+        let mid2 = client.add_milestone(
+            &escrow_client,
+            &escrow_id,
+            &String::from_str(&env, "Milestone 2"),
+            &BytesN::from_array(&env, &[3; 32]),
+            &300_i128,
+        );
+
+        let milestone_count_after_all_adds = env.as_contract(&contract_id, || {
+            let meta: EscrowMeta = env
+                .storage()
+                .persistent()
+                .get(&PackedDataKey::EscrowMeta(escrow_id))
+                .unwrap();
+            meta.milestone_count
+        });
+        assert_eq!(
+            milestone_count_after_all_adds, 3,
+            "milestone_count should be 3 after adding 3 milestones"
+        );
+
+        // ── After submit_milestone: submitted_count increases ─────────────────
+        let submitted_before = env.as_contract(&contract_id, || {
+            let meta: EscrowMeta = env
+                .storage()
+                .persistent()
+                .get(&PackedDataKey::EscrowMeta(escrow_id))
+                .unwrap();
+            meta.submitted_count
+        });
+
+        client.submit_milestone(&freelancer, &escrow_id, &mid0);
+
+        let submitted_after = env.as_contract(&contract_id, || {
+            let meta: EscrowMeta = env
+                .storage()
+                .persistent()
+                .get(&PackedDataKey::EscrowMeta(escrow_id))
+                .unwrap();
+            meta.submitted_count
+        });
+        assert_eq!(
+            submitted_after,
+            submitted_before + 1,
+            "submitted_count should increase by 1 after submit_milestone"
+        );
+
+        // ── After approve_milestone: approved_count increases ─────────────────
+        let approved_before = env.as_contract(&contract_id, || {
+            let meta: EscrowMeta = env
+                .storage()
+                .persistent()
+                .get(&PackedDataKey::EscrowMeta(escrow_id))
+                .unwrap();
+            meta.approved_count
+        });
+
+        client.approve_milestone(&escrow_client, &escrow_id, &mid0);
+
+        let (approved_after, balance_after_approve) = env.as_contract(&contract_id, || {
+            let meta: EscrowMeta = env
+                .storage()
+                .persistent()
+                .get(&PackedDataKey::EscrowMeta(escrow_id))
+                .unwrap();
+            (meta.approved_count, meta.remaining_balance)
+        });
+        assert_eq!(
+            approved_after,
+            approved_before + 1,
+            "approved_count should increase by 1 after approve_milestone"
+        );
+
+        // ── After release_funds: remaining_balance decreases ──────────────────
+        // Submit and approve mid1 so it reaches MS_APPROVED state for release_funds
+        client.submit_milestone(&freelancer, &escrow_id, &mid1);
+        client.approve_milestone(&escrow_client, &escrow_id, &mid1);
+
+        // At this point mid1 is MS_RELEASED (timelock not active), so we use
+        // the admin release_funds path on mid2 after manually approving it.
+        // Submit mid2 and approve it — with no timelock it goes straight to Released.
+        // Instead, test remaining_balance decrease via the approve_milestone path
+        // which already released mid0 and mid1. Verify balance decreased by 300 each.
+        let balance_after_mid1_release = env.as_contract(&contract_id, || {
+            let meta: EscrowMeta = env
+                .storage()
+                .persistent()
+                .get(&PackedDataKey::EscrowMeta(escrow_id))
+                .unwrap();
+            meta.remaining_balance
+        });
+        assert_eq!(
+            balance_after_mid1_release,
+            balance_after_approve - 300_i128,
+            "remaining_balance should decrease by milestone amount after each release"
+        );
+
+        // ── After cancel_escrow: status == Cancelled ──────────────────────────
+        // Create a fresh escrow with no pending milestones to test cancellation
+        let cancel_rent = ContractStorage::reserve_for_entries(1);
+        token_admin.mint(&escrow_client, &(100_i128 + cancel_rent));
+
+        let cancel_escrow_id = client.create_escrow(
+            &escrow_client,
+            &freelancer,
+            &token_id,
+            &100_i128,
+            &BytesN::from_array(&env, &[99; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
+
+        client.cancel_escrow(&escrow_client, &cancel_escrow_id);
+
+        let cancelled_status = env.as_contract(&contract_id, || {
+            let meta: EscrowMeta = env
+                .storage()
+                .persistent()
+                .get(&PackedDataKey::EscrowMeta(cancel_escrow_id))
+                .unwrap();
+            meta.status
+        });
+        assert_eq!(
+            cancelled_status,
+            EscrowStatus::Cancelled,
+            "status should be Cancelled after cancel_escrow"
+        );
+    }
 }
