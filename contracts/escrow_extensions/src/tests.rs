@@ -329,6 +329,53 @@ mod tests {
         );
     }
 
+    // ── Batch fee deduction ───────────────────────────────────────────────────
+
+    #[test]
+    fn test_batch_create_fee_deduction() {
+        // Initialize with fee_bps = 100 (1%)
+        let s = setup_with_fee(100);
+        let client_addr = soroban_sdk::Address::generate(&s.env);
+
+        // Mint enough tokens for 3 × 1000 stroops
+        mint(&s.env, &s.admin, &s.token_id, &client_addr, 3_000);
+
+        // Build 3 BatchEscrowParams of 1000 stroops each
+        let mut params = Vec::new(&s.env);
+        for i in 1_u8..=3 {
+            params.push_back(BatchEscrowParams {
+                freelancer: soroban_sdk::Address::generate(&s.env),
+                token: s.token_id.clone(),
+                total_amount: 1_000,
+                brief_hash: make_hash(&s.env, i),
+                arbiter: None,
+                deadline: None,
+            });
+        }
+
+        // Create the batch — returns 3 escrow IDs
+        let ids = s.client.create_batch(&client_addr, &params);
+        assert_eq!(ids.len(), 3);
+        assert_eq!(ids.get(0).unwrap(), 0);
+        assert_eq!(ids.get(1).unwrap(), 1);
+        assert_eq!(ids.get(2).unwrap(), 2);
+
+        // batch_escrow_count must equal 3
+        assert_eq!(s.client.batch_escrow_count(), 3);
+
+        // Simulate fee collection on release for each escrow (1% of 1000 = 10 per escrow)
+        // collect_fee returns (net, fee): net = 990, fee = 10
+        for i in 0..3_u64 {
+            let (net, fee) = s.client.collect_fee(&i, &s.token_id, &1_000_i128);
+            assert_eq!(net, 990, "escrow {i}: net amount should be 990 after 1% fee");
+            assert_eq!(fee, 10, "escrow {i}: fee should be 10 (1% of 1000)");
+        }
+
+        // get_fee_balance must accumulate 3 × 10 = 30 stroops
+        let balance = s.client.get_fee_balance(&s.token_id);
+        assert_eq!(balance, 30, "fee balance should be 30 stroops (1% × 3 × 1000)");
+    }
+
     #[test]
     fn test_isqrt_values() {
         // Verify quadratic voting weights
