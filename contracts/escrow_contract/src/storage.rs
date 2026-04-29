@@ -37,6 +37,9 @@ use crate::{DataKey, Milestone, OptionalTimelock, MS_APPROVED, MS_RELEASED, MS_S
 // Current storage version - increment when storage layout changes
 pub const STORAGE_VERSION: u32 = 2;
 
+/// Maximum number of escrows to migrate in a single v1-to-v2 batch.
+pub const MAX_MIGRATION_BATCH: u32 = 20;
+
 /// Storage keys for version management (stored in instance storage)
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -122,10 +125,33 @@ impl StorageManager {
         // Run migrations in order from current to target version
 
         // v1 -> v2: Migration from monolithic EscrowState to granular storage
-        // This was done in issue #65 for gas optimization
+        // This is now run in configurable batches to avoid per-transaction ledger entry limits.
         if current_version < 2 {
-            Self::migrate_v1_to_v2(env)?;
-            Self::set_version(env, 2);
+            let cursor: u64 = env
+                .storage()
+                .instance()
+                .get(&DataKey::MigrationCursor)
+                .unwrap_or(1_u64);
+            let escrow_counter: u64 = env
+                .storage()
+                .instance()
+                .get(&DataKey::EscrowCounter)
+                .unwrap_or(0_u64);
+
+            if cursor > escrow_counter {
+                Self::set_version(env, 2);
+                return Ok(());
+            }
+
+            let last_id = Self::migrate_v1_to_v2(env, cursor, MAX_MIGRATION_BATCH)?;
+            let next_cursor = last_id.saturating_add(1);
+            env.storage()
+                .instance()
+                .set(&DataKey::MigrationCursor, &next_cursor);
+
+            if next_cursor > escrow_counter {
+                Self::set_version(env, 2);
+            }
         }
 
         Ok(())
@@ -141,16 +167,24 @@ impl StorageManager {
     /// 2. Extracts EscrowMeta fields and stores separately
     /// 3. Stores each milestone with its own key
     /// 4. Removes the v1 storage entry
-    fn migrate_v1_to_v2(env: &Env) -> Result<(), crate::EscrowError> {
-        // Get the escrow counter to know how many escrows to migrate
+    fn migrate_v1_to_v2(env: &Env, start_id: u64, max_count: u32) -> Result<u64, crate::EscrowError> {
         let escrow_counter: u64 = env
             .storage()
             .instance()
             .get(&DataKey::EscrowCounter)
             .unwrap_or(0_u64);
 
-        // Migrate each escrow from v1 to v2 format
-        for escrow_id in 1..=escrow_counter {
+        let start_id = if start_id == 0 { 1 } else { start_id };
+        if start_id > escrow_counter {
+            return Ok(escrow_counter);
+        }
+
+        let end_id = core::cmp::min(
+            start_id.saturating_add(u64::from(max_count).saturating_sub(1)),
+            escrow_counter,
+        );
+
+        for escrow_id in start_id..=end_id {
             // In v1, escrows were stored with DataKey::Escrow(id)
             // In v2, we use PackedDataKey::EscrowMeta(id) and PackedDataKey::Milestone(id, milestone_id)
             let v1_key = DataKey::Escrow(escrow_id);
@@ -221,7 +255,7 @@ impl StorageManager {
             }
         }
 
-        Ok(())
+        Ok(end_id)
     }
 
     /// Initialize storage version on first deploy.
