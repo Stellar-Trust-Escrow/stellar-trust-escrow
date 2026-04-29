@@ -386,10 +386,12 @@ impl ContractStorage {
     // ── Full escrow view (read-only, assembles EscrowState for callers) ───────
     fn load_escrow(env: &Env, escrow_id: u64) -> Result<EscrowState, EscrowError> {
         let meta = Self::load_escrow_meta_with_rent(env, escrow_id)?;
-        let mut milestones = Vec::new(env);
-        for mid in 0..meta.milestone_count {
-            milestones.push_back(Self::load_milestone(env, escrow_id, mid)?);
-        }
+        let milestones = (0..meta.milestone_count)
+            .map(|mid| Self::load_milestone(env, escrow_id, mid))
+            .try_fold(Vec::new(env), |mut result, item| {
+                result.push_back(item?);
+                Ok(result)
+            })?;
         Ok(EscrowState {
             escrow_id: meta.escrow_id,
             client: meta.client,
