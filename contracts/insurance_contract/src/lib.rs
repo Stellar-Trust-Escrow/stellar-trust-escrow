@@ -28,6 +28,7 @@
 //! | DataKey::Vote(id,addr) | Persistent | Per-governor vote on a claim       |
 
 #![no_std]
+#![deny(warnings)]
 
 mod errors;
 mod events;

@@ -31,6 +31,7 @@
 //! - State is preserved (Soroban upgrades only replace WASM)
 
 #![no_std]
+#![deny(warnings)]
 
 mod errors;
 mod event_names;

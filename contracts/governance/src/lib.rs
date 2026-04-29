@@ -25,6 +25,7 @@
 //! `votes_for >= (votes_for + votes_against) * approval_threshold_bps / 10_000`
 
 #![no_std]
+#![deny(warnings)]
 #![allow(clippy::too_many_arguments)]
 
 mod errors;

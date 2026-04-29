@@ -4,6 +4,7 @@
 //! StellarTrustEscrow workspace.
 
 #![no_std]
+#![deny(warnings)]
 
 use soroban_sdk::{Env, IntoVal, Val};
 
