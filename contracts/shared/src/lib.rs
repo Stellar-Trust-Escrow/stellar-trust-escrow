@@ -5,6 +5,8 @@
 
 #![no_std]
 
+use soroban_sdk::{Env, IntoVal, Val};
+
 // ── TTL constants ─────────────────────────────────────────────────────────────
 
 /// Bump instance storage TTL when remaining ledgers fall below this threshold.
@@ -18,6 +20,27 @@ pub const PERSISTENT_TTL_THRESHOLD: u32 = 5_000;
 
 /// Extend persistent storage TTL to this value on bump.
 pub const PERSISTENT_TTL_EXTEND_TO: u32 = 50_000;
+
+/// Bump instance TTL using shared config constants.
+#[inline]
+pub fn bump_instance_ttl(env: &Env) {
+    env.storage()
+        .instance()
+        .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND_TO);
+}
+
+/// Bump persistent TTL using shared config constants.
+#[inline]
+pub fn bump_persistent_ttl<K>(env: &Env, key: &K)
+where
+    K: IntoVal<Env, Val>,
+{
+    env.storage().persistent().extend_ttl(
+        key,
+        PERSISTENT_TTL_THRESHOLD,
+        PERSISTENT_TTL_EXTEND_TO,
+    );
+}
 
 // ── Escrow limits ─────────────────────────────────────────────────────────────
 

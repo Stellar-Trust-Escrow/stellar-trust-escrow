@@ -9,4 +9,4 @@ description = "Shared constants and configuration for StellarTrustEscrow contrac
 crate-type = ["rlib"]
 
 [dependencies]
-# No external deps — pure constants only
+soroban-sdk = "21.0.0"

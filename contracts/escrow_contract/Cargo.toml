@@ -11,6 +11,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 soroban-sdk = { version = "21.0.0", features = [] }
 hex = { version = "0.4", default-features = false, features = ["alloc"] }
+stellar-trust-shared = { path = "../shared" }
 
 [dev-dependencies]
 criterion = "0.4"
