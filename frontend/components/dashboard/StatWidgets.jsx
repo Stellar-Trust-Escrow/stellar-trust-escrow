@@ -114,7 +114,7 @@ export default function StatWidgets({ address }) {
 
   if (loading) {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {Array.from({ length: 6 }).map((_, i) => (
           <SkeletonCard key={i} />
         ))}
@@ -133,7 +133,7 @@ export default function StatWidgets({ address }) {
   // Empty state — user has no escrows yet
   if (!stats || stats.total === 0) {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <StatWidget label="Total Escrows" value={0} icon="📦" />
         <StatWidget label="Active" value={0} icon="🔒" color="text-indigo-400" />
         <StatWidget label="Completed" value={0} icon="✅" color="text-emerald-400" />
@@ -145,7 +145,7 @@ export default function StatWidgets({ address }) {
   }
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
       <StatWidget label="Total Escrows" value={stats.total} icon="📦" />
       <StatWidget label="Active" value={stats.active} icon="🔒" color="text-indigo-400" />
       <StatWidget label="Completed" value={stats.completed} icon="✅" color="text-emerald-400" />

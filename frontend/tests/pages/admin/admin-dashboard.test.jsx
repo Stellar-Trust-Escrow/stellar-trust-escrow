@@ -1,5 +1,7 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { screen, fireEvent } from '@testing-library/react';
 import AdminDashboard from '../../../app/admin/page';
+import { renderWithStore } from '../../../store/test-utils';
+import { APP_STORAGE_KEY } from '../../../store/state';
 
 // Mock localStorage
 const localStorageMock = (() => {
@@ -29,18 +31,18 @@ describe('AdminDashboard', () => {
   });
 
   it('renders admin dashboard heading', () => {
-    render(<AdminDashboard />);
+    renderWithStore(<AdminDashboard />);
     expect(screen.getByText('Admin Dashboard')).toBeInTheDocument();
   });
 
   it('shows API key login form when not authenticated', () => {
-    render(<AdminDashboard />);
+    renderWithStore(<AdminDashboard />);
     expect(screen.getByText('Admin Authentication')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Enter admin API key')).toBeInTheDocument();
   });
 
   it('shows Authenticate button', () => {
-    render(<AdminDashboard />);
+    renderWithStore(<AdminDashboard />);
     expect(screen.getByRole('button', { name: 'Authenticate' })).toBeInTheDocument();
   });
 
@@ -53,16 +55,17 @@ describe('AdminDashboard', () => {
         disputes: { open: 1, resolved: 0 },
       }),
     });
-    render(<AdminDashboard />);
+    renderWithStore(<AdminDashboard />);
     fireEvent.change(screen.getByPlaceholderText('Enter admin API key'), {
       target: { value: 'test-key' },
     });
     fireEvent.submit(screen.getByRole('button', { name: 'Authenticate' }).closest('form'));
-    expect(localStorageMock.getItem('adminApiKey')).toBe('test-key');
+    const persisted = JSON.parse(localStorageMock.getItem(APP_STORAGE_KEY));
+    expect(persisted.admin.apiKey).toBe('test-key');
   });
 
   it('shows nav items when authenticated', async () => {
-    localStorageMock.setItem('adminApiKey', 'test-key');
+    localStorageMock.setItem(APP_STORAGE_KEY, JSON.stringify({ admin: { apiKey: 'test-key' } }));
     global.fetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -71,7 +74,7 @@ describe('AdminDashboard', () => {
         disputes: { open: 1, resolved: 0 },
       }),
     });
-    render(<AdminDashboard />);
+    renderWithStore(<AdminDashboard />);
     expect(await screen.findByText('User Management')).toBeInTheDocument();
     expect(screen.getByText('Dispute Resolution')).toBeInTheDocument();
     expect(screen.getByText('Audit Logs')).toBeInTheDocument();
@@ -79,17 +82,17 @@ describe('AdminDashboard', () => {
   });
 
   it('shows error when fetch fails', async () => {
-    localStorageMock.setItem('adminApiKey', 'bad-key');
+    localStorageMock.setItem(APP_STORAGE_KEY, JSON.stringify({ admin: { apiKey: 'bad-key' } }));
     global.fetch.mockResolvedValueOnce({
       ok: false,
       json: async () => ({ error: 'Unauthorized' }),
     });
-    render(<AdminDashboard />);
+    renderWithStore(<AdminDashboard />);
     expect(await screen.findByText(/Unauthorized/)).toBeInTheDocument();
   });
 
   it('signs out and clears key', async () => {
-    localStorageMock.setItem('adminApiKey', 'test-key');
+    localStorageMock.setItem(APP_STORAGE_KEY, JSON.stringify({ admin: { apiKey: 'test-key' } }));
     global.fetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -98,10 +101,11 @@ describe('AdminDashboard', () => {
         disputes: { open: 0, resolved: 0 },
       }),
     });
-    render(<AdminDashboard />);
+    renderWithStore(<AdminDashboard />);
     const signOut = await screen.findByText('Sign out');
     fireEvent.click(signOut);
-    expect(localStorageMock.getItem('adminApiKey')).toBeNull();
+    const persisted = JSON.parse(localStorageMock.getItem(APP_STORAGE_KEY));
+    expect(persisted.admin.apiKey).toBe('');
     expect(screen.getByText('Admin Authentication')).toBeInTheDocument();
   });
 });

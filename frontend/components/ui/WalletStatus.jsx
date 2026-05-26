@@ -18,18 +18,10 @@
 import { useState } from 'react';
 import Button from './Button';
 import Spinner from './Spinner';
+import { truncateAddress } from '../../lib/truncateAddress';
 import { useI18n } from '../../i18n/index.jsx';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-/**
- * Truncate a Stellar address to first 6 + last 4 chars.
- * e.g. GABCDEF...XY12
- */
-function truncateAddress(address) {
-  if (!address) return '';
-  return `${address.slice(0, 6)}…${address.slice(-4)}`;
-}
 
 // ── Status Dot ────────────────────────────────────────────────────────────────
 
@@ -148,7 +140,6 @@ export default function WalletStatus({ wallet }) {
   if (isConnected && address) {
     return (
       <div className="flex items-center gap-2">
-        <StatusDot status="connected" />
         <AddressWithTooltip address={address} />
         <Button id="wallet-disconnect-btn" variant="secondary" size="sm" onClick={disconnect}>
           {t('wallet.disconnect')}

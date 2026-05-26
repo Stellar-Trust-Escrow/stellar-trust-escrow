@@ -334,6 +334,7 @@ export default function TemplateSelector({
           <select
             value={customCategory}
             onChange={(event) => setCustomCategory(event.target.value)}
+            aria-label="Template category"
             className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
           >
             {Array.from(new Set(['Custom', ...categories.filter((category) => category !== 'All')])).map(

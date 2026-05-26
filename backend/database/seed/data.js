@@ -7,7 +7,7 @@ export const USERS = [
   {
     email: 'client@example.com',
     // bcrypt hash of "password123" — never use real passwords in seeds
-    password: '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW',
+    password: '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31l',
   },
   {
     email: 'freelancer@example.com',

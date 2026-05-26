@@ -1,4 +1,4 @@
-const exportService = require('../../services/exportService');
+import exportService from '../../services/exportService.js';
 
 /**
  * Export Controller
@@ -110,7 +110,7 @@ const downloadExportFile = async (req, res) => {
   }
 };
 
-module.exports = {
+export default {
   exportUserData,
   importUserData,
   downloadExportFile,

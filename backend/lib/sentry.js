@@ -14,6 +14,9 @@
  */
 
 import * as Sentry from '@sentry/node';
+import { createModuleLogger } from '../config/logger.js';
+
+const sentryLog = createModuleLogger('sentry');
 
 const DSN = process.env.SENTRY_DSN;
 const ENV = process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV || 'development';
@@ -47,9 +50,13 @@ if (DSN) {
     },
   });
 
-  console.log(`[Sentry] Initialised — env=${ENV} traces=${traceSampleRate}`);
+  sentryLog.info({
+    message: 'sentry_initialised',
+    environment: ENV,
+    tracesSampleRate: traceSampleRate,
+  });
 } else {
-  console.warn('[Sentry] SENTRY_DSN not set — error tracking disabled');
+  sentryLog.warn({ message: 'sentry_dsn_unset' });
 }
 
 export default Sentry;

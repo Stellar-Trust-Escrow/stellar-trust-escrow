@@ -5,12 +5,16 @@
  * Sets X-Cache: HIT|MISS header for observability.
  *
  * Usage:
- *   router.get('/path', cacheMiddleware(60), handler)
- *   // or with a custom key builder:
- *   router.get('/path', cacheMiddleware(60, (req) => `custom:${req.params.id}`), handler)
+ *   router.get('/path', cacheResponse(TTL.LIST), handler)
+ *   router.get('/path/:id', cacheResponse(TTL.DETAIL, (req) => \`custom:\${req.params.id}\`), handler)
  */
 
 import cache from '../../lib/cache.js';
+
+export const TTL = {
+  LIST: 300,   // 5 minutes for escrow lists
+  DETAIL: 900, // 15 minutes for individual escrows
+};
 
 /**
  * @param {number} ttlSeconds

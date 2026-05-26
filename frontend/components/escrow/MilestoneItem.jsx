@@ -35,7 +35,9 @@
 import { useState } from 'react';
 import Badge from '../ui/Badge';
 import Button from '../ui/Button';
+import CurrencyAmount from '../ui/CurrencyAmount';
 import { useI18n } from '../../i18n/index.jsx';
+import { useToast } from '../../contexts/ToastContext';
 
 export default function MilestoneItem({
   milestone,
@@ -48,13 +50,15 @@ export default function MilestoneItem({
 }) {
   const [isActing, setIsActing] = useState(false);
   const { t, formatDate } = useI18n();
+  const { showToast } = useToast();
 
   const handleAction = async (actionFn, actionName) => {
     setIsActing(true);
     try {
       await actionFn(milestone.id);
+      showToast(`${actionName} milestone successful!`, 'success');
     } catch (err) {
-      // TODO (contributor — Issue #40): show toast notification on error
+      showToast(`Failed to ${actionName.toLowerCase()} milestone`, 'error');
       console.error(`${actionName} failed:`, err.message);
     } finally {
       setIsActing(false);
@@ -98,7 +102,7 @@ export default function MilestoneItem({
               )}
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              <span className="text-white font-semibold text-sm">{milestone.amount}</span>
+              <CurrencyAmount amount={milestone.amount} size="sm" />
               <Badge status={milestone.status} size="sm" />
             </div>
           </div>

@@ -1,47 +1,27 @@
-/**
- * useEscrow Hook
- *
- * Fetches and caches escrow data from the backend API using SWR.
- *
- * Usage:
- *   const { escrow, isLoading, error, mutate } = useEscrow(escrowId);
- *
- * TODO (contributor — medium, Issue #39):
- * Implement this hook using SWR:
- *
- * import useSWR from 'swr';
- * const fetcher = (url) => fetch(url).then(r => r.json());
- *
- * export function useEscrow(id) {
- *   const { data, error, isLoading, mutate } = useSWR(
- *     id ? `${API_URL}/api/escrows/${id}` : null,
- *     fetcher,
- *     { refreshInterval: 10_000 }   // poll every 10s for updates
- *   );
- *   return { escrow: data, isLoading, error, mutate };
- * }
- */
-
 'use client';
 
-const _API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+import useSWR from 'swr';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+const fetcher = (url) => fetch(url).then((r) => r.json());
 
 /**
  * Fetch a single escrow by ID.
+ * Polls every 30 seconds; pauses automatically when the page is hidden.
  *
  * @param {number|string} id — escrow_id
  * @returns {{ escrow: object|null, isLoading: boolean, error: Error|null, mutate: Function }}
- *
- * TODO (contributor — Issue #39): implement with SWR
  */
-export function useEscrow(_id) {
-  // TODO: replace with SWR
-  return {
-    escrow: null,
-    isLoading: false,
-    error: new Error('useEscrow not implemented — see Issue #39'),
-    mutate: () => {},
-  };
+export function useEscrow(id) {
+  const { data, error, isLoading, mutate } = useSWR(
+    id ? `${API_URL}/api/escrows/${id}` : null,
+    fetcher,
+    {
+      refreshInterval: 30_000,  // poll every 30 seconds
+      refreshWhenHidden: false, // pause polling when page is not visible
+    }
+  );
+  return { escrow: data, isLoading, error, mutate };
 }
 
 /**

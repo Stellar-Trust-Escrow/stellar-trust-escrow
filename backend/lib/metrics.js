@@ -153,6 +153,38 @@ export const activeEscrowsGauge = new client.Gauge({
   registers: [register],
 });
 
+// ── Circuit Breaker Metrics ───────────────────────────────────────────────────
+
+export const circuitBreakerState = new client.Gauge({
+  name: 'circuit_breaker_state',
+  help: 'Current circuit breaker state: 0=CLOSED, 1=OPEN, 2=HALF_OPEN',
+  labelNames: ['name'],
+  registers: [register],
+});
+
+export const circuitBreakerCallsTotal = new client.Counter({
+  name: 'circuit_breaker_calls_total',
+  help: 'Total circuit breaker call outcomes',
+  labelNames: ['name', 'outcome'], // outcome: success | failure | rejected
+  registers: [register],
+});
+
+export const circuitBreakerTransitionsTotal = new client.Counter({
+  name: 'circuit_breaker_transitions_total',
+  help: 'Total circuit breaker state transitions',
+  labelNames: ['name', 'from', 'to'],
+  registers: [register],
+});
+
+// ── Chaos Metrics ─────────────────────────────────────────────────────────────
+
+export const chaosInjectedTotal = new client.Counter({
+  name: 'chaos_injected_total',
+  help: 'Total chaos faults injected',
+  labelNames: ['experiment_id', 'fault_type'],
+  registers: [register],
+});
+
 // ── Error Metrics ─────────────────────────────────────────────────────────────
 
 export const errorsTotal = new client.Counter({

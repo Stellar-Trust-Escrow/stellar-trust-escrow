@@ -407,7 +407,8 @@ paths:
       tags: [Users]
       summary: Get user profile (reputation, escrow history, stats)
       operationId: getUserProfile
-      security: []
+      security:
+        - BearerAuth: []
       parameters:
         - name: address
           in: path
@@ -423,6 +424,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -467,7 +470,8 @@ paths:
       tags: [Users]
       summary: Aggregated user statistics
       operationId: getUserStats
-      security: []
+      security:
+        - BearerAuth: []
       parameters:
         - name: address
           in: path
@@ -481,6 +485,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserStats'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -598,7 +604,8 @@ paths:
       tags: [Disputes]
       summary: List disputes with pagination
       operationId: listDisputes
-      security: []
+      security:
+        - BearerAuth: []
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Limit'
@@ -609,13 +616,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedDisputes'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
   /api/disputes/{escrowId}:
     get:
       tags: [Disputes]
       summary: Get dispute details for a specific escrow
       operationId: getDispute
-      security: []
+      security:
+        - BearerAuth: []
       parameters:
         - name: escrowId
           in: path
@@ -629,6 +639,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Dispute'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -710,7 +722,7 @@ paths:
     post:
       tags: [Payments]
       summary: Create a Stripe Checkout session
-      description: Requires KYC Approved status. Creates a checkout.sessions record.
+      description: Requires KYC Approved status and the JWT wallet address must match the request body.
       operationId: createCheckout
       security:
         - BearerAuth: []
@@ -755,6 +767,12 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Wallet address mismatch or KYC not approved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/payments/status/{sessionId}:
     get:
@@ -779,13 +797,19 @@ paths:
                 $ref: '#/components/schemas/PaymentRecord'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Payment does not belong to the authenticated wallet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           $ref: '#/components/responses/NotFound'
 
   /api/payments/{address}:
     get:
       tags: [Payments]
-      summary: List all payments for a Stellar address
+      summary: List all payments for the authenticated Stellar address
       operationId: listPayments
       security:
         - BearerAuth: []
@@ -809,11 +833,17 @@ paths:
                       $ref: '#/components/schemas/PaymentRecord'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Wallet address mismatch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/payments/{paymentId}/refund:
     post:
       tags: [Payments]
-      summary: Issue a full refund for a completed payment
+      summary: Issue a full refund for a completed payment owned by the authenticated wallet
       operationId: refundPayment
       security:
         - BearerAuth: []
@@ -840,13 +870,20 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Payment does not belong to the authenticated wallet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/notifications/events:
     post:
       tags: [Notifications]
       summary: Enqueue an email notification event
       operationId: enqueueNotification
-      security: []
+      security:
+        - AdminAuth: []
       requestBody:
         required: true
         content:
@@ -888,11 +925,13 @@ paths:
                     type: boolean
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
   /api/notifications/subscribe:
     post:
       tags: [Notifications]
-      summary: Re-subscribe an email to notifications
+      summary: Re-subscribe an email to notifications using the unsubscribe token
       operationId: subscribe
       security: []
       requestBody:
@@ -901,12 +940,15 @@ paths:
           application/json:
             schema:
               type: object
-              required: [email]
+              required: [email, token]
               properties:
                 email:
                   type: string
                   format: email
                   example: user@example.com
+                token:
+                  type: string
+                  description: Unsubscribe token from the original email link
       responses:
         '200':
           description: Resubscribed
@@ -924,6 +966,12 @@ paths:
                     nullable: true
         '400':
           $ref: '#/components/responses/BadRequest'
+        '403':
+          description: Invalid resubscribe token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/notifications/unsubscribe:
     get:
@@ -1002,7 +1050,8 @@ paths:
       tags: [Notifications]
       summary: Get email queue snapshot (size, processing stats)
       operationId: getQueueSnapshot
-      security: []
+      security:
+        - AdminAuth: []
       responses:
         '200':
           description: Queue snapshot
@@ -1017,6 +1066,8 @@ paths:
                     type: integer
                   processed:
                     type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
   /api/events:
     get:
@@ -1151,7 +1202,7 @@ paths:
     post:
       tags: [KYC]
       summary: Generate a Sumsub SDK access token
-      description: Returns a short-lived token for the frontend Sumsub widget.
+      description: Returns a short-lived token for the frontend Sumsub widget. The JWT wallet address must match the request body.
       operationId: getKycToken
       security:
         - BearerAuth: []
@@ -1182,13 +1233,20 @@ paths:
                     example: 3600
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Wallet address mismatch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/kyc/status/{address}:
     get:
       tags: [KYC]
       summary: Get KYC verification status for an address
       operationId: getKycStatus
-      security: []
+      security:
+        - BearerAuth: []
       parameters:
         - name: address
           in: path
@@ -1202,6 +1260,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/KycStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Wallet address mismatch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           $ref: '#/components/responses/NotFound'
 

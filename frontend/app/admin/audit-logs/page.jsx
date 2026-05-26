@@ -7,12 +7,8 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-
-function getAdminKey() {
-  return typeof window !== 'undefined' ? localStorage.getItem('adminApiKey') || '' : '';
-}
+import { useAdminStore } from '../../../store/app-store';
+import { adminFetch } from '../../../store/admin';
 
 function actionColor(action) {
   if (action?.includes('BAN')) return 'text-red-400 bg-red-500/10 border-red-500/20';
@@ -23,6 +19,7 @@ function actionColor(action) {
 }
 
 export default function AdminAuditLogsPage() {
+  const { apiKey } = useAdminStore();
   const [logs, setLogs] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, total: 0, pages: 1 });
   const [loading, setLoading] = useState(false);
@@ -32,9 +29,7 @@ export default function AdminAuditLogsPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${API_BASE}/api/admin/audit-logs?page=${page}&limit=50`, {
-        headers: { 'x-admin-api-key': getAdminKey() },
-      });
+      const res = await adminFetch(`/api/admin/audit-logs?page=${page}&limit=50`, apiKey);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to fetch audit logs');
       setLogs(data.logs);
@@ -44,11 +39,11 @@ export default function AdminAuditLogsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [apiKey]);
 
   useEffect(() => {
     fetchLogs(1);
-  }, [fetchLogs]);
+  }, [apiKey, fetchLogs]);
 
   return (
     <div>

@@ -13,6 +13,14 @@ assignees: ''
 - [ ] 🎨 Frontend
 - [ ] 📖 Documentation
 
+## Affected Crates
+
+- [ ] escrow_contract
+- [ ] escrow_extensions
+- [ ] governance
+- [ ] backend
+- [ ] frontend
+
 ## Summary
 
 <!-- One sentence: what would you like to add? -->
@@ -21,9 +29,22 @@ assignees: ''
 
 <!-- Why is this useful? What problem does it solve? -->
 
-## Proposed Implementation
+## Proposed API / Implementation
 
-<!-- How might this be implemented? Any API changes? -->
+- Proposed function signatures:
+
+```rust
+// e.g. pub fn example_function(...)
+```
+
+- Expected input/output behavior
+- Any changes to contract storage or preconditions
+
+## Soroban / Stellar Constraints
+
+- Gas / fee considerations
+- Transaction size limits
+- Stellar ledger time / network constraints
 
 ## References
 

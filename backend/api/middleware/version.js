@@ -12,6 +12,17 @@ export const versioning = (version) => {
 
 /**
  * Middleware to warn clients about interacting with deprecated (unversioned) endpoints.
+ * 
+ * @deprecated Use the comprehensive deprecation middleware from './deprecation.js' instead.
+ * This provides RFC-compliant headers, sunset dates, and better migration guidance.
+ * 
+ * @example
+ * // Old way (deprecated)
+ * app.use('/api', deprecatedRoute);
+ * 
+ * // New way (recommended)
+ * import { deprecateVersion, deprecationPresets } from './deprecation.js';
+ * app.use('/api', deprecateVersion(deprecationPresets.legacyUnversioned));
  */
 export const deprecatedRoute = (req, res, next) => {
   res.setHeader(

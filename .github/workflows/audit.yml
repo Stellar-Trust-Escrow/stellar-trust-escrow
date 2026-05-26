@@ -1,0 +1,36 @@
+name: Cargo Audit
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    # Run weekly on Monday at 6 AM UTC
+    - cron: '0 6 * * 1'
+
+jobs:
+  audit:
+    name: Audit Dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+
+      - name: Run cargo audit
+        run: cargo audit --workspace
+        continue-on-error: true
+        id: audit
+
+      - name: Audit Summary
+        run: |
+          echo "## Cargo Audit Results" >> $GITHUB_STEP_SUMMARY
+          cargo audit --workspace --json | jq '.vulnerabilities | length' | xargs -I {} echo "Found {} vulnerabilities" >> $GITHUB_STEP_SUMMARY || echo "Audit completed" >> $GITHUB_STEP_SUMMARY
+
+      - name: Fail if vulnerabilities found
+        if: steps.audit.outcome == 'failure'
+        run: exit 1

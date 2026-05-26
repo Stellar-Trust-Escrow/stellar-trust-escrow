@@ -25,11 +25,13 @@
 //! `votes_for >= (votes_for + votes_against) * approval_threshold_bps / 10_000`
 
 #![no_std]
+#![deny(warnings)]
+#![allow(clippy::too_many_arguments)]
 
 mod errors;
 mod events;
-mod types;
 mod tests;
+mod types;
 
 pub use errors::GovError;
 pub use types::{
@@ -38,27 +40,24 @@ pub use types::{
 };
 
 use soroban_sdk::{contract, contractimpl, token, Address, Env, String};
-
-const INSTANCE_TTL_THRESHOLD: u32 = 5_000;
-const INSTANCE_TTL_EXTEND_TO: u32 = 50_000;
-const PERSISTENT_TTL_THRESHOLD: u32 = 5_000;
-const PERSISTENT_TTL_EXTEND_TO: u32 = 50_000;
+use stellar_trust_shared::{
+    bump_instance_ttl as shared_bump_instance_ttl,
+    bump_persistent_ttl as shared_bump_persistent_ttl,
+};
 
 // ── Storage helpers ───────────────────────────────────────────────────────────
 
 struct Storage;
 
 impl Storage {
+    /// Bump instance TTL using shared config constants from `stellar_trust_shared`.
     fn bump_instance(env: &Env) {
-        env.storage()
-            .instance()
-            .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND_TO);
+        shared_bump_instance_ttl(env);
     }
 
+    /// Bump persistent TTL using shared config constants from `stellar_trust_shared`.
     fn bump_persistent<K: soroban_sdk::IntoVal<Env, soroban_sdk::Val>>(env: &Env, key: &K) {
-        env.storage()
-            .persistent()
-            .extend_ttl(key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        shared_bump_persistent_ttl(env, key);
     }
 
     fn require_initialized(env: &Env) -> Result<(), GovError> {
@@ -136,8 +135,7 @@ fn evaluate(proposal: &Proposal, config: &GovConfig) -> bool {
     let total_votes = proposal.votes_for + proposal.votes_against;
 
     // Quorum: enough participation?
-    let quorum_required =
-        proposal.total_supply_snapshot * config.quorum_bps as i128 / 10_000;
+    let quorum_required = proposal.total_supply_snapshot * config.quorum_bps as i128 / 10_000;
     if total_votes < quorum_required {
         return false;
     }
@@ -468,6 +466,10 @@ impl GovernanceContract {
             return Err(GovError::ProposalAlreadyExecuted);
         }
 
+        if proposal.status == ProposalStatus::Cancelled {
+            return Err(GovError::ProposalAlreadyCancelled);
+        }
+
         proposal.status = ProposalStatus::Cancelled;
         Storage::save_proposal(&env, &proposal);
         events::emit_proposal_cancelled(&env, proposal_id, &caller);
@@ -477,11 +479,7 @@ impl GovernanceContract {
     // ── Admin ─────────────────────────────────────────────────────────────────
 
     /// Updates governance configuration. Admin only.
-    pub fn update_config(
-        env: Env,
-        caller: Address,
-        new_config: GovConfig,
-    ) -> Result<(), GovError> {
+    pub fn update_config(env: Env, caller: Address, new_config: GovConfig) -> Result<(), GovError> {
         Storage::require_initialized(&env)?;
         caller.require_auth();
 

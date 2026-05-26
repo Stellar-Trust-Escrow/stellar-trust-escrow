@@ -1,10 +1,14 @@
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod tests {
-    use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env, String};
+    use soroban_sdk::{
+        testutils::{Address as _, Ledger},
+        token, Address, Env, String,
+    };
 
     use crate::{
-        FundPayload, GovConfig, GovernanceContract, GovernanceContractClient, ParameterPayload,
-        ProposalPayload, ProposalStatus, ProposalType, UpgradePayload,
+        FundPayload, GovernanceContract, GovernanceContractClient, ParameterPayload,
+        ProposalPayload, ProposalStatus, ProposalType,
     };
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -12,11 +16,17 @@ mod tests {
     const VOTING_DELAY: u64 = 60;
     const VOTING_PERIOD: u64 = 3_600;
     const TIMELOCK_DELAY: u64 = 7_200;
-    const QUORUM_BPS: u32 = 400;       // 4%
-    const APPROVAL_BPS: u32 = 5_100;   // 51%
+    const QUORUM_BPS: u32 = 400; // 4%
+    const APPROVAL_BPS: u32 = 5_100; // 51%
     const THRESHOLD: i128 = 100;
 
-    fn setup() -> (Env, Address, Address, Address, GovernanceContractClient<'static>) {
+    fn setup() -> (
+        Env,
+        Address,
+        Address,
+        Address,
+        GovernanceContractClient<'static>,
+    ) {
         let env = Env::default();
         env.mock_all_auths();
 
@@ -44,7 +54,7 @@ mod tests {
         (env, admin, token_admin, token, client)
     }
 
-    fn mint(env: &Env, token_admin: &Address, token: &Address, to: &Address, amount: i128) {
+    fn mint(env: &Env, _token_admin: &Address, token: &Address, to: &Address, amount: i128) {
         token::StellarAssetClient::new(env, token).mint(to, &amount);
     }
 
@@ -56,15 +66,11 @@ mod tests {
         String::from_str(env, s)
     }
 
-    fn hash(env: &Env, seed: u8) -> BytesN<32> {
-        BytesN::from_array(env, &[seed; 32])
-    }
-
     // ── Initialization ────────────────────────────────────────────────────────
 
     #[test]
     fn test_initialize_stores_config() {
-        let (env, _admin, _ta, token, client) = setup();
+        let (_env, _admin, _ta, token, client) = setup();
         let config = client.get_config();
         assert_eq!(config.token, token);
         assert_eq!(config.quorum_bps, QUORUM_BPS);
@@ -75,11 +81,16 @@ mod tests {
 
     #[test]
     fn test_double_initialize_fails() {
-        let (env, admin, _ta, token, client) = setup();
+        let (_env, admin, _ta, token, client) = setup();
         let result = client.try_initialize(
-            &admin, &token, &THRESHOLD,
-            &VOTING_DELAY, &VOTING_PERIOD, &TIMELOCK_DELAY,
-            &QUORUM_BPS, &APPROVAL_BPS,
+            &admin,
+            &token,
+            &THRESHOLD,
+            &VOTING_DELAY,
+            &VOTING_PERIOD,
+            &TIMELOCK_DELAY,
+            &QUORUM_BPS,
+            &APPROVAL_BPS,
         );
         assert!(result.is_err());
     }
@@ -155,8 +166,11 @@ mod tests {
         mint(&env, &ta, &token, &voter, 1_000);
 
         let id = client.create_proposal(
-            &proposer, &str(&env, "T"), &str(&env, "D"),
-            &ProposalType::TextProposal, &ProposalPayload::Text,
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
             &10_000i128,
         );
 
@@ -178,8 +192,11 @@ mod tests {
         mint(&env, &ta, &token, &voter, 500);
 
         let id = client.create_proposal(
-            &proposer, &str(&env, "T"), &str(&env, "D"),
-            &ProposalType::TextProposal, &ProposalPayload::Text,
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
             &10_000i128,
         );
 
@@ -199,8 +216,11 @@ mod tests {
         mint(&env, &ta, &token, &voter, 1_000);
 
         let id = client.create_proposal(
-            &proposer, &str(&env, "T"), &str(&env, "D"),
-            &ProposalType::TextProposal, &ProposalPayload::Text,
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
             &10_000i128,
         );
 
@@ -220,8 +240,11 @@ mod tests {
         mint(&env, &ta, &token, &voter, 1_000);
 
         let id = client.create_proposal(
-            &proposer, &str(&env, "T"), &str(&env, "D"),
-            &ProposalType::TextProposal, &ProposalPayload::Text,
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
             &10_000i128,
         );
 
@@ -239,8 +262,11 @@ mod tests {
         mint(&env, &ta, &token, &voter, 1_000);
 
         let id = client.create_proposal(
-            &proposer, &str(&env, "T"), &str(&env, "D"),
-            &ProposalType::TextProposal, &ProposalPayload::Text,
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
             &10_000i128,
         );
 
@@ -262,8 +288,11 @@ mod tests {
         mint(&env, &ta, &token, &voter, 10_000);
 
         let id = client.create_proposal(
-            &proposer, &str(&env, "T"), &str(&env, "D"),
-            &ProposalType::TextProposal, &ProposalPayload::Text,
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
             &10_000i128,
         );
 
@@ -289,8 +318,11 @@ mod tests {
         mint(&env, &ta, &token, &whale, 99_800);
 
         let id = client.create_proposal(
-            &proposer, &str(&env, "T"), &str(&env, "D"),
-            &ProposalType::TextProposal, &ProposalPayload::Text,
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
             &10_000i128,
         );
 
@@ -309,8 +341,11 @@ mod tests {
         mint(&env, &ta, &token, &proposer, THRESHOLD);
 
         let id = client.create_proposal(
-            &proposer, &str(&env, "T"), &str(&env, "D"),
-            &ProposalType::TextProposal, &ProposalPayload::Text,
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
             &10_000i128,
         );
 
@@ -330,8 +365,11 @@ mod tests {
         mint(&env, &ta, &token, &voter, 10_000);
 
         let id = client.create_proposal(
-            &proposer, &str(&env, "T"), &str(&env, "D"),
-            &ProposalType::TextProposal, &ProposalPayload::Text,
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
             &10_000i128,
         );
 
@@ -354,8 +392,11 @@ mod tests {
         mint(&env, &ta, &token, &voter, 10_000);
 
         let id = client.create_proposal(
-            &proposer, &str(&env, "T"), &str(&env, "D"),
-            &ProposalType::TextProposal, &ProposalPayload::Text,
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
             &10_000i128,
         );
 
@@ -391,8 +432,11 @@ mod tests {
         });
 
         let id = client.create_proposal(
-            &proposer, &str(&env, "Fund"), &str(&env, "Allocate"),
-            &ProposalType::FundAllocation, &payload,
+            &proposer,
+            &str(&env, "Fund"),
+            &str(&env, "Allocate"),
+            &ProposalType::FundAllocation,
+            &payload,
             &10_000i128,
         );
 
@@ -416,8 +460,11 @@ mod tests {
         mint(&env, &ta, &token, &proposer, THRESHOLD);
 
         let id = client.create_proposal(
-            &proposer, &str(&env, "T"), &str(&env, "D"),
-            &ProposalType::TextProposal, &ProposalPayload::Text,
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
             &10_000i128,
         );
 
@@ -433,8 +480,11 @@ mod tests {
         mint(&env, &ta, &token, &proposer, THRESHOLD);
 
         let id = client.create_proposal(
-            &proposer, &str(&env, "T"), &str(&env, "D"),
-            &ProposalType::TextProposal, &ProposalPayload::Text,
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
             &10_000i128,
         );
 
@@ -451,8 +501,11 @@ mod tests {
         mint(&env, &ta, &token, &proposer, THRESHOLD);
 
         let id = client.create_proposal(
-            &proposer, &str(&env, "T"), &str(&env, "D"),
-            &ProposalType::TextProposal, &ProposalPayload::Text,
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
             &10_000i128,
         );
 
@@ -460,11 +513,102 @@ mod tests {
         assert!(result.is_err());
     }
 
+    // ── Issue #658: Quorum not reached → Defeated ─────────────────────────────
+
+    #[test]
+    fn test_governance_quorum_not_reached_defeated() {
+        let (env, admin, ta, token, client) = setup();
+
+        // Raise quorum to 10%
+        let mut config = client.get_config();
+        config.quorum_bps = 1_000;
+        client.update_config(&admin, &config);
+
+        let proposer = Address::generate(&env);
+        let voter = Address::generate(&env);
+        let whale = Address::generate(&env);
+
+        // total supply = 100_000; 10% quorum = 10_000; voter only has 500 (< 10%)
+        mint(&env, &ta, &token, &proposer, THRESHOLD);
+        mint(&env, &ta, &token, &voter, 500);
+        mint(&env, &ta, &token, &whale, 99_400);
+
+        let id = client.create_proposal(
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
+            &100_000i128,
+        );
+
+        advance(&env, VOTING_DELAY + 1);
+        client.cast_vote(&voter, &id, &true);
+
+        advance(&env, VOTING_PERIOD);
+        let status = client.finalize_proposal(&id);
+        assert_eq!(status, ProposalStatus::Defeated);
+
+        let p = client.get_proposal(&id);
+        assert_eq!(p.status, ProposalStatus::Defeated);
+
+        // execute_proposal on a Defeated proposal must fail
+        let result = client.try_execute_proposal(&id);
+        assert!(result.is_err());
+    }
+
+    // ── Issue #659: cancel_proposal edge cases ────────────────────────────────
+
+    #[test]
+    fn test_cast_vote_after_cancel_fails() {
+        let (env, _admin, ta, token, client) = setup();
+        let proposer = Address::generate(&env);
+        let voter = Address::generate(&env);
+        mint(&env, &ta, &token, &proposer, THRESHOLD);
+        mint(&env, &ta, &token, &voter, 1_000);
+
+        let id = client.create_proposal(
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
+            &10_000i128,
+        );
+
+        client.cancel_proposal(&proposer, &id);
+        assert_eq!(client.get_proposal(&id).status, ProposalStatus::Cancelled);
+
+        advance(&env, VOTING_DELAY + 1);
+        let result = client.try_cast_vote(&voter, &id, &true);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_double_cancel_fails() {
+        let (env, _admin, ta, token, client) = setup();
+        let proposer = Address::generate(&env);
+        mint(&env, &ta, &token, &proposer, THRESHOLD);
+
+        let id = client.create_proposal(
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
+            &10_000i128,
+        );
+
+        client.cancel_proposal(&proposer, &id);
+        let result = client.try_cancel_proposal(&proposer, &id);
+        assert!(result.is_err());
+    }
+
     // ── Config update ─────────────────────────────────────────────────────────
 
     #[test]
     fn test_admin_can_update_config() {
-        let (env, admin, _ta, token, client) = setup();
+        let (_env, admin, _ta, _token, client) = setup();
         let mut config = client.get_config();
         config.quorum_bps = 1_000; // 10%
 
@@ -480,6 +624,91 @@ mod tests {
 
         let result = client.try_update_config(&stranger, &config);
         assert!(result.is_err());
+    }
+
+    // ── Full governance lifecycle ─────────────────────────────────────────────
+
+    /// End-to-end test: create_proposal → cast_vote (for + against) →
+    /// finalize_proposal → execute_proposal, verifying every status transition
+    /// and the ParameterChange payload.
+    ///
+    /// Note: finalize_proposal transitions Active → Queued directly (the
+    /// `Passed` variant is defined in ProposalStatus but the contract skips it,
+    /// going straight to Queued when quorum + threshold are met).
+    #[test]
+    fn test_governance_full_lifecycle() {
+        let (env, _admin, ta, token, client) = setup();
+
+        let proposer = Address::generate(&env);
+        let voter_for = Address::generate(&env);
+        let voter_against = Address::generate(&env);
+
+        // Supply: proposer=100, for=8_000, against=1_000 → total=9_100
+        // Quorum required: 9_100 * 4% = 364 → total votes 9_000 ≥ 364 ✓
+        // Approval: 8_000 / 9_000 ≈ 88.9% ≥ 51% ✓
+        mint(&env, &ta, &token, &proposer, THRESHOLD);
+        mint(&env, &ta, &token, &voter_for, 8_000);
+        mint(&env, &ta, &token, &voter_against, 1_000);
+
+        let payload = ProposalPayload::Parameter(ParameterPayload {
+            key: str(&env, "platform_fee_bps"),
+            value: 150,
+        });
+
+        // 1. create_proposal — status must be Active
+        let proposal_id = client.create_proposal(
+            &proposer,
+            &str(&env, "Lower platform fee"),
+            &str(&env, "Reduce platform fee to 1.5%"),
+            &ProposalType::ParameterChange,
+            &payload,
+            &9_100i128,
+        );
+        assert_eq!(proposal_id, 0);
+
+        let p = client.get_proposal(&proposal_id);
+        assert_eq!(p.status, ProposalStatus::Active);
+        assert_eq!(p.votes_for, 0);
+        assert_eq!(p.votes_against, 0);
+
+        // 2. cast_vote — advance past voting_delay, then vote for and against
+        advance(&env, VOTING_DELAY + 1);
+
+        client.cast_vote(&voter_for, &proposal_id, &true);
+        client.cast_vote(&voter_against, &proposal_id, &false);
+
+        let p = client.get_proposal(&proposal_id);
+        assert_eq!(p.votes_for, 8_000);
+        assert_eq!(p.votes_against, 1_000);
+        assert!(client.has_voted(&proposal_id, &voter_for));
+        assert!(client.has_voted(&proposal_id, &voter_against));
+
+        // 3. finalize_proposal — advance past voting_period; expect Queued
+        advance(&env, VOTING_PERIOD);
+
+        let status = client.finalize_proposal(&proposal_id);
+        assert_eq!(status, ProposalStatus::Queued);
+
+        let p = client.get_proposal(&proposal_id);
+        assert_eq!(p.status, ProposalStatus::Queued);
+
+        // 4. execute_proposal — advance past timelock_delay; expect Executed
+        advance(&env, TIMELOCK_DELAY + 1);
+
+        client.execute_proposal(&proposal_id);
+
+        let p = client.get_proposal(&proposal_id);
+        assert_eq!(p.status, ProposalStatus::Executed);
+        assert!(p.executed_at.is_some());
+
+        // Verify the ParameterChange payload is intact and readable
+        match p.payload {
+            ProposalPayload::Parameter(ref pp) => {
+                assert_eq!(pp.key, str(&env, "platform_fee_bps"));
+                assert_eq!(pp.value, 150);
+            }
+            _ => panic!("unexpected payload variant"),
+        }
     }
 
     // ── Parameter change proposal ─────────────────────────────────────────────

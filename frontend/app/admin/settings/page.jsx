@@ -7,28 +7,22 @@
  */
 
 import { useState, useEffect } from 'react';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-
-function getAdminKey() {
-  return typeof window !== 'undefined' ? localStorage.getItem('adminApiKey') || '' : '';
-}
+import { useAdminStore } from '../../../store/app-store';
+import { adminFetch } from '../../../store/admin';
 
 export default function AdminSettingsPage() {
+  const { apiKey } = useAdminStore();
   const [settings, setSettings] = useState(null);
   const [feeInput, setFeeInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
-
-  const headers = { 'Content-Type': 'application/json', 'x-admin-api-key': getAdminKey() };
-
   const fetchSettings = async () => {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${API_BASE}/api/admin/settings`, { headers });
+      const res = await adminFetch('/api/admin/settings', apiKey);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load settings');
       setSettings(data);
@@ -42,16 +36,15 @@ export default function AdminSettingsPage() {
 
   useEffect(() => {
     fetchSettings();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [apiKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSave = async (e) => {
     e.preventDefault();
     setSaving(true);
     setError('');
     try {
-      const res = await fetch(`${API_BASE}/api/admin/settings`, {
+      const res = await adminFetch('/api/admin/settings', apiKey, {
         method: 'PATCH',
-        headers,
         body: JSON.stringify({ platformFeePercent: feeInput }),
       });
       const data = await res.json();

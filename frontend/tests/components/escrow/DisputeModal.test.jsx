@@ -36,7 +36,7 @@ describe('DisputeModal', () => {
   it('calls onClose when backdrop is clicked', () => {
     const onClose = jest.fn();
     const { container } = render(<DisputeModal {...defaultProps} onClose={onClose} />);
-    const backdrop = container.querySelector('.fixed.inset-0.bg-black\\/70');
+    const backdrop = container.querySelector('.absolute.inset-0');
     fireEvent.click(backdrop);
     expect(onClose).toHaveBeenCalledTimes(1);
   });

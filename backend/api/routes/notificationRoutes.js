@@ -1,5 +1,6 @@
 import express from 'express';
 import emailService from '../../services/emailService.js';
+import adminAuth from '../middleware/adminAuth.js';
 
 const router = express.Router();
 
@@ -33,7 +34,7 @@ async function enqueueNotification(eventType, data) {
   }
 }
 
-router.post('/events', async (req, res) => {
+router.post('/events', adminAuth, async (req, res) => {
   try {
     const { eventType, data } = req.body || {};
     if (!eventType || !data || !Array.isArray(data.recipients) || data.recipients.length === 0) {
@@ -79,19 +80,27 @@ router.post('/unsubscribe', async (req, res) => {
 
 router.post('/subscribe', async (req, res) => {
   try {
-    const { email } = req.body || {};
-    if (!email) {
-      return res.status(400).json({ error: 'email is required' });
+    const { email, token } = req.body || {};
+    if (!email || !token) {
+      return res.status(400).json({ error: 'email and token are required' });
     }
 
-    const preference = await emailService.resubscribe(email);
-    return res.json({ email: preference.email, unsubscribedAt: preference.unsubscribedAt });
+    const existingPreference = await emailService.getPreference(email);
+    if (existingPreference.unsubscribeToken !== token) {
+      return res.status(403).json({ error: 'Invalid resubscribe token' });
+    }
+
+    const updatedPreference = await emailService.resubscribe(email);
+    return res.json({
+      email: updatedPreference.email,
+      unsubscribedAt: updatedPreference.unsubscribedAt,
+    });
   } catch (error) {
     return res.status(400).json({ error: error.message });
   }
 });
 
-router.get('/queue', async (_req, res) => {
+router.get('/queue', adminAuth, async (_req, res) => {
   const snapshot = await emailService.getQueueSnapshot();
   res.json(snapshot);
 });
