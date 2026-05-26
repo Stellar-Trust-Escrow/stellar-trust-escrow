@@ -2,7 +2,7 @@
 
 All public contract functions return `Result<T, EscrowError>`. When a transaction fails, the Soroban diagnostic stream includes the `EscrowError` discriminant as a `u32`. Use this table to map that value to a human-readable description.
 
-Discriminants 7, 11, 22, and 24 are **reserved / unused** — they do not correspond to any current variant and are noted in the table for completeness.
+Discriminants 7, 11, 22, and 24 are **reserved / unused** — they are represented by explicit `Reserved*` variants so the discriminant space stays contiguous without renumbering existing errors.
 
 ---
 
@@ -30,11 +30,11 @@ Discriminants 7, 11, 22, and 24 are **reserved / unused** — they do not corres
 
 | Code | Name                           | User-facing description                          | When it occurs                                                                             |
 | ---- | ------------------------------ | ------------------------------------------------ | ------------------------------------------------------------------------------------------ |
-| 7    | _(reserved)_                   | —                                                | Unused discriminant.                                                                       |
+| 7    | `Reserved7`                    | Reserved for future use.                         | Placeholder variant to keep the error-code space contiguous without breaking existing codes. |
 | 8    | `EscrowNotFound`               | Escrow not found.                                | No escrow exists for the given `escrow_id`.                                                |
 | 9    | `EscrowNotActive`              | This escrow is not currently active.             | Operation requires `Active` status but escrow is `Completed`, `Disputed`, or `Cancelled`.  |
 | 10   | `EscrowNotDisputed`            | This escrow is not in a disputed state.          | Dispute-resolution function called on a non-disputed escrow.                               |
-| 11   | _(reserved)_                   | —                                                | Unused discriminant.                                                                       |
+| 11   | `Reserved11`                   | Reserved for future use.                         | Placeholder variant to keep the error-code space contiguous without breaking existing codes. |
 | 12   | `CannotCancelWithPendingFunds` | Cannot cancel while milestone funds are pending. | Cancellation attempted while at least one milestone is in `Submitted` or `Approved` state. |
 
 ---
@@ -66,7 +66,7 @@ Discriminants 7, 11, 22, and 24 are **reserved / unused** — they do not corres
 
 | Code | Name                   | User-facing description                    | When it occurs                                           |
 | ---- | ---------------------- | ------------------------------------------ | -------------------------------------------------------- |
-| 22   | _(reserved)_           | —                                          | Unused discriminant.                                     |
+| 22   | `Reserved22`          | Reserved for future use.                 | Placeholder variant to keep the error-code space contiguous without breaking existing codes. |
 | 23   | `DisputeAlreadyExists` | A dispute is already open for this escrow. | `raise_dispute` called when a dispute is already active. |
 
 ---
@@ -75,7 +75,7 @@ Discriminants 7, 11, 22, and 24 are **reserved / unused** — they do not corres
 
 | Code | Name              | User-facing description           | When it occurs                                      |
 | ---- | ----------------- | --------------------------------- | --------------------------------------------------- |
-| 24   | _(reserved)_      | —                                 | Unused discriminant.                                |
+| 24   | `Reserved24`     | Reserved for future use.        | Placeholder variant to keep the error-code space contiguous without breaking existing codes. |
 | 25   | `InvalidDeadline` | The provided deadline is invalid. | Deadline timestamp is in the past at creation time. |
 | 26   | `DeadlineExpired` | The escrow deadline has passed.   | Operation attempted after the escrow deadline.      |
 
