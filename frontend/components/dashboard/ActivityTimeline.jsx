@@ -73,13 +73,14 @@ function TimelineItem({ escrow, address, isLast }) {
   const counterparty = role === 'client' ? escrow.freelancerAddress : escrow.clientAddress;
 
   return (
-    <div className="flex gap-4 group">
+    <div className="flex gap-4 group" role="listitem">
       {/* Dot + line */}
       <div className="flex flex-col items-center shrink-0">
         <div
           className={`w-3 h-3 rounded-full mt-1 ring-2 ring-gray-950 ${cfg.dot} transition-transform group-hover:scale-125`}
+          aria-hidden="true"
         />
-        {!isLast && <div className="w-0.5 flex-1 bg-gray-800 mt-1 min-h-[2.5rem]" />}
+        {!isLast && <div className="w-0.5 flex-1 bg-gray-800 mt-1 min-h-[2.5rem]" aria-hidden="true" />}
       </div>
 
       {/* Content */}
@@ -87,9 +88,11 @@ function TimelineItem({ escrow, address, isLast }) {
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-semibold text-white">Escrow #{escrow.id.toString()}</span>
           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${cfg.color} bg-gray-800`}>
-            {cfg.icon} {cfg.label}
+            <span aria-hidden="true">{cfg.icon}</span> {cfg.label}
           </span>
-          <span className="text-xs text-gray-500 ml-auto">{timeAgo(escrow.updatedAt)}</span>
+          <span className="text-xs text-gray-500 ml-auto" aria-live="polite">
+            {timeAgo(escrow.updatedAt)}
+          </span>
         </div>
         <p className="text-xs text-gray-500 mt-1">
           As <span className="text-gray-400 capitalize">{role}</span>
@@ -128,23 +131,30 @@ export default function ActivityTimeline({ address }) {
   }, [address]);
 
   return (
-    <section>
+    <section aria-label="Recent escrow activity timeline">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-white">Recent Activity</h2>
-        <span className="text-xs text-gray-500">Last 10 events</span>
+        <span className="text-xs text-gray-500" aria-live="polite" aria-atomic="true">
+          Last 10 events
+        </span>
       </div>
 
       {loading && <TimelineSkeleton />}
 
       {!loading && error && (
-        <div className="bg-red-900/20 border border-red-500/30 text-red-400 text-sm rounded-lg px-4 py-3">
+        <div
+          className="bg-red-900/20 border border-red-500/30 text-red-400 text-sm rounded-lg px-4 py-3"
+          role="alert"
+        >
           ⚠️ Could not load activity: {error}
         </div>
       )}
 
       {!loading && !error && escrows.length === 0 && (
         <div className="card text-center py-10">
-          <p className="text-3xl mb-2">🌑</p>
+          <p className="text-3xl mb-2" aria-hidden="true">
+            🌑
+          </p>
           <p className="text-gray-400 font-medium">No activity yet</p>
           <p className="text-gray-600 text-sm mt-1">Create your first escrow to see it here.</p>
         </div>
@@ -152,6 +162,34 @@ export default function ActivityTimeline({ address }) {
 
       {!loading && !error && escrows.length > 0 && (
         <div className="card">
+          <table className="sr-only" aria-label="Escrow activity data">
+            <thead>
+              <tr>
+                <th>Escrow ID</th>
+                <th>Status</th>
+                <th>Role</th>
+                <th>Counterparty</th>
+                <th>Amount</th>
+                <th>Updated</th>
+              </tr>
+            </thead>
+            <tbody>
+              {escrows.map((escrow) => {
+                const role = escrow.clientAddress === address ? 'client' : 'freelancer';
+                const counterparty = role === 'client' ? escrow.freelancerAddress : escrow.clientAddress;
+                return (
+                  <tr key={escrow.id.toString()}>
+                    <td>{escrow.id}</td>
+                    <td>{escrow.status}</td>
+                    <td>{role}</td>
+                    <td>{counterparty}</td>
+                    <td>{escrow.totalAmount}</td>
+                    <td>{timeAgo(escrow.updatedAt)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
           {escrows.map((escrow, i) => (
             <TimelineItem
               key={escrow.id.toString()}
