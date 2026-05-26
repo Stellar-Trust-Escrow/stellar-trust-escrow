@@ -13,6 +13,12 @@ assignees: ''
 - [ ] 🎨 Frontend (Next.js/React)
 - [ ] 📡 Indexer
 
+## Contract Crate
+
+- [ ] escrow_contract
+- [ ] escrow_extensions
+- [ ] governance
+
 ## Description
 
 <!-- A clear description of what the bug is -->
@@ -33,11 +39,15 @@ assignees: ''
 
 <!-- What actually happened. Include error messages and stack traces. -->
 
+## Soroban Details
+
+- Soroban CLI version:
+- Relevant EscrowError code:
+
 ## Environment
 
 - OS:
 - Node.js version:
 - Rust version (if contract):
-- Soroban CLI version (if contract):
 - Browser (if frontend):
 - Stellar Network: [ ] Testnet [ ] Mainnet

@@ -24,11 +24,7 @@
  * @module escrowIndexer
  */
 
-/* eslint-disable no-undef */
-/* eslint-disable @typescript-eslint/no-unused-vars */
-
 // TODO (contributor): uncomment when dependencies are installed
-// const { SorobanRpc, xdr, StrKey } = require('@stellar/stellar-sdk');
 // const { PrismaClient } = require('@prisma/client');
 
 // const prisma = new PrismaClient();
@@ -151,6 +147,9 @@ const handleMilestoneApproved = async (_event) => {
  */
 const handleFundsReleased = async (_event) => {
   // TODO: implement
+  // After updating DB, invalidate cache for this escrow:
+  // const escrowId = parseEscrowId(_event);
+  // await escrowController.onEscrowStatusChange(escrowId);
 };
 
 /**
@@ -160,6 +159,9 @@ const handleFundsReleased = async (_event) => {
  */
 const handleDisputeRaised = async (_event) => {
   // TODO: implement
+  // After updating DB, invalidate cache for this escrow:
+  // const escrowId = parseEscrowId(_event);
+  // await escrowController.onEscrowStatusChange(escrowId);
 };
 
 /**
@@ -169,6 +171,9 @@ const handleDisputeRaised = async (_event) => {
  */
 const handleDisputeResolved = async (_event) => {
   // TODO: implement
+  // After updating DB, invalidate cache for this escrow:
+  // const escrowId = parseEscrowId(_event);
+  // await escrowController.onEscrowStatusChange(escrowId);
 };
 
 /**

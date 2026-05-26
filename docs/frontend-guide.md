@@ -16,6 +16,19 @@ npm run dev
 
 Visit `http://localhost:3000`.
 
+### Testing
+
+```bash
+cd frontend
+npm run test:unit
+npm run test:integration
+npm run test:a11y
+npm run test:coverage
+npm run test:e2e
+```
+
+Use `npm run test:visual:update` when intentional UI changes require new Playwright snapshot baselines.
+
 ---
 
 ## Project Structure
@@ -104,9 +117,13 @@ const handleApprove = async (milestoneId) => {
 };
 ```
 
+### State Management
+See the [comprehensive guide](frontend-state-management.md) covering SWR data fetching, WebSocket real-time updates, global Zustand-like store, optimistic patterns, error boundaries, loading skeletons, sync strategies, performance tips, and testing.
+
 ---
 
 ## Adding a New Component
+
 
 1. Create file in `components/ui/` or `components/escrow/`
 2. Export a default function component

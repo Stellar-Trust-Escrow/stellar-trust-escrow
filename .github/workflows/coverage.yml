@@ -1,0 +1,36 @@
+name: Coverage
+
+on:
+  push:
+    branches: [develop]
+  pull_request:
+    branches: [develop]
+  workflow_dispatch: {}
+
+jobs:
+  tarpaulin:
+    name: Cargo Tarpaulin Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: clippy, rustfmt
+
+      - name: Install cargo-tarpaulin
+        run: cargo install cargo-tarpaulin --version 0.35.4
+
+      - name: Run cargo tarpaulin
+        run: cargo tarpaulin --config tarpaulin.toml --out Html --out Xml --output-dir target/tarpaulin
+
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tarpaulin-coverage
+          path: target/tarpaulin/**

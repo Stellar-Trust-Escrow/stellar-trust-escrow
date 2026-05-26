@@ -1,0 +1,67 @@
+
+running 1 test
+test pause_tests::pause_tests::test_pause_unpause_restores_add_milestone ... FAILED
+
+failures:
+
+---- pause_tests::pause_tests::test_pause_unpause_restores_add_milestone stdout ----
+
+thread 'pause_tests::pause_tests::test_pause_unpause_restores_add_milestone' (165289) panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:768:9:
+HostError: Error(Contract, #10)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #10)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #10)], data:["contract call failed", create_escrow, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 1000, Bytes(0101010101010101010101010101010101010101010101010101010101010101), Void, Void, Void, Void, {approvers: [], threshold: 0, weights: []}]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[error, Error(Contract, #10)], data:"caught error from function"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[error, Error(Contract, #10)], data:"escalating error to panic"
+   4: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[error, Error(Contract, #10)], data:["contract call failed", transfer, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, 30]]
+   5: [Failed Diagnostic Event (not emitted)] contract:CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, topics:[error, Error(Contract, #10)], data:["balance is not sufficient to spend", {amount: 0, authorized: true, clawback: false}, 30]
+   6: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[fn_call, Bytes(d63a954726751a876d37290072af1ee723d7d761eec3bf4191849d2116acdc73), transfer], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, 30]
+   7: [Failed Diagnostic Event (not emitted)] contract:CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, topics:[fn_return, transfer], data:Void
+   8: [Failed Contract Event (not emitted)] contract:CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, topics:[transfer, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL7NV"], data:1000
+   9: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[fn_call, Bytes(d63a954726751a876d37290072af1ee723d7d761eec3bf4191849d2116acdc73), transfer], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, 1000]
+   10: [Diagnostic Event] topics:[fn_call, Bytes(0000000000000000000000000000000000000000000000000000000000000002), create_escrow], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 1000, Bytes(0101010101010101010101010101010101010101010101010101010101010101), Void, Void, Void, Void, {approvers: [], threshold: 0, weights: []}]
+   11: [Diagnostic Event] contract:CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, topics:[fn_return, mint], data:Void
+   12: [Contract Event] contract:CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, topics:[mint, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL7NV"], data:1000
+   13: [Diagnostic Event] topics:[fn_call, Bytes(d63a954726751a876d37290072af1ee723d7d761eec3bf4191849d2116acdc73), mint], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 1000]
+   14: [Diagnostic Event] contract:CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, topics:[fn_return, set_admin], data:Void
+   15: [Contract Event] contract:CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, topics:[set_admin, GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL7NV, "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL7NV"], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM
+   16: [Diagnostic Event] topics:[fn_call, Bytes(d63a954726751a876d37290072af1ee723d7d761eec3bf4191849d2116acdc73), set_admin], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM
+   17: [Diagnostic Event] contract:CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, topics:[fn_return, init_asset], data:Void
+   18: [Diagnostic Event] topics:[fn_call, Bytes(d63a954726751a876d37290072af1ee723d7d761eec3bf4191849d2116acdc73), init_asset], data:Bytes(0000000161616100000000000000000000000000000000000000000000000000000000000000000000000005)
+   19: [Diagnostic Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[fn_return, initialize], data:Void
+   20: [Contract Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[adm_init], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM
+   21: [Diagnostic Event] topics:[fn_call, Bytes(0000000000000000000000000000000000000000000000000000000000000002), initialize], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM
+
+Backtrace (newest first):
+   0: <soroban_env_host::host::Host as soroban_env_common::env::EnvBase>::escalate_error_to_panic
+             at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:767:31
+   1: soroban_sdk::env::internal::reject_err::{{closure}}
+             at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:27
+   2: core::result::Result<T,E>::map_err
+             at /home/edohwares/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs:968:27
+   3: soroban_sdk::env::internal::reject_err
+             at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:11
+   4: <soroban_sdk::env::Env as soroban_env_common::env::Env>::call
+             at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:1667:13
+   5: soroban_sdk::env::Env::invoke_contract
+             at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:379:18
+   6: stellar_trust_escrow_contract::EscrowContractClient::create_escrow
+             at src/lib.rs:802:1
+   7: stellar_trust_escrow_contract::pause_tests::pause_tests::test_pause_unpause_restores_add_milestone
+             at src/pause_tests.rs:181:32
+   8: stellar_trust_escrow_contract::pause_tests::pause_tests::test_pause_unpause_restores_add_milestone::{{closure}}
+             at src/pause_tests.rs:175:51
+   9: core::ops::function::FnOnce::call_once
+             at /home/edohwares/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/ops/function.rs:250:5
+
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+Writing test snapshot file for test "pause_tests::pause_tests::test_pause_unpause_restores_add_milestone" to "test_snapshots/pause_tests/pause_tests/test_pause_unpause_restores_add_milestone.1.json".
+
+
+failures:
+    pause_tests::pause_tests::test_pause_unpause_restores_add_milestone
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 105 filtered out; finished in 1.28s
+

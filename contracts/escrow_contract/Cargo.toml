@@ -10,6 +10,8 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 soroban-sdk = { version = "21.0.0", features = [] }
+stellar-trust-shared = { path = "../shared" }
 
 [dev-dependencies]
+criterion = "0.4"
 soroban-sdk = { version = "21.0.0", features = ["testutils"] }

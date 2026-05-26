@@ -6,6 +6,7 @@
 [![Contributors Welcome](https://img.shields.io/badge/contributors-welcome-brightgreen)](CONTRIBUTING.md)
 [![Built on Stellar](https://img.shields.io/badge/built%20on-Stellar-blueviolet)](https://stellar.org)
 [![Soroban](https://img.shields.io/badge/Soroban-Smart%20Contracts-orange)](https://soroban.stellar.org)
+[![Coverage](https://img.shields.io/github/actions/workflow/status/Stellar-Trust-Escrow/stellar-trust-escrow/coverage.yml?label=coverage&style=flat-square)](https://github.com/Stellar-Trust-Escrow/stellar-trust-escrow/actions/workflows/coverage.yml)
 
 ---
 
@@ -170,6 +171,16 @@ stellar-trust-escrow/
 We welcome contributions of all kinds! This repository is designed to be beginner-friendly with clearly scoped issues.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide, or jump straight to [open issues](../../issues).
+
+---
+
+## 🔒 Security
+
+- **Security Model**: [`docs/SECURITY.md`](docs/SECURITY.md)
+- **Privacy Policy**: [`docs/PRIVACY.md`](docs/PRIVACY.md)
+- **Bug Bounty**: [`docs/BUG_BOUNTY.md`](docs/BUG_BOUNTY.md)
+
+Report vulnerabilities to security@stellartrustescrow.example.com.
 
 ---
 

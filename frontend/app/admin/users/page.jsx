@@ -8,23 +8,8 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-
-function getAdminKey() {
-  return typeof window !== 'undefined' ? localStorage.getItem('adminApiKey') || '' : '';
-}
-
-function adminFetch(path, options = {}) {
-  return fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      'x-admin-api-key': getAdminKey(),
-      ...(options.headers || {}),
-    },
-  });
-}
+import { useAdminStore } from '../../../store/app-store';
+import { adminFetch } from '../../../store/admin';
 
 function truncate(str, len = 18) {
   if (!str) return '—';
@@ -47,7 +32,10 @@ function ActionModal({ user, action, onClose, onConfirm }) {
           className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-indigo-500 mb-4 resize-none"
         />
         <div className="flex gap-2 justify-end">
-          <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white transition-colors">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white transition-colors"
+          >
             Cancel
           </button>
           <button
@@ -63,6 +51,7 @@ function ActionModal({ user, action, onClose, onConfirm }) {
 }
 
 export default function AdminUsersPage() {
+  const { apiKey } = useAdminStore();
   const [users, setUsers] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, total: 0, pages: 1 });
   const [search, setSearch] = useState('');
@@ -77,7 +66,7 @@ export default function AdminUsersPage() {
     setError('');
     try {
       const params = new URLSearchParams({ page, limit: 20, ...(q ? { search: q } : {}) });
-      const res = await adminFetch(`/api/admin/users?${params}`);
+      const res = await adminFetch(`/api/admin/users?${params}`, apiKey);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to fetch users');
       setUsers(data.users);
@@ -87,9 +76,11 @@ export default function AdminUsersPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [apiKey]);
 
-  useEffect(() => { fetchUsers(1, search); }, [search, fetchUsers]);
+  useEffect(() => {
+    fetchUsers(1, search);
+  }, [apiKey, search, fetchUsers]);
 
   const showToast = (msg) => {
     setToast(msg);
@@ -100,7 +91,7 @@ export default function AdminUsersPage() {
     const { user, action } = modal;
     setModal({ user: null, action: '' });
     try {
-      const res = await adminFetch(`/api/admin/users/${user.address}/${action}`, {
+      const res = await adminFetch(`/api/admin/users/${user.address}/${action}`, apiKey, {
         method: 'POST',
         body: JSON.stringify({ reason }),
       });
@@ -133,7 +124,12 @@ export default function AdminUsersPage() {
           <h1 className="text-2xl font-bold text-white">User Management</h1>
           <p className="text-gray-400 text-sm mt-1">{pagination.total} users total</p>
         </div>
-        <a href="/admin" className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors">← Dashboard</a>
+        <a
+          href="/admin"
+          className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors"
+        >
+          ← Dashboard
+        </a>
       </div>
 
       {/* Search */}
@@ -142,7 +138,9 @@ export default function AdminUsersPage() {
           type="text"
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') setSearch(searchInput); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') setSearch(searchInput);
+          }}
           placeholder="Search by Stellar address…"
           className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-indigo-500"
         />
@@ -153,13 +151,23 @@ export default function AdminUsersPage() {
           Search
         </button>
         {search && (
-          <button onClick={() => { setSearch(''); setSearchInput(''); }} className="text-sm text-gray-400 hover:text-white px-3 transition-colors">
+          <button
+            onClick={() => {
+              setSearch('');
+              setSearchInput('');
+            }}
+            className="text-sm text-gray-400 hover:text-white px-3 transition-colors"
+          >
             Clear
           </button>
         )}
       </div>
 
-      {error && <div className="bg-red-900/20 border border-red-500/30 text-red-400 text-sm rounded-lg px-4 py-3 mb-4">⚠️ {error}</div>}
+      {error && (
+        <div className="bg-red-900/20 border border-red-500/30 text-red-400 text-sm rounded-lg px-4 py-3 mb-4">
+          ⚠️ {error}
+        </div>
+      )}
 
       {/* Table */}
       <div className="card p-0 overflow-hidden">
@@ -176,38 +184,55 @@ export default function AdminUsersPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={5} className="text-center py-12 text-gray-500">Loading…</td>
+                <td colSpan={5} className="text-center py-12 text-gray-500">
+                  Loading…
+                </td>
               </tr>
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={5} className="text-center py-12 text-gray-500">No users found.</td>
-              </tr>
-            ) : users.map((u) => (
-              <tr key={u.address} className="border-b border-gray-800/60 hover:bg-gray-800/30 transition-colors">
-                <td className="px-5 py-3 font-mono text-gray-300" title={u.address}>{truncate(u.address, 30)}</td>
-                <td className="px-5 py-3 text-right text-indigo-400 font-semibold">{u.totalScore?.toString()}</td>
-                <td className="px-5 py-3 text-right text-gray-400 hidden sm:table-cell">{u.completedEscrows}</td>
-                <td className="px-5 py-3 text-right text-gray-400 hidden md:table-cell">{u.disputedEscrows}</td>
-                <td className="px-5 py-3 text-right">
-                  <div className="flex gap-2 justify-end">
-                    <button
-                      id={`suspend-${u.address}`}
-                      onClick={() => setModal({ user: u, action: 'suspend' })}
-                      className="text-xs bg-amber-500/15 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30 px-2 py-1 rounded transition-colors"
-                    >
-                      Suspend
-                    </button>
-                    <button
-                      id={`ban-${u.address}`}
-                      onClick={() => setModal({ user: u, action: 'ban' })}
-                      className="text-xs bg-red-500/15 text-red-400 border border-red-500/30 hover:bg-red-500/30 px-2 py-1 rounded transition-colors"
-                    >
-                      Ban
-                    </button>
-                  </div>
+                <td colSpan={5} className="text-center py-12 text-gray-500">
+                  No users found.
                 </td>
               </tr>
-            ))}
+            ) : (
+              users.map((u) => (
+                <tr
+                  key={u.address}
+                  className="border-b border-gray-800/60 hover:bg-gray-800/30 transition-colors"
+                >
+                  <td className="px-5 py-3 font-mono text-gray-300" title={u.address}>
+                    {truncate(u.address, 30)}
+                  </td>
+                  <td className="px-5 py-3 text-right text-indigo-400 font-semibold">
+                    {u.totalScore?.toString()}
+                  </td>
+                  <td className="px-5 py-3 text-right text-gray-400 hidden sm:table-cell">
+                    {u.completedEscrows}
+                  </td>
+                  <td className="px-5 py-3 text-right text-gray-400 hidden md:table-cell">
+                    {u.disputedEscrows}
+                  </td>
+                  <td className="px-5 py-3 text-right">
+                    <div className="flex gap-2 justify-end">
+                      <button
+                        id={`suspend-${u.address}`}
+                        onClick={() => setModal({ user: u, action: 'suspend' })}
+                        className="text-xs bg-amber-500/15 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30 px-2 py-1 rounded transition-colors"
+                      >
+                        Suspend
+                      </button>
+                      <button
+                        id={`ban-${u.address}`}
+                        onClick={() => setModal({ user: u, action: 'ban' })}
+                        className="text-xs bg-red-500/15 text-red-400 border border-red-500/30 hover:bg-red-500/30 px-2 py-1 rounded transition-colors"
+                      >
+                        Ban
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
