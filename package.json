@@ -25,6 +25,9 @@
     "loadtest:generate": "node load-tests/data/generate.js",
     "loadtest": "node load-tests/run.js",
     "loadtest:ci": "node load-tests/run.js --ci",
+    "loadtest:nightly": "node load-tests/nightly-runner.js",
+    "loadtest:dashboard": "open load-tests/results/history/dashboard.html",
+
     "prepare": "node .husky/install.mjs"
   },
   "devDependencies": {
