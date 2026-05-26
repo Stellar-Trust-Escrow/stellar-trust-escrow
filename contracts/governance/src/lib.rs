@@ -533,4 +533,188 @@ impl GovernanceContract {
         let config = Storage::config(&env)?;
         Ok(voting_power(&env, &config.token, &address))
     }
+
+    // ── Arbitrator DAO ────────────────────────────────────────────────────────
+
+    /// Minimum stake required to register as an arbitrator (in token base units).
+    /// Configurable via the governance token's decimals; default 1000 units.
+    const MIN_STAKE: i128 = 1_000;
+
+    /// Cooldown period before a non-slashed stake can be withdrawn (7 days in seconds).
+    const WITHDRAW_COOLDOWN: u64 = 604_800;
+
+    /// Percentage of stake slashed on misconduct (10%).
+    const SLASH_PERCENT: i128 = 10;
+
+    /// Stake tokens to register as an arbitrator candidate.
+    ///
+    /// The caller transfers `amount` tokens to this contract.
+    /// If `amount >= MIN_STAKE`, the caller is added to the arbitrator whitelist.
+    ///
+    /// # Arguments
+    /// * `caller` — must `require_auth()`. Tokens deducted from their balance.
+    /// * `amount` — tokens to stake. Must be >= MIN_STAKE.
+    pub fn stake_arbitrator(env: Env, caller: Address, amount: i128) -> Result<(), GovError> {
+        Storage::require_initialized(&env)?;
+        caller.require_auth();
+
+        if amount < Self::MIN_STAKE {
+            return Err(GovError::InsufficientStake);
+        }
+
+        let config = Storage::config(&env)?;
+        token::Client::new(&env, &config.token).transfer(
+            &caller,
+            &env.current_contract_address(),
+            &amount,
+        );
+
+        // Accumulate stake
+        let prev_stake: i128 = env.storage().persistent()
+            .get(&DataKey::ArbitratorStake(caller.clone()))
+            .unwrap_or(0);
+        let new_stake = prev_stake + amount;
+        env.storage().persistent().set(&DataKey::ArbitratorStake(caller.clone()), &new_stake);
+        env.storage().persistent().set(&DataKey::Arbitrator(caller.clone()), &true);
+
+        Storage::bump_persistent(&env, &DataKey::ArbitratorStake(caller.clone()));
+        Storage::bump_persistent(&env, &DataKey::Arbitrator(caller.clone()));
+
+        env.events().publish(
+            (soroban_sdk::symbol_short!("arb_stk"), caller.clone()),
+            (amount, new_stake),
+        );
+        Ok(())
+    }
+
+    /// Withdraw stake after the cooldown period (only if not slashed below MIN_STAKE).
+    ///
+    /// Sets a cooldown on first call; tokens are returned on second call after cooldown.
+    pub fn withdraw_stake(env: Env, caller: Address) -> Result<i128, GovError> {
+        Storage::require_initialized(&env)?;
+        caller.require_auth();
+
+        let stake: i128 = env.storage().persistent()
+            .get(&DataKey::ArbitratorStake(caller.clone()))
+            .unwrap_or(0);
+
+        if stake <= 0 {
+            return Err(GovError::NoStakeToWithdraw);
+        }
+
+        let now = env.ledger().timestamp();
+        let cooldown_key = DataKey::WithdrawCooldown(caller.clone());
+
+        match env.storage().persistent().get::<DataKey, u64>(&cooldown_key) {
+            None => {
+                // First call — start cooldown
+                let expires = now + Self::WITHDRAW_COOLDOWN;
+                env.storage().persistent().set(&cooldown_key, &expires);
+                Storage::bump_persistent(&env, &cooldown_key);
+                return Err(GovError::StakeCooldownActive);
+            }
+            Some(expires) if now < expires => {
+                return Err(GovError::StakeCooldownActive);
+            }
+            _ => {}
+        }
+
+        // Cooldown elapsed — return stake and remove arbitrator
+        let config = Storage::config(&env)?;
+        token::Client::new(&env, &config.token).transfer(
+            &env.current_contract_address(),
+            &caller,
+            &stake,
+        );
+
+        env.storage().persistent().remove(&DataKey::ArbitratorStake(caller.clone()));
+        env.storage().persistent().remove(&DataKey::Arbitrator(caller.clone()));
+        env.storage().persistent().remove(&cooldown_key);
+
+        env.events().publish(
+            (soroban_sdk::symbol_short!("arb_wdr"), caller.clone()),
+            stake,
+        );
+        Ok(stake)
+    }
+
+    /// Governance-driven slash of a misbehaving arbitrator.
+    ///
+    /// Only callable by the contract admin (after a governance vote passes and
+    /// the admin executes the resolution). Slashes SLASH_PERCENT of the
+    /// arbitrator's stake and sends it to `recipient` (victim or treasury).
+    ///
+    /// # Arguments
+    /// * `caller`      — must be admin.
+    /// * `arbitrator`  — address to slash.
+    /// * `recipient`   — receives the slashed tokens.
+    /// * `reason`      — on-chain evidence string (IPFS hash or description).
+    pub fn slash_arbitrator(
+        env: Env,
+        caller: Address,
+        arbitrator: Address,
+        recipient: Address,
+        reason: soroban_sdk::String,
+    ) -> Result<i128, GovError> {
+        Storage::require_initialized(&env)?;
+        caller.require_auth();
+
+        let admin = Storage::admin(&env)?;
+        if caller != admin {
+            return Err(GovError::AdminOnly);
+        }
+
+        let stake: i128 = env.storage().persistent()
+            .get(&DataKey::ArbitratorStake(arbitrator.clone()))
+            .unwrap_or(0);
+
+        if stake <= 0 {
+            return Err(GovError::NotArbitrator);
+        }
+
+        let slash_amount = stake * Self::SLASH_PERCENT / 100;
+        if slash_amount > stake {
+            return Err(GovError::SlashExceedsStake);
+        }
+
+        let remaining = stake - slash_amount;
+
+        // Transfer slashed amount to recipient
+        let config = Storage::config(&env)?;
+        token::Client::new(&env, &config.token).transfer(
+            &env.current_contract_address(),
+            &recipient,
+            &slash_amount,
+        );
+
+        // Update or remove stake
+        if remaining < Self::MIN_STAKE {
+            // Below minimum — remove from whitelist
+            env.storage().persistent().remove(&DataKey::Arbitrator(arbitrator.clone()));
+            env.storage().persistent().remove(&DataKey::ArbitratorStake(arbitrator.clone()));
+        } else {
+            env.storage().persistent().set(&DataKey::ArbitratorStake(arbitrator.clone()), &remaining);
+            Storage::bump_persistent(&env, &DataKey::ArbitratorStake(arbitrator.clone()));
+        }
+
+        env.events().publish(
+            (soroban_sdk::symbol_short!("arb_slh"), arbitrator.clone()),
+            (slash_amount, remaining, reason),
+        );
+        Ok(slash_amount)
+    }
+
+    /// Returns whether `address` is a whitelisted arbitrator.
+    pub fn is_arbitrator(env: Env, address: Address) -> bool {
+        env.storage().persistent()
+            .get::<DataKey, bool>(&DataKey::Arbitrator(address))
+            .unwrap_or(false)
+    }
+
+    /// Returns the current stake of `address`.
+    pub fn get_stake(env: Env, address: Address) -> i128 {
+        env.storage().persistent()
+            .get(&DataKey::ArbitratorStake(address))
+            .unwrap_or(0)
+    }
 }

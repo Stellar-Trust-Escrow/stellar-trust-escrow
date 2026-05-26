@@ -10,6 +10,7 @@ import { buildPaginatedResponse, parsePagination } from '../../lib/pagination.js
 import { uploadEvidence } from '../middleware/fileUpload.js';
 import ipfsService from '../../services/ipfsService.js';
 import { broadcastToDispute } from '../websocket/handlers.js';
+import { verifyFile, merkleRoot, hashFile } from '../../services/ipfsHashService.js';
 
 /**
  * List and get handlers assume query/params are already validated by
@@ -482,6 +483,57 @@ const getResolutionHistory = async (req, res) => {
   }
 };
 
+/**
+ * POST /api/disputes/verify-evidence
+ * Body: multipart/form-data with files[] + evidenceIds[]
+ *
+ * Re-uploads files and verifies their SHA-256 hashes against stored values.
+ * Also recomputes the Merkle root and compares against the stored root.
+ */
+const verifyEvidence = async (req, res) => {
+  try {
+    const { evidenceIds } = req.body;
+    const files = req.files ?? [];
+
+    if (!evidenceIds || !files.length) {
+      return res.status(400).json({ error: 'evidenceIds and files are required' });
+    }
+
+    const ids = (Array.isArray(evidenceIds) ? evidenceIds : [evidenceIds]).map(Number);
+
+    const records = await prisma.disputeEvidence.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, fileHash: true, merkleRoot: true, filename: true },
+    });
+
+    if (records.length !== files.length) {
+      return res.status(400).json({ error: 'File count must match evidenceIds count' });
+    }
+
+    const fileResults = files.map((file, i) => {
+      const record = records[i];
+      if (!record?.fileHash) return { id: record?.id, valid: false, reason: 'No stored hash' };
+      const { hex } = hashFile(file.buffer);
+      return { id: record.id, filename: file.originalname, valid: hex === record.fileHash };
+    });
+
+    const storedHashes = records.map(r => r.fileHash).filter(Boolean);
+    const recomputedRoot = merkleRoot(storedHashes);
+    const storedRoot = records[0]?.merkleRoot ?? null;
+    const rootMatch = storedRoot ? recomputedRoot === storedRoot : null;
+
+    return res.json({
+      allValid: fileResults.every(r => r.valid),
+      fileResults,
+      merkleRoot: recomputedRoot,
+      storedMerkleRoot: storedRoot,
+      rootMatch,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+};
+
 function determineUserRole(dispute, userAddress) {
   if (dispute.raisedByAddress === userAddress) {
     return dispute.escrow.clientAddress === userAddress ? 'client' : 'freelancer';
@@ -532,5 +584,6 @@ export default {
   postAppeal,
   patchAppeal,
   getResolutionHistory,
-  uploadEvidence
+  uploadEvidence,
+  verifyEvidence,
 };

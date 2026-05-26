@@ -145,4 +145,13 @@ pub enum DataKey {
     Proposal(u64),
     /// Whether `voter` has voted on proposal `id`: (proposal_id, voter)
     HasVoted(u64, Address),
+    // ── Arbitrator DAO ────────────────────────────────────────────────────────
+    /// Registered arbitrator whitelist entry — key: Address, value: bool
+    Arbitrator(Address),
+    /// Arbitrator stake — key: Address, value: i128
+    ArbitratorStake(Address),
+    /// Cooldown expiry for stake withdrawal — key: Address, value: u64
+    WithdrawCooldown(Address),
+    /// Slash record counter
+    SlashCounter,
 }

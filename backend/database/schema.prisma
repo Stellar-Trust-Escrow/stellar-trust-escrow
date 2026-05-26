@@ -254,6 +254,10 @@ model DisputeEvidence {
   ipfsCid      String?  @map("ipfs_cid")
   /// IPFS CID for thumbnail (images only)
   thumbnailCid String?  @map("thumbnail_cid")
+  /// SHA-256 hash of the file content (hex)
+  fileHash     String?  @map("file_hash")
+  /// Merkle root of all evidence files in this dispute batch
+  merkleRoot   String?  @map("merkle_root")
   /// Virus scan status: pending | clean | infected | error
   scanStatus   String?  @default("pending") @map("scan_status")
   /// Virus scan result details
