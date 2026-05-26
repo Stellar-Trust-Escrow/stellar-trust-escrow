@@ -372,6 +372,12 @@ pub struct EscrowState {
     /// TODO (contributor): implement auto-cancel on deadline
     pub deadline: Option<u64>,
 
+    /// Optional dispute-timeout window in ledger sequences.
+    pub dispute_timeout: Option<u32>,
+
+    /// Ledger sequence captured when a dispute was raised.
+    pub dispute_start_ledger: Option<u32>,
+
     /// Optional lock time (ledger timestamp) - funds locked until this time.
     /// When set, funds cannot be released until this timestamp has passed.
     /// Useful for vesting schedules, deferred payments, or future-dated agreements.
