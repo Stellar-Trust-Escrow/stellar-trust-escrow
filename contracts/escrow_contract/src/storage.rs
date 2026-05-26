@@ -236,6 +236,8 @@ impl StorageManager {
                     buyer_signers: soroban_sdk::Vec::new(env),
                     created_at: v1_escrow.created_at,
                     deadline: v1_escrow.deadline,
+                    dispute_timeout: None,
+                    dispute_start_ledger: None,
                     lock_time: v1_escrow.lock_time,
                     lock_time_extension: v1_escrow.lock_time_extension,
                     timelock: OptionalTimelock::None,
