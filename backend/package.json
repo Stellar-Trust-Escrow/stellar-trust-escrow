@@ -19,7 +19,12 @@
     "db:migrate:deploy": "npx prisma migrate deploy",
     "db:generate": "npx prisma generate",
     "db:seed": "node database/seed/index.js",
-    "db:seed:reset": "node database/seed/index.js --reset"
+    "db:seed:reset": "node database/seed/index.js --reset",
+    "chaos": "node backend/chaos/runner.js",
+    "chaos:db": "node backend/chaos/runner.js --scenario db-disconnect",
+    "chaos:redis": "node backend/chaos/runner.js --scenario redis-timeout",
+    "chaos:rpc": "node backend/chaos/runner.js --scenario rpc-lag",
+    "chaos:tx": "node backend/chaos/runner.js --scenario duplicate-transaction"
   },
   "dependencies": {
     "@elastic/elasticsearch": "^9.3.4",
