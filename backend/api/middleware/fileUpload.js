@@ -1,8 +1,8 @@
 import multer from 'multer';
 import prisma from '../../lib/prisma.js';
-import virusScanner from '../../services/virusScanner.js';
 import ipfsService from '../../services/ipfsService.js';
 import { broadcastToDispute } from '../websocket/handlers.js';
+import virusScanMiddleware from '../../middleware/virusScanner.js';
 
 const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE || String(10 * 1024 * 1024), 10);
 const MAX_FILES = parseInt(process.env.MAX_FILES || '5', 10);
@@ -55,33 +55,6 @@ export function handleUploadError(err, _req, res, next) {
   next(err);
 }
 
-const virusScanMiddleware = async (req, res, next) => {
-  if (!req.files || req.files.length === 0) return next();
-
-  try {
-    const scanResults = await Promise.all(
-      req.files.map(async (file) => {
-        const scanResult = await virusScanner.quickScan(file.buffer, file.originalname);
-        return { fieldname: file.fieldname, originalname: file.originalname, ...scanResult };
-      })
-    );
-
-    const infectedFiles = scanResults.filter((r) => r.isInfected);
-    if (infectedFiles.length > 0) {
-      return res.status(400).json({
-        error: 'Virus detected',
-        message: `Malicious content found in: ${infectedFiles.map((f) => f.originalname).join(', ')}`,
-        infectedFiles: infectedFiles.map((f) => ({ filename: f.originalname, viruses: f.viruses })),
-      });
-    }
-
-    req.virusScanResults = scanResults;
-    next();
-  } catch (error) {
-    console.error('Virus scan error:', error);
-    res.status(500).json({ error: 'Virus scan failed', message: 'Unable to complete virus scan' });
-  }
-};
 
 const ipfsUploadMiddleware = async (req, res, next) => {
   if (!req.files || req.files.length === 0) return next();
