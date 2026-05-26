@@ -53,6 +53,7 @@ pub const VESTING_SCHEDULE_CREATED: Symbol = symbol_short!("vest_crt");
 
 pub const DISPUTE_RAISED: Symbol = symbol_short!("dis_rai");
 pub const DISPUTE_RESOLVED: Symbol = symbol_short!("dis_res");
+pub const DISPUTE_TIMEOUT_CLAIMED: Symbol = symbol_short!("dis_tmo");
 
 // ── Cancellations ─────────────────────────────────────────────────────────────
 
