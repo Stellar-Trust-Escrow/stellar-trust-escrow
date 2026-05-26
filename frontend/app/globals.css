@@ -55,7 +55,30 @@
   .card {
     @apply bg-gray-100 border border-gray-200 rounded-xl p-6 dark:bg-gray-900 dark:border-gray-800
            transition-[transform,box-shadow] duration-200 ease-out
-           hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20;
+           hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20
+           focus-within:ring-2 focus-within:ring-indigo-500 focus-within:ring-offset-2 focus-within:ring-offset-gray-950;
+  }
+
+  /* High-contrast focus indicators for accessibility */
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    @apply outline-none ring-2 ring-indigo-500 ring-offset-2 ring-offset-gray-950;
+  }
+
+  /* Visually hidden content for screen readers */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
   }
 
   /* Status badge styles — TODO (contributor): ensure these match EscrowStatus enum */

@@ -74,7 +74,7 @@ export default function DashboardPage() {
   return (
     <PageTransition>
       <ErrorBoundary>
-        <div className="space-y-8">
+        <div className="space-y-8" role="main">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <h1 className="text-2xl font-bold text-white">{t('nav.dashboard')}</h1>
@@ -82,23 +82,30 @@ export default function DashboardPage() {
             </div>
             <div className="flex items-center gap-3">
               {reputationScore !== null && <ReputationBadge score={reputationScore} />}
-              <Button href="/escrow/create" variant="primary">
+              <Button
+                href="/escrow/create"
+                variant="primary"
+                className="focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-950 rounded-lg"
+              >
                 + {t('escrow.create')}
               </Button>
             </div>
           </div>
 
-          <section>
+          <section aria-label="Key performance metrics">
+            <h2 className="sr-only">Dashboard Statistics</h2>
             <Suspense fallback={<div className="h-40 card animate-pulse" />}>
               <StatWidgets address={PLACEHOLDER_ADDRESS} />
             </Suspense>
           </section>
 
-          <Suspense fallback={<div className="h-40 card animate-pulse" />}>
-            <ActivityTimeline address={PLACEHOLDER_ADDRESS} />
-          </Suspense>
+          <section aria-label="Recent activity feed">
+            <Suspense fallback={<div className="h-40 card animate-pulse" />}>
+              <ActivityTimeline address={PLACEHOLDER_ADDRESS} />
+            </Suspense>
+          </section>
 
-          <section>
+          <section aria-label="Active escrow agreements">
             <h2 className="text-lg font-semibold text-white mb-4">Your Active Escrows</h2>
             {escrowsLoading ? (
               <div className="grid gap-4 md:grid-cols-2">
@@ -111,9 +118,11 @@ export default function DashboardPage() {
                 <p className="text-gray-400 font-medium">No active escrows yet.</p>
               </div>
             ) : (
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-2" role="list">
                 {escrows.map((escrow) => (
-                  <EscrowCard key={escrow.id} escrow={escrow} />
+                  <div key={escrow.id} role="listitem">
+                    <EscrowCard escrow={escrow} />
+                  </div>
                 ))}
               </div>
             )}
