@@ -58,6 +58,7 @@ mod batch_add_milestones_cap_tests;
 mod batch_approve_release_e2e_tests;
 mod bridge;
 mod bridge_tests;
+mod dispute_timeout_tests;
 mod errors;
 mod event_names;
 mod event_tests;
@@ -217,6 +218,8 @@ pub struct EscrowMeta {
     pub buyer_signers: soroban_sdk::Vec<Address>,
     pub created_at: u64,
     pub deadline: Option<u64>,
+    pub dispute_timeout: Option<u32>,
+    pub dispute_start_ledger: Option<u32>,
     /// Optional lock time (ledger timestamp) - funds locked until this time.
     pub lock_time: Option<u64>,
     /// Optional extension deadline for the lock time.
@@ -404,6 +407,8 @@ impl ContractStorage {
             buyer_signers: meta.buyer_signers.clone(),
             created_at: meta.created_at,
             deadline: meta.deadline,
+            dispute_timeout: meta.dispute_timeout,
+            dispute_start_ledger: meta.dispute_start_ledger,
             lock_time: meta.lock_time,
             lock_time_extension: meta.lock_time_extension,
             timelock: meta.timelock,
@@ -1239,6 +1244,37 @@ impl EscrowContract {
             deadline,
             lock_time,
             None,
+            None,
+        )
+    }
+
+    /// Creates a new escrow and stores an optional dispute-timeout window in ledger sequences.
+    pub fn create_escrow_with_dispute_timeout(
+        env: Env,
+        client: Address,
+        freelancer: Address,
+        token: Address,
+        total_amount: i128,
+        brief_hash: BytesN<32>,
+        arbiter: Option<Address>,
+        deadline: Option<u64>,
+        lock_time: Option<u64>,
+        dispute_timeout: Option<u32>,
+        _timelock: Option<Timelock>,
+        _multisig_config: MultisigConfig,
+    ) -> Result<u64, EscrowError> {
+        Self::create_escrow_internal(
+            env,
+            client,
+            freelancer,
+            token,
+            total_amount,
+            brief_hash,
+            arbiter,
+            deadline,
+            lock_time,
+            dispute_timeout,
+            None,
         )
     }
 
@@ -1275,6 +1311,7 @@ impl EscrowContract {
             deadline,
             lock_time,
             None,
+            None,
         )?;
         events::emit_nft_gated_escrow_created(&env, escrow_id, &nft_contract, token_id);
         Ok(escrow_id)
@@ -1305,6 +1342,7 @@ impl EscrowContract {
             arbiter,
             deadline,
             lock_time,
+            None,
             Some(buyer_signers),
         )
     }
@@ -1352,6 +1390,7 @@ impl EscrowContract {
         arbiter: Option<Address>,
         deadline: Option<u64>,
         lock_time: Option<u64>,
+        dispute_timeout: Option<u32>,
         buyer_signers: Option<soroban_sdk::Vec<Address>>,
     ) -> Result<u64, EscrowError> {
         // Auth + validation before any storage I/O
@@ -1443,6 +1482,8 @@ impl EscrowContract {
                 buyer_signers: buyer_signers.clone(),
                 created_at: now,
                 deadline,
+                dispute_timeout,
+                dispute_start_ledger: None,
                 lock_time,
                 lock_time_extension: None,
                 timelock: OptionalTimelock::None,
@@ -1547,6 +1588,8 @@ impl EscrowContract {
             buyer_signers,
             created_at: now,
             deadline: None,
+            dispute_timeout: None,
+            dispute_start_ledger: None,
             lock_time: None,
             lock_time_extension: None,
             timelock: OptionalTimelock::None,
@@ -2878,6 +2921,7 @@ impl EscrowContract {
         }
 
         meta.status = EscrowStatus::Disputed;
+        meta.dispute_start_ledger = Some(env.ledger().sequence());
         Self::remove_from_vec_index(
             &env,
             &DataKey::EscrowsByStatus(EscrowStatus::Active),
@@ -2953,6 +2997,7 @@ impl EscrowContract {
         }
 
         meta.remaining_balance = 0;
+        meta.dispute_start_ledger = None;
         meta.status = EscrowStatus::Completed;
         Self::remove_from_vec_index(
             &env,
@@ -2972,6 +3017,48 @@ impl EscrowContract {
         Self::_update_reputation_internal(&env, &meta.client, false, true, client_amount);
         Self::_update_reputation_internal(&env, &meta.freelancer, false, true, freelancer_amount);
 
+        Ok(())
+    }
+
+    /// Allows either party to settle a disputed escrow after the configured timeout has elapsed.
+    pub fn claim_dispute_timeout(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_not_paused(&env)?;
+
+        let mut meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
+        if caller != meta.client && caller != meta.freelancer {
+            return Err(EscrowError::Unauthorized);
+        }
+        if meta.status != EscrowStatus::Disputed {
+            return Err(EscrowError::EscrowNotDisputed);
+        }
+
+        let dispute_timeout = meta.dispute_timeout.ok_or(EscrowError::LockTimeNotExpired)?;
+        let dispute_start = meta.dispute_start_ledger.ok_or(EscrowError::LockTimeNotExpired)?;
+        let current_sequence = env.ledger().sequence();
+        let timeout_sequence = dispute_start.saturating_add(dispute_timeout);
+        if current_sequence < timeout_sequence {
+            return Err(EscrowError::LockTimeNotExpired);
+        }
+
+        let client_amount = meta.remaining_balance / 2;
+        let freelancer_amount = meta.remaining_balance - client_amount;
+        let token = token::Client::new(&env, &meta.token);
+        let contract_addr = env.current_contract_address();
+        if client_amount > 0 { token.transfer(&contract_addr, &meta.client, &client_amount); }
+        if freelancer_amount > 0 { token.transfer(&contract_addr, &meta.freelancer, &freelancer_amount); }
+
+        meta.remaining_balance = 0;
+        meta.dispute_start_ledger = None;
+        meta.status = EscrowStatus::Completed;
+        Self::remove_from_vec_index(&env, &DataKey::EscrowsByStatus(EscrowStatus::Disputed), escrow_id);
+        Self::append_to_vec_index(&env, &DataKey::EscrowsByStatus(EscrowStatus::Completed), escrow_id);
+        ContractStorage::save_escrow_meta(&env, &meta);
+        events::emit_dispute_timeout_claimed(&env, escrow_id, client_amount, freelancer_amount, current_sequence);
         Ok(())
     }
 
@@ -3289,6 +3376,7 @@ impl EscrowContract {
             arbiter.clone(),
             deadline,
             None, // lock_time
+            None, // dispute_timeout
             None, // buyer_signers
         )?;
 
@@ -3873,6 +3961,7 @@ impl EscrowContract {
 
         // Raise dispute on escrow
         meta.status = EscrowStatus::Disputed;
+        meta.dispute_start_ledger = Some(env.ledger().sequence());
         Self::remove_from_vec_index(
             &env,
             &DataKey::EscrowsByStatus(EscrowStatus::CancellationPending),
