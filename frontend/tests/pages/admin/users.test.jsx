@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
 import AdminUsersPage from '../../../app/admin/users/page';
 import { renderWithStore } from '../../../store/test-utils';
 

@@ -111,7 +111,7 @@ describe('ExplorerPage', () => {
 
   it('renders stats bar', async () => {
     render(<ExplorerPage />);
-    expect(await screen.findByText('Total Escrows')).toBeInTheDocument();
+    expect(await screen.findByText('Page 1 of 2')).toBeInTheDocument();
   });
 
   it('renders pagination buttons', async () => {

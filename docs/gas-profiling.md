@@ -98,6 +98,21 @@ The report is written to `gas-report.json` at the repo root.
 - `contribute` (309,011 CPU) — token transfer + two storage writes.
 
 **Read-only functions** are cheap (29k–139k CPU), confirming the granular
+
+## perf/contract-milestone-gas-optimization changes
+
+The following optimizations were applied on this branch:
+
+| Optimization | Mechanism | Expected saving |
+|---|---|---|
+| Bitflag `MilestoneStatus` | `u32` constant replaces tagged-union enum (~36 bytes/milestone) | ~10–15% per milestone read/write |
+| Fixed-capacity milestones | `MAX_MILESTONES = 20` cap, O(1) storage planning | Prevents unbounded growth |
+| `submitted_count` counter | O(1) cancel check replaces O(n) milestone scan | Saves N storage reads in `cancel_escrow` |
+| `batch_add_milestones` | 1 meta load + N writes + 1 meta save | O(N+1) vs O(2N) |
+| `batch_approve_milestones` | 1 meta load + N writes + 1 transfer + 1 meta save | O(N+1) vs O(2N transfers) |
+| `batch_release_funds` | 1 meta load + N writes + 1 transfer + 1 meta save | O(N+1) vs O(2N transfers) |
+
+Re-run `gas-profile.sh` after merging to update the table above with measured numbers.
 per-entry storage layout is working as intended.
 
 ---

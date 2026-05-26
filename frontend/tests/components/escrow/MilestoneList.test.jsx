@@ -1,5 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import MilestoneList from '../../../components/escrow/MilestoneList';
+import { renderWithAppProviders } from '../../test-utils';
 
 const milestones = [
   {
@@ -21,7 +22,7 @@ const milestones = [
 
 describe('MilestoneList', () => {
   it('renders empty state for client when no milestones', () => {
-    render(
+    renderWithAppProviders(
       <MilestoneList
         milestones={[]}
         role="client"
@@ -35,7 +36,7 @@ describe('MilestoneList', () => {
   });
 
   it('renders empty state for freelancer when no milestones', () => {
-    render(
+    renderWithAppProviders(
       <MilestoneList
         milestones={[]}
         role="freelancer"
@@ -48,7 +49,7 @@ describe('MilestoneList', () => {
   });
 
   it('renders all milestones', () => {
-    render(
+    renderWithAppProviders(
       <MilestoneList
         milestones={milestones}
         role="observer"
@@ -63,7 +64,7 @@ describe('MilestoneList', () => {
   });
 
   it('shows progress summary', () => {
-    render(
+    renderWithAppProviders(
       <MilestoneList
         milestones={milestones}
         role="observer"
@@ -76,7 +77,7 @@ describe('MilestoneList', () => {
   });
 
   it('shows percentage', () => {
-    render(
+    renderWithAppProviders(
       <MilestoneList
         milestones={milestones}
         role="observer"

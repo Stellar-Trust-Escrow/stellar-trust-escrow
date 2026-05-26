@@ -196,7 +196,7 @@ test('invalidateOn before — invalidates before calling next', async () => {
 
 test('TTL exports are positive integers', async () => {
   const { TTL } = await import('../api/middleware/cache.js');
-  for (const [k, v] of Object.entries(TTL)) {
+  for (const [_k, v] of Object.entries(TTL)) {
     expect(typeof v).toBe('number');
     expect(v).toBeGreaterThan(0);
     expect(Number.isInteger(v)).toBe(true);

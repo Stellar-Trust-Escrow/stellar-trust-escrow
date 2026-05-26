@@ -25,6 +25,7 @@
 //! `votes_for >= (votes_for + votes_against) * approval_threshold_bps / 10_000`
 
 #![no_std]
+#![deny(warnings)]
 #![allow(clippy::too_many_arguments)]
 
 mod errors;
@@ -39,29 +40,24 @@ pub use types::{
 };
 
 use soroban_sdk::{contract, contractimpl, token, Address, Env, String};
-
-const INSTANCE_TTL_THRESHOLD: u32 = 5_000;
-const INSTANCE_TTL_EXTEND_TO: u32 = 50_000;
-const PERSISTENT_TTL_THRESHOLD: u32 = 5_000;
-const PERSISTENT_TTL_EXTEND_TO: u32 = 50_000;
+use stellar_trust_shared::{
+    bump_instance_ttl as shared_bump_instance_ttl,
+    bump_persistent_ttl as shared_bump_persistent_ttl,
+};
 
 // ── Storage helpers ───────────────────────────────────────────────────────────
 
 struct Storage;
 
 impl Storage {
+    /// Bump instance TTL using shared config constants from `stellar_trust_shared`.
     fn bump_instance(env: &Env) {
-        env.storage()
-            .instance()
-            .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND_TO);
+        shared_bump_instance_ttl(env);
     }
 
+    /// Bump persistent TTL using shared config constants from `stellar_trust_shared`.
     fn bump_persistent<K: soroban_sdk::IntoVal<Env, soroban_sdk::Val>>(env: &Env, key: &K) {
-        env.storage().persistent().extend_ttl(
-            key,
-            PERSISTENT_TTL_THRESHOLD,
-            PERSISTENT_TTL_EXTEND_TO,
-        );
+        shared_bump_persistent_ttl(env, key);
     }
 
     fn require_initialized(env: &Env) -> Result<(), GovError> {
@@ -468,6 +464,10 @@ impl GovernanceContract {
 
         if proposal.status == ProposalStatus::Executed {
             return Err(GovError::ProposalAlreadyExecuted);
+        }
+
+        if proposal.status == ProposalStatus::Cancelled {
+            return Err(GovError::ProposalAlreadyCancelled);
         }
 
         proposal.status = ProposalStatus::Cancelled;

@@ -9,6 +9,7 @@
 
 import prisma from '../../lib/prisma.js';
 import cache from '../../lib/cache.js';
+import { logControllerError } from '../../config/logger.js';
 import { buildPaginatedResponse, parsePagination } from '../../lib/pagination.js';
 
 const EVENT_TTL = 15; // seconds — events are append-only so short TTL is fine
@@ -74,6 +75,7 @@ const listEvents = async (req, res) => {
     await cache.set(cacheKey, result, EVENT_TTL);
     res.json(result);
   } catch (err) {
+    logControllerError('events.listEvents', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -98,6 +100,7 @@ const getEvent = async (req, res) => {
     await cache.set(cacheKey, result, 300);
     res.json(result);
   } catch (err) {
+    logControllerError('events.getEvent', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -139,6 +142,7 @@ const listEscrowEvents = async (req, res) => {
     await cache.set(cacheKey, result, EVENT_TTL);
     res.json(result);
   } catch (err) {
+    logControllerError('events.listEscrowEvents', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -164,6 +168,7 @@ const listEventTypes = async (req, res) => {
     await cache.set(cacheKey, result, 60);
     res.json(result);
   } catch (err) {
+    logControllerError('events.listEventTypes', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -188,6 +193,7 @@ const getEventStats = async (req, res) => {
     await cache.set(cacheKey, result, 30);
     res.json(result);
   } catch (err) {
+    logControllerError('events.getEventStats', err, req);
     res.status(500).json({ error: err.message });
   }
 };

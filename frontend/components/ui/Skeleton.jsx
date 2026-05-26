@@ -1,7 +1,4 @@
 import { clsx } from 'clsx';
-import { twMerge } from 'tw-merge';
-
-const cn = (...inputs) => twMerge(clsx(inputs));
 
 const Skeleton = ({ className, variant = 'text', ...props }) => {
   const base = 'animate-pulse bg-gray-200 dark:bg-gray-700';
@@ -17,7 +14,7 @@ const Skeleton = ({ className, variant = 'text', ...props }) => {
 
   return (
     <div
-      className={`${base} ${variants[variant]} ${className || ''}`}
+      className={clsx(base, variants[variant], className)}
       {...props}
     />
   );

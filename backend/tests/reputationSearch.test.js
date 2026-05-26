@@ -227,7 +227,6 @@ describe('search — Prisma fallback', () => {
     mockSearch.mockRejectedValue(new Error('ES down'));
     mockTransaction.mockResolvedValue([[], 0]);
     await search('GBBD', { tenantId: 'tenant_1' });
-    const [findArgs] = mockTransaction.mock.calls[0][0];
     // findArgs is the prisma call — check where clause via mock
     expect(mockTransaction).toHaveBeenCalled();
   });

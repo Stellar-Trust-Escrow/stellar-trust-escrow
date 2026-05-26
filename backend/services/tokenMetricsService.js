@@ -269,7 +269,7 @@ async function getMetrics() {
 /**
  * Get metrics for a specific time range
  */
-async function getMetricsByTimeRange(startTime, endTime) {
+async function getMetricsByTimeRange(_startTime, _endTime) {
   try {
     // This would require Redis SCAN or time-based queries
     // For now, return basic metrics

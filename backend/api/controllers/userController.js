@@ -1,5 +1,6 @@
 import prisma from '../../lib/prisma.js';
 import cache from '../../lib/cache.js';
+import { logControllerError } from '../../config/logger.js';
 import { buildPaginatedResponse, parsePagination } from '../../lib/pagination.js';
 
 const STELLAR_ADDRESS_RE = /^G[A-Z2-7]{55}$/;
@@ -68,6 +69,7 @@ const getUserProfile = async (req, res) => {
     await cache.set(cacheKey, profile, 60);
     res.json(profile);
   } catch (err) {
+    logControllerError('users.getUserProfile', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -111,36 +113,24 @@ const getUserEscrows = async (req, res) => {
       freelancerWhere.status = status;
     }
 
-    const [clientCount, freelancerCount] = await Promise.all([
-      prisma.escrow.count({ where: clientWhere }),
-      prisma.escrow.count({ where: freelancerWhere }),
-    ]);
+    const where = { OR: [clientWhere, freelancerWhere] };
 
-    const total = clientCount + freelancerCount;
-
-    const [clientEscrows, freelancerEscrows] = await Promise.all([
+    const [data, total] = await prisma.$transaction([
       prisma.escrow.findMany({
-        where: clientWhere,
+        where,
         select: ESCROW_SUMMARY_SELECT,
         orderBy: { createdAt: 'desc' },
-        take: skip + limit,
+        skip,
+        take: limit,
       }),
-      prisma.escrow.findMany({
-        where: freelancerWhere,
-        select: ESCROW_SUMMARY_SELECT,
-        orderBy: { createdAt: 'desc' },
-        take: skip + limit,
-      }),
+      prisma.escrow.count({ where }),
     ]);
 
-    const merged = [...clientEscrows, ...freelancerEscrows]
-      .sort((a, b) => b.createdAt - a.createdAt)
-      .slice(skip, skip + limit);
-
-    const result = buildPaginatedResponse(merged, { total, page, limit });
+    const result = buildPaginatedResponse(data, { total, page, limit });
     await cache.set(cacheKey, result, 15);
     res.json(result);
   } catch (err) {
+    logControllerError('users.getUserEscrows', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -195,6 +185,7 @@ const getUserStats = async (req, res) => {
     await cache.set(cacheKey, stats, 120);
     res.json(stats);
   } catch (err) {
+    logControllerError('users.getUserStats', err, req);
     res.status(500).json({ error: err.message });
   }
 };

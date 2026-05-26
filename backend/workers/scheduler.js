@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import { scheduledQueue } from '../queues/index.js';
+import { syncFromPrisma } from '../services/reputationSearchService.js';
 
 // Daily cleanup at 2AM UTC
 cron.schedule(
@@ -21,5 +22,17 @@ cron.schedule('0 * * * *', async () => {
   console.log('[Scheduler] Running hourly reputation check');
   await scheduledQueue.add('reputation-check', {});
 });
+
+// Daily ES reputation sync at 3AM UTC
+cron.schedule(
+  '0 3 * * *',
+  async () => {
+    console.log('[Scheduler] Running daily reputation ES sync');
+    await syncFromPrisma().catch((err) =>
+      console.warn('[ReputationSearch] Daily sync failed:', err.message),
+    );
+  },
+  { timezone: 'UTC' },
+);
 
 console.log('[Scheduler] Started - queues ready for cron jobs');

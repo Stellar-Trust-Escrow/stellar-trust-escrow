@@ -513,6 +513,97 @@ mod tests {
         assert!(result.is_err());
     }
 
+    // ── Issue #658: Quorum not reached → Defeated ─────────────────────────────
+
+    #[test]
+    fn test_governance_quorum_not_reached_defeated() {
+        let (env, admin, ta, token, client) = setup();
+
+        // Raise quorum to 10%
+        let mut config = client.get_config();
+        config.quorum_bps = 1_000;
+        client.update_config(&admin, &config);
+
+        let proposer = Address::generate(&env);
+        let voter = Address::generate(&env);
+        let whale = Address::generate(&env);
+
+        // total supply = 100_000; 10% quorum = 10_000; voter only has 500 (< 10%)
+        mint(&env, &ta, &token, &proposer, THRESHOLD);
+        mint(&env, &ta, &token, &voter, 500);
+        mint(&env, &ta, &token, &whale, 99_400);
+
+        let id = client.create_proposal(
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
+            &100_000i128,
+        );
+
+        advance(&env, VOTING_DELAY + 1);
+        client.cast_vote(&voter, &id, &true);
+
+        advance(&env, VOTING_PERIOD);
+        let status = client.finalize_proposal(&id);
+        assert_eq!(status, ProposalStatus::Defeated);
+
+        let p = client.get_proposal(&id);
+        assert_eq!(p.status, ProposalStatus::Defeated);
+
+        // execute_proposal on a Defeated proposal must fail
+        let result = client.try_execute_proposal(&id);
+        assert!(result.is_err());
+    }
+
+    // ── Issue #659: cancel_proposal edge cases ────────────────────────────────
+
+    #[test]
+    fn test_cast_vote_after_cancel_fails() {
+        let (env, _admin, ta, token, client) = setup();
+        let proposer = Address::generate(&env);
+        let voter = Address::generate(&env);
+        mint(&env, &ta, &token, &proposer, THRESHOLD);
+        mint(&env, &ta, &token, &voter, 1_000);
+
+        let id = client.create_proposal(
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
+            &10_000i128,
+        );
+
+        client.cancel_proposal(&proposer, &id);
+        assert_eq!(client.get_proposal(&id).status, ProposalStatus::Cancelled);
+
+        advance(&env, VOTING_DELAY + 1);
+        let result = client.try_cast_vote(&voter, &id, &true);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_double_cancel_fails() {
+        let (env, _admin, ta, token, client) = setup();
+        let proposer = Address::generate(&env);
+        mint(&env, &ta, &token, &proposer, THRESHOLD);
+
+        let id = client.create_proposal(
+            &proposer,
+            &str(&env, "T"),
+            &str(&env, "D"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
+            &10_000i128,
+        );
+
+        client.cancel_proposal(&proposer, &id);
+        let result = client.try_cancel_proposal(&proposer, &id);
+        assert!(result.is_err());
+    }
+
     // ── Config update ─────────────────────────────────────────────────────────
 
     #[test]
@@ -533,6 +624,91 @@ mod tests {
 
         let result = client.try_update_config(&stranger, &config);
         assert!(result.is_err());
+    }
+
+    // ── Full governance lifecycle ─────────────────────────────────────────────
+
+    /// End-to-end test: create_proposal → cast_vote (for + against) →
+    /// finalize_proposal → execute_proposal, verifying every status transition
+    /// and the ParameterChange payload.
+    ///
+    /// Note: finalize_proposal transitions Active → Queued directly (the
+    /// `Passed` variant is defined in ProposalStatus but the contract skips it,
+    /// going straight to Queued when quorum + threshold are met).
+    #[test]
+    fn test_governance_full_lifecycle() {
+        let (env, _admin, ta, token, client) = setup();
+
+        let proposer = Address::generate(&env);
+        let voter_for = Address::generate(&env);
+        let voter_against = Address::generate(&env);
+
+        // Supply: proposer=100, for=8_000, against=1_000 → total=9_100
+        // Quorum required: 9_100 * 4% = 364 → total votes 9_000 ≥ 364 ✓
+        // Approval: 8_000 / 9_000 ≈ 88.9% ≥ 51% ✓
+        mint(&env, &ta, &token, &proposer, THRESHOLD);
+        mint(&env, &ta, &token, &voter_for, 8_000);
+        mint(&env, &ta, &token, &voter_against, 1_000);
+
+        let payload = ProposalPayload::Parameter(ParameterPayload {
+            key: str(&env, "platform_fee_bps"),
+            value: 150,
+        });
+
+        // 1. create_proposal — status must be Active
+        let proposal_id = client.create_proposal(
+            &proposer,
+            &str(&env, "Lower platform fee"),
+            &str(&env, "Reduce platform fee to 1.5%"),
+            &ProposalType::ParameterChange,
+            &payload,
+            &9_100i128,
+        );
+        assert_eq!(proposal_id, 0);
+
+        let p = client.get_proposal(&proposal_id);
+        assert_eq!(p.status, ProposalStatus::Active);
+        assert_eq!(p.votes_for, 0);
+        assert_eq!(p.votes_against, 0);
+
+        // 2. cast_vote — advance past voting_delay, then vote for and against
+        advance(&env, VOTING_DELAY + 1);
+
+        client.cast_vote(&voter_for, &proposal_id, &true);
+        client.cast_vote(&voter_against, &proposal_id, &false);
+
+        let p = client.get_proposal(&proposal_id);
+        assert_eq!(p.votes_for, 8_000);
+        assert_eq!(p.votes_against, 1_000);
+        assert!(client.has_voted(&proposal_id, &voter_for));
+        assert!(client.has_voted(&proposal_id, &voter_against));
+
+        // 3. finalize_proposal — advance past voting_period; expect Queued
+        advance(&env, VOTING_PERIOD);
+
+        let status = client.finalize_proposal(&proposal_id);
+        assert_eq!(status, ProposalStatus::Queued);
+
+        let p = client.get_proposal(&proposal_id);
+        assert_eq!(p.status, ProposalStatus::Queued);
+
+        // 4. execute_proposal — advance past timelock_delay; expect Executed
+        advance(&env, TIMELOCK_DELAY + 1);
+
+        client.execute_proposal(&proposal_id);
+
+        let p = client.get_proposal(&proposal_id);
+        assert_eq!(p.status, ProposalStatus::Executed);
+        assert!(p.executed_at.is_some());
+
+        // Verify the ParameterChange payload is intact and readable
+        match p.payload {
+            ProposalPayload::Parameter(ref pp) => {
+                assert_eq!(pp.key, str(&env, "platform_fee_bps"));
+                assert_eq!(pp.value, 150);
+            }
+            _ => panic!("unexpected payload variant"),
+        }
     }
 
     // ── Parameter change proposal ─────────────────────────────────────────────

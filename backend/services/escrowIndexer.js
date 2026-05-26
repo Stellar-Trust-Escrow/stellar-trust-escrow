@@ -147,6 +147,9 @@ const handleMilestoneApproved = async (_event) => {
  */
 const handleFundsReleased = async (_event) => {
   // TODO: implement
+  // After updating DB, invalidate cache for this escrow:
+  // const escrowId = parseEscrowId(_event);
+  // await escrowController.onEscrowStatusChange(escrowId);
 };
 
 /**
@@ -156,6 +159,9 @@ const handleFundsReleased = async (_event) => {
  */
 const handleDisputeRaised = async (_event) => {
   // TODO: implement
+  // After updating DB, invalidate cache for this escrow:
+  // const escrowId = parseEscrowId(_event);
+  // await escrowController.onEscrowStatusChange(escrowId);
 };
 
 /**
@@ -165,6 +171,9 @@ const handleDisputeRaised = async (_event) => {
  */
 const handleDisputeResolved = async (_event) => {
   // TODO: implement
+  // After updating DB, invalidate cache for this escrow:
+  // const escrowId = parseEscrowId(_event);
+  // await escrowController.onEscrowStatusChange(escrowId);
 };
 
 /**

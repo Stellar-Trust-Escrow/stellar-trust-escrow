@@ -3,7 +3,6 @@
 import { Component } from 'react';
 import * as Sentry from '@sentry/nextjs';
 import Button from '../ui/Button';
-import Spinner from '../ui/Spinner';
 import Link from 'next/link';
 
 /**
@@ -100,4 +99,3 @@ class ErrorBoundary extends Component {
 }
 
 export default ErrorBoundary;
-

@@ -39,11 +39,13 @@ export async function withTenantScopeBypassed(callback) {
 }
 
 export function scopeCacheKey(key, tenant = getCurrentTenant()) {
+  if (isTenantScopeBypassed()) return key;
   if (!tenant) return key;
   return `tenant:${tenant.slug || tenant.id}:${key}`;
 }
 
 export function scopeCacheTag(tag, tenant = getCurrentTenant()) {
+  if (isTenantScopeBypassed()) return tag;
   if (!tenant) return tag;
   return `tenant:${tenant.slug || tenant.id}:tag:${tag}`;
 }

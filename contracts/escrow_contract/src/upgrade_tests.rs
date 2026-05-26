@@ -18,9 +18,20 @@
 #[cfg(test)]
 #[allow(clippy::module_inception)]
 mod upgrade_tests {
-    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String};
+    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
 
-    use crate::{EscrowContract, EscrowContractClient, EscrowStatus, MilestoneStatus};
+    use crate::{
+        EscrowContract, EscrowContractClient, EscrowStatus, MultisigConfig, MS_PENDING,
+        MS_SUBMITTED,
+    };
+
+    fn no_multisig(env: &Env) -> MultisigConfig {
+        MultisigConfig {
+            approvers: Vec::new(env),
+            weights: Vec::new(env),
+            threshold: 0,
+        }
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Helpers
@@ -153,6 +164,8 @@ mod upgrade_tests {
             &None,
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
         contract.create_escrow(
             &client_addr,
@@ -163,6 +176,8 @@ mod upgrade_tests {
             &None,
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
 
         assert_eq!(
@@ -198,6 +213,8 @@ mod upgrade_tests {
             &None,
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
 
         let pre = contract.get_escrow(&escrow_id);
@@ -217,6 +234,9 @@ mod upgrade_tests {
         assert_eq!(post.brief_hash, pre.brief_hash);
         assert_eq!(post.created_at, pre.created_at);
         assert_eq!(post.deadline, pre.deadline);
+        assert_eq!(post.multisig_threshold, pre.multisig_threshold);
+        assert_eq!(post.multisig_approvers.len(), pre.multisig_approvers.len());
+        assert_eq!(post.multisig_weights.len(), pre.multisig_weights.len());
     }
 
     /// Milestones attached to an escrow must survive an upgrade intact.
@@ -235,6 +255,8 @@ mod upgrade_tests {
             &None,
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
 
         let title = String::from_str(&env, "Design phase");
@@ -252,7 +274,7 @@ mod upgrade_tests {
         let milestone = contract.get_milestone(&escrow_id, &m_id);
         assert_eq!(milestone.id, m_id);
         assert_eq!(milestone.amount, 400_000);
-        assert_eq!(milestone.status, MilestoneStatus::Pending);
+        assert_eq!(milestone.status, MS_PENDING);
         assert_eq!(milestone.title, title);
     }
 
@@ -300,6 +322,8 @@ mod upgrade_tests {
             &None,
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
         let m_id = contract.add_milestone(
             &client_addr,
@@ -318,7 +342,7 @@ mod upgrade_tests {
 
         // Status must still be Submitted post-upgrade.
         let milestone = contract.get_milestone(&escrow_id, &m_id);
-        assert_eq!(milestone.status, MilestoneStatus::Submitted);
+        assert_eq!(milestone.status, MS_SUBMITTED);
 
         // Client can still approve post-upgrade.
         contract.approve_milestone(&client_addr, &escrow_id, &m_id);
@@ -344,6 +368,8 @@ mod upgrade_tests {
             &Some(arbiter.clone()),
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
 
         contract.raise_dispute(&client_addr, &escrow_id, &None);
@@ -386,6 +412,8 @@ mod upgrade_tests {
             &None,
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
 
         // Upload two distinct WASM blobs to simulate v1 → v2 → rollback to v1.
@@ -427,6 +455,8 @@ mod upgrade_tests {
                 &None,
                 &None,
                 &None,
+                &None,
+                &no_multisig(&env),
             );
         }
         assert_eq!(contract.escrow_count(), 3u64);

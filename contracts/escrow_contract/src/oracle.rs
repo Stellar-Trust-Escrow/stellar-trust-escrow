@@ -1,7 +1,7 @@
 use soroban_sdk::{contractclient, contracttype, Address, Env};
 
-use crate::errors::EscrowError;
 use crate::types::DataKey;
+use crate::EscrowError;
 
 /// Maximum age (in seconds) before a price is considered stale.
 pub const PRICE_STALENESS_THRESHOLD: u64 = 3_600; // 1 hour
@@ -42,7 +42,7 @@ pub fn get_oracle(env: &Env) -> Result<Address, EscrowError> {
     env.storage()
         .instance()
         .get(&DataKey::OracleAddress)
-        .ok_or(EscrowError::OracleNotConfigured)
+        .ok_or(EscrowError::BridgeError)
 }
 
 pub fn set_fallback_oracle(env: &Env, oracle: &Address) {
@@ -66,7 +66,7 @@ pub fn get_price_usd(env: &Env, asset: &Address) -> Result<i128, EscrowError> {
     let oracle_addr = get_oracle(env)?;
     let now = env.ledger().timestamp();
 
-    if let Some(data) = OracleClient::new(env, &oracle_addr).lastprice(&asset.clone()) {
+    if let Some(data) = OracleClient::new(env, &oracle_addr).lastprice(asset) {
         if is_fresh(&data, now) {
             return Ok(data.price);
         }
@@ -74,15 +74,15 @@ pub fn get_price_usd(env: &Env, asset: &Address) -> Result<i128, EscrowError> {
 
     // Primary stale or missing — try fallback
     if let Some(fallback_addr) = get_fallback_oracle(env) {
-        if let Some(data) = OracleClient::new(env, &fallback_addr).lastprice(&asset.clone()) {
+        if let Some(data) = OracleClient::new(env, &fallback_addr).lastprice(asset) {
             if is_fresh(&data, now) {
                 return Ok(data.price);
             }
-            return Err(EscrowError::OraclePriceStale);
+            return Err(EscrowError::BridgeError);
         }
     }
 
-    Err(EscrowError::OraclePriceStale)
+    Err(EscrowError::BridgeError)
 }
 
 /// Convert `amount` of `from_asset` to `to_asset` using oracle prices.
@@ -97,14 +97,14 @@ pub fn convert_amount(
     let to_price = get_price_usd(env, to_asset)?;
 
     if to_price == 0 {
-        return Err(EscrowError::OracleInvalidPrice);
+        return Err(EscrowError::BridgeError);
     }
 
     // amount * from_price / to_price  (prices share the same decimal base)
     amount
         .checked_mul(from_price)
         .and_then(|v| v.checked_div(to_price))
-        .ok_or(EscrowError::OracleInvalidPrice)
+        .ok_or(EscrowError::BridgeError)
 }
 
 #[inline]

@@ -118,7 +118,7 @@ async function rotateRefreshToken(oldRefreshToken, deviceInfo = {}, ipAddress = 
         oldRefreshToken,
         process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret'
       );
-    } catch (err) {
+    } catch (_err) {
       throw new Error('Invalid or expired refresh token');
     }
 

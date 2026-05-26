@@ -1,5 +1,6 @@
 import { Worker } from 'bullmq';
-import { emailQueue, connection } from '../queues/index.js';
+import crypto from 'crypto';
+import { connection } from '../queues/index.js';
 
 import disputeRaisedTemplate from '../templates/emails/disputeRaised.js';
 import escrowStatusChangedTemplate from '../templates/emails/escrowStatusChanged.js';

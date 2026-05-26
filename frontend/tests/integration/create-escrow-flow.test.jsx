@@ -1,9 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import CreateEscrowPage from '../../app/escrow/create/page';
+import { renderWithAppProviders } from '../test-utils';
 
 describe('CreateEscrowPage integration flow', () => {
   it('preserves entered counterparty details while moving between steps', async () => {
-    render(<CreateEscrowPage />);
+    renderWithAppProviders(<CreateEscrowPage />);
 
     fireEvent.change(screen.getByPlaceholderText(/GABCD1234/i), {
       target: { value: 'GTESTFREELANCER123' },
@@ -22,7 +23,7 @@ describe('CreateEscrowPage integration flow', () => {
   });
 
   it('surfaces submit errors in the signing step', async () => {
-    render(<CreateEscrowPage />);
+    renderWithAppProviders(<CreateEscrowPage />);
 
     fireEvent.click(screen.getByRole('button', { name: /Next/i }));
     fireEvent.click(screen.getByRole('button', { name: /Next/i }));

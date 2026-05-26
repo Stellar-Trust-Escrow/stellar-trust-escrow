@@ -76,7 +76,7 @@ export function useWallet() {
     startConnect();
     try {
       // TODO (contributor — Issue #35): implement Freighter connection
-      setError('Wallet connection not yet implemented. See Issue #35.');
+      setConnectError('Wallet connection not yet implemented. See Issue #35.');
     } catch (err) {
       setConnectError(err.message);
     }

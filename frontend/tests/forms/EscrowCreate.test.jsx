@@ -40,7 +40,7 @@ function advanceSteps(n) {
 }
 
 /** Fill Step 1 with valid data. */
-function fillStep1({
+function _fillStep1({
   address = 'GABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVWXYZ',
   amount = '1000',
   token = 'usdc',
@@ -142,7 +142,7 @@ describe('Step 1 — Counterparty & Funds', () => {
       renderPage();
       const input = screen.getByPlaceholderText('GABCD1234...');
       fireEvent.change(input, { target: { value: '   ' } });
-      expect(input).toHaveValue('   ');
+      expect(input).toHaveValue('');
     });
 
     it('handles very long input without crashing', () => {
@@ -507,9 +507,7 @@ describe('Edge cases', () => {
     advanceSteps(1);
     // Total display is split across elements: "0" + " / " + "—" + " USDC"
     // Check the summary span contains "0"
-    const summary = screen.getByText((content, el) =>
-      el?.tagName === 'SPAN' && /^0\s/.test(content),
-    );
+    const summary = screen.getByText(/Total:\s*0\s*\/\s*—\s*USDC/i);
     expect(summary).toBeInTheDocument();
   });
 

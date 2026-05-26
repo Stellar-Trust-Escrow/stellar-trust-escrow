@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 
-export default function RetryButton({ onRetry, retries = 3, children }) {
+export default function RetryButton({ onRetry, children }) {
   const [loading, setLoading] = useState(false);
 
   const handleClick = async () => {

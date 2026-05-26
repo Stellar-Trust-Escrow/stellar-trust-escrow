@@ -1,12 +1,16 @@
 import crypto from 'crypto';
 
-import { emailQueue } from '../queues/emailQueue.js';
+import {
+  __resetForTests,
+  enqueueEvent,
+  getQueueSnapshot,
+} from '../queues/emailQueue.js';
 
 import disputeRaisedTemplate from '../templates/emails/disputeRaised.js';
 import escrowStatusChangedTemplate from '../templates/emails/escrowStatusChanged.js';
 import milestoneCompletedTemplate from '../templates/emails/milestoneCompleted.js';
 
-const EMAIL_RE = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const config = {
   provider: process.env.EMAIL_PROVIDER || 'bullmq',
@@ -14,6 +18,7 @@ const config = {
   fromName: process.env.EMAIL_FROM_NAME || 'Stellar Trust Escrow',
   baseUrl: process.env.EMAIL_BASE_URL || `http://localhost:${process.env.PORT || 4000}`,
 };
+const preferences = new Map();
 
 function sanitizeEmail(email) {
   return String(email || '')
@@ -40,13 +45,16 @@ function createUnsubscribeToken(email) {
 }
 
 async function ensurePreference(email) {
-  // Stub - migrate full logic later or use DB
   const normalized = assertEmail(email);
-  return {
-    email: normalized,
-    unsubscribeToken: createUnsubscribeToken(normalized),
-    unsubscribedAt: null,
-  };
+  if (!preferences.has(normalized)) {
+    preferences.set(normalized, {
+      email: normalized,
+      unsubscribeToken: createUnsubscribeToken(normalized),
+      unsubscribedAt: null,
+    });
+  }
+
+  return { ...preferences.get(normalized) };
 }
 
 async function unsubscribe(email, token, reason = 'user_request') {
@@ -54,14 +62,23 @@ async function unsubscribe(email, token, reason = 'user_request') {
   if (preference.unsubscribeToken !== token) {
     throw new Error('Invalid unsubscribe token');
   }
-  // Stub - update DB later
-  return preference;
+  const updatedPreference = {
+    ...preference,
+    unsubscribedAt: new Date().toISOString(),
+    reason,
+  };
+  preferences.set(preference.email, updatedPreference);
+  return { ...updatedPreference };
 }
 
 async function resubscribe(email) {
   const preference = await ensurePreference(email);
-  // Stub
-  return preference;
+  const updatedPreference = {
+    ...preference,
+    unsubscribedAt: null,
+  };
+  preferences.set(preference.email, updatedPreference);
+  return { ...updatedPreference };
 }
 
 async function getPreference(email) {
@@ -80,18 +97,75 @@ async function start() {
   };
 }
 
+async function queueNotifications(eventType, payload, templateFactory) {
+  const recipients = Array.isArray(payload.recipients) ? payload.recipients : [];
+  const queued = [];
+  const skipped = [];
+
+  for (const recipient of recipients) {
+    const preference = await getPreference(recipient.email);
+
+    if (preference.unsubscribedAt) {
+      skipped.push({ email: preference.email, reason: 'unsubscribed' });
+      continue;
+    }
+
+    const message = templateFactory(payload)({
+      recipient,
+      unsubscribeUrl: buildUnsubscribeUrl(preference.email, preference.unsubscribeToken),
+      fromName: config.fromName,
+    });
+
+    const result = await enqueueEvent(eventType, {
+      ...payload,
+      recipients: [recipient],
+      message,
+    });
+
+    queued.push(...result.accepted.map((entry) => ({ ...entry, recipient: preference.email })));
+  }
+
+  return {
+    queued: queued.length,
+    accepted: queued,
+    skipped,
+  };
+}
+
+async function notifyEscrowStatusChange(payload) {
+  return queueNotifications('escrow.status_changed', payload, escrowStatusChangedTemplate);
+}
+
+async function notifyMilestoneCompleted(payload) {
+  return queueNotifications('milestone.completed', payload, milestoneCompletedTemplate);
+}
+
+async function notifyDisputeRaised(payload) {
+  return queueNotifications('dispute.raised', payload, disputeRaisedTemplate);
+}
+
+function resetEmailServiceForTests() {
+  preferences.clear();
+  __resetForTests();
+}
+
 export { buildUnsubscribeUrl, getPreference, unsubscribe, resubscribe, start };
+export {
+  resetEmailServiceForTests as __resetForTests,
+  getQueueSnapshot,
+  notifyDisputeRaised,
+  notifyEscrowStatusChange,
+  notifyMilestoneCompleted,
+};
 
 export default {
   getPreference,
   unsubscribe,
   resubscribe,
   start,
-};
-
-export {
   getQueueSnapshot,
+  notifyDisputeRaised,
   notifyEscrowStatusChange,
   notifyMilestoneCompleted,
-  notifyDisputeRaised,
-} from '../queues/emailQueue.js';
+  __resetForTests: resetEmailServiceForTests,
+};

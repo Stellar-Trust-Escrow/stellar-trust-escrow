@@ -10,7 +10,7 @@ import { useWalletStore } from '../../store/useWalletStore';
 import { useReputation, getReputationBadge } from '../../hooks/useReputation';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
-import { truncateAddress, stroopsToXlm, explorerUrl } from '../../lib/stellar';
+import { stroopsToXlm, explorerUrl } from '../../lib/stellar';
 
 export default function ProfileScreen() {
   const address = useWalletStore((s) => s.address)!;

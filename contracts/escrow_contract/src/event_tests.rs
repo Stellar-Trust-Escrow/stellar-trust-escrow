@@ -6,7 +6,15 @@ mod event_tests {
         token, Address, BytesN, Env, String, Symbol, TryFromVal, Val,
     };
 
-    use crate::{EscrowContract, EscrowContractClient, EscrowError};
+    use crate::{EscrowContract, EscrowContractClient, EscrowError, MultisigConfig};
+
+    fn no_multisig(env: &Env) -> MultisigConfig {
+        MultisigConfig {
+            approvers: soroban_sdk::Vec::new(env),
+            weights: soroban_sdk::Vec::new(env),
+            threshold: 0,
+        }
+    }
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
@@ -74,6 +82,8 @@ mod event_tests {
             &None,
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
 
         let events = contract_events(&env, &contract_id);
@@ -110,6 +120,8 @@ mod event_tests {
             &None,
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
 
         let milestone_id = client.add_milestone(
@@ -151,6 +163,8 @@ mod event_tests {
             &None,
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
         let mid = client.add_milestone(
             &client_addr,
@@ -194,6 +208,8 @@ mod event_tests {
             &None,
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
         let mid = client.add_milestone(
             &client_addr,
@@ -253,6 +269,8 @@ mod event_tests {
             &None,
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
         let mid = client.add_milestone(
             &client_addr,
@@ -295,6 +313,8 @@ mod event_tests {
             &None,
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
         client.cancel_escrow(&client_addr, &escrow_id);
 
@@ -327,6 +347,8 @@ mod event_tests {
             &None,
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
         let mid = client.add_milestone(
             &client_addr,
@@ -368,6 +390,8 @@ mod event_tests {
             &Some(arbiter.clone()),
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
         let mid = client.add_milestone(
             &client_addr,
@@ -479,6 +503,8 @@ mod event_tests {
             &None,
             &None,
             &Some(lock_time),
+            &None,
+            &no_multisig(&env),
         );
         let mid = client.add_milestone(
             &client_addr,
@@ -518,6 +544,8 @@ mod event_tests {
             &None,
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
 
         let mid = client.add_milestone(
@@ -533,8 +561,8 @@ mod event_tests {
         let events = contract_events(&env, &contract_id);
         let (_, topics, _) = events
             .iter()
-            .find(|(_, t, _)| has_topic_symbol(&env, t, soroban_sdk::symbol_short!("tl_started")))
-            .expect("tl_started event not emitted");
+            .find(|(_, t, _)| has_topic_symbol(&env, t, soroban_sdk::symbol_short!("tl_start")))
+            .expect("tl_start event not emitted");
         assert_eq!(topic_u64(&env, &topics, 1), escrow_id);
 
         client.submit_milestone(&freelancer, &escrow_id, &mid);
@@ -548,7 +576,7 @@ mod event_tests {
         let release_err = client
             .try_release_funds(&client_addr, &escrow_id, &mid)
             .unwrap_err();
-        assert!(matches!(release_err, Err(Err(EscrowError::TimelockNotExpired))));
+        assert!(matches!(release_err, Ok(EscrowError::TimelockNotExpired)));
 
         env.ledger().set_timestamp(env.ledger().timestamp() + 20);
 
@@ -557,14 +585,16 @@ mod event_tests {
         assert_eq!(freelancer_balance_after, 500);
 
         let events = contract_events(&env, &contract_id);
-        assert!(events.iter().any(|(_, t, _)|
-            has_topic_symbol(&env, t, soroban_sdk::symbol_short!("tl_released"))
-        ));
+        assert!(events.iter().any(|(_, t, _)| has_topic_symbol(
+            &env,
+            &t,
+            soroban_sdk::symbol_short!("tl_rel")
+        )));
     }
 
     #[test]
     fn test_admin_override_release_funds_before_timelock_expires() {
-        let (env, admin, contract_id, client) = setup();
+        let (env, admin, _contract_id, client) = setup();
         let client_addr = Address::generate(&env);
         let freelancer = Address::generate(&env);
         let token = register_token(&env, &admin, &client_addr, 500);
@@ -578,6 +608,8 @@ mod event_tests {
             &None,
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
 
         let mid = client.add_milestone(
@@ -615,6 +647,8 @@ mod event_tests {
             &None,
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
         let reason = String::from_str(&env, "No longer needed");
         client.request_cancellation(&client_addr, &escrow_id, &reason);
@@ -650,6 +684,8 @@ mod event_tests {
             &None,
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
         client.request_cancellation(&client_addr, &escrow_id, &String::from_str(&env, "Done"));
 
@@ -689,6 +725,8 @@ mod event_tests {
             &None,
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
         let mid = client.add_milestone(
             &client_addr,
@@ -730,6 +768,8 @@ mod event_tests {
             &None,
             &None,
             &None,
+            &None,
+            &no_multisig(&env),
         );
         let mid = client.add_milestone(
             &client_addr,

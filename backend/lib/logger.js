@@ -29,8 +29,8 @@ const rotatingStream = rfs.createStream(LOG_FILE, {
 const redactPaths = [
   'req.headers.authorization',
   'req.headers.cookie',
-  'req.headers.set-cookie',
-  'req.headers.x-admin-api-key',
+  'req.headers["set-cookie"]',
+  'req.headers["x-admin-api-key"]',
   'req.body.password',
   'req.body.private_key',
   'req.body.secret_key',
@@ -54,7 +54,7 @@ export const logger = pino(
   rotatingStream,
 );
 
-export const requestLogger = pinoHttp({
+const pinoRequestLogger = pinoHttp({
   logger,
   genReqId: (req) => {
     const headerId = req.headers['x-request-id'] || req.headers['x-correlation-id'];
@@ -116,3 +116,12 @@ export const requestLogger = pinoHttp({
     };
   },
 });
+
+export function requestLogger(req, res, next) {
+  pinoRequestLogger(req, res, () => {
+    if (req.id) {
+      res.setHeader('X-Request-Id', req.id);
+    }
+    next();
+  });
+}

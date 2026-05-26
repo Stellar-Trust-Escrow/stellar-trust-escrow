@@ -11,6 +11,11 @@ import { uploadEvidence } from '../middleware/fileUpload.js';
 import ipfsService from '../../services/ipfsService.js';
 import { broadcastToDispute } from '../websocket/handlers.js';
 
+/**
+ * List and get handlers assume query/params are already validated by
+ * `validate(disputeListQueryRules)` and `validate(disputeEscrowIdParamRules)`.
+ */
+
 const listDisputes = async (req, res) => {
   try {
     const { page, limit, skip } = parsePagination(req.query);
@@ -76,12 +81,10 @@ const listDisputes = async (req, res) => {
       prisma.dispute.count({ where })
     ]);
 
-    const response = buildPaginatedResponse({
-      items: disputes,
+    const response = buildPaginatedResponse(disputes, {
       total,
       page,
       limit,
-      request: req
     });
 
     res.json(response);
@@ -156,9 +159,8 @@ const getDispute = async (req, res) => {
 
 const postEvidence = async (req, res) => {
   try {
-    const { id } = req.params;
     const { description, role } = req.body;
-    const userAddress = req.user?.address;
+    const userAddress = req.userAddress; // set by validateDisputeAccess in fileUpload middleware
 
     if (!userAddress) {
       return res.status(401).json({ error: 'User not authenticated' });
@@ -288,12 +290,10 @@ const listEvidence = async (req, res) => {
       })
     );
 
-    const response = buildPaginatedResponse({
-      items: evidenceWithUrls,
+    const response = buildPaginatedResponse(evidenceWithUrls, {
       total,
       page,
       limit,
-      request: req
     });
 
     res.json(response);
@@ -305,7 +305,6 @@ const listEvidence = async (req, res) => {
 
 const autoResolve = async (req, res) => {
   try {
-    const { id } = req.params;
     const dispute = req.dispute;
 
     const resolution = await prisma.dispute.update({
@@ -338,7 +337,6 @@ const autoResolve = async (req, res) => {
 
 const getRecommendation = async (req, res) => {
   try {
-    const { id } = req.params;
     const dispute = req.dispute;
 
     const evidence = await prisma.disputeEvidence.findMany({
@@ -365,9 +363,8 @@ const getRecommendation = async (req, res) => {
 
 const postAppeal = async (req, res) => {
   try {
-    const { id } = req.params;
     const { reason } = req.body;
-    const userAddress = req.user?.address;
+    const userAddress = req.user?.walletAddress ?? req.userAddress;
 
     if (!reason || reason.trim().length === 0) {
       return res.status(400).json({ error: 'Appeal reason is required' });
@@ -406,7 +403,7 @@ const patchAppeal = async (req, res) => {
   try {
     const { appealId } = req.params;
     const { status, reviewNotes } = req.body;
-    const userAddress = req.user?.address;
+    const userAddress = req.user?.walletAddress ?? req.userAddress;
 
     const appeal = await prisma.disputeAppeal.findFirst({
       where: {

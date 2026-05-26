@@ -92,7 +92,7 @@ export default function Modal({
                        hover:bg-gray-800 focus:outline-none focus-visible:ring-2
                        focus-visible:ring-indigo-500 focus-visible:ring-offset-2
                        focus-visible:ring-offset-gray-900"
-            aria-label={title ? `Close ${title} modal` : 'Close modal'}
+            aria-label="Close modal"
             type="button"
           >
             ✕

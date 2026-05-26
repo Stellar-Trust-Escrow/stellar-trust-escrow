@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+env:
+  SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+
 jobs:
   deploy-staging:
     name: Deploy to Staging
@@ -18,13 +21,21 @@ jobs:
           # Insert actual deployment commands here (e.g., SSH, Cloud provider CLI)
           echo "Successfully deployed to Staging"
 
-      - name: Slack Notification
-        if: always()
+      - name: Slack Notification Success
+        if: ${{ success() && env.SLACK_WEBHOOK != '' }}
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-          SLACK_COLOR: ${{ job.status == 'success' && 'good' || 'danger' }}
-          SLACK_MESSAGE: 'Staging Deployment: ${{ job.status }}'
+          SLACK_COLOR: good
+          SLACK_MESSAGE: 'Staging Deployment: success'
+
+      - name: Slack Notification Failure
+        if: ${{ failure() && env.SLACK_WEBHOOK != '' }}
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_COLOR: danger
+          SLACK_MESSAGE: 'Staging Deployment: failure'
 
   deploy-production:
     name: Deploy to Production
@@ -41,10 +52,18 @@ jobs:
           # Insert actual deployment commands here
           echo "Successfully deployed to Production"
 
-      - name: Slack Notification
-        if: always()
+      - name: Slack Notification Success
+        if: ${{ success() && env.SLACK_WEBHOOK != '' }}
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-          SLACK_COLOR: ${{ job.status == 'success' && 'good' || 'danger' }}
-          SLACK_MESSAGE: 'Production Deployment: ${{ job.status }}'
+          SLACK_COLOR: good
+          SLACK_MESSAGE: 'Production Deployment: success'
+
+      - name: Slack Notification Failure
+        if: ${{ failure() && env.SLACK_WEBHOOK != '' }}
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_COLOR: danger
+          SLACK_MESSAGE: 'Production Deployment: failure'

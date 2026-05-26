@@ -4,8 +4,8 @@
  * Persistent top navigation bar. Includes:
  * - Logo / brand name
  * - Nav links (Dashboard, Explorer)
+ * - NetworkIndicator pill (Testnet / Mainnet)
  * - WalletStatus indicator (connected/connecting/disconnected)
- * - Network indicator pill (Testnet / Mainnet)
  *
  * TODO (contributor — medium, Issue #37):
  * - Add mobile hamburger menu
@@ -22,6 +22,7 @@ import WalletStatus from '../ui/WalletStatus';
 import MobileDrawer from './MobileDrawer';
 import ThemeToggle from './ThemeToggle';
 import CurrencySelector from '../ui/CurrencySelector';
+import NetworkIndicator from './NetworkIndicator';
 
 export default function Header() {
   const wallet = useWallet();
@@ -35,16 +36,10 @@ export default function Header() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  const networkLabel = wallet.network === 'mainnet' ? t('network.mainnet') : t('network.testnet');
-  const networkStyles =
-    wallet.network === 'mainnet'
-      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-      : 'bg-amber-500/10 text-amber-400 border-amber-500/20';
-  const networkDotStyles =
-    wallet.network === 'mainnet' ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse';
-
   return (
-    <header className={`border-b border-gray-200 bg-white/80 dark:border-gray-800 dark:bg-gray-950/80 backdrop-blur-sm sticky top-0 z-50 transition-shadow duration-200 ${scrolled ? 'shadow-lg shadow-black/20' : ''}`}>
+    <header
+      className={`border-b border-gray-200 bg-white/80 dark:border-gray-800 dark:bg-gray-950/80 backdrop-blur-sm sticky top-0 z-50 transition-shadow duration-200 ${scrolled ? 'shadow-lg shadow-black/20' : ''}`}
+    >
       <div className="container mx-auto px-4 max-w-7xl">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
@@ -63,30 +58,30 @@ export default function Header() {
               href="/dashboard"
               className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white text-sm transition-colors"
             >
-              Dashboard
+              {t('nav.dashboard')}
             </Link>
             <Link
               href="/explorer"
               className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white text-sm transition-colors"
             >
-              Explorer
+              {t('nav.explorer')}
             </Link>
             {/* TODO (contributor): add Leaderboard link */}
           </nav>
 
           {/* Right Side */}
           <div className="flex items-center gap-3">
-            {/* Network Badge — shows real network when wallet is connected */}
-            <span
-              id="network-badge"
-              className={`hidden sm:flex items-center gap-1.5 text-xs border px-2.5 py-1 rounded-full transition-colors duration-300 ${networkStyles}`}
-            >
-              <span className={`w-1.5 h-1.5 rounded-full ${networkDotStyles}`} />
-              {networkLabel}
-            </span>
+            {/* Network Indicator */}
+            <NetworkIndicator network={wallet.network} isConnected={wallet.isConnected} />
 
             {/* Wallet Status */}
             <WalletStatus wallet={wallet} />
+
+            {/* Currency Selector */}
+            <CurrencySelector size="sm" />
+
+            {/* Theme Toggle */}
+            <ThemeToggle />
 
             {/* Hamburger — mobile only */}
             <button
@@ -95,18 +90,17 @@ export default function Header() {
               aria-expanded={isMobileMenuOpen}
               onClick={() => setIsMobileMenuOpen(true)}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="w-6 h-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-          </div>
-        </div>
-
-            {/* Currency Selector */}
-            <CurrencySelector size="sm" />
-
-            {/* Theme Toggle */}
-            <ThemeToggle />
           </div>
         </div>
 
@@ -118,14 +112,14 @@ export default function Header() {
               className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors px-2"
               onClick={() => setIsMobileMenuOpen(false)}
             >
-              Dashboard
+              {t('nav.dashboard')}
             </Link>
             <Link
               href="/explorer"
               className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors px-2"
               onClick={() => setIsMobileMenuOpen(false)}
             >
-              Explorer
+              {t('nav.explorer')}
             </Link>
           </nav>
         )}

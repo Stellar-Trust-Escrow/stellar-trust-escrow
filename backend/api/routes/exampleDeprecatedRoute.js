@@ -12,7 +12,6 @@ import {
   deprecate,
   enforceSunset,
   addDeprecationToResponse,
-  deprecationPresets,
 } from '../middleware/deprecation.js';
 
 const router = express.Router();

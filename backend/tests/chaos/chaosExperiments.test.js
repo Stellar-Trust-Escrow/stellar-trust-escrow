@@ -89,7 +89,6 @@ describe('Experiment: db-latency — failure injection', () => {
   it('injectLatency resolves after the specified delay when chaos enabled', async () => {
     enableChaos('db-latency');
 
-    const start = Date.now();
     const p = injectLatency(500, 0, 'db-latency');
     jest.advanceTimersByTime(500);
     await p;

@@ -1,5 +1,5 @@
 import { Worker } from 'bullmq';
-import { webhookQueue, connection } from '../queues/index.js';
+import { connection } from '../queues/index.js';
 
 const webhookWorker = new Worker(
   'webhook',
