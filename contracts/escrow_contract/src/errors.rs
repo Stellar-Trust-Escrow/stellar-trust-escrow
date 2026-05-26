@@ -25,14 +25,16 @@ pub enum EscrowError {
     // Note: discriminant 6 is reserved / unused.
 
     // ── Escrow State ──────────────────────────────────────────────────────────
-    // Note: discriminants 7 is reserved / unused.
+    /// Reserved for future use.
+    Reserved7 = 7,
     /// No escrow exists for the given `escrow_id`.
     EscrowNotFound = 8,
     /// Operation requires the escrow to be in `Active` status.
     EscrowNotActive = 9,
     /// Operation requires the escrow to be in `Disputed` status.
     EscrowNotDisputed = 10,
-    // Note: discriminant 11 is reserved / unused.
+    /// Reserved for future use.
+    Reserved11 = 11,
     /// Escrow cannot be cancelled while milestone funds are pending release.
     PendingFunds = 12,
 
@@ -55,8 +57,10 @@ pub enum EscrowError {
     /// Deposited amount does not match the sum of milestone amounts.
     AmountMismatch = 20,
     // ── Dispute ───────────────────────────────────────────────────────────────
-    // Note: discriminant 22 is reserved / unused.
-    // Note: discriminant 24 is reserved / unused.
+    /// Reserved for future use.
+    Reserved22 = 22,
+    /// Reserved for future use.
+    Reserved24 = 24,
     // Note: discriminant 23 is reserved / unused.
 
     // ── Deadline ──────────────────────────────────────────────────────────────
