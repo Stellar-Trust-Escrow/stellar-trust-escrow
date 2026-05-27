@@ -56,6 +56,9 @@ backend/database/migrations/*.sql
 # ── Generated / large data files ──────────────────────────────────────────────
 load-tests/data/generated.json
 load-tests/results/*.json
+load-tests/results/*.html
+load-tests/results/stress/*.json
+load-tests/results/stress/*.html
 !load-tests/results/.gitkeep
 bundle-stats.json
 

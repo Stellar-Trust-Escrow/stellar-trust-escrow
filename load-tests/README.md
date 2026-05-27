@@ -71,6 +71,73 @@ This runs the suite every night at 2:00 AM UTC. Results are logged to `results/n
 
 Open `load-tests/results/history/dashboard.html` in a browser to see historical latency trend charts, system metrics, and run history.
 
+## Stress Testing
+
+The stress testing suite (`stress-test.js`) simulates high transaction volume with hundreds of concurrent users performing realistic actions. This helps identify:
+
+- Database connection pool exhaustion
+- Memory leaks under sustained load
+- System degradation over extended periods
+- Rate limiting and circuit breaker behavior
+- Concurrent write operation handling
+
+### Stress Test Scenarios
+
+1. **High-Volume Escrow Browsing** - 200 concurrent users browsing listings (500 req/s)
+2. **Concurrent Escrow Detail Views** - 160 users viewing details and milestones (400 req/s)
+3. **Concurrent Milestone Completions** - 60 users completing milestones (50 req/s)
+4. **Concurrent Evidence Uploads** - 40 users uploading dispute evidence (30 req/s)
+5. **User Dashboard Load** - 120 users loading dashboards (300 req/s)
+6. **Mixed Realistic Workload** - 200 users with mixed read/write operations (600 req/s)
+
+### Run Stress Tests
+
+```bash
+npm run loadtest:stress
+```
+
+With custom configuration:
+
+```bash
+STRESS_DURATION=600 STRESS_CONNECTIONS=300 npm run loadtest:stress
+```
+
+### Stress Test Thresholds
+
+More lenient than regular load tests to account for extreme conditions:
+
+- Error rate: ≤2% (CI), ≤5% (local)
+- Tail latency (p97.5): ≤2000ms (CI), ≤3000ms (local)
+- Throughput: ≥30 req/s (CI), ≥20 req/s (local)
+- CPU usage: ≤90%
+- Memory usage: ≤2048MB
+- DB pool utilization: ≤90%
+
+### Stress Test Reports
+
+Reports are generated in `load-tests/results/stress/`:
+
+- `latest.json` - Most recent stress test results
+- `latest.html` - Interactive HTML report with metrics
+- `stress-{timestamp}.json` - Historical JSON reports
+- `stress-{timestamp}.html` - Historical HTML reports
+
+### Automated Nightly Stress Testing
+
+The GitHub Actions workflow `.github/workflows/nightly-stress-test.yml` runs automatically every night at 2:00 AM UTC:
+
+1. Runs full stress test suite (5 minutes per scenario)
+2. Generates detailed HTML and JSON reports
+3. Uploads reports as artifacts (90-day retention)
+4. Triggers Slack alerts on critical failures
+5. Fails workflow if critical or multiple high-severity alerts detected
+
+Manual trigger:
+
+```bash
+gh workflow run nightly-stress-test.yml
+```
+
 ## Notes
 
 - The harness runs against a local Express server with route shapes that mirror the backend API contract.
