@@ -27,7 +27,6 @@
     "loadtest:ci": "node load-tests/run.js --ci",
     "loadtest:nightly": "node load-tests/nightly-runner.js",
     "loadtest:dashboard": "open load-tests/results/history/dashboard.html",
-
     "prepare": "node .husky/install.mjs"
   },
   "devDependencies": {
@@ -51,7 +50,8 @@
     "tough-cookie": "^6.0.1",
     "typescript-eslint": "^8.57.1",
     "url-parse": "^1.5.10",
-    "validate-branch-name": "^1.3.2"
+    "validate-branch-name": "^1.3.2",
+    "wait-on": "^9.0.10"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,json,md}": [

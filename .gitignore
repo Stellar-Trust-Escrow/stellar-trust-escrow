@@ -49,6 +49,7 @@ Thumbs.db
 coverage/
 .nyc_output/
 **/test_snapshots/
+frontend/accessibility-reports/
 
 # ── Prisma generated ───────────────────────────────────────────────────────────
 backend/database/migrations/*.sql

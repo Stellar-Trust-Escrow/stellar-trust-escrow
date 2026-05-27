@@ -22,6 +22,7 @@
     "test:e2e:ui": "playwright test --config playwright.config.js --ui",
     "test:visual:update": "cross-env PLAYWRIGHT_DISABLE_WEBSERVER=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3000 playwright test --config playwright.config.js tests/e2e/visual.spec.js tests/e2e/navigation.spec.js tests/e2e/performance.spec.js --reporter=line --update-snapshots",
     "test:perf": "playwright test --config playwright.config.js tests/e2e/performance.spec.js --project=chromium",
+    "test:a11y:scan": "node ../scripts/accessibility-scan.js",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build"
   },
@@ -41,6 +42,7 @@
     "web-vitals": "^5.1.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.3",
     "@playwright/test": "^1.52.0",
     "@storybook/addon-a11y": "^8.6.18",
     "@storybook/addon-essentials": "^8.6.14",
