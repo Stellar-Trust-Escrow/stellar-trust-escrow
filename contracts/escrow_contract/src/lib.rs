@@ -74,6 +74,7 @@ mod oracle_tests;
 mod partial_cancel_tests;
 mod pause_tests;
 mod self_escrow_tests;
+mod staking;
 mod timelock_enforcement_tests;
 mod transfer_client_tests;
 mod types;
@@ -81,6 +82,7 @@ mod upgrade_tests;
 
 pub use errors::EscrowError;
 use storage::StorageManager;
+pub use staking::{deposit_stake_and_activate, return_stake_on_completion, slash_stake_to_client};
 pub use types::{
     ApprovalRecord, DataKey, EscrowFeeSnapshot, EscrowState, EscrowStatus, EscrowTemplate, FeeTier,
     Milestone, MilestoneStatus, MilestoneTemplate, MultisigConfig, OptionalBytesN32,
@@ -233,6 +235,10 @@ pub struct EscrowMeta {
     pub rent_balance: i128,
     /// Timestamp of the last successful rent collection checkpoint.
     pub last_rent_collection_at: u64,
+    /// Required freelancer stake amount for this escrow (0 means no stake required).
+    pub required_freelancer_stake: i128,
+    /// Whether the freelancer has deposited the required stake.
+    pub stake_deposited: bool,
 }
 
 // ── Storage helpers ───────────────────────────────────────────────────────────
@@ -1296,6 +1302,7 @@ impl EscrowContract {
         defaults
     }
 
+    #[allow(dead_code)]
     fn calculate_platform_fee(
         env: &Env,
         total_amount: i128,
@@ -1432,8 +1439,7 @@ impl EscrowContract {
         arbiter: Option<Address>,
         deadline: Option<u64>,
         lock_time: Option<u64>,
-        _timelock: Option<Timelock>,
-        _multisig_config: MultisigConfig,
+        required_freelancer_stake: i128,
     ) -> Result<u64, EscrowError> {
         Self::create_escrow_internal(
             env,
@@ -1445,12 +1451,13 @@ impl EscrowContract {
             arbiter,
             deadline,
             lock_time,
+            required_freelancer_stake,
             None,
             None,
         )
     }
 
-    pub fn create_escrow_with_dispute_timeout(
+    pub fn create_escrow_dispute_timeout(
         env: Env,
         client: Address,
         freelancer: Address,
@@ -1472,6 +1479,7 @@ impl EscrowContract {
             arbiter,
             deadline,
             lock_time,
+            0, // No freelancer stake required
             Some(dispute_timeout_ledger),
             None,
         )
@@ -1509,6 +1517,7 @@ impl EscrowContract {
             arbiter,
             deadline,
             lock_time,
+            0, // No freelancer stake required
             None,
             None,
         )?;
@@ -1541,6 +1550,7 @@ impl EscrowContract {
             arbiter,
             deadline,
             lock_time,
+            0, // No freelancer stake required
             None,
             Some(buyer_signers),
         )
@@ -1579,6 +1589,16 @@ impl EscrowContract {
         Ok(())
     }
 
+    /// Deposits the required freelancer stake and allows the escrow to become active for milestone work.
+    /// Must be called before any milestones can be released.
+    pub fn deposit_freelancer_stake(
+        env: Env,
+        escrow_id: u64,
+        freelancer: Address,
+    ) -> Result<(), EscrowError> {
+        staking::deposit_stake_and_activate(&env, escrow_id, &freelancer)
+    }
+
     fn create_escrow_internal(
         env: Env,
         client: Address,
@@ -1589,6 +1609,7 @@ impl EscrowContract {
         arbiter: Option<Address>,
         deadline: Option<u64>,
         lock_time: Option<u64>,
+        required_freelancer_stake: i128,
         dispute_timeout_ledger: Option<u32>,
         buyer_signers: Option<soroban_sdk::Vec<Address>>,
     ) -> Result<u64, EscrowError> {
@@ -1662,6 +1683,13 @@ impl EscrowContract {
         );
         ContractStorage::charge_rent_reserve(&env, &token, &client, rent_reserve)?;
 
+        // Status is Active only if no stake is required; otherwise keep as created
+        let initial_status = if required_freelancer_stake > 0 {
+            EscrowStatus::Active // Escrow is active, but funds can't be released until stake is deposited
+        } else {
+            EscrowStatus::Active
+        };
+
         ContractStorage::save_escrow_meta(
             &env,
             &EscrowMeta {
@@ -1672,7 +1700,7 @@ impl EscrowContract {
                 total_amount,
                 allocated_amount: 0,
                 remaining_balance: total_amount,
-                status: EscrowStatus::Active,
+                status: initial_status,
                 milestone_count: 0,
                 approved_count: 0,
                 released_count: 0,
@@ -1689,6 +1717,8 @@ impl EscrowContract {
                 brief_hash,
                 rent_balance: rent_reserve,
                 last_rent_collection_at: now,
+                required_freelancer_stake,
+                stake_deposited: required_freelancer_stake == 0,
             },
         );
 
@@ -1795,6 +1825,8 @@ impl EscrowContract {
             brief_hash,
             rent_balance: base_rent_reserve,
             last_rent_collection_at: now,
+            required_freelancer_stake: 0,
+            stake_deposited: true,
         };
         ContractStorage::charge_entry_rent(&env, &mut meta, &client, 1)?;
         ContractStorage::save_escrow_meta(&env, &meta);
@@ -2788,6 +2820,11 @@ impl EscrowContract {
 
             let mut meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
 
+            // Check if freelancer stake is required and deposited
+            if meta.required_freelancer_stake > 0 && !meta.stake_deposited {
+                return Err(EscrowError::InvalidEscrowAmount);
+            }
+
             let is_admin = caller == admin;
             let timelock_ok = ContractStorage::check_timelock_expired(
                 &env,
@@ -2830,6 +2867,9 @@ impl EscrowContract {
                 .ok_or(EscrowError::AmountMismatch)?;
 
             if meta.released_count == meta.milestone_count && meta.milestone_count > 0 {
+                // Return freelancer stake on successful completion
+                staking::return_stake_on_completion(&env, &meta)?;
+
                 meta.status = EscrowStatus::Completed;
                 Self::remove_from_vec_index(
                     &env,
@@ -2975,6 +3015,7 @@ impl EscrowContract {
             meta.arbiter.clone(),
             meta.deadline,
             meta.lock_time,
+            meta.required_freelancer_stake,
             meta.dispute_timeout_ledger,
             Some(meta.buyer_signers.clone()),
         )?;
@@ -2990,6 +3031,7 @@ impl EscrowContract {
             meta.arbiter.clone(),
             meta.deadline,
             meta.lock_time,
+            meta.required_freelancer_stake,
             meta.dispute_timeout_ledger,
             Some(meta.buyer_signers.clone()),
         )?;
@@ -3315,6 +3357,12 @@ impl EscrowContract {
             }
             if freelancer_payout > 0 {
                 token.transfer(&contract_addr, &meta.freelancer, &freelancer_payout);
+            }
+
+            // Slash stake if dispute resolved in favor of client (client_amount > freelancer_amount)
+            if client_amount > freelancer_amount && meta.required_freelancer_stake > 0 && meta.stake_deposited {
+                // Slash 100% of stake on freelancer misconduct
+                staking::slash_stake_to_client(&env, &meta, 100)?;
             }
 
             meta.remaining_balance = 0;
@@ -3661,6 +3709,7 @@ impl EscrowContract {
             arbiter.clone(),
             deadline,
             None, // lock_time
+            0, // No freelancer stake required
             None, // dispute_timeout_ledger
             None, // buyer_signers
         )?;

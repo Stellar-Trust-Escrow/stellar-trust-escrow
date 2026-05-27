@@ -712,4 +712,6 @@ pub enum DataKey {
     PlatformFeeTiers,
     /// Applied fee snapshot for an escrow â€” key: u64, value: EscrowFeeSnapshot
     PlatformFeeSnapshot(u64),
+    /// Freelancer stake deposit status per escrow – key: u64, value: bool
+    FreelancerStake(u64),
 }
