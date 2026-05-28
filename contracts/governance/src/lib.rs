@@ -31,6 +31,7 @@
 pub mod arbitrators;
 mod errors;
 mod events;
+pub mod incentives;
 mod tests;
 mod types;
 
@@ -533,6 +534,47 @@ impl GovernanceContract {
         Storage::require_initialized(&env)?;
         let config = Storage::config(&env)?;
         Ok(voting_power(&env, &config.token, &address))
+    }
+
+    // ── Incentives ────────────────────────────────────────────────────────────
+
+    /// Admin deposits tokens into the platform incentives pool.
+    ///
+    /// Caller must have already transferred tokens to this contract.
+    pub fn deposit_to_incentives_pool(
+        env: Env,
+        caller: Address,
+        amount: i128,
+    ) -> Result<(), GovError> {
+        Storage::require_initialized(&env)?;
+        caller.require_auth();
+        let admin = Storage::admin(&env)?;
+        if caller != admin {
+            return Err(GovError::AdminOnly);
+        }
+        incentives::deposit_to_pool(&env, amount).map_err(|_| GovError::InvalidParameter)
+    }
+
+    /// Returns the current balance of the platform incentives pool.
+    pub fn get_incentives_pool_balance(env: Env) -> i128 {
+        incentives::get_pool_balance(&env)
+    }
+
+    /// Apply a lock-extension bonus for `staker`.
+    ///
+    /// Transfers bonus tokens (from the pool) to the staker's locked voting weight.
+    /// Only triggers when extension > 1 year; returns 0 otherwise.
+    pub fn extend_lock_bonus(
+        env: Env,
+        staker: Address,
+        current_lock_end: u64,
+        new_lock_end: u64,
+        locked_amount: i128,
+    ) -> Result<i128, GovError> {
+        Storage::require_initialized(&env)?;
+        staker.require_auth();
+        incentives::apply_lock_extension_bonus(&env, &staker, current_lock_end, new_lock_end, locked_amount)
+            .map_err(|_| GovError::InvalidParameter)
     }
 
     // ── Arbitrator DAO ────────────────────────────────────────────────────────
