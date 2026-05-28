@@ -64,15 +64,101 @@ model User {
   email        String   @unique
   password     String
   walletAddress String? @unique @map("wallet_address")
+  role         String   @default("user") // user | admin | superadmin
+  mfaEnabled   Boolean  @default(false) @map("mfa_enabled")
+  mfaEnforced  Boolean  @default(false) @map("mfa_enforced") // Force MFA for high-value operations
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   tenant        Tenant        @relation(fields: [tenantId], references: [id])
   refreshTokens RefreshToken[]
+  mfaMethods    MfaMethod[]
+  mfaAttempts   MfaAttempt[]
 
   @@index([tenantId, createdAt(sort: Desc)])
   @@index([tenantId, email])
+  @@index([walletAddress])
+  @@index([role])
   @@map("users")
+}
+
+// ── MFA Methods ───────────────────────────────────────────────────────────────
+
+model MfaMethod {
+  id            String    @id @default(cuid())
+  userId        Int       @map("user_id")
+  tenantId      String    @map("tenant_id")
+  type          MfaType   // TOTP | WEBAUTHN
+  name          String    // User-friendly name (e.g., "iPhone 15", "Authenticator App")
+  isActive      Boolean   @default(true) @map("is_active")
+  isPrimary     Boolean   @default(false) @map("is_primary")
+  
+  // TOTP-specific fields
+  totpSecret    String?   @map("totp_secret") // Encrypted TOTP secret
+  totpBackupCodes String[] @default([]) @map("totp_backup_codes") // Encrypted backup codes
+  
+  // WebAuthn-specific fields
+  credentialId  String?   @unique @map("credential_id") // Base64-encoded credential ID
+  publicKey     String?   @map("public_key") // Base64-encoded public key
+  counter       BigInt?   @default(0) // Signature counter for replay protection
+  transports    String[]  @default([]) // usb, nfc, ble, internal
+  aaguid        String?   // Authenticator AAGUID
+  
+  lastUsedAt    DateTime? @map("last_used_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, tenantId])
+  @@index([userId, isActive])
+  @@index([type, isActive])
+  @@index([credentialId])
+  @@map("mfa_methods")
+}
+
+// ── MFA Attempts (Brute-force Protection) ─────────────────────────────────────
+
+model MfaAttempt {
+  id          String   @id @default(cuid())
+  userId      Int      @map("user_id")
+  tenantId    String   @map("tenant_id")
+  methodType  MfaType  @map("method_type")
+  success     Boolean
+  ipAddress   String   @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  failureReason String? @map("failure_reason")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, success, createdAt(sort: Desc)])
+  @@index([ipAddress, createdAt(sort: Desc)])
+  @@index([createdAt])
+  @@map("mfa_attempts")
+}
+
+// ── MFA Lockouts ──────────────────────────────────────────────────────────────
+
+model MfaLockout {
+  id          String   @id @default(cuid())
+  userId      Int      @unique @map("user_id")
+  tenantId    String   @map("tenant_id")
+  lockedUntil DateTime @map("locked_until")
+  reason      String   @default("Too many failed MFA attempts")
+  attempts    Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([userId, lockedUntil])
+  @@index([lockedUntil])
+  @@map("mfa_lockouts")
+}
+
+enum MfaType {
+  TOTP
+  WEBAUTHN
 }
 
 // ── Refresh Tokens ─────────────────────────────────────────────────────────────

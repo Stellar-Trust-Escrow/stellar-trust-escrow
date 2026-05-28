@@ -44,4 +44,14 @@ pub enum GovError {
     StakeCooldownActive = 24,
     NoStakeToWithdraw = 25,
     SlashExceedsStake = 26,
+
+    // Jury Voting Pool
+    JuryPoolNotFound = 27,
+    JuryPoolAlreadyResolved = 28,
+    JuryVotingNotStarted = 29,
+    JuryVotingClosed = 30,
+    JuryAlreadyVoted = 31,
+    JuryQuorumNotReached = 32,
+    JuryInsufficientLockedTokens = 33,
+    JuryPoolNotResolved = 34,
 }

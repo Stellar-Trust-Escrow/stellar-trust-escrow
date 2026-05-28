@@ -9,6 +9,7 @@
 import express from 'express';
 const router = express.Router();
 import adminAuth from '../middleware/adminAuth.js';
+import { requireMfa } from '../middleware/mfaAuth.js';
 import adminController from '../controllers/adminController.js';
 import tenantController from '../controllers/tenantController.js';
 import * as featureFlagController from '../controllers/featureFlagController.js';
@@ -43,15 +44,17 @@ router.get('/users/:address', adminController.getUserDetail);
  * @route  POST /api/admin/users/:address/suspend
  * @desc   Suspend a user; logs action to admin audit log
  * @body   { reason: string }
+ * @security Requires MFA verification
  */
-router.post('/users/:address/suspend', adminController.suspendUser);
+router.post('/users/:address/suspend', requireMfa, adminController.suspendUser);
 
 /**
  * @route  POST /api/admin/users/:address/ban
  * @desc   Permanently ban a user; logs action to admin audit log
  * @body   { reason: string }
+ * @security Requires MFA verification
  */
-router.post('/users/:address/ban', adminController.banUser);
+router.post('/users/:address/ban', requireMfa, adminController.banUser);
 
 // ── Disputes ───────────────────────────────────────────────────────────────────
 /**
@@ -65,8 +68,9 @@ router.get('/disputes', adminController.listDisputes);
  * @route  POST /api/admin/disputes/:id/resolve
  * @desc   Resolve an open dispute
  * @body   { clientAmount: string, freelancerAmount: string, notes: string }
+ * @security Requires MFA verification
  */
-router.post('/disputes/:id/resolve', adminController.resolveDispute);
+router.post('/disputes/:id/resolve', requireMfa, adminController.resolveDispute);
 
 // ── Settings & Fees ────────────────────────────────────────────────────────────
 /**
@@ -79,8 +83,9 @@ router.get('/settings', adminController.getSettings);
  * @route  PATCH /api/admin/settings
  * @desc   Update platform settings (fee percentage, etc.)
  * @body   { platformFeePercent: number }
+ * @security Requires MFA verification
  */
-router.patch('/settings', adminController.updateSettings);
+router.patch('/settings', requireMfa, adminController.updateSettings);
 
 // ── Audit Logs ─────────────────────────────────────────────────────────────────
 /**
@@ -101,8 +106,9 @@ router.get('/rate-limits', adminController.getRateLimits);
  * @route  PATCH /api/admin/rate-limits/:tier
  * @desc   Update rate limit max for a specific tier
  * @body   { max: number }
+ * @security Requires MFA verification
  */
-router.patch('/rate-limits/:tier', adminController.updateRateLimit);
+router.patch('/rate-limits/:tier', requireMfa, adminController.updateRateLimit);
 
 /**
  * @route  GET /api/admin/rate-limits/usage/:userId
@@ -136,8 +142,9 @@ router.get('/secrets/audit', (_req, res) => {
  * @route  POST /api/admin/secrets/rotate
  * @desc   Forces an immediate cache invalidation and re-fetch from the
  *         secrets backend. Use after rotating credentials in Vault.
+ * @security Requires MFA verification
  */
-router.post('/secrets/rotate', async (_req, res) => {
+router.post('/secrets/rotate', requireMfa, async (_req, res) => {
   try {
     await rotateSecrets();
     res.json({ ok: true, message: 'Secrets rotated successfully' });
@@ -158,8 +165,9 @@ router.get('/cache/stats', (_req, res) => {
  * @route  DELETE /api/admin/cache
  * @desc   Flush the entire cache (all tags and keys).
  * @body   { tag?: string, prefix?: string } — optional scope
+ * @security Requires MFA verification
  */
-router.delete('/cache', async (req, res) => {
+router.delete('/cache', requireMfa, async (req, res) => {
   try {
     const { tag, prefix } = req.body ?? {};
     if (tag) {

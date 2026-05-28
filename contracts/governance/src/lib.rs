@@ -35,8 +35,9 @@ mod types;
 
 pub use errors::GovError;
 pub use types::{
-    DataKey, FundPayload, GovConfig, ParameterPayload, Proposal, ProposalPayload, ProposalStatus,
-    ProposalType, UpgradePayload, Vote,
+    DataKey, FundPayload, GovConfig, JuryPool, JuryPoolConfig, JuryResolution, JuryVote,
+    ParameterPayload, Proposal, ProposalPayload, ProposalStatus, ProposalType, UpgradePayload,
+    Vote,
 };
 
 use soroban_sdk::{contract, contractimpl, token, Address, Env, String};
@@ -716,5 +717,380 @@ impl GovernanceContract {
         env.storage().persistent()
             .get(&DataKey::ArbitratorStake(address))
             .unwrap_or(0)
+    }
+
+    // ── Jury Voting Pool ──────────────────────────────────────────────────────
+
+    /// Default jury voting period: 7 days in seconds.
+    const DEFAULT_JURY_VOTING_PERIOD: u64 = 604_800;
+
+    /// Default minimum locked tokens to participate in jury voting.
+    const DEFAULT_MIN_LOCKED_TOKENS: i128 = 100;
+
+    /// Default quorum for jury pools: 5% of total locked tokens.
+    const DEFAULT_JURY_QUORUM_BPS: u32 = 500;
+
+    /// Initializes the jury pool configuration. Admin only.
+    ///
+    /// # Arguments
+    /// * `caller`             — must be admin.
+    /// * `voting_period`      — voting period duration in seconds.
+    /// * `min_locked_tokens`  — minimum locked tokens to participate.
+    /// * `quorum_bps`         — minimum % of locked tokens for quorum (basis points).
+    pub fn initialize_jury_config(
+        env: Env,
+        caller: Address,
+        voting_period: u64,
+        min_locked_tokens: i128,
+        quorum_bps: u32,
+    ) -> Result<(), GovError> {
+        Storage::require_initialized(&env)?;
+        caller.require_auth();
+
+        let admin = Storage::admin(&env)?;
+        if caller != admin {
+            return Err(GovError::AdminOnly);
+        }
+
+        if voting_period == 0 {
+            return Err(GovError::InvalidDuration);
+        }
+        if quorum_bps > 10_000 {
+            return Err(GovError::InvalidParameter);
+        }
+
+        let config = types::JuryPoolConfig {
+            voting_period,
+            min_locked_tokens,
+            quorum_bps,
+        };
+
+        env.storage().instance().set(&DataKey::JuryConfig, &config);
+        env.storage()
+            .instance()
+            .set(&DataKey::JuryPoolCounter, &0u64);
+        Storage::bump_instance(&env);
+        Ok(())
+    }
+
+    /// Creates a new jury voting pool for a disputed milestone.
+    ///
+    /// Anyone can create a jury pool for a disputed milestone. The disputed
+    /// amount is held by this contract until resolution.
+    ///
+    /// # Arguments
+    /// * `escrow_id`        — the escrow containing the disputed milestone.
+    /// * `milestone_id`     — the disputed milestone index.
+    /// * `client`           — the client address.
+    /// * `freelancer`       — the freelancer address.
+    /// * `disputed_amount`  — the amount in dispute.
+    /// * `token`            — the token address for the disputed funds.
+    ///
+    /// # Returns
+    /// The assigned `pool_id`.
+    pub fn create_jury_pool(
+        env: Env,
+        escrow_id: u64,
+        milestone_id: u64,
+        client: Address,
+        freelancer: Address,
+        disputed_amount: i128,
+        token: Address,
+    ) -> Result<u64, GovError> {
+        Storage::require_initialized(&env)?;
+
+        if disputed_amount <= 0 {
+            return Err(GovError::InvalidParameter);
+        }
+
+        // Get or create default jury config
+        let config: types::JuryPoolConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::JuryConfig)
+            .unwrap_or(types::JuryPoolConfig {
+                voting_period: Self::DEFAULT_JURY_VOTING_PERIOD,
+                min_locked_tokens: Self::DEFAULT_MIN_LOCKED_TOKENS,
+                quorum_bps: Self::DEFAULT_JURY_QUORUM_BPS,
+            });
+
+        let now = env.ledger().timestamp();
+        let voting_end = now + config.voting_period;
+
+        let pool_id: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::JuryPoolCounter)
+            .unwrap_or(0u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::JuryPoolCounter, &(pool_id + 1));
+
+        let pool = types::JuryPool {
+            pool_id,
+            milestone_id,
+            escrow_id,
+            client: client.clone(),
+            freelancer: freelancer.clone(),
+            disputed_amount,
+            token,
+            voting_start: now,
+            voting_end,
+            weight_for_client: 0,
+            weight_for_freelancer: 0,
+            total_locked_tokens: 0,
+            resolution: types::JuryResolution::Pending,
+            resolved_at: None,
+            created_at: now,
+        };
+
+        let key = DataKey::JuryPool(pool_id);
+        env.storage().persistent().set(&key, &pool);
+        Storage::bump_persistent(&env, &key);
+
+        events::emit_jury_pool_created(&env, pool_id, escrow_id, milestone_id, voting_end);
+        Ok(pool_id)
+    }
+
+    /// Casts a vote in a jury pool.
+    ///
+    /// Voting power is weighted by the amount of locked governance tokens.
+    /// Tokens must be locked (staked) in the governance contract to participate.
+    /// Each address can vote exactly once per pool.
+    ///
+    /// # Arguments
+    /// * `voter`        — must `require_auth()`.
+    /// * `pool_id`      — target jury pool.
+    /// * `for_client`   — `true` = vote for client, `false` = vote for freelancer.
+    pub fn cast_jury_vote(
+        env: Env,
+        voter: Address,
+        pool_id: u64,
+        for_client: bool,
+    ) -> Result<(), GovError> {
+        Storage::require_initialized(&env)?;
+        voter.require_auth();
+
+        let key = DataKey::JuryPool(pool_id);
+        let mut pool: types::JuryPool = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(GovError::JuryPoolNotFound)?;
+
+        if pool.resolution != types::JuryResolution::Pending {
+            return Err(GovError::JuryPoolAlreadyResolved);
+        }
+
+        let now = env.ledger().timestamp();
+
+        if now < pool.voting_start {
+            return Err(GovError::JuryVotingNotStarted);
+        }
+        if now > pool.voting_end {
+            return Err(GovError::JuryVotingClosed);
+        }
+
+        // Check if already voted
+        let voted_key = DataKey::JuryVoted(pool_id, voter.clone());
+        if env.storage().persistent().has(&voted_key) {
+            return Err(GovError::JuryAlreadyVoted);
+        }
+
+        // Get locked tokens (stake) as voting power
+        let locked_tokens: i128 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ArbitratorStake(voter.clone()))
+            .unwrap_or(0);
+
+        let config: types::JuryPoolConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::JuryConfig)
+            .unwrap_or(types::JuryPoolConfig {
+                voting_period: Self::DEFAULT_JURY_VOTING_PERIOD,
+                min_locked_tokens: Self::DEFAULT_MIN_LOCKED_TOKENS,
+                quorum_bps: Self::DEFAULT_JURY_QUORUM_BPS,
+            });
+
+        if locked_tokens < config.min_locked_tokens {
+            return Err(GovError::JuryInsufficientLockedTokens);
+        }
+
+        // Update pool weights
+        if for_client {
+            pool.weight_for_client += locked_tokens;
+        } else {
+            pool.weight_for_freelancer += locked_tokens;
+        }
+
+        pool.total_locked_tokens += locked_tokens;
+
+        // Mark as voted
+        env.storage().persistent().set(&voted_key, &true);
+        Storage::bump_persistent(&env, &voted_key);
+
+        // Save updated pool
+        env.storage().persistent().set(&key, &pool);
+        Storage::bump_persistent(&env, &key);
+
+        events::emit_jury_vote_cast(&env, pool_id, &voter, locked_tokens, for_client);
+        Ok(())
+    }
+
+    /// Resolves a jury pool after the voting period ends.
+    ///
+    /// Resolution rules:
+    /// - Quorum must be met (total locked tokens >= quorum threshold)
+    /// - Client wins if `weight_for_client > weight_for_freelancer`
+    /// - Freelancer wins otherwise (including ties)
+    ///
+    /// Anyone can call this after the voting period ends.
+    ///
+    /// # Arguments
+    /// * `pool_id` — the jury pool to resolve.
+    ///
+    /// # Returns
+    /// `true` if client wins, `false` if freelancer wins.
+    pub fn resolve_jury_pool(env: Env, pool_id: u64) -> Result<bool, GovError> {
+        Storage::require_initialized(&env)?;
+
+        let key = DataKey::JuryPool(pool_id);
+        let mut pool: types::JuryPool = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(GovError::JuryPoolNotFound)?;
+
+        if pool.resolution != types::JuryResolution::Pending {
+            // Already resolved — return cached result
+            return Ok(pool.resolution == types::JuryResolution::ClientWins);
+        }
+
+        let now = env.ledger().timestamp();
+        if now <= pool.voting_end {
+            return Err(GovError::JuryVotingClosed);
+        }
+
+        // Check quorum
+        let config: types::JuryPoolConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::JuryConfig)
+            .unwrap_or(types::JuryPoolConfig {
+                voting_period: Self::DEFAULT_JURY_VOTING_PERIOD,
+                min_locked_tokens: Self::DEFAULT_MIN_LOCKED_TOKENS,
+                quorum_bps: Self::DEFAULT_JURY_QUORUM_BPS,
+            });
+
+        // For quorum, we need a minimum participation threshold
+        // Since we don't track total possible locked tokens, we use a simple
+        // absolute minimum based on the disputed amount
+        let min_participation = pool.disputed_amount * config.quorum_bps as i128 / 10_000;
+        if pool.total_locked_tokens < min_participation {
+            return Err(GovError::JuryQuorumNotReached);
+        }
+
+        // Determine winner: client wins if they have strictly more weight
+        let client_wins = pool.weight_for_client > pool.weight_for_freelancer;
+
+        pool.resolution = if client_wins {
+            types::JuryResolution::ClientWins
+        } else {
+            types::JuryResolution::FreelancerWins
+        };
+        pool.resolved_at = Some(now);
+
+        env.storage().persistent().set(&key, &pool);
+        Storage::bump_persistent(&env, &key);
+
+        events::emit_jury_pool_resolved(
+            &env,
+            pool_id,
+            client_wins,
+            pool.weight_for_client,
+            pool.weight_for_freelancer,
+            pool.total_locked_tokens,
+        );
+
+        Ok(client_wins)
+    }
+
+    /// Distributes the disputed funds according to the jury pool resolution.
+    ///
+    /// Can only be called after the pool is resolved. Transfers the disputed
+    /// amount to the winner (client or freelancer).
+    ///
+    /// Anyone can call this after resolution.
+    ///
+    /// # Arguments
+    /// * `pool_id` — the resolved jury pool.
+    pub fn distribute_jury_funds(env: Env, pool_id: u64) -> Result<(), GovError> {
+        Storage::require_initialized(&env)?;
+
+        let key = DataKey::JuryPool(pool_id);
+        let pool: types::JuryPool = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(GovError::JuryPoolNotFound)?;
+
+        if pool.resolution == types::JuryResolution::Pending {
+            return Err(GovError::JuryPoolNotResolved);
+        }
+
+        let recipient = match pool.resolution {
+            types::JuryResolution::ClientWins => pool.client.clone(),
+            types::JuryResolution::FreelancerWins => pool.freelancer.clone(),
+            types::JuryResolution::Pending => return Err(GovError::JuryPoolNotResolved),
+        };
+
+        // Transfer disputed funds from governance contract to winner
+        token::Client::new(&env, &pool.token).transfer(
+            &env.current_contract_address(),
+            &recipient,
+            &pool.disputed_amount,
+        );
+
+        events::emit_jury_funds_distributed(&env, pool_id, &recipient, pool.disputed_amount);
+        Ok(())
+    }
+
+    /// Returns a jury pool by ID.
+    pub fn get_jury_pool(env: Env, pool_id: u64) -> Result<types::JuryPool, GovError> {
+        Storage::require_initialized(&env)?;
+        let key = DataKey::JuryPool(pool_id);
+        env.storage()
+            .persistent()
+            .get(&key)
+            .ok_or(GovError::JuryPoolNotFound)
+    }
+
+    /// Returns the jury pool configuration.
+    pub fn get_jury_config(env: Env) -> types::JuryPoolConfig {
+        env.storage()
+            .instance()
+            .get(&DataKey::JuryConfig)
+            .unwrap_or(types::JuryPoolConfig {
+                voting_period: Self::DEFAULT_JURY_VOTING_PERIOD,
+                min_locked_tokens: Self::DEFAULT_MIN_LOCKED_TOKENS,
+                quorum_bps: Self::DEFAULT_JURY_QUORUM_BPS,
+            })
+    }
+
+    /// Returns the total number of jury pools created.
+    pub fn jury_pool_count(env: Env) -> u64 {
+        env.storage()
+            .instance()
+            .get(&DataKey::JuryPoolCounter)
+            .unwrap_or(0u64)
+    }
+
+    /// Returns whether `voter` has voted on `pool_id`.
+    pub fn has_jury_voted(env: Env, pool_id: u64, voter: Address) -> bool {
+        env.storage()
+            .persistent()
+            .has(&DataKey::JuryVoted(pool_id, voter))
     }
 }

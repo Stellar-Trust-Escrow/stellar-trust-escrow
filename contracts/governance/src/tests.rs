@@ -745,4 +745,468 @@ mod tests {
         let p = client.get_proposal(&id);
         assert_eq!(p.status, ProposalStatus::Executed);
     }
+
+    // ── Jury Voting Pool Tests ────────────────────────────────────────────────
+
+    #[test]
+    fn test_create_jury_pool() {
+        let (env, admin, ta, token, client) = setup();
+
+        // Initialize jury config
+        client.initialize_jury_config(&admin, &604_800u64, &100i128, &500u32);
+
+        let client_addr = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let disputed_amount = 5_000i128;
+
+        // Fund the governance contract with disputed amount
+        mint(&env, &ta, &token, &client.address, disputed_amount);
+
+        let pool_id = client.create_jury_pool(
+            &1u64,
+            &0u64,
+            &client_addr,
+            &freelancer,
+            &disputed_amount,
+            &token,
+        );
+
+        assert_eq!(pool_id, 0);
+        assert_eq!(client.jury_pool_count(), 1);
+
+        let pool = client.get_jury_pool(&pool_id);
+        assert_eq!(pool.escrow_id, 1);
+        assert_eq!(pool.milestone_id, 0);
+        assert_eq!(pool.disputed_amount, disputed_amount);
+        assert_eq!(pool.weight_for_client, 0);
+        assert_eq!(pool.weight_for_freelancer, 0);
+    }
+
+    #[test]
+    fn test_cast_jury_vote_for_client() {
+        let (env, admin, ta, token, client) = setup();
+
+        client.initialize_jury_config(&admin, &604_800u64, &100i128, &500u32);
+
+        let client_addr = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let voter = Address::generate(&env);
+
+        mint(&env, &ta, &token, &client.address, 5_000);
+
+        let pool_id = client.create_jury_pool(
+            &1u64,
+            &0u64,
+            &client_addr,
+            &freelancer,
+            &5_000i128,
+            &token,
+        );
+
+        // Voter stakes tokens to get voting power
+        mint(&env, &ta, &token, &voter, 1_000);
+        client.stake_arbitrator(&voter, &1_000i128);
+
+        // Cast vote for client
+        client.cast_jury_vote(&voter, &pool_id, &true);
+
+        let pool = client.get_jury_pool(&pool_id);
+        assert_eq!(pool.weight_for_client, 1_000);
+        assert_eq!(pool.weight_for_freelancer, 0);
+        assert_eq!(pool.total_locked_tokens, 1_000);
+        assert!(client.has_jury_voted(&pool_id, &voter));
+    }
+
+    #[test]
+    fn test_cast_jury_vote_for_freelancer() {
+        let (env, admin, ta, token, client) = setup();
+
+        client.initialize_jury_config(&admin, &604_800u64, &100i128, &500u32);
+
+        let client_addr = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let voter = Address::generate(&env);
+
+        mint(&env, &ta, &token, &client.address, 5_000);
+
+        let pool_id = client.create_jury_pool(
+            &1u64,
+            &0u64,
+            &client_addr,
+            &freelancer,
+            &5_000i128,
+            &token,
+        );
+
+        mint(&env, &ta, &token, &voter, 500);
+        client.stake_arbitrator(&voter, &500i128);
+
+        client.cast_jury_vote(&voter, &pool_id, &false);
+
+        let pool = client.get_jury_pool(&pool_id);
+        assert_eq!(pool.weight_for_client, 0);
+        assert_eq!(pool.weight_for_freelancer, 500);
+        assert_eq!(pool.total_locked_tokens, 500);
+    }
+
+    #[test]
+    fn test_jury_double_vote_fails() {
+        let (env, admin, ta, token, client) = setup();
+
+        client.initialize_jury_config(&admin, &604_800u64, &100i128, &500u32);
+
+        let client_addr = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let voter = Address::generate(&env);
+
+        mint(&env, &ta, &token, &client.address, 5_000);
+
+        let pool_id = client.create_jury_pool(
+            &1u64,
+            &0u64,
+            &client_addr,
+            &freelancer,
+            &5_000i128,
+            &token,
+        );
+
+        mint(&env, &ta, &token, &voter, 1_000);
+        client.stake_arbitrator(&voter, &1_000i128);
+
+        client.cast_jury_vote(&voter, &pool_id, &true);
+
+        let result = client.try_cast_jury_vote(&voter, &pool_id, &false);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_jury_vote_insufficient_stake_fails() {
+        let (env, admin, ta, token, client) = setup();
+
+        client.initialize_jury_config(&admin, &604_800u64, &100i128, &500u32);
+
+        let client_addr = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let voter = Address::generate(&env);
+
+        mint(&env, &ta, &token, &client.address, 5_000);
+
+        let pool_id = client.create_jury_pool(
+            &1u64,
+            &0u64,
+            &client_addr,
+            &freelancer,
+            &5_000i128,
+            &token,
+        );
+
+        // Voter has only 50 tokens staked, below minimum of 100
+        mint(&env, &ta, &token, &voter, 50);
+        client.stake_arbitrator(&voter, &50i128);
+
+        let result = client.try_cast_jury_vote(&voter, &pool_id, &true);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_resolve_jury_pool_client_wins() {
+        let (env, admin, ta, token, client) = setup();
+
+        client.initialize_jury_config(&admin, &604_800u64, &100i128, &500u32);
+
+        let client_addr = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let voter1 = Address::generate(&env);
+        let voter2 = Address::generate(&env);
+
+        mint(&env, &ta, &token, &client.address, 5_000);
+
+        let pool_id = client.create_jury_pool(
+            &1u64,
+            &0u64,
+            &client_addr,
+            &freelancer,
+            &5_000i128,
+            &token,
+        );
+
+        // voter1: 2000 tokens for client
+        mint(&env, &ta, &token, &voter1, 2_000);
+        client.stake_arbitrator(&voter1, &2_000i128);
+        client.cast_jury_vote(&voter1, &pool_id, &true);
+
+        // voter2: 500 tokens for freelancer
+        mint(&env, &ta, &token, &voter2, 500);
+        client.stake_arbitrator(&voter2, &500i128);
+        client.cast_jury_vote(&voter2, &pool_id, &false);
+
+        // Advance past voting period
+        advance(&env, 604_801);
+
+        let client_wins = client.resolve_jury_pool(&pool_id);
+        assert!(client_wins);
+
+        let pool = client.get_jury_pool(&pool_id);
+        assert_eq!(pool.weight_for_client, 2_000);
+        assert_eq!(pool.weight_for_freelancer, 500);
+        assert!(pool.resolved_at.is_some());
+    }
+
+    #[test]
+    fn test_resolve_jury_pool_freelancer_wins() {
+        let (env, admin, ta, token, client) = setup();
+
+        client.initialize_jury_config(&admin, &604_800u64, &100i128, &500u32);
+
+        let client_addr = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let voter1 = Address::generate(&env);
+        let voter2 = Address::generate(&env);
+
+        mint(&env, &ta, &token, &client.address, 5_000);
+
+        let pool_id = client.create_jury_pool(
+            &1u64,
+            &0u64,
+            &client_addr,
+            &freelancer,
+            &5_000i128,
+            &token,
+        );
+
+        // voter1: 800 tokens for client
+        mint(&env, &ta, &token, &voter1, 800);
+        client.stake_arbitrator(&voter1, &800i128);
+        client.cast_jury_vote(&voter1, &pool_id, &true);
+
+        // voter2: 1500 tokens for freelancer
+        mint(&env, &ta, &token, &voter2, 1_500);
+        client.stake_arbitrator(&voter2, &1_500i128);
+        client.cast_jury_vote(&voter2, &pool_id, &false);
+
+        advance(&env, 604_801);
+
+        let client_wins = client.resolve_jury_pool(&pool_id);
+        assert!(!client_wins);
+
+        let pool = client.get_jury_pool(&pool_id);
+        assert_eq!(pool.weight_for_client, 800);
+        assert_eq!(pool.weight_for_freelancer, 1_500);
+    }
+
+    #[test]
+    fn test_resolve_before_voting_ends_fails() {
+        let (env, admin, ta, token, client) = setup();
+
+        client.initialize_jury_config(&admin, &604_800u64, &100i128, &500u32);
+
+        let client_addr = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+
+        mint(&env, &ta, &token, &client.address, 5_000);
+
+        let pool_id = client.create_jury_pool(
+            &1u64,
+            &0u64,
+            &client_addr,
+            &freelancer,
+            &5_000i128,
+            &token,
+        );
+
+        let result = client.try_resolve_jury_pool(&pool_id);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_resolve_jury_pool_quorum_not_reached() {
+        let (env, admin, ta, token, client) = setup();
+
+        client.initialize_jury_config(&admin, &604_800u64, &100i128, &500u32);
+
+        let client_addr = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let voter = Address::generate(&env);
+
+        mint(&env, &ta, &token, &client.address, 10_000);
+
+        let pool_id = client.create_jury_pool(
+            &1u64,
+            &0u64,
+            &client_addr,
+            &freelancer,
+            &10_000i128,
+            &token,
+        );
+
+        // Only 100 tokens locked, but quorum requires 5% of 10_000 = 500
+        mint(&env, &ta, &token, &voter, 100);
+        client.stake_arbitrator(&voter, &100i128);
+        client.cast_jury_vote(&voter, &pool_id, &true);
+
+        advance(&env, 604_801);
+
+        let result = client.try_resolve_jury_pool(&pool_id);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_distribute_jury_funds_client_wins() {
+        let (env, admin, ta, token, client) = setup();
+
+        client.initialize_jury_config(&admin, &604_800u64, &100i128, &500u32);
+
+        let client_addr = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let voter = Address::generate(&env);
+
+        let disputed_amount = 5_000i128;
+        mint(&env, &ta, &token, &client.address, disputed_amount);
+
+        let pool_id = client.create_jury_pool(
+            &1u64,
+            &0u64,
+            &client_addr,
+            &freelancer,
+            &disputed_amount,
+            &token,
+        );
+
+        mint(&env, &ta, &token, &voter, 1_000);
+        client.stake_arbitrator(&voter, &1_000i128);
+        client.cast_jury_vote(&voter, &pool_id, &true);
+
+        advance(&env, 604_801);
+        client.resolve_jury_pool(&pool_id);
+
+        client.distribute_jury_funds(&pool_id);
+
+        let balance = token::Client::new(&env, &token).balance(&client_addr);
+        assert_eq!(balance, disputed_amount);
+    }
+
+    #[test]
+    fn test_distribute_jury_funds_freelancer_wins() {
+        let (env, admin, ta, token, client) = setup();
+
+        client.initialize_jury_config(&admin, &604_800u64, &100i128, &500u32);
+
+        let client_addr = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let voter = Address::generate(&env);
+
+        let disputed_amount = 5_000i128;
+        mint(&env, &ta, &token, &client.address, disputed_amount);
+
+        let pool_id = client.create_jury_pool(
+            &1u64,
+            &0u64,
+            &client_addr,
+            &freelancer,
+            &disputed_amount,
+            &token,
+        );
+
+        mint(&env, &ta, &token, &voter, 1_000);
+        client.stake_arbitrator(&voter, &1_000i128);
+        client.cast_jury_vote(&voter, &pool_id, &false);
+
+        advance(&env, 604_801);
+        client.resolve_jury_pool(&pool_id);
+
+        client.distribute_jury_funds(&pool_id);
+
+        let balance = token::Client::new(&env, &token).balance(&freelancer);
+        assert_eq!(balance, disputed_amount);
+    }
+
+    #[test]
+    fn test_distribute_before_resolution_fails() {
+        let (env, admin, ta, token, client) = setup();
+
+        client.initialize_jury_config(&admin, &604_800u64, &100i128, &500u32);
+
+        let client_addr = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+
+        mint(&env, &ta, &token, &client.address, 5_000);
+
+        let pool_id = client.create_jury_pool(
+            &1u64,
+            &0u64,
+            &client_addr,
+            &freelancer,
+            &5_000i128,
+            &token,
+        );
+
+        let result = client.try_distribute_jury_funds(&pool_id);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_jury_pool_full_lifecycle() {
+        let (env, admin, ta, token, client) = setup();
+
+        // Initialize jury config
+        client.initialize_jury_config(&admin, &604_800u64, &100i128, &500u32);
+
+        let client_addr = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let voter1 = Address::generate(&env);
+        let voter2 = Address::generate(&env);
+        let voter3 = Address::generate(&env);
+
+        let disputed_amount = 10_000i128;
+        mint(&env, &ta, &token, &client.address, disputed_amount);
+
+        // 1. Create jury pool
+        let pool_id = client.create_jury_pool(
+            &42u64,
+            &3u64,
+            &client_addr,
+            &freelancer,
+            &disputed_amount,
+            &token,
+        );
+
+        assert_eq!(pool_id, 0);
+
+        // 2. Multiple voters stake and vote
+        // voter1: 3000 tokens for client
+        mint(&env, &ta, &token, &voter1, 3_000);
+        client.stake_arbitrator(&voter1, &3_000i128);
+        client.cast_jury_vote(&voter1, &pool_id, &true);
+
+        // voter2: 2000 tokens for freelancer
+        mint(&env, &ta, &token, &voter2, 2_000);
+        client.stake_arbitrator(&voter2, &2_000i128);
+        client.cast_jury_vote(&voter2, &pool_id, &false);
+
+        // voter3: 1500 tokens for client
+        mint(&env, &ta, &token, &voter3, 1_500);
+        client.stake_arbitrator(&voter3, &1_500i128);
+        client.cast_jury_vote(&voter3, &pool_id, &true);
+
+        let pool = client.get_jury_pool(&pool_id);
+        assert_eq!(pool.weight_for_client, 4_500);
+        assert_eq!(pool.weight_for_freelancer, 2_000);
+        assert_eq!(pool.total_locked_tokens, 6_500);
+
+        // 3. Advance past voting period
+        advance(&env, 604_801);
+
+        // 4. Resolve pool
+        let client_wins = client.resolve_jury_pool(&pool_id);
+        assert!(client_wins);
+
+        // 5. Distribute funds
+        client.distribute_jury_funds(&pool_id);
+
+        let client_balance = token::Client::new(&env, &token).balance(&client_addr);
+        assert_eq!(client_balance, disputed_amount);
+
+        let freelancer_balance = token::Client::new(&env, &token).balance(&freelancer);
+        assert_eq!(freelancer_balance, 0);
+    }
 }
