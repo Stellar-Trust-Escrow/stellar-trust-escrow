@@ -31,3 +31,17 @@ pub fn emit_proposal_defeated(env: &Env, proposal_id: u64) {
     env.events()
         .publish((symbol_short!("prop_def"), proposal_id), ());
 }
+
+pub fn emit_deposit_refunded(env: &Env, proposal_id: u64, proposer: &Address, amount: i128) {
+    env.events().publish(
+        (symbol_short!("dep_ref"), proposal_id),
+        (proposer.clone(), amount),
+    );
+}
+
+pub fn emit_deposit_slashed(env: &Env, proposal_id: u64, treasury: &Address, amount: i128) {
+    env.events().publish(
+        (symbol_short!("dep_slh"), proposal_id),
+        (treasury.clone(), amount),
+    );
+}

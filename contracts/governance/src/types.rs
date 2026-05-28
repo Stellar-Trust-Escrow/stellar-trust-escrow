@@ -154,4 +154,8 @@ pub enum DataKey {
     WithdrawCooldown(Address),
     /// Slash record counter
     SlashCounter,
+    /// Fee deposit locked for a proposal — key: proposal_id, value: i128
+    ProposalDeposit(u64),
+    /// Treasury address for slashed fee deposits — instance storage
+    Treasury,
 }

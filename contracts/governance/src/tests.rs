@@ -19,6 +19,7 @@ mod tests {
     const QUORUM_BPS: u32 = 400; // 4%
     const APPROVAL_BPS: u32 = 5_100; // 51%
     const THRESHOLD: i128 = 100;
+    const PROPOSER_DEPOSIT: i128 = 500; // fee locked on proposal creation
 
     fn setup() -> (
         Env,
@@ -101,7 +102,7 @@ mod tests {
     fn test_create_text_proposal() {
         let (env, _admin, ta, token, client) = setup();
         let proposer = Address::generate(&env);
-        mint(&env, &ta, &token, &proposer, THRESHOLD);
+        mint(&env, &ta, &token, &proposer, THRESHOLD + PROPOSER_DEPOSIT);
 
         let id = client.create_proposal(
             &proposer,
@@ -141,7 +142,7 @@ mod tests {
     fn test_create_proposal_mismatched_payload_fails() {
         let (env, _admin, ta, token, client) = setup();
         let proposer = Address::generate(&env);
-        mint(&env, &ta, &token, &proposer, THRESHOLD);
+        mint(&env, &ta, &token, &proposer, THRESHOLD + PROPOSER_DEPOSIT);
 
         // ParameterChange type but Text payload
         let result = client.try_create_proposal(
@@ -162,7 +163,7 @@ mod tests {
         let (env, _admin, ta, token, client) = setup();
         let proposer = Address::generate(&env);
         let voter = Address::generate(&env);
-        mint(&env, &ta, &token, &proposer, THRESHOLD);
+        mint(&env, &ta, &token, &proposer, THRESHOLD + PROPOSER_DEPOSIT);
         mint(&env, &ta, &token, &voter, 1_000);
 
         let id = client.create_proposal(
@@ -188,7 +189,7 @@ mod tests {
         let (env, _admin, ta, token, client) = setup();
         let proposer = Address::generate(&env);
         let voter = Address::generate(&env);
-        mint(&env, &ta, &token, &proposer, THRESHOLD);
+        mint(&env, &ta, &token, &proposer, THRESHOLD + PROPOSER_DEPOSIT);
         mint(&env, &ta, &token, &voter, 500);
 
         let id = client.create_proposal(
@@ -212,7 +213,7 @@ mod tests {
         let (env, _admin, ta, token, client) = setup();
         let proposer = Address::generate(&env);
         let voter = Address::generate(&env);
-        mint(&env, &ta, &token, &proposer, THRESHOLD);
+        mint(&env, &ta, &token, &proposer, THRESHOLD + PROPOSER_DEPOSIT);
         mint(&env, &ta, &token, &voter, 1_000);
 
         let id = client.create_proposal(
@@ -236,7 +237,7 @@ mod tests {
         let (env, _admin, ta, token, client) = setup();
         let proposer = Address::generate(&env);
         let voter = Address::generate(&env);
-        mint(&env, &ta, &token, &proposer, THRESHOLD);
+        mint(&env, &ta, &token, &proposer, THRESHOLD + PROPOSER_DEPOSIT);
         mint(&env, &ta, &token, &voter, 1_000);
 
         let id = client.create_proposal(
@@ -258,7 +259,7 @@ mod tests {
         let (env, _admin, ta, token, client) = setup();
         let proposer = Address::generate(&env);
         let voter = Address::generate(&env);
-        mint(&env, &ta, &token, &proposer, THRESHOLD);
+        mint(&env, &ta, &token, &proposer, THRESHOLD + PROPOSER_DEPOSIT);
         mint(&env, &ta, &token, &voter, 1_000);
 
         let id = client.create_proposal(
@@ -284,7 +285,7 @@ mod tests {
         let voter = Address::generate(&env);
 
         // Mint enough for quorum: supply = 10_000, quorum = 4% = 400
-        mint(&env, &ta, &token, &proposer, THRESHOLD);
+        mint(&env, &ta, &token, &proposer, THRESHOLD + PROPOSER_DEPOSIT);
         mint(&env, &ta, &token, &voter, 10_000);
 
         let id = client.create_proposal(
@@ -311,7 +312,7 @@ mod tests {
         let voter = Address::generate(&env);
 
         // Supply = 100_000, quorum = 4% = 4_000, voter only has 100
-        mint(&env, &ta, &token, &proposer, THRESHOLD);
+        mint(&env, &ta, &token, &proposer, THRESHOLD + PROPOSER_DEPOSIT);
         mint(&env, &ta, &token, &voter, 100);
         // Mint rest to someone else so supply is large
         let whale = Address::generate(&env);
@@ -338,7 +339,7 @@ mod tests {
     fn test_finalize_before_vote_end_fails() {
         let (env, _admin, ta, token, client) = setup();
         let proposer = Address::generate(&env);
-        mint(&env, &ta, &token, &proposer, THRESHOLD);
+        mint(&env, &ta, &token, &proposer, THRESHOLD + PROPOSER_DEPOSIT);
 
         let id = client.create_proposal(
             &proposer,
@@ -361,7 +362,7 @@ mod tests {
         let (env, _admin, ta, token, client) = setup();
         let proposer = Address::generate(&env);
         let voter = Address::generate(&env);
-        mint(&env, &ta, &token, &proposer, THRESHOLD);
+        mint(&env, &ta, &token, &proposer, THRESHOLD + PROPOSER_DEPOSIT);
         mint(&env, &ta, &token, &voter, 10_000);
 
         let id = client.create_proposal(
@@ -388,7 +389,7 @@ mod tests {
         let (env, _admin, ta, token, client) = setup();
         let proposer = Address::generate(&env);
         let voter = Address::generate(&env);
-        mint(&env, &ta, &token, &proposer, THRESHOLD);
+        mint(&env, &ta, &token, &proposer, THRESHOLD + PROPOSER_DEPOSIT);
         mint(&env, &ta, &token, &voter, 10_000);
 
         let id = client.create_proposal(
@@ -420,7 +421,7 @@ mod tests {
         let recipient = Address::generate(&env);
         let contract_id = client.address.clone();
 
-        mint(&env, &ta, &token, &proposer, THRESHOLD);
+        mint(&env, &ta, &token, &proposer, THRESHOLD + PROPOSER_DEPOSIT);
         mint(&env, &ta, &token, &voter, 10_000);
         // Fund the governance treasury
         mint(&env, &ta, &token, &contract_id, 5_000);
@@ -457,7 +458,7 @@ mod tests {
     fn test_proposer_can_cancel() {
         let (env, _admin, ta, token, client) = setup();
         let proposer = Address::generate(&env);
-        mint(&env, &ta, &token, &proposer, THRESHOLD);
+        mint(&env, &ta, &token, &proposer, THRESHOLD + PROPOSER_DEPOSIT);
 
         let id = client.create_proposal(
             &proposer,
@@ -477,7 +478,7 @@ mod tests {
     fn test_admin_can_cancel() {
         let (env, admin, ta, token, client) = setup();
         let proposer = Address::generate(&env);
-        mint(&env, &ta, &token, &proposer, THRESHOLD);
+        mint(&env, &ta, &token, &proposer, THRESHOLD + PROPOSER_DEPOSIT);
 
         let id = client.create_proposal(
             &proposer,
@@ -498,7 +499,7 @@ mod tests {
         let (env, _admin, ta, token, client) = setup();
         let proposer = Address::generate(&env);
         let stranger = Address::generate(&env);
-        mint(&env, &ta, &token, &proposer, THRESHOLD);
+        mint(&env, &ta, &token, &proposer, THRESHOLD + PROPOSER_DEPOSIT);
 
         let id = client.create_proposal(
             &proposer,
@@ -529,7 +530,7 @@ mod tests {
         let whale = Address::generate(&env);
 
         // total supply = 100_000; 10% quorum = 10_000; voter only has 500 (< 10%)
-        mint(&env, &ta, &token, &proposer, THRESHOLD);
+        mint(&env, &ta, &token, &proposer, THRESHOLD + PROPOSER_DEPOSIT);
         mint(&env, &ta, &token, &voter, 500);
         mint(&env, &ta, &token, &whale, 99_400);
 
@@ -564,7 +565,7 @@ mod tests {
         let (env, _admin, ta, token, client) = setup();
         let proposer = Address::generate(&env);
         let voter = Address::generate(&env);
-        mint(&env, &ta, &token, &proposer, THRESHOLD);
+        mint(&env, &ta, &token, &proposer, THRESHOLD + PROPOSER_DEPOSIT);
         mint(&env, &ta, &token, &voter, 1_000);
 
         let id = client.create_proposal(
@@ -588,7 +589,7 @@ mod tests {
     fn test_double_cancel_fails() {
         let (env, _admin, ta, token, client) = setup();
         let proposer = Address::generate(&env);
-        mint(&env, &ta, &token, &proposer, THRESHOLD);
+        mint(&env, &ta, &token, &proposer, THRESHOLD + PROPOSER_DEPOSIT);
 
         let id = client.create_proposal(
             &proposer,
@@ -643,10 +644,10 @@ mod tests {
         let voter_for = Address::generate(&env);
         let voter_against = Address::generate(&env);
 
-        // Supply: proposer=100, for=8_000, against=1_000 → total=9_100
+        // Supply: proposer=600 (threshold+deposit), for=8_000, against=1_000; snapshot=9_100
         // Quorum required: 9_100 * 4% = 364 → total votes 9_000 ≥ 364 ✓
         // Approval: 8_000 / 9_000 ≈ 88.9% ≥ 51% ✓
-        mint(&env, &ta, &token, &proposer, THRESHOLD);
+        mint(&env, &ta, &token, &proposer, THRESHOLD + PROPOSER_DEPOSIT);
         mint(&env, &ta, &token, &voter_for, 8_000);
         mint(&env, &ta, &token, &voter_against, 1_000);
 
@@ -718,7 +719,7 @@ mod tests {
         let (env, _admin, ta, token, client) = setup();
         let proposer = Address::generate(&env);
         let voter = Address::generate(&env);
-        mint(&env, &ta, &token, &proposer, THRESHOLD);
+        mint(&env, &ta, &token, &proposer, THRESHOLD + PROPOSER_DEPOSIT);
         mint(&env, &ta, &token, &voter, 10_000);
 
         let payload = ProposalPayload::Parameter(ParameterPayload {
@@ -744,5 +745,95 @@ mod tests {
 
         let p = client.get_proposal(&id);
         assert_eq!(p.status, ProposalStatus::Executed);
+    }
+
+    // ── Fee deposit (Issue #895) ──────────────────────────────────────────────
+
+    #[test]
+    fn test_fee_deposit_refunded_on_quorum_met() {
+        let (env, _admin, ta, token, client) = setup();
+        let proposer = Address::generate(&env);
+        let voter = Address::generate(&env);
+        // supply_snapshot = 10_000; 15% fee quorum = 1_500; voter has 2_000 ≥ 1_500
+        mint(&env, &ta, &token, &proposer, THRESHOLD + PROPOSER_DEPOSIT);
+        mint(&env, &ta, &token, &voter, 2_000);
+
+        let id = client.create_proposal(
+            &proposer,
+            &str(&env, "Deposit refund test"),
+            &str(&env, "Verify deposit refunded when quorum met"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
+            &10_000i128,
+        );
+
+        let tok = token::Client::new(&env, &token);
+        // 500 should be locked: proposer has THRESHOLD remaining
+        assert_eq!(tok.balance(&proposer), THRESHOLD);
+
+        advance(&env, VOTING_DELAY + 1);
+        client.cast_vote(&voter, &id, &true);
+        advance(&env, VOTING_PERIOD);
+        client.finalize_proposal(&id);
+
+        // Deposit refunded — proposer is whole again
+        assert_eq!(tok.balance(&proposer), THRESHOLD + PROPOSER_DEPOSIT);
+    }
+
+    #[test]
+    fn test_fee_deposit_slashed_to_treasury_on_low_quorum() {
+        let (env, admin, ta, token, client) = setup();
+        let treasury = Address::generate(&env);
+        client.set_treasury(&admin, &treasury);
+
+        let proposer = Address::generate(&env);
+        let voter = Address::generate(&env);
+        // supply_snapshot = 10_000; fee quorum = 1_500; voter has 100 < 1_500
+        mint(&env, &ta, &token, &proposer, THRESHOLD + PROPOSER_DEPOSIT);
+        mint(&env, &ta, &token, &voter, 100);
+
+        let id = client.create_proposal(
+            &proposer,
+            &str(&env, "Low participation"),
+            &str(&env, "Verify deposit slashed when quorum not met"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
+            &10_000i128,
+        );
+
+        advance(&env, VOTING_DELAY + 1);
+        client.cast_vote(&voter, &id, &true);
+        advance(&env, VOTING_PERIOD);
+        client.finalize_proposal(&id);
+
+        let tok = token::Client::new(&env, &token);
+        // Treasury received the 500 deposit
+        assert_eq!(tok.balance(&treasury), PROPOSER_DEPOSIT);
+        // Proposer keeps only what was left after deposit, no refund
+        assert_eq!(tok.balance(&proposer), THRESHOLD);
+    }
+
+    #[test]
+    fn test_fee_deposit_refunded_on_cancel() {
+        let (env, _admin, ta, token, client) = setup();
+        let proposer = Address::generate(&env);
+        mint(&env, &ta, &token, &proposer, THRESHOLD + PROPOSER_DEPOSIT);
+
+        let id = client.create_proposal(
+            &proposer,
+            &str(&env, "Cancel refund"),
+            &str(&env, "Verify deposit refunded on cancel"),
+            &ProposalType::TextProposal,
+            &ProposalPayload::Text,
+            &10_000i128,
+        );
+
+        let tok = token::Client::new(&env, &token);
+        assert_eq!(tok.balance(&proposer), THRESHOLD); // 500 locked
+
+        client.cancel_proposal(&proposer, &id);
+
+        // Deposit returned on cancel
+        assert_eq!(tok.balance(&proposer), THRESHOLD + PROPOSER_DEPOSIT);
     }
 }

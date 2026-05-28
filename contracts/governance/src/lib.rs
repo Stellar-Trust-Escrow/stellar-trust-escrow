@@ -267,6 +267,16 @@ impl GovernanceContract {
 
         let id = Storage::next_proposal_id(&env);
 
+        // Lock proposer fee deposit
+        token::Client::new(&env, &config.token).transfer(
+            &proposer,
+            &env.current_contract_address(),
+            &Self::PROPOSER_FEE,
+        );
+        let deposit_key = DataKey::ProposalDeposit(id);
+        env.storage().persistent().set(&deposit_key, &Self::PROPOSER_FEE);
+        Storage::bump_persistent(&env, &deposit_key);
+
         let proposal = Proposal {
             id,
             proposal_type,
@@ -382,6 +392,41 @@ impl GovernanceContract {
         }
 
         Storage::save_proposal(&env, &proposal);
+
+        // Process fee deposit: refund if participation ≥ 15%, else slash to treasury
+        let deposit_key = DataKey::ProposalDeposit(proposal_id);
+        if let Some(deposit) = env.storage().persistent().get::<DataKey, i128>(&deposit_key) {
+            if deposit > 0 {
+                let total_votes = proposal.votes_for + proposal.votes_against;
+                let fee_quorum = proposal
+                    .total_supply_snapshot
+                    .saturating_mul(Self::FEE_DEPOSIT_QUORUM_BPS as i128)
+                    / 10_000;
+                let token_client = token::Client::new(&env, &config.token);
+                if total_votes >= fee_quorum {
+                    token_client.transfer(
+                        &env.current_contract_address(),
+                        &proposal.proposer,
+                        &deposit,
+                    );
+                    events::emit_deposit_refunded(&env, proposal_id, &proposal.proposer, deposit);
+                } else {
+                    let treasury: Address = env
+                        .storage()
+                        .instance()
+                        .get(&DataKey::Treasury)
+                        .unwrap_or_else(|| Storage::admin(&env).unwrap());
+                    token_client.transfer(
+                        &env.current_contract_address(),
+                        &treasury,
+                        &deposit,
+                    );
+                    events::emit_deposit_slashed(&env, proposal_id, &treasury, deposit);
+                }
+                env.storage().persistent().remove(&deposit_key);
+            }
+        }
+
         Ok(proposal.status)
     }
 
@@ -473,6 +518,21 @@ impl GovernanceContract {
         proposal.status = ProposalStatus::Cancelled;
         Storage::save_proposal(&env, &proposal);
         events::emit_proposal_cancelled(&env, proposal_id, &caller);
+
+        // Refund fee deposit to proposer on cancel
+        let deposit_key = DataKey::ProposalDeposit(proposal_id);
+        if let Some(deposit) = env.storage().persistent().get::<DataKey, i128>(&deposit_key) {
+            if deposit > 0 {
+                let config = Storage::config(&env)?;
+                token::Client::new(&env, &config.token).transfer(
+                    &env.current_contract_address(),
+                    &proposal.proposer,
+                    &deposit,
+                );
+                env.storage().persistent().remove(&deposit_key);
+            }
+        }
+
         Ok(())
     }
 
@@ -496,6 +556,19 @@ impl GovernanceContract {
         }
 
         env.storage().instance().set(&DataKey::Config, &new_config);
+        Storage::bump_instance(&env);
+        Ok(())
+    }
+
+    /// Sets the treasury address for slashed fee deposits. Admin only.
+    pub fn set_treasury(env: Env, caller: Address, treasury: Address) -> Result<(), GovError> {
+        Storage::require_initialized(&env)?;
+        caller.require_auth();
+        let admin = Storage::admin(&env)?;
+        if caller != admin {
+            return Err(GovError::AdminOnly);
+        }
+        env.storage().instance().set(&DataKey::Treasury, &treasury);
         Storage::bump_instance(&env);
         Ok(())
     }
@@ -533,6 +606,14 @@ impl GovernanceContract {
         let config = Storage::config(&env)?;
         Ok(voting_power(&env, &config.token, &address))
     }
+
+    // ── Fee deposit ───────────────────────────────────────────────────────────
+
+    /// Tokens locked by the proposer on proposal creation.
+    const PROPOSER_FEE: i128 = 500;
+
+    /// Minimum participation rate for fee deposit refund (basis points; 1500 = 15%).
+    const FEE_DEPOSIT_QUORUM_BPS: u32 = 1_500;
 
     // ── Arbitrator DAO ────────────────────────────────────────────────────────
 
