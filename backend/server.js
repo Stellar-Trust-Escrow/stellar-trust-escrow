@@ -57,10 +57,12 @@ import emailService from './services/emailService.js';
 import complianceService from './services/complianceService.js';
 import { startIndexer } from './services/eventIndexer.js';
 import { startRpcMonitor } from './monitoring/rpcMonitor.js';
+import { createEventWorker, createDeadLetterWorker } from './services/eventWorker.js';
 import { setupSwagger } from './api/docs/swagger.js';
 import { getBackupStatus } from './services/backupMonitor.js';
 import { syncFromPrisma, ensureIndex } from './services/reputationSearchService.js';
 import { createGateway } from './gateway/index.js';
+import queueDashboardRoutes from './api/routes/queueDashboardRoutes.js';
 
 // Attach Prisma query instrumentation and monitoring
 attachPrismaMetrics(prisma);
@@ -201,6 +203,7 @@ app.use('/api/incidents', incidentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/batch', batchRoutes);
 app.use('/api/search', searchRoutes);
+app.use('/admin/queues', queueDashboardRoutes);
 app.use('/docs', docsRouter);
 // Alias — acceptance criteria requires /api-docs
 app.use('/api-docs', docsRouter);
@@ -273,6 +276,25 @@ async function startServer() {
         complianceService.startScheduler();
         logger.info('[ComplianceService] Scheduler started');
         logger.info('[WebSocket] Server attached');
+
+        try {
+          const eventWorker = createEventWorker();
+          const deadLetterWorker = createDeadLetterWorker();
+          logger.info('[BullMQ] Event processing workers started');
+
+          const closeWorkers = async () => {
+            logger.info('[BullMQ] Shutting down workers...');
+            await eventWorker.close();
+            await deadLetterWorker.close();
+          };
+
+          process.once('SIGTERM', closeWorkers);
+          process.once('SIGINT', closeWorkers);
+        } catch (error) {
+          logger.error({ err: error }, '[BullMQ] Failed to start workers');
+          Sentry.captureException(error, { tags: { component: 'bullmq-workers' } });
+        }
+
         startIndexer().catch((err) => {
           logger.error({ err, component: 'indexer' }, 'Indexer failed to start');
           Sentry.captureException(err, { tags: { component: 'indexer' } });
