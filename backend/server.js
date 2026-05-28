@@ -1,5 +1,7 @@
-// Sentry must be initialised before any other imports so it can
-// instrument all subsequent modules (HTTP, DB, etc.)
+ 
+import { initTracing } from './lib/tracing.js';
+// Tracing and Sentry must be initialised before other imports so instrumentation patches apply.
+initTracing();
 import './lib/sentry.js';
 import * as Sentry from '@sentry/node';
 
@@ -44,6 +46,7 @@ import auditMiddleware from './api/middleware/audit.js';
 import { createWebSocketServer, pool } from './api/websocket/handlers.js';
 import cache from './lib/cache.js';
 import { attachPrismaMetrics } from './lib/prismaMetrics.js';
+import { attachPrismaTracing } from './lib/prismaTracing.js';
 import healthRoutes from './api/routes/healthRoutes.js';
 import tenantRoutes from './api/routes/tenantRoutes.js';
 import wsHealthRoutes from './api/routes/wsHealth.js';
@@ -52,6 +55,7 @@ import { errorsTotal } from './lib/metrics.js';
 import { leaderboardRateLimit } from './middleware/rateLimit.js';
 import metricsMiddleware from './middleware/metricsMiddleware.js';
 import responseTime from './middleware/responseTime.js';
+import tracingMiddleware from './middleware/tracingMiddleware.js';
 import logger, { getLogger } from './config/logger.js';
 import emailService from './services/emailService.js';
 import complianceService from './services/complianceService.js';
@@ -64,8 +68,9 @@ import { syncFromPrisma, ensureIndex } from './services/reputationSearchService.
 import { createGateway } from './gateway/index.js';
 import queueDashboardRoutes from './api/routes/queueDashboardRoutes.js';
 
-// Attach Prisma query instrumentation and monitoring
+// Attach Prisma query instrumentation (metrics + traces)
 attachPrismaMetrics(prisma);
+attachPrismaTracing(prisma);
 
 const PORT = process.env.PORT || 4000;
 const app = express();
@@ -86,6 +91,7 @@ app.use(helmet());
 app.use(compressionMiddleware);
 app.use(metricsMiddleware);
 app.use(responseTime);
+app.use(tracingMiddleware);
 app.use(requestLogger);
 app.use((req, res, next) => {
   const requestId =
