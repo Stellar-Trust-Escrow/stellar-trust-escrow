@@ -127,9 +127,40 @@ impl Storage {
 
 // ── Governance helpers ────────────────────────────────────────────────────────
 
-/// Returns the token balance of `address` — used as voting power.
+/// Returns the token balance or ve-token voting power of `address`.
 fn voting_power(env: &Env, token: &Address, address: &Address) -> i128 {
-    token::Client::new(env, token).balance(address)
+    let base_balance = token::Client::new(env, token).balance(address);
+    let ve_power = GovernanceContract::ve_voting_power(env, address);
+    if ve_power > base_balance {
+        ve_power
+    } else {
+        base_balance
+    }
+}
+
+fn validate_parameter_payload(payload: &ParameterPayload) -> Result<(), GovError> {
+    if payload.key == "proposal_threshold" {
+        if payload.value < 0 {
+            return Err(GovError::InvalidParameter);
+        }
+        return Ok(());
+    }
+
+    if payload.key == "voting_period" || payload.key == "voting_delay" || payload.key == "timelock_delay" {
+        if payload.value <= 0 {
+            return Err(GovError::InvalidParameter);
+        }
+        return Ok(());
+    }
+
+    if payload.key == "quorum_bps" || payload.key == "approval_threshold_bps" {
+        if payload.value < 0 || payload.value > 10_000 {
+            return Err(GovError::InvalidParameter);
+        }
+        return Ok(());
+    }
+
+    Err(GovError::InvalidParameter)
 }
 
 /// Checks whether a proposal has reached quorum and approval threshold.
@@ -249,9 +280,11 @@ impl GovernanceContract {
             return Err(GovError::InsufficientVotingPower);
         }
 
-        // Validate payload matches type
+        // Validate payload matches type and control parameter updates
         match (&proposal_type, &payload) {
-            (ProposalType::ParameterChange, ProposalPayload::Parameter(_)) => {}
+            (ProposalType::ParameterChange, ProposalPayload::Parameter(parameter)) => {
+                validate_parameter_payload(parameter)?;
+            }
             (ProposalType::ContractUpgrade, ProposalPayload::Upgrade(_)) => {}
             (ProposalType::FundAllocation, ProposalPayload::Fund(_)) => {}
             (ProposalType::TextProposal, ProposalPayload::Text) => {}
@@ -470,7 +503,8 @@ impl GovernanceContract {
                     &p.amount,
                 );
             }
-            ProposalPayload::Parameter(_) => {
+            ProposalPayload::Parameter(parameter) => {
+                validate_parameter_payload(parameter)?;
                 // Parameter changes are read by off-chain systems via events.
                 // On-chain consumers can query get_proposal and read the payload.
             }
