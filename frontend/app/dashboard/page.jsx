@@ -8,6 +8,7 @@ import Button from '../../components/ui/Button';
 import CardSkeleton from '../../components/ui/CardSkeleton';
 import PageTransition from '../../components/layout/PageTransition';
 import ErrorBoundary from '../../components/error/ErrorBoundary';
+import DashboardTour from '../../components/onboarding/DashboardTour';
 import { usePerformance } from '../../hooks/usePerformance';
 import { useI18n } from '../../i18n/index.jsx';
 
@@ -75,6 +76,8 @@ export default function DashboardPage() {
     <PageTransition>
       <ErrorBoundary>
         <div className="space-y-8" role="main">
+          <DashboardTour />
+
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <h1 className="text-2xl font-bold text-white">{t('nav.dashboard')}</h1>
@@ -85,11 +88,19 @@ export default function DashboardPage() {
               <Button
                 href="/escrow/create"
                 variant="primary"
+                data-tour="create-escrow"
                 className="focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-950 rounded-lg"
               >
                 + {t('escrow.create')}
               </Button>
             </div>
+          </div>
+
+          <div
+            data-tour="get-testnet-xlm"
+            className="card rounded-3xl border border-indigo-500/20 bg-gray-950 p-5 text-sm text-gray-300"
+          >
+            Connect your wallet and use the Stellar Friendbot faucet to fund testnet XLM for your first escrow contract experiments.
           </div>
 
           <section aria-label="Key performance metrics">
@@ -105,7 +116,7 @@ export default function DashboardPage() {
             </Suspense>
           </section>
 
-          <section aria-label="Active escrow agreements">
+          <section aria-label="Active escrow agreements" data-tour="disputes">
             <h2 className="text-lg font-semibold text-white mb-4">Your Active Escrows</h2>
             {escrowsLoading ? (
               <div className="grid gap-4 md:grid-cols-2">

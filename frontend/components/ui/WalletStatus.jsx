@@ -153,7 +153,13 @@ export default function WalletStatus({ wallet }) {
     <div className="flex flex-col items-end gap-1">
       <div className="flex items-center gap-2">
         <StatusDot status="disconnected" />
-        <Button id="wallet-connect-btn" variant="primary" size="sm" onClick={connect}>
+        <Button
+          id="wallet-connect-btn"
+          variant="primary"
+          size="sm"
+          onClick={connect}
+          data-tour="connect-wallet"
+        >
           {t('wallet.connect')}
         </Button>
       </div>
