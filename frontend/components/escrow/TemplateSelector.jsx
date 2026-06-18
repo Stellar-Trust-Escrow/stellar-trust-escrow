@@ -227,6 +227,7 @@ export default function TemplateSelector({
                 key={template.id}
                 role="button"
                 tabIndex={0}
+                aria-label={`Select template: ${template.name}`}
                 onClick={() => setSelectedTemplateId(template.id)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
