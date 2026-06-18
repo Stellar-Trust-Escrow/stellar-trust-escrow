@@ -21,13 +21,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Button from '../../../components/ui/Button';
 import TemplateSelector from '../../../components/escrow/TemplateSelector';
 import StellarAddressInput from '../../../components/ui/StellarAddressInput';
 import XLMAmountInput from '../../../components/ui/XLMAmountInput';
 import templatesData from '../../../data/templates.json';
 import { useToast } from '../../../contexts/ToastContext';
+import { useWallet } from '../../../hooks/useWallet';
+import { buildCreateEscrowTx, broadcastTransaction, isValidStellarAddress } from '../../../lib/stellar';
 
 const STEPS = [
   { id: 1, label: 'Counterparty' },
@@ -67,9 +69,11 @@ function isPositiveAmount(value) {
 }
 
 export default function CreateEscrowPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const templateLibrary = templatesData.templates || [];
 
+  const { address, isConnected, signTx } = useWallet();
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState({
     freelancerAddress: '',
@@ -117,14 +121,46 @@ export default function CreateEscrowPage() {
     setIsSubmitting(true);
     setError(null);
     try {
-      // 1. Build Soroban transaction
-      // 2. Sign with Freighter
-      // 3. Broadcast
-      // 4. Redirect
-      throw new Error('Not implemented — see Issue #33');
+      if (!isConnected || !address) {
+        throw new Error('Please connect your wallet first');
+      }
+
+      if (!isValidStellarAddress(formData.freelancerAddress)) {
+        throw new Error('Invalid freelancer address');
+      }
+
+      // Generate a placeholder brief hash (32 bytes of hex)
+      // TODO: In production, upload brief description to IPFS and use hash
+      const briefHash = formData.briefDescription
+        ? Buffer.from(formData.briefDescription)
+            .toString('hex')
+            .padEnd(64, '0')
+            .slice(0, 64)
+        : '0'.repeat(64);
+
+      // Build the create_escrow transaction
+      const unsignedXdr = await buildCreateEscrowTx({
+        sourceAddress: address,
+        freelancerAddress: formData.freelancerAddress,
+        tokenAddress: formData.tokenAddress === 'custom' ? formData.tokenAddress : formData.tokenAddress,
+        amount: (BigInt(formData.totalAmount) * BigInt(10000000)).toString(), // Convert XLM to stroops
+        briefHash,
+      });
+
+      // Sign with Freighter
+      const signedXdr = await signTx(unsignedXdr);
+
+      // Broadcast to backend
+      const { hash } = await broadcastTransaction(signedXdr);
+
+      showToast(`Escrow created: ${hash}`, 'success');
+
+      // Extract escrow ID from response or redirect to dashboard
+      router.push(`/escrow/${hash}`);
     } catch (err) {
-      setError(err.message);
-      showToast('Failed to create escrow', 'error');
+      const message = err.message || 'Failed to create escrow';
+      setError(message);
+      showToast(message, 'error');
     } finally {
       setIsSubmitting(false);
     }
