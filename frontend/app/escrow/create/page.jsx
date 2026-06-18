@@ -196,31 +196,31 @@ export default function CreateEscrowPage() {
       )}
 
       {/* Step Indicator */}
-      <nav aria-label="Progress" className="flex items-center gap-2">
-        {STEPS.map((step, i) => (
-          <div key={step.id} className="flex items-center gap-2">
-            <div
-              role="img"
-              aria-label={`Step ${step.id}: ${step.label}${currentStep >= step.id ? ' (completed)' : ''}`}
-              aria-current={currentStep === step.id ? 'step' : false}
-              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
+      <nav aria-label="Progress">
+        <ol className="flex items-center gap-2">
+          {STEPS.map((step, i) => (
+            <li key={step.id} className="flex items-center gap-2">
+              <div
+                aria-current={currentStep === step.id ? 'step' : undefined}
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
                 ${
                   currentStep >= step.id ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-500'
                 }`}
-            >
-              {step.id}
-            </div>
-            <span
-              className={`text-sm hidden sm:inline
+              >
+                <span aria-label={`Step ${step.id}: ${step.label}`}>{step.id}</span>
+              </div>
+              <span
+                className={`text-sm hidden sm:inline
                 ${currentStep >= step.id ? 'text-white' : 'text-gray-500'}`}
-            >
-              {step.label}
-            </span>
-            {i < STEPS.length - 1 && (
-              <div className="w-8 h-px bg-gray-700 mx-1" aria-hidden="true" />
-            )}
-          </div>
-        ))}
+              >
+                {step.label}
+              </span>
+              {i < STEPS.length - 1 && (
+                <div className="w-8 h-px bg-gray-700 mx-1" aria-hidden="true" />
+              )}
+            </li>
+          ))}
+        </ol>
       </nav>
 
       {/* Step Content */}
