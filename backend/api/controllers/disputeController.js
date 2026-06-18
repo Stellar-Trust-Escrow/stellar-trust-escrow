@@ -17,6 +17,9 @@ import { verifyFile, merkleRoot, hashFile } from '../../services/ipfsHashService
  * `validate(disputeListQueryRules)` and `validate(disputeEscrowIdParamRules)`.
  */
 
+const VALID_DISPUTE_SORT_FIELDS = new Set(['raisedAt', 'resolvedAt', 'id']);
+const VALID_SORT_ORDERS = new Set(['asc', 'desc']);
+
 const listDisputes = async (req, res) => {
   try {
     const { page, limit, skip } = parsePagination(req.query);
@@ -28,6 +31,19 @@ const listDisputes = async (req, res) => {
       sortBy = 'raisedAt',
       sortOrder = 'desc',
     } = req.query;
+
+    if (!VALID_DISPUTE_SORT_FIELDS.has(sortBy)) {
+      return res.status(400).json({
+        error: 'Invalid sortBy value',
+        allowed: [...VALID_DISPUTE_SORT_FIELDS],
+      });
+    }
+    if (!VALID_SORT_ORDERS.has(sortOrder)) {
+      return res.status(400).json({
+        error: 'Invalid sortOrder value',
+        allowed: [...VALID_SORT_ORDERS],
+      });
+    }
 
     const where = {
       tenantId: req.tenant.id,
