@@ -33,7 +33,8 @@ function verifyUpgradeJwt(request) {
     const url = new URL(request.url, `http://${request.headers.host}`);
     const token = url.searchParams.get('token');
     if (!token) return null;
-    const secret = process.env.JWT_ACCESS_SECRET || 'fallback_access_secret';
+    const secret = process.env.JWT_ACCESS_SECRET;
+    if (!secret) throw new Error('JWT_ACCESS_SECRET environment variable is required');
     const decoded = jwt.verify(token, secret);
     if (decoded.type !== 'access') return null;
     return decoded;
