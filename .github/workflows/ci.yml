@@ -271,13 +271,11 @@ jobs:
 
       - name: Lint
         if: steps.changes.outputs.changed == 'true'
-        run: npm run lint
-        working-directory: backend
+        run: npm run lint -w backend
 
       - name: Test
         if: steps.changes.outputs.changed == 'true'
-        run: npm test
-        working-directory: backend
+        run: npm test -w backend
         env:
           NODE_ENV: test
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
@@ -341,32 +339,29 @@ jobs:
 
       - name: Lint
         if: steps.changes.outputs.changed == 'true'
-        run: npm run lint
-        working-directory: frontend
+        run: npm run lint -w frontend
         env:
           NEXT_PUBLIC_API_URL: http://localhost:4000
+          NEXT_PUBLIC_CONTRACT_ADDRESS: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 
       - name: Build
         if: steps.changes.outputs.changed == 'true'
-        run: npm run build
-        working-directory: frontend
+        run: npm run build -w frontend
         env:
           NEXT_PUBLIC_API_URL: http://localhost:4000
+          NEXT_PUBLIC_CONTRACT_ADDRESS: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 
       - name: Unit Tests
         if: steps.changes.outputs.changed == 'true'
-        run: npm run test:unit
-        working-directory: frontend
+        run: npm run test:unit -w frontend
 
       - name: Integration Tests
         if: steps.changes.outputs.changed == 'true'
-        run: npm run test:integration
-        working-directory: frontend
+        run: npm run test:integration -w frontend
 
       - name: Accessibility Tests
         if: steps.changes.outputs.changed == 'true'
-        run: npm run test:a11y
-        working-directory: frontend
+        run: npm run test:a11y -w frontend
         env:
           NEXT_PUBLIC_API_URL: http://localhost:4000
 
@@ -428,18 +423,18 @@ jobs:
 
       - name: Build frontend
         if: steps.changes.outputs.changed == 'true'
-        run: npm run build
-        working-directory: frontend
+        run: npm run build -w frontend
         env:
           NEXT_PUBLIC_API_URL: http://127.0.0.1:4000
+          NEXT_PUBLIC_CONTRACT_ADDRESS: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 
       - name: Run Playwright suite
         if: steps.changes.outputs.changed == 'true'
-        run: npm run test:e2e -- --update-snapshots
-        working-directory: frontend
+        run: npm run test:e2e -w frontend -- --update-snapshots
         env:
           CI: 'true'
           NEXT_PUBLIC_API_URL: http://127.0.0.1:4000
+          NEXT_PUBLIC_CONTRACT_ADDRESS: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 
       - name: Upload Playwright report
         if: steps.changes.outputs.changed == 'true' && always()
@@ -500,17 +495,17 @@ jobs:
 
       - name: Build frontend
         if: steps.changes.outputs.changed == 'true'
-        run: npm run build
-        working-directory: frontend
+        run: npm run build -w frontend
         env:
           NEXT_PUBLIC_API_URL: http://127.0.0.1:4000
+          NEXT_PUBLIC_CONTRACT_ADDRESS: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 
       - name: Start frontend server
         if: steps.changes.outputs.changed == 'true'
-        run: npm run start:test &
-        working-directory: frontend
+        run: npm run start:test -w frontend &
         env:
           NEXT_PUBLIC_API_URL: http://127.0.0.1:4000
+          NEXT_PUBLIC_CONTRACT_ADDRESS: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 
       - name: Wait for server
         if: steps.changes.outputs.changed == 'true'
@@ -518,15 +513,13 @@ jobs:
 
       - name: Run Jest Accessibility Tests
         if: steps.changes.outputs.changed == 'true'
-        run: npm run test:a11y
-        working-directory: frontend
+        run: npm run test:a11y -w frontend
         env:
           NEXT_PUBLIC_API_URL: http://127.0.0.1:4000
 
       - name: Run Automated Accessibility Scanner
         if: steps.changes.outputs.changed == 'true'
-        run: npm run test:a11y:scan
-        working-directory: frontend
+        run: npm run test:a11y:scan -w frontend
         env:
           CI: 'true'
           BASE_URL: http://127.0.0.1:3000
