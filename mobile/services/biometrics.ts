@@ -33,7 +33,7 @@ export async function getSupportedBiometricTypes(): Promise<string[]> {
 
 export async function authenticate(reason = 'Authenticate to continue'): Promise<boolean> {
   const available = await isBiometricAvailable();
-  if (!available) return true; // gracefully skip if not available
+  if (!available) return false;
 
   const result = await LocalAuthentication.authenticateAsync({
     promptMessage: reason,
