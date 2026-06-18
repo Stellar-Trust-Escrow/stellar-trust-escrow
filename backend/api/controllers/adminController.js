@@ -9,8 +9,10 @@
 
 import prisma from '../../lib/prisma.js';
 import { TIER_LIMITS } from '../../config/rateLimits.js';
-import { logControllerError } from '../../config/logger.js';
+import { logControllerError, getLogger } from '../../config/logger.js';
 import { getUserUsage } from '../middleware/rateLimiter.js';
+
+const adminLog = getLogger();
 
 // JSON.stringify does not guarantee key order, so two objects with the same
 // contents but different insertion order produce different cache keys.
@@ -40,7 +42,19 @@ const updateRateLimit = (req, res) => {
   if (isNaN(parsed) || parsed < 1) {
     return res.status(400).json({ error: 'max must be a positive integer' });
   }
+  const previous = runtimeTierLimits[tier];
   runtimeTierLimits[tier] = parsed;
+
+  adminLog.warn({
+    type: 'admin_action',
+    action: 'UPDATE_RATE_LIMIT',
+    tier,
+    previous,
+    updated: parsed,
+    performedBy: req.user?.address ?? 'unknown',
+    requestId: req.id,
+  });
+
   res.json({ tier, max: parsed });
 };
 
