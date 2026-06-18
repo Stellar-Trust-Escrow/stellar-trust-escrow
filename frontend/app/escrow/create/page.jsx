@@ -384,6 +384,7 @@ function StepMilestones({ formData, onAdd, onRemove, onUpdate }) {
           <input
             type="text"
             placeholder="Title (e.g. Initial Design Mockups)"
+            aria-label={`Milestone ${index + 1} title`}
             className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2
                        text-white placeholder-gray-500 text-sm focus:outline-none focus:border-indigo-500"
             value={milestone.title}
@@ -392,6 +393,7 @@ function StepMilestones({ formData, onAdd, onRemove, onUpdate }) {
           <textarea
             rows={2}
             placeholder="Milestone description"
+            aria-label={`Milestone ${index + 1} description`}
             className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2
                        text-white placeholder-gray-500 text-sm focus:outline-none focus:border-indigo-500 resize-none"
             value={milestone.description}
@@ -401,6 +403,7 @@ function StepMilestones({ formData, onAdd, onRemove, onUpdate }) {
             <XLMAmountInput
               value={milestone.amount}
               placeholder="Amount"
+              aria-label={`Milestone ${index + 1} amount`}
               onChange={(event) => onUpdate(index, 'amount', event.target.value)}
               inputClassName="w-32"
               className="w-32"
