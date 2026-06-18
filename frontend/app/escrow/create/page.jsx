@@ -196,10 +196,12 @@ export default function CreateEscrowPage() {
       )}
 
       {/* Step Indicator */}
-      <div className="flex items-center gap-2">
+      <nav aria-label="Progress" className="flex items-center gap-2">
         {STEPS.map((step, i) => (
           <div key={step.id} className="flex items-center gap-2">
             <div
+              aria-label={`Step ${step.id}: ${step.label}${currentStep >= step.id ? ' (completed)' : ''}`}
+              aria-current={currentStep === step.id ? 'step' : undefined}
               className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
                 ${
                   currentStep >= step.id ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-500'
@@ -213,10 +215,12 @@ export default function CreateEscrowPage() {
             >
               {step.label}
             </span>
-            {i < STEPS.length - 1 && <div className="w-8 h-px bg-gray-700 mx-1" />}
+            {i < STEPS.length - 1 && (
+              <div className="w-8 h-px bg-gray-700 mx-1" aria-hidden="true" />
+            )}
           </div>
         ))}
-      </div>
+      </nav>
 
       {/* Step Content */}
       <div className="card space-y-6">
