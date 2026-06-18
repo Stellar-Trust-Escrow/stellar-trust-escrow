@@ -24,7 +24,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     current_user=$(git config user.email)
 
     case "$current_user" in
-      ilorahdavid126@gmail.com|davidilorah@gmail.com|devcyprain@gmail.com) ;;
+      ilorahdavid126@gmail.com|davidilorah@gmail.com|devcyprain@gmail.com|coredevdave@gmail.com) ;;
       *) echo "❌ Only authorised profiles can push directly to main."; exit 1 ;;
     esac
 
