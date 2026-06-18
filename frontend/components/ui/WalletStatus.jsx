@@ -33,6 +33,7 @@ function StatusDot({ status }) {
   };
   return (
     <span
+      role="status"
       className={`inline-block w-2 h-2 rounded-full shrink-0 transition-colors duration-300 ${styles[status]}`}
       aria-label={`Wallet ${status}`}
     />
