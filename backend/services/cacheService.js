@@ -234,6 +234,42 @@ function size() {
   return redisReady ? null : mem.size();
 }
 
+/**
+ * Delete all cache keys belonging to a tenant.
+ * Uses SCAN cursor iteration (never KEYS) to avoid blocking Redis.
+ * Covers both `t:<slug>:*` HTTP keys and `tenant:<slug>:*` scoped keys.
+ *
+ * @param {string} slug
+ * @returns {Promise<number>} number of keys deleted
+ */
+async function flushTenant(slug) {
+  const patterns = [`t:${slug}:*`, `tenant:${slug}:*`];
+  let deleted = 0;
+
+  if (redisReady) {
+    for (const pattern of patterns) {
+      let cursor = 0;
+      do {
+        const reply = await redis.scan(cursor, { MATCH: pattern, COUNT: 100 }).catch(() => ({ cursor: 0, keys: [] }));
+        cursor = reply.cursor;
+        if (reply.keys.length) {
+          await redis.del(reply.keys).catch(() => null);
+          deleted += reply.keys.length;
+        }
+      } while (cursor !== 0);
+    }
+  } else {
+    for (const key of mem.keys()) {
+      if (key.startsWith(`t:${slug}:`) || key.startsWith(`tenant:${slug}:`)) {
+        mem.del(key);
+        deleted++;
+      }
+    }
+  }
+
+  return deleted;
+}
+
 export default {
   get,
   set,
@@ -245,4 +281,5 @@ export default {
   warm,
   analytics,
   size,
+  flushTenant,
 };

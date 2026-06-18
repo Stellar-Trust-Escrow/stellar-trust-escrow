@@ -39,6 +39,7 @@
  * @module middleware/cache
  */
 
+import { createHash } from 'crypto';
 import cache from '../../lib/cache.js';
 
 // ── TTL presets (overridable via env) ─────────────────────────────────────────
@@ -56,18 +57,23 @@ export const TTL = {
 // ── Key builder ───────────────────────────────────────────────────────────────
 
 /**
- * Builds a deterministic cache key from the request.
- * Query params are sorted so ?b=2&a=1 and ?a=1&b=2 hit the same entry.
+ * Builds a deterministic, tenant-scoped cache key from the request.
+ * Query params are sorted and SHA-256 hashed (16-char prefix) to keep keys short.
+ * Tenant slug is prefixed so two tenants hitting the same path get independent entries.
  *
  * @param {import('express').Request} req
  * @returns {string}
  */
 export function buildCacheKey(req) {
+  const tenantSlug = req.tenant?.slug ?? '_global';
   const sortedQuery = Object.keys(req.query)
     .sort()
     .map((k) => `${k}=${req.query[k]}`)
     .join('&');
-  return `http:${req.method}:${req.path}${sortedQuery ? ':' + sortedQuery : ''}`;
+  const queryPart = sortedQuery
+    ? ':' + createHash('sha256').update(sortedQuery).digest('hex').slice(0, 16)
+    : '';
+  return `t:${tenantSlug}:http:${req.method}:${req.path}${queryPart}`;
 }
 
 // ── Cache response middleware ─────────────────────────────────────────────────
@@ -193,3 +199,16 @@ export const invalidateCollection = (collection, idFn = null) =>
   invalidateOn({
     tags: (req) => [collection, ...(idFn ? [`${collection}:${idFn(req)}`] : [])],
   });
+
+// ── Tenant flush utility ──────────────────────────────────────────────────────
+
+/**
+ * Delete all cache keys belonging to a tenant using SCAN (never KEYS).
+ * Removes both `t:<slug>:*` HTTP keys and any tenant-scoped tag sets.
+ *
+ * @param {string} slug  — tenant slug
+ * @returns {Promise<number>}  number of keys deleted
+ */
+export async function flushTenant(slug) {
+  return cache.flushTenant(slug);
+}

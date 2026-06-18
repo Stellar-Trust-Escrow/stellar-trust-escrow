@@ -55,7 +55,7 @@ const listUsers = async (req, res) => {
 
     const where = search ? { address: { contains: search, mode: 'insensitive' } } : {};
 
-    const cacheKey = `admin:users:${JSON.stringify({ where, page, limit })}`;
+    const cacheKey = `t:${req.tenant?.slug ?? '_global'}:admin:users:${page}:${limit}:${search}`;
     const cached = await cache.get(cacheKey);
     if (cached) return res.json(cached);
 
@@ -95,7 +95,7 @@ const getUserDetail = async (req, res) => {
   try {
     const { address } = req.params;
 
-    const cacheKey = `admin:user:${address}`;
+    const cacheKey = `t:${req.tenant?.slug ?? '_global'}:admin:user:${address}`;
     const cached = await cache.get(cacheKey);
     if (cached) return res.json(cached);
 
@@ -158,7 +158,7 @@ const suspendUser = async (req, res) => {
       return res.status(404).json({ error: 'User not found.' });
     }
 
-    await cache.invalidatePrefix(`admin:user:${address}`);
+    await cache.invalidatePrefix(`t:${req.tenant?.slug ?? '_global'}:admin:user:${address}`);
     res.json({ message: `User ${address} suspended.`, auditEntry: result });
   } catch (err) {
     logControllerError('admin.suspendUser', err, req);
@@ -200,7 +200,7 @@ const banUser = async (req, res) => {
       return res.status(404).json({ error: 'User not found.' });
     }
 
-    await cache.invalidatePrefix(`admin:user:${address}`);
+    await cache.invalidatePrefix(`t:${req.tenant?.slug ?? '_global'}:admin:user:${address}`);
     res.json({ message: `User ${address} banned.`, auditEntry: result });
   } catch (err) {
     logControllerError('admin.banUser', err, req);
@@ -226,7 +226,7 @@ const listDisputes = async (req, res) => {
           ? { resolvedAt: null }
           : {};
 
-    const cacheKey = `admin:disputes:${JSON.stringify({ where, page, limit })}`;
+    const cacheKey = `t:${req.tenant?.slug ?? '_global'}:admin:disputes:${page}:${limit}:${resolved ?? ''}`;
     const cached = await cache.get(cacheKey);
     if (cached) return res.json(cached);
 
@@ -320,7 +320,7 @@ const resolveDispute = async (req, res) => {
     }
 
     await cache.invalidateTags(['escrows', `escrow:${result.dispute.escrowId}`]);
-    await cache.invalidatePrefix('admin:disputes');
+    await cache.invalidatePrefix(`t:${req.tenant?.slug ?? '_global'}:admin:disputes`);
     res.json({ message: 'Dispute resolved.', dispute: result.dispute });
   } catch (err) {
     logControllerError('admin.resolveDispute', err, req);
@@ -338,7 +338,7 @@ const resolveDispute = async (req, res) => {
  */
 const getStats = async (req, res) => {
   try {
-    const cacheKey = 'admin:stats';
+    const cacheKey = `t:${req.tenant?.slug ?? '_global'}:admin:stats`;
     const cached = await cache.get(cacheKey);
     if (cached) return res.json(cached);
 
@@ -390,7 +390,7 @@ const getAuditLogs = async (req, res) => {
   try {
     const { page, limit, skip } = parsePagination(req.query);
 
-    const cacheKey = `admin:audit-logs:${page}:${limit}`;
+    const cacheKey = `t:${req.tenant?.slug ?? '_global'}:admin:audit-logs:${page}:${limit}`;
     const cached = await cache.get(cacheKey);
     if (cached) return res.json(cached);
 
