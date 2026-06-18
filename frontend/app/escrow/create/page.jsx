@@ -200,8 +200,9 @@ export default function CreateEscrowPage() {
         {STEPS.map((step, i) => (
           <div key={step.id} className="flex items-center gap-2">
             <div
+              role="img"
               aria-label={`Step ${step.id}: ${step.label}${currentStep >= step.id ? ' (completed)' : ''}`}
-              aria-current={currentStep === step.id ? 'step' : undefined}
+              aria-current={currentStep === step.id ? 'step' : false}
               className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
                 ${
                   currentStep >= step.id ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-500'
