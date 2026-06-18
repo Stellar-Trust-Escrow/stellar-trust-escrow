@@ -14,6 +14,10 @@ import {
   getCachedMilestones,
 } from '../services/offlineCache';
 
+// Exponential backoff: 500ms, 1000ms, capped at 10s
+const RETRY_BASE_DELAY_MS = 500;
+const retryDelay = (attempt: number) => Math.min(RETRY_BASE_DELAY_MS * 2 ** attempt, 10_000);
+
 export function useEscrow(id: string | null) {
   return useQuery({
     queryKey: ['escrow', id],
@@ -30,7 +34,9 @@ export function useEscrow(id: string | null) {
     },
     enabled: !!id,
     staleTime: 10_000,
-    retry: 1,
+    gcTime: 5 * 60_000,
+    retry: 2,
+    retryDelay,
   });
 }
 
@@ -65,6 +71,10 @@ export function useEscrowList(params?: Record<string, string | number>) {
       return data;
     },
     staleTime: 15_000,
+    gcTime: 5 * 60_000,
+    retry: 2,
+    retryDelay,
+    refetchOnWindowFocus: false,
   });
 }
 
