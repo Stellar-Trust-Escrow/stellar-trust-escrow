@@ -31,12 +31,6 @@ const _NETWORK_PASSPHRASE =
     ? 'Public Global Stellar Network ; September 2015'
     : 'Test SDF Network ; September 2015';
 
-if (!_CONTRACT_ADDRESS || _CONTRACT_ADDRESS.trim() === '') {
-  throw new Error(
-    'NEXT_PUBLIC_CONTRACT_ADDRESS is not set. Please check your environment variables.',
-  );
-}
-
 /**
  * Builds an unsigned `create_escrow` Soroban transaction XDR.
  *
@@ -67,6 +61,10 @@ export async function buildCreateEscrowTx({
   arbiter = null,
   deadline = null,
 }) {
+  if (!_CONTRACT_ADDRESS) {
+    throw new Error('Contract address not configured. Set NEXT_PUBLIC_CONTRACT_ADDRESS.');
+  }
+
   _validateInputs({
     sourceAddress,
     freelancerAddress,
