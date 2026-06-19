@@ -36,7 +36,21 @@ const adminAuth = (req, res, next) => {
     return res.status(403).json({ error: 'Invalid admin API key.' });
   }
 
+  req.isAdmin = true;
+  req.adminId = 'admin';
   next();
 };
+
+export function optionalAdminAuth(req, _res, next) {
+  const adminKey = process.env.ADMIN_API_KEY;
+  const providedKey = req.headers['x-admin-api-key'];
+
+  if (adminKey && providedKey === adminKey) {
+    req.isAdmin = true;
+    req.adminId = 'admin';
+  }
+
+  next();
+}
 
 export default adminAuth;

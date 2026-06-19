@@ -1,5 +1,7 @@
 import exportService from '../../services/exportService.js';
 
+const LARGE_EXPORT_LIMIT_BYTES = 10 * 1024 * 1024;
+
 /**
  * Export Controller
  * Handles data export/import endpoints for user data portability
@@ -20,7 +22,32 @@ const exportUserData = async (req, res) => {
       });
     }
 
-    const data = await exportService.exportUserData(address);
+    if (req.user?.address !== address && !req.isAdmin) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const tenantId = req.tenant?.id;
+    const data = await exportService.exportUserData(address, { tenantId });
+    const fileContent = exportService.generateExportFile(data);
+
+    if (req.isAdmin) {
+      await exportService.logAdminExport(address, {
+        tenantId,
+        performedBy: req.adminId ?? req.user?.address ?? 'admin',
+      });
+    }
+
+    if (Buffer.byteLength(fileContent, 'utf8') > LARGE_EXPORT_LIMIT_BYTES) {
+      const queued = await exportService.queueLargeExport(address, {
+        tenantId,
+        requestedBy: req.user?.address,
+      });
+      return res.status(202).json({
+        status: 'queued',
+        message: 'Export is larger than 10MB and will be delivered by email.',
+        jobId: queued.jobId,
+      });
+    }
 
     res.json(data);
   } catch (error) {
@@ -93,8 +120,32 @@ const downloadExportFile = async (req, res) => {
       });
     }
 
-    const data = await exportService.exportUserData(address);
+    if (req.user?.address !== address && !req.isAdmin) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const tenantId = req.tenant?.id;
+    const data = await exportService.exportUserData(address, { tenantId });
     const fileContent = exportService.generateExportFile(data);
+
+    if (req.isAdmin) {
+      await exportService.logAdminExport(address, {
+        tenantId,
+        performedBy: req.adminId ?? req.user?.address ?? 'admin',
+      });
+    }
+
+    if (Buffer.byteLength(fileContent, 'utf8') > LARGE_EXPORT_LIMIT_BYTES) {
+      const queued = await exportService.queueLargeExport(address, {
+        tenantId,
+        requestedBy: req.user?.address,
+      });
+      return res.status(202).json({
+        status: 'queued',
+        message: 'Export is larger than 10MB and will be delivered by email.',
+        jobId: queued.jobId,
+      });
+    }
 
     res.setHeader('Content-Type', 'application/json');
     res.setHeader(
@@ -110,8 +161,37 @@ const downloadExportFile = async (req, res) => {
   }
 };
 
+/**
+ * Pseudonymize user data
+ * @route DELETE /api/users/:address/data
+ */
+const deleteUserData = async (req, res) => {
+  try {
+    const { address } = req.params;
+
+    if (!address || !address.startsWith('G')) {
+      return res.status(400).json({
+        error: 'Invalid Stellar address format',
+      });
+    }
+
+    const result = await exportService.pseudonymizeUserData(address, {
+      tenantId: req.tenant?.id,
+      performedBy: req.adminId ?? 'admin',
+    });
+
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('GDPR deletion error:', error);
+    res.status(500).json({
+      error: 'Failed to pseudonymize user data',
+    });
+  }
+};
+
 export default {
   exportUserData,
   importUserData,
   downloadExportFile,
+  deleteUserData,
 };

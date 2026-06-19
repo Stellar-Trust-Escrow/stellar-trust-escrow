@@ -11,6 +11,11 @@ import sessionService from '../../services/sessionService.js';
 const JWT_SECRET = process.env.JWT_SECRET || 'change_this_in_production';
 
 export default async function authMiddleware(req, res, next) {
+  if (req.isAdmin) {
+    req.user = req.user ?? { address: req.adminId ?? 'admin' };
+    return next();
+  }
+
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Authentication required' });
