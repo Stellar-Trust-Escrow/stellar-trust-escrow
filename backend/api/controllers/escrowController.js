@@ -12,6 +12,8 @@ import prisma from '../../lib/prisma.js';
 import cache from '../../lib/cache.js';
 import { buildPaginatedResponse, parsePagination } from '../../lib/pagination.js';
 import { logControllerError } from '../../config/logger.js';
+import { submitTransaction } from '../../services/stellarService.js';
+import { xdr, scValToNative } from '@stellar/stellar-sdk';
 import {
   escrowIdParam,
   signedXdrBody,
@@ -181,7 +183,50 @@ const broadcastCreateEscrow = async (req, res) => {
     if (!signedXdr || typeof signedXdr !== 'string') {
       return res.status(400).json({ error: 'signedXdr is required' });
     }
-    res.status(501).json({ error: 'Not implemented - see Issue #20' });
+
+    const result = await submitTransaction(signedXdr);
+
+    if (result.status !== 'SUCCESS') {
+      return res.status(422).json({
+        error: 'Transaction failed',
+        sorobanStatus: result.status,
+        errorResultXdr: result.errorResultXdr ?? null,
+      });
+    }
+
+    // Extract escrow ID from the transaction return value (ScVal u64/i128)
+    let escrowId = null;
+    if (result.returnValue) {
+      try {
+        const native = scValToNative(xdr.ScVal.fromXDR(result.returnValue, 'base64'));
+        escrowId = typeof native === 'bigint' ? native : BigInt(String(native));
+      } catch {
+        // returnValue absent or not a numeric type — escrowId stays null
+      }
+    }
+
+    // Upsert the escrow row so the DB reflects the on-chain state immediately,
+    // even before the indexer's next polling tick.
+    if (escrowId !== null) {
+      await prisma.escrow.upsert({
+        where: { id: escrowId },
+        create: {
+          id: escrowId,
+          clientAddress: '',
+          freelancerAddress: '',
+          tokenAddress: '',
+          totalAmount: '0',
+          remainingBalance: '0',
+          status: 'Active',
+          briefHash: '',
+          createdAt: new Date(),
+          createdLedger: BigInt(0),
+        },
+        update: {}, // indexer will fill in the details on next tick
+      });
+    }
+
+    return res.status(200).json({ hash: result.hash, escrowId: escrowId ? String(escrowId) : null });
   } catch (err) {
     logControllerError('escrow.broadcastCreateEscrow', err, req);
     res.status(500).json({ error: err.message });

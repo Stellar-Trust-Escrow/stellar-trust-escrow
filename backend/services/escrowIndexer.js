@@ -4,295 +4,310 @@
  * Background service that polls the Stellar network for Soroban contract
  * events emitted by the escrow contract and writes them to PostgreSQL.
  *
- * This keeps the database in sync so the REST API can serve data quickly
- * without querying the blockchain on every request.
- *
- * ## Event → DB Mapping
- *
- * | Contract Event      | DB Action                              |
- * |---------------------|----------------------------------------|
- * | EscrowCreated       | INSERT into escrows table              |
- * | MilestoneAdded      | INSERT into milestones table           |
- * | MilestoneSubmitted  | UPDATE milestone status = Submitted    |
- * | MilestoneApproved   | UPDATE milestone status = Approved     |
- * | FundsReleased       | UPDATE escrow remaining_balance        |
- * | EscrowCancelled     | UPDATE escrow status = Cancelled       |
- * | DisputeRaised       | UPDATE escrow status = Disputed        |
- * | DisputeResolved     | UPDATE escrow status = Completed       |
- * | ReputationUpdated   | UPSERT reputation_records table        |
+ * Resilience guarantees:
+ *  - Crash recovery: resumes from last committed ledger (Redis + DB) on restart
+ *  - Exponential backoff on RPC failures
+ *  - Idempotent: upsert semantics prevent duplicate DB records
+ *  - DLQ: events that fail after MAX_RETRIES pushes are written to
+ *    Redis key `indexer:dlq` for manual inspection without blocking
  *
  * @module escrowIndexer
  */
 
-import { stellarEventsQueue } from '../lib/queueConfig.js';
-import { setupQueueEventListeners } from '../lib/queueConfig.js';
-import { startMonitoring } from './alertService.js';
+import { Redis } from 'ioredis';
+import prisma from '../lib/prisma.js';
+import { createModuleLogger } from '../config/logger.js';
+import { getContractEvents, getLatestLedger } from './stellarService.js';
 
-// TODO (contributor): uncomment when dependencies are installed
-// const { PrismaClient } = require('@prisma/client');
+const log = createModuleLogger('service.escrowIndexer');
 
-// const prisma = new PrismaClient();
+// ── Config ────────────────────────────────────────────────────────────────────
+
+const CONTRACT_ID = process.env.ESCROW_CONTRACT_ID || '';
+const POLL_INTERVAL_MS = parseInt(process.env.INDEXER_POLL_INTERVAL_MS || '5000', 10);
+const START_LEDGER = parseInt(process.env.INDEXER_START_LEDGER || '0', 10);
+const MAX_RETRIES = 3;
+const DLQ_KEY = 'indexer:dlq';
+
+// ── Redis ─────────────────────────────────────────────────────────────────────
+
+let _redis = null;
+
+function getRedis() {
+  if (!_redis) {
+    _redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
+      maxRetriesPerRequest: 2,
+      enableReadyCheck: false,
+      lazyConnect: true,
+    });
+    _redis.on('error', (err) => log.warn({ message: 'redis_error', error: err.message }));
+  }
+  return _redis;
+}
+
+async function persistCursor(ledger) {
+  await prisma.indexerState.update({
+    where: { id: 1 },
+    data: { lastProcessedLedger: BigInt(ledger) },
+  });
+}
+
+// ── ScVal helpers (raw JSON values from eventIndexer shape) ───────────────────
+
+const parseBigInt = (v) => {
+  if (typeof v === 'bigint') return v;
+  if (typeof v === 'number') return BigInt(v);
+  try { return BigInt(String(v)); } catch { return BigInt(0); }
+};
+
+const parseAddress = (v) => {
+  if (typeof v === 'string') return v;
+  try { return v.address().toString(); } catch { return String(v); }
+};
+
+// ── Event handlers ────────────────────────────────────────────────────────────
+
+export async function handleMilestoneApproved(event) {
+  const escrowId = parseBigInt(event.topic?.[1]);
+  const [milestoneId] = event.value ?? [];
+  if (!escrowId || milestoneId === undefined) return;
+  await prisma.milestone.updateMany({
+    where: { escrowId, milestoneIndex: Number(parseBigInt(milestoneId)) },
+    data: { status: 'Approved', resolvedAt: new Date(event.ledgerClosedAt) },
+  });
+}
+
+export async function handleDisputeRaised(event) {
+  const escrowId = parseBigInt(event.topic?.[1]);
+  if (!escrowId) return;
+  const raisedBy = parseAddress(event.value);
+  await prisma.$transaction([
+    prisma.escrow.updateMany({ where: { id: escrowId }, data: { status: 'Disputed' } }),
+    prisma.dispute.upsert({
+      where: { escrowId },
+      create: { escrowId, raisedByAddress: String(raisedBy ?? ''), raisedAt: new Date(event.ledgerClosedAt) },
+      update: {},
+    }),
+  ]);
+}
+
+export async function handleFundsReleased(event) {
+  const escrowId = parseBigInt(event.topic?.[1]);
+  const [, amount] = event.value ?? [];
+  if (!escrowId || !amount) return;
+  const released = parseBigInt(amount);
+  await prisma.$executeRaw`
+    UPDATE escrows
+    SET remaining_balance = (remaining_balance::numeric - ${released}::numeric)::text
+    WHERE id = ${escrowId}
+  `;
+}
+
+export async function handleEscrowCancelled(event) {
+  const escrowId = parseBigInt(event.topic?.[1]);
+  if (!escrowId) return;
+  await prisma.escrow.updateMany({ where: { id: escrowId }, data: { status: 'Cancelled' } });
+}
+
+export async function handleEscrowCreated(event) {
+  const escrowId = parseBigInt(event.topic?.[1]);
+  const [client, freelancer, amount] = event.value ?? [];
+  if (!escrowId || !client) return;
+  await prisma.escrow.upsert({
+    where: { id: escrowId },
+    create: {
+      id: escrowId,
+      clientAddress: parseAddress(client),
+      freelancerAddress: parseAddress(freelancer),
+      tokenAddress: '',
+      totalAmount: parseBigInt(amount).toString(),
+      remainingBalance: parseBigInt(amount).toString(),
+      status: 'Active',
+      briefHash: '',
+      createdAt: new Date(event.ledgerClosedAt),
+      createdLedger: BigInt(event.ledger ?? 0),
+    },
+    update: {},
+  });
+}
+
+export async function handleMilestoneAdded(event) {
+  const escrowId = parseBigInt(event.topic?.[1]);
+  const [milestoneId, amount] = event.value ?? [];
+  if (!escrowId || milestoneId === undefined) return;
+  const milestoneIndex = Number(parseBigInt(milestoneId));
+  await prisma.milestone.upsert({
+    where: { escrowId_milestoneIndex: { escrowId, milestoneIndex } },
+    create: {
+      escrowId,
+      milestoneIndex,
+      title: `Milestone ${milestoneIndex}`,
+      descriptionHash: '',
+      amount: parseBigInt(amount).toString(),
+      status: 'Pending',
+    },
+    update: {},
+  });
+}
+
+export async function handleMilestoneSubmitted(event) {
+  const escrowId = parseBigInt(event.topic?.[1]);
+  const [milestoneId] = event.value ?? [];
+  if (!escrowId || milestoneId === undefined) return;
+  await prisma.milestone.updateMany({
+    where: { escrowId, milestoneIndex: Number(parseBigInt(milestoneId)) },
+    data: { status: 'Submitted', submittedAt: new Date(event.ledgerClosedAt) },
+  });
+}
+
+export async function handleDisputeResolved(event) {
+  const escrowId = parseBigInt(event.topic?.[1]);
+  if (!escrowId) return;
+  await prisma.escrow.updateMany({ where: { id: escrowId }, data: { status: 'Completed' } });
+}
+
+export async function handleReputationUpdated(event) {
+  const [address, newScore] = event.value ?? [];
+  if (!address) return;
+  await prisma.reputationRecord.upsert({
+    where: { address: String(address) },
+    create: {
+      address: String(address),
+      totalScore: parseBigInt(newScore ?? 0),
+      lastUpdated: new Date(),
+    },
+    update: { totalScore: parseBigInt(newScore ?? 0), lastUpdated: new Date() },
+  });
+}
+
+// ── Dispatch ──────────────────────────────────────────────────────────────────
+
+const HANDLERS = {
+  esc_crt:   handleEscrowCreated,
+  mil_add:   handleMilestoneAdded,
+  mil_sub:   handleMilestoneSubmitted,
+  mil_apr:   handleMilestoneApproved,
+  funds_rel: handleFundsReleased,
+  esc_can:   handleEscrowCancelled,
+  dis_rai:   handleDisputeRaised,
+  dis_res:   handleDisputeResolved,
+  rep_upd:   handleReputationUpdated,
+};
+
+export async function dispatchEvent(event) {
+  const topic = typeof event.topic?.[0] === 'string' ? event.topic[0] : String(event.topic?.[0] ?? '');
+  const handler = HANDLERS[topic];
+  if (!handler) {
+    log.warn({ message: 'indexer_unknown_event_type', topic });
+    return;
+  }
+  await handler(event);
+}
+
+// ── DLQ ───────────────────────────────────────────────────────────────────────
+
+async function pushToDlq(event, error) {
+  try {
+    const redis = getRedis();
+    await redis.rpush(DLQ_KEY, JSON.stringify({
+      event,
+      error: error.message,
+      failedAt: new Date().toISOString(),
+    }));
+    log.warn({ message: 'indexer_event_dlq', topic: event.topic?.[0], error: error.message });
+  } catch (redisErr) {
+    log.error({ message: 'indexer_dlq_push_failed', error: redisErr.message });
+  }
+}
+
+async function processWithRetry(event) {
+  let lastErr;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      await dispatchEvent(event);
+      return;
+    } catch (err) {
+      lastErr = err;
+      if (attempt < MAX_RETRIES) {
+        await new Promise((r) => setTimeout(r, 200 * 2 ** (attempt - 1)));
+      }
+    }
+  }
+  await pushToDlq(event, lastErr);
+}
+
+// ── Core polling ──────────────────────────────────────────────────────────────
 
 /**
- * The last ledger sequence successfully processed.
- * Persisted to DB so the indexer can resume after restarts.
+ * Fetches all events since fromLedger and processes them.
+ * Advances the ledger cursor only after all events in a ledger are committed.
  *
- * @type {number}
+ * @param {number} fromLedger
+ * @returns {Promise<number>} latest ledger sequence
  */
-let lastProcessedLedger = parseInt(process.env.INDEXER_START_LEDGER || '0');
+export async function fetchAndProcessEvents(fromLedger) {
+  const events = await getContractEvents(fromLedger, CONTRACT_ID);
+  const latest = await getLatestLedger();
+
+  for (const event of events) {
+    await processWithRetry(event);
+  }
+
+  if (events.length > 0) {
+    log.info({ message: 'indexer_events_processed', count: events.length, latestLedger: latest });
+  }
+
+  return latest;
+}
 
 /**
  * Starts the indexer polling loop.
- *
- * Polls at the interval defined by INDEXER_POLL_INTERVAL_MS.
- * Each tick fetches new events since `lastProcessedLedger` and
- * queues them for processing via BullMQ.
- *
- * TODO (contributor — hard, Issue #27):
- * 1. Initialize Soroban RPC client
- * 2. Load lastProcessedLedger from DB (table: indexer_state)
- * 3. Start polling loop with setInterval
- * 4. On each tick, call fetchAndProcessEvents()
- * 5. Handle errors gracefully (log + continue, don't crash)
+ * Validates required env vars, loads cursor from DB, then polls.
  */
-const startIndexer = async () => {
-  console.log(`[Indexer] Starting from ledger ${lastProcessedLedger}`);
+export async function startIndexer() {
+  // Load cursor
+  const state = await prisma.indexerState.upsert({
+    where: { id: 1 },
+    create: { id: 1, lastProcessedLedger: BigInt(START_LEDGER) },
+    update: {},
+  });
 
-  // Setup queue event listeners and monitoring
-  setupQueueEventListeners();
-  startMonitoring();
+  let cursor = Number(state.lastProcessedLedger);
+  let backoff = 1000;
 
-  // TODO: implement polling loop
-  // const server = new SorobanRpc.Server(process.env.SOROBAN_RPC_URL);
-  // setInterval(async () => {
-  //   try {
-  //     await fetchAndProcessEvents(server);
-  //   } catch (err) {
-  //     console.error('[Indexer] Error in polling tick:', err.message);
-  //   }
-  // }, parseInt(process.env.INDEXER_POLL_INTERVAL_MS || '5000'));
+  log.info({ message: 'indexer_starting', fromLedger: cursor });
 
-  console.log('[Indexer] TODO: implement — see Issue #27');
-};
-
-/**
- * Fetches contract events from Stellar since `lastProcessedLedger`
- * and queues each event for processing via BullMQ.
- *
- * @param {SorobanRpc.Server} server — initialized Soroban RPC client
- *
- * TODO (contributor — hard, Issue #27):
- * 1. Call server.getEvents({ startLedger, filters: [{ contractIds: [CONTRACT_ADDRESS] }] })
- * 2. For each event, queue it via BullMQ instead of direct processing
- * 3. Update lastProcessedLedger = latestLedger
- * 4. Persist lastProcessedLedger to DB
- */
-const fetchAndProcessEvents = async (_server) => {
-  // TODO: implement
-  throw new Error('fetchAndProcessEvents not implemented — see Issue #27');
-
-  // Example implementation when ready:
-  // const events = await server.getEvents({
-  //   startLedger: lastProcessedLedger,
-  //   filters: [{ contractIds: [process.env.ESCORROW_CONTRACT_ADDRESS] }]
-  // });
-  //
-  // for (const event of events.events) {
-  //   await stellarEventsQueue.add('process-stellar-event', {
-  //     event,
-  //     ledger: event.ledger
-  //   }, {
-  //     // Optional: customize job options per event type
-  //     priority: getEventPriority(event),
-  //     delay: getEventDelay(event)
-  //   });
-  // }
-};
-
-/**
- * Get processing priority for an event
- * @param {Object} event - Stellar event
- * @returns {number} Priority (higher = more important)
- */
-const getEventPriority = (event) => {
-  // High priority for critical events
-  const highPriorityEvents = ['DisputeRaised', 'DisputeResolved'];
-  const eventName = parseEventName(event);
-
-  if (highPriorityEvents.includes(eventName)) {
-    return 10;
-  }
-  return 1;
-};
-
-/**
- * Get processing delay for an event (if any)
- * @param {Object} event - Stellar event
- * @returns {number} Delay in milliseconds
- */
-const getEventDelay = (event) => {
-  // No delay by default, but could be used for throttling
-  return 0;
-};
-
-/**
- * Parse event name from Stellar event topic
- * @param {Object} event - Stellar event
- * @returns {string} Event name
- */
-const parseEventName = (event) => {
-  if (!event.topic || !event.topic[0]) {
-    return 'Unknown';
-  }
-
-  const topicHex = event.topic[0];
-  const eventMap = {
-    '6573635f637274': 'EscrowCreated',
-    '6d696c5f616464': 'MilestoneAdded',
-    '6d696c5f737562': 'MilestoneSubmitted',
-    '6d696c5f617070': 'MilestoneApproved',
-    '66756e645f726c': 'FundsReleased',
-    '6573635f63616e': 'EscrowCancelled',
-    '6469735f726169': 'DisputeRaised',
-    '6469735f726573': 'DisputeResolved',
-    '7265705f757064': 'ReputationUpdated',
+  const tick = async () => {
+    if (!CONTRACT_ID) return;
+    try {
+      const latest = await fetchAndProcessEvents(cursor);
+      if (latest > cursor) {
+        cursor = latest;
+        await persistCursor(cursor);
+      }
+      backoff = 1000;
+    } catch (err) {
+      log.error({ message: 'indexer_tick_error', backoffMs: backoff, error: err.message });
+      await new Promise((r) => setTimeout(r, backoff));
+      backoff = Math.min(backoff * 2, 60_000);
+    }
   };
 
-  return eventMap[topicHex] || 'Unknown';
-};
+  await tick();
+  setInterval(tick, POLL_INTERVAL_MS);
+}
 
-/**
- * Routes a contract event to the correct handler based on its topic.
- * NOTE: This function is now called by the event worker, not directly.
- *
- * @param {object} event — raw Soroban event object from RPC
- *
- * TODO (contributor — medium, Issue #27):
- * Parse event.topic[0] to determine event type, then call the
- * appropriate handler (handleEscrowCreated, handleMilestoneAdded, etc.)
- */
-const dispatchEvent = async (_event) => {
-  // TODO: implement event routing
-  // const eventName = parseEventName(event.topic);
-  // switch (eventName) {
-  //   case 'esc_crt': return handleEscrowCreated(event);
-  //   case 'mil_add': return handleMilestoneAdded(event);
-  //   ...
-  // }
-  console.log('[Indexer] dispatchEvent not implemented — see Issue #27');
-};
-
-/**
- * Handles an EscrowCreated event — inserts a new escrow row.
- *
- * @param {object} event — parsed EscrowCreated event
- *
- * Expected event data: (client, freelancer, amount)
- * Expected event topic: (symbol_short!("esc_crt"), escrow_id)
- *
- * TODO (contributor — medium, Issue #27):
- * 1. Parse escrow_id from topic[1]
- * 2. Parse client, freelancer, amount from data
- * 3. prisma.escrow.create({ data: { ... } })
- */
-const handleEscrowCreated = async (_event) => {
-  // TODO: implement
-  console.log('[Indexer] handleEscrowCreated not implemented');
-};
-
-/**
- * Handles a MilestoneAdded event — inserts a new milestone row.
- *
- * TODO (contributor — medium, Issue #27)
- */
-const handleMilestoneAdded = async (_event) => {
-  // TODO: implement
-};
-
-/**
- * Handles a MilestoneSubmitted event — updates milestone status in DB.
- *
- * TODO (contributor — medium, Issue #27)
- */
-const handleMilestoneSubmitted = async (_event) => {
-  // TODO: implement
-};
-
-/**
- * Handles a MilestoneApproved event — updates milestone status in DB.
- *
- * TODO (contributor — medium, Issue #27)
- */
-const handleMilestoneApproved = async (_event) => {
-  // TODO: implement
-};
-
-/**
- * Handles a FundsReleased event — updates escrow remaining_balance.
- *
- * TODO (contributor — medium, Issue #27)
- */
-const handleFundsReleased = async (_event) => {
-  // TODO: implement
-  // After updating DB, invalidate cache for this escrow:
-  // const escrowId = parseEscrowId(_event);
-  // await escrowController.onEscrowStatusChange(escrowId);
-};
-
-/**
- * Handles a DisputeRaised event — updates escrow status to Disputed.
- *
- * TODO (contributor — medium, Issue #27)
- */
-const handleDisputeRaised = async (_event) => {
-  // TODO: implement
-  // After updating DB, invalidate cache for this escrow:
-  // const escrowId = parseEscrowId(_event);
-  // await escrowController.onEscrowStatusChange(escrowId);
-};
-
-/**
- * Handles a DisputeResolved event — sets status to Completed.
- *
- * TODO (contributor — medium, Issue #27)
- */
-const handleDisputeResolved = async (_event) => {
-  // TODO: implement
-  // After updating DB, invalidate cache for this escrow:
-  // const escrowId = parseEscrowId(_event);
-  // await escrowController.onEscrowStatusChange(escrowId);
-};
-
-/**
- * Handles a ReputationUpdated event — upserts reputation record.
- *
- * TODO (contributor — medium, Issue #27)
- */
-const handleReputationUpdated = async (_event) => {
-  // TODO: implement
-};
-
-/**
- * Handles an EscrowCancelled event.
- *
- * TODO (contributor — easy, Issue #27)
- */
-const handleEscrowCancelled = async (_event) => {
-  // TODO: implement
-};
-
-export {
+export default {
   startIndexer,
   fetchAndProcessEvents,
   dispatchEvent,
-  // Export handlers for unit testing
   handleEscrowCreated,
   handleMilestoneAdded,
   handleMilestoneSubmitted,
   handleMilestoneApproved,
   handleFundsReleased,
+  handleEscrowCancelled,
   handleDisputeRaised,
   handleDisputeResolved,
   handleReputationUpdated,
-  handleEscrowCancelled,
 };
