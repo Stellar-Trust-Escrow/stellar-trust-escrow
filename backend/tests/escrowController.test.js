@@ -32,6 +32,7 @@ const prismaMock = {
     findMany: jest.fn(),
     findUnique: jest.fn(),
     count: jest.fn(),
+    upsert: jest.fn(),
   },
   milestone: {
     findMany: jest.fn(),
@@ -40,8 +41,26 @@ const prismaMock = {
   },
 };
 
+const submitTransactionMock = jest.fn();
+
 jest.unstable_mockModule('../lib/cache.js', () => ({ default: cacheMock }));
 jest.unstable_mockModule('../lib/prisma.js', () => ({ default: prismaMock }));
+jest.unstable_mockModule('../services/stellarService.js', () => ({
+  submitTransaction: submitTransactionMock,
+  getContractEvents: jest.fn(),
+  getLatestLedger: jest.fn(),
+}));
+jest.unstable_mockModule('@stellar/stellar-sdk', () => ({
+  xdr: {
+    ScVal: {
+      fromXDR: jest.fn(() => ({ type: 'u64', value: () => 42n })),
+    },
+  },
+  scValToNative: jest.fn(() => 42n),
+  SorobanRpc: {},
+  Transaction: jest.fn(),
+  Networks: { TESTNET: 'Test SDF Network ; September 2015', PUBLIC: 'Public Global Stellar Network ; September 2015' },
+}));
 
 const { default: escrowController } = await import('../api/controllers/escrowController.js');
 
@@ -64,6 +83,8 @@ function createMockRes() {
 beforeEach(() => {
   jest.clearAllMocks();
   cacheMock.get.mockReturnValue(null);
+  submitTransactionMock.mockResolvedValue({ hash: 'abc123', status: 'SUCCESS', returnValue: null });
+  prismaMock.escrow.upsert.mockResolvedValue({});
   // Default prisma transaction behavior
   prismaMock.$transaction.mockImplementation(async (ops) => {
     return Promise.all(ops);
@@ -208,13 +229,36 @@ describe('escrowController', () => {
       expect(res.status).toHaveBeenCalledWith(400);
     });
 
-    it('returns 501 (not implemented)', async () => {
+    it('returns 200 with { hash, escrowId } on SUCCESS', async () => {
+      submitTransactionMock.mockResolvedValue({ hash: 'tx_abc', status: 'SUCCESS', returnValue: null });
       const req = { body: { signedXdr: 'AAAA...' } };
       const res = createMockRes();
 
       await escrowController.broadcastCreateEscrow(req, res);
 
-      expect(res.status).toHaveBeenCalledWith(501);
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toMatchObject({ hash: 'tx_abc' });
+    });
+
+    it('returns 422 on Soroban FAILED status', async () => {
+      submitTransactionMock.mockResolvedValue({ hash: 'tx_fail', status: 'FAILED', errorResultXdr: 'AAAA' });
+      const req = { body: { signedXdr: 'AAAA...' } };
+      const res = createMockRes();
+
+      await escrowController.broadcastCreateEscrow(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(422);
+      expect(res.body.sorobanStatus).toBe('FAILED');
+    });
+
+    it('returns 422 on TIMEOUT', async () => {
+      submitTransactionMock.mockResolvedValue({ hash: 'tx_timeout', status: 'TIMEOUT' });
+      const req = { body: { signedXdr: 'AAAA...' } };
+      const res = createMockRes();
+
+      await escrowController.broadcastCreateEscrow(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(422);
     });
   });
 
