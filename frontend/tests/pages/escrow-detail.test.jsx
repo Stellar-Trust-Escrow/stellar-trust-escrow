@@ -1,4 +1,5 @@
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { renderWithAppProviders } from '../test-utils';
 import EscrowDetailPage from '../../app/escrow/[id]/page';
 
 // Mock useEscrow so tests don't hit the network.
@@ -44,33 +45,33 @@ beforeEach(() => {
 
 describe('EscrowDetailPage', () => {
   it('renders escrow title', () => {
-    render(<EscrowDetailPage params={params} />);
+    renderWithAppProviders(<EscrowDetailPage params={params} />);
     expect(screen.getByText('Smart Contract Audit')).toBeInTheDocument();
   });
 
   it('renders escrow status badge', () => {
-    render(<EscrowDetailPage params={params} />);
+    renderWithAppProviders(<EscrowDetailPage params={params} />);
     expect(screen.getByText('Active')).toBeInTheDocument();
   });
 
   it('renders escrow ID', () => {
-    render(<EscrowDetailPage params={params} />);
+    renderWithAppProviders(<EscrowDetailPage params={params} />);
     expect(screen.getByText('Escrow #1')).toBeInTheDocument();
   });
 
   it('renders info cells', () => {
-    render(<EscrowDetailPage params={params} />);
+    renderWithAppProviders(<EscrowDetailPage params={params} />);
     expect(screen.getByText('2,000 USDC')).toBeInTheDocument();
     expect(screen.getByText('1,500 USDC')).toBeInTheDocument();
   });
 
   it('renders Raise Dispute button for active escrow', () => {
-    render(<EscrowDetailPage params={params} />);
+    renderWithAppProviders(<EscrowDetailPage params={params} />);
     expect(screen.getByRole('button', { name: /Raise Dispute/ })).toBeInTheDocument();
   });
 
   it('opens dispute modal when Raise Dispute is clicked', () => {
-    render(<EscrowDetailPage params={params} />);
+    renderWithAppProviders(<EscrowDetailPage params={params} />);
     fireEvent.click(screen.getByRole('button', { name: /Raise Dispute/ }));
     expect(screen.getByText('Raise Dispute')).toBeInTheDocument();
     // 'Escrow #1' appears in both the page subtitle and the modal header
@@ -78,7 +79,7 @@ describe('EscrowDetailPage', () => {
   });
 
   it('closes dispute modal when Cancel is clicked', () => {
-    render(<EscrowDetailPage params={params} />);
+    renderWithAppProviders(<EscrowDetailPage params={params} />);
     fireEvent.click(screen.getByRole('button', { name: /Raise Dispute/ }));
     fireEvent.click(screen.getByText('Cancel'));
     // Modal should close - the backdrop should be gone
@@ -86,19 +87,19 @@ describe('EscrowDetailPage', () => {
   });
 
   it('renders milestones section', () => {
-    render(<EscrowDetailPage params={params} />);
+    renderWithAppProviders(<EscrowDetailPage params={params} />);
     expect(screen.getByRole('heading', { name: 'Milestones' })).toBeInTheDocument();
   });
 
   it('renders all 3 milestones', () => {
-    render(<EscrowDetailPage params={params} />);
+    renderWithAppProviders(<EscrowDetailPage params={params} />);
     expect(screen.getByText('Codebase Review')).toBeInTheDocument();
     expect(screen.getByText('Vulnerability Report')).toBeInTheDocument();
     expect(screen.getByText('Final Sign-off')).toBeInTheDocument();
   });
 
   it('renders party cards', () => {
-    render(<EscrowDetailPage params={params} />);
+    renderWithAppProviders(<EscrowDetailPage params={params} />);
     expect(screen.getByText('Client')).toBeInTheDocument();
     expect(screen.getByText('Freelancer')).toBeInTheDocument();
   });
@@ -106,17 +107,17 @@ describe('EscrowDetailPage', () => {
   // Auto-refresh tests
   describe('auto-refresh', () => {
     it('shows last updated timestamp on mount', () => {
-      render(<EscrowDetailPage params={params} />);
+      renderWithAppProviders(<EscrowDetailPage params={params} />);
       expect(screen.getByTestId('last-refreshed')).toHaveTextContent(/Last updated:/);
     });
 
     it('renders a manual Refresh button', () => {
-      render(<EscrowDetailPage params={params} />);
+      renderWithAppProviders(<EscrowDetailPage params={params} />);
       expect(screen.getByRole('button', { name: /Refresh escrow data/ })).toBeInTheDocument();
     });
 
     it('calls mutate when the Refresh button is clicked', async () => {
-      render(<EscrowDetailPage params={params} />);
+      renderWithAppProviders(<EscrowDetailPage params={params} />);
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: /Refresh escrow data/ }));
       });
@@ -124,7 +125,7 @@ describe('EscrowDetailPage', () => {
     });
 
     it('updates the last updated timestamp after a manual refresh', async () => {
-      render(<EscrowDetailPage params={params} />);
+      renderWithAppProviders(<EscrowDetailPage params={params} />);
 
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: /Refresh escrow data/ }));

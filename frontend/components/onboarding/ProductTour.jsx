@@ -157,7 +157,11 @@ function Tooltip({ step, stepIndex, rect, onNext, onPrev, onSkip, walletConnecte
       style={pos}
     >
       {/* Progress dots */}
-      <div className="flex gap-1.5 mb-4" aria-label={`Step ${stepIndex + 1} of ${TOTAL_STEPS}`}>
+      <div
+        role="status"
+        className="flex gap-1.5 mb-4"
+        aria-label={`Step ${stepIndex + 1} of ${TOTAL_STEPS}`}
+      >
         {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
           <div
             key={i}

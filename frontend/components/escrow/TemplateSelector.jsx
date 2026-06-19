@@ -197,6 +197,8 @@ export default function TemplateSelector({
             <button
               key={category}
               type="button"
+              aria-pressed={isActive}
+              aria-label={`Filter by ${category}`}
               onClick={() => setSelectedCategory(category)}
               className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
                 isActive
@@ -227,6 +229,7 @@ export default function TemplateSelector({
                 key={template.id}
                 role="button"
                 tabIndex={0}
+                aria-label={`Select template: ${template.name}`}
                 onClick={() => setSelectedTemplateId(template.id)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
