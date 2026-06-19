@@ -1,4 +1,15 @@
+import { createHash, randomUUID } from 'crypto';
+
 import prisma from '../lib/prisma.js';
+import { emailQueue } from '../queues/emailQueue.js';
+
+function withTenant(where, tenantId) {
+  return tenantId ? { ...where, tenantId } : where;
+}
+
+function toIso(value) {
+  return value instanceof Date ? value.toISOString() : value ? new Date(value).toISOString() : null;
+}
 
 /**
  * Export/Import Service for Stellar Trust Escrow
@@ -11,12 +22,14 @@ class ExportService {
    * @param {string} address - User's Stellar address
    * @returns {Promise<Object>} Complete user data export
    */
-  async exportUserData(address) {
-    const [escrows, payments, kyc, reputation] = await Promise.all([
-      this.exportEscrowHistory(address),
-      this.exportPaymentHistory(address),
-      this.exportKycStatus(address),
-      this.exportReputation(address),
+  async exportUserData(address, { tenantId } = {}) {
+    const [escrows, payments, kyc, reputation, adminAuditLog, disputeMessages] = await Promise.all([
+      this.exportEscrowHistory(address, { tenantId }),
+      this.exportPaymentHistory(address, { tenantId }),
+      this.exportKycStatus(address, { tenantId }),
+      this.exportReputation(address, { tenantId }),
+      this.exportAdminAuditLog(address, { tenantId }),
+      this.exportDisputeMessages(address),
     ]);
 
     return {
@@ -28,6 +41,8 @@ class ExportService {
         payments,
         kyc,
         reputation,
+        adminAuditLog,
+        disputeMessages,
       },
     };
   }
@@ -37,9 +52,10 @@ class ExportService {
    * @param {string} address - User's Stellar address
    * @returns {Promise<Array>} Array of escrow records
    */
-  async exportEscrowHistory(address) {
+  async exportEscrowHistory(address, { tenantId } = {}) {
     const escrows = await prisma.escrow.findMany({
       where: {
+        ...(tenantId ? { tenantId } : {}),
         OR: [{ clientAddress: address }, { freelancerAddress: address }],
       },
       include: {
@@ -61,8 +77,8 @@ class ExportService {
       remainingBalance: escrow.remainingBalance,
       status: escrow.status,
       briefHash: escrow.briefHash,
-      deadline: escrow.deadline?.toISOString() || null,
-      createdAt: escrow.createdAt.toISOString(),
+      deadline: toIso(escrow.deadline),
+      createdAt: toIso(escrow.createdAt),
       createdLedger: escrow.createdLedger.toString(),
       milestones: escrow.milestones.map((m) => ({
         milestoneIndex: m.milestoneIndex,
@@ -70,14 +86,14 @@ class ExportService {
         descriptionHash: m.descriptionHash,
         amount: m.amount,
         status: m.status,
-        submittedAt: m.submittedAt?.toISOString() || null,
-        resolvedAt: m.resolvedAt?.toISOString() || null,
+        submittedAt: toIso(m.submittedAt),
+        resolvedAt: toIso(m.resolvedAt),
       })),
       dispute: escrow.dispute
         ? {
             raisedByAddress: escrow.dispute.raisedByAddress,
-            raisedAt: escrow.dispute.raisedAt.toISOString(),
-            resolvedAt: escrow.dispute.resolvedAt?.toISOString() || null,
+            raisedAt: toIso(escrow.dispute.raisedAt),
+            resolvedAt: toIso(escrow.dispute.resolvedAt),
             clientAmount: escrow.dispute.clientAmount,
             freelancerAmount: escrow.dispute.freelancerAmount,
             resolvedBy: escrow.dispute.resolvedBy,
@@ -92,9 +108,9 @@ class ExportService {
    * @param {string} address - User's Stellar address
    * @returns {Promise<Array>} Array of payment records
    */
-  async exportPaymentHistory(address) {
+  async exportPaymentHistory(address, { tenantId } = {}) {
     const payments = await prisma.payment.findMany({
-      where: { address },
+      where: withTenant({ address }, tenantId),
       orderBy: { createdAt: 'desc' },
     });
 
@@ -108,8 +124,8 @@ class ExportService {
       currency: payment.currency,
       status: payment.status,
       refundId: payment.refundId,
-      createdAt: payment.createdAt.toISOString(),
-      updatedAt: payment.updatedAt.toISOString(),
+      createdAt: toIso(payment.createdAt),
+      updatedAt: toIso(payment.updatedAt),
     }));
   }
 
@@ -118,10 +134,12 @@ class ExportService {
    * @param {string} address - User's Stellar address
    * @returns {Promise<Object|null>} KYC record or null
    */
-  async exportKycStatus(address) {
-    const kyc = await prisma.kycVerification.findUnique({
-      where: { address },
-    });
+  async exportKycStatus(address, { tenantId } = {}) {
+    const kyc = tenantId
+      ? await prisma.kycVerification.findFirst({ where: { address, tenantId } })
+      : await prisma.kycVerification.findUnique({
+          where: { address },
+        });
 
     if (!kyc) return null;
 
@@ -129,8 +147,8 @@ class ExportService {
       status: kyc.status,
       reviewResult: kyc.reviewResult,
       rejectLabels: kyc.rejectLabels,
-      createdAt: kyc.createdAt.toISOString(),
-      updatedAt: kyc.updatedAt.toISOString(),
+      createdAt: toIso(kyc.createdAt),
+      updatedAt: toIso(kyc.updatedAt),
     };
   }
 
@@ -139,10 +157,12 @@ class ExportService {
    * @param {string} address - User's Stellar address
    * @returns {Promise<Object|null>} Reputation record or null
    */
-  async exportReputation(address) {
-    const reputation = await prisma.reputationRecord.findUnique({
-      where: { address },
-    });
+  async exportReputation(address, { tenantId } = {}) {
+    const reputation = tenantId
+      ? await prisma.reputationRecord.findFirst({ where: { address, tenantId } })
+      : await prisma.reputationRecord.findUnique({
+          where: { address },
+        });
 
     if (!reputation) return null;
 
@@ -152,9 +172,177 @@ class ExportService {
       disputedEscrows: reputation.disputedEscrows,
       disputesWon: reputation.disputesWon,
       totalVolume: reputation.totalVolume,
-      lastUpdated: reputation.lastUpdated.toISOString(),
-      updatedAt: reputation.updatedAt.toISOString(),
+      lastUpdated: toIso(reputation.lastUpdated),
+      updatedAt: toIso(reputation.updatedAt),
     };
+  }
+
+  async exportAdminAuditLog(address, { tenantId } = {}) {
+    const logs = await prisma.adminAuditLog.findMany({
+      where: withTenant({ targetAddress: address }, tenantId),
+      orderBy: { performedAt: 'desc' },
+    });
+
+    return logs.map((log) => ({
+      action: log.action,
+      targetAddress: log.targetAddress,
+      timestamp: toIso(log.performedAt),
+      outcome: log.reason || 'recorded',
+    }));
+  }
+
+  async exportDisputeMessages(address) {
+    if (!prisma.chatMessage || !prisma.chatRoomKey) return [];
+
+    const roomKeys = await prisma.chatRoomKey.findMany({
+      where: { address },
+      select: { roomId: true },
+    });
+    const roomIds = [...new Set(roomKeys.map((key) => key.roomId).filter(Boolean))];
+
+    const messages = await prisma.chatMessage.findMany({
+      where: {
+        OR: [{ senderAddress: address }, ...(roomIds.length ? [{ roomId: { in: roomIds } }] : [])],
+      },
+      orderBy: { sentAt: 'asc' },
+      select: {
+        id: true,
+        roomId: true,
+        senderAddress: true,
+        ciphertext: true,
+        iv: true,
+        tag: true,
+        sentAt: true,
+      },
+    });
+
+    return messages.map((message) => ({
+      id: message.id,
+      roomId: message.roomId,
+      senderAddress: message.senderAddress,
+      ciphertext: message.ciphertext,
+      iv: message.iv,
+      tag: message.tag,
+      sentAt: toIso(message.sentAt),
+    }));
+  }
+
+  async logAdminExport(address, { tenantId, performedBy = 'admin' } = {}) {
+    return prisma.adminAuditLog.create({
+      data: {
+        ...(tenantId ? { tenantId } : {}),
+        action: 'DATA_EXPORT',
+        targetAddress: address,
+        reason: 'Admin exported user data',
+        performedBy,
+        performedAt: new Date(),
+      },
+    });
+  }
+
+  async queueLargeExport(address, { tenantId, requestedBy } = {}) {
+    const token = randomUUID();
+    const downloadUrl = `/api/users/${address}/export/file?token=${token}`;
+    const user = await prisma.user?.findFirst?.({
+      where: withTenant({ walletAddress: address }, tenantId),
+      select: { email: true },
+    });
+
+    const job = await emailQueue.add('data_export.deliver', {
+      address,
+      tenantId,
+      requestedBy,
+      downloadUrl,
+      recipients: user?.email ? [{ email: user.email }] : [],
+      message: {
+        subject: 'Your Stellar Trust Escrow data export is ready',
+        text: `Your data export is ready: ${downloadUrl}`,
+      },
+    });
+
+    return { jobId: job.id, downloadUrl };
+  }
+
+  pseudonymForAddress(address) {
+    return `anon_${createHash('sha256').update(address).digest('hex').slice(0, 32)}`;
+  }
+
+  async pseudonymizeUserData(address, { tenantId, performedBy = 'admin' } = {}) {
+    const pseudonym = this.pseudonymForAddress(address);
+    const scoped = (where) => withTenant(where, tenantId);
+
+    const result = await prisma.$transaction(async (tx) => {
+      const [
+        escrowsAsClient,
+        escrowsAsFreelancer,
+        escrowsAsArbiter,
+        payments,
+        kyc,
+        reputation,
+        profiles,
+        users,
+      ] = await Promise.all([
+        tx.escrow.updateMany({
+          where: scoped({ clientAddress: address }),
+          data: { clientAddress: pseudonym },
+        }),
+        tx.escrow.updateMany({
+          where: scoped({ freelancerAddress: address }),
+          data: { freelancerAddress: pseudonym },
+        }),
+        tx.escrow.updateMany({
+          where: scoped({ arbiterAddress: address }),
+          data: { arbiterAddress: pseudonym },
+        }),
+        tx.payment.updateMany({
+          where: scoped({ address }),
+          data: { address: pseudonym },
+        }),
+        tx.kycVerification.updateMany({
+          where: scoped({ address }),
+          data: { address: pseudonym, applicantId: null, rejectLabels: [] },
+        }),
+        tx.reputationRecord.updateMany({
+          where: scoped({ address }),
+          data: { address: pseudonym },
+        }),
+        tx.userProfile.updateMany({
+          where: scoped({ address }),
+          data: { address: pseudonym, displayName: null, bio: null, avatarUrl: null },
+        }),
+        tx.user.updateMany({
+          where: scoped({ walletAddress: address }),
+          data: { walletAddress: pseudonym, email: `${pseudonym}@deleted.local` },
+        }),
+      ]);
+
+      await tx.adminAuditLog.create({
+        data: {
+          ...(tenantId ? { tenantId } : {}),
+          action: 'GDPR_DATA_PSEUDONYMIZE',
+          targetAddress: pseudonym,
+          reason: 'Pseudonymized user data',
+          performedBy,
+          performedAt: new Date(),
+        },
+      });
+
+      return {
+        pseudonym,
+        updated: {
+          escrowsAsClient: escrowsAsClient.count,
+          escrowsAsFreelancer: escrowsAsFreelancer.count,
+          escrowsAsArbiter: escrowsAsArbiter.count,
+          payments: payments.count,
+          kyc: kyc.count,
+          reputation: reputation.count,
+          profiles: profiles.count,
+          users: users.count,
+        },
+      };
+    });
+
+    return result;
   }
 
   /**
