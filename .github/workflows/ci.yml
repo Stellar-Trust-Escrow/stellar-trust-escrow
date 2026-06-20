@@ -9,6 +9,8 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
+  issues: write
 
 env:
   HUSKY: 0
@@ -26,7 +28,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: Install root dependencies
         run: npm ci --ignore-scripts
@@ -130,6 +132,7 @@ jobs:
       - name: Coverage summary comment
         if: steps.changes.outputs.changed == 'true' && github.event_name == 'pull_request'
         uses: romeovs/lcov-reporter-action@v0.4.0
+        continue-on-error: true
         with:
           lcov-file: test-artifacts/escrow_contract-lcov.info
           github-token: ${{ secrets.GITHUB_TOKEN }}

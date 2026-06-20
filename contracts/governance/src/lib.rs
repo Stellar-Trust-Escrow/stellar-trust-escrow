@@ -123,6 +123,12 @@ impl Storage {
         env.storage().persistent().set(&key, &true);
         Self::bump_persistent(env, &key);
     }
+
+    fn save_vote_record(env: &Env, proposal_id: u64, voter: &Address, power: i128) {
+        let key = DataKey::VoteRecord(proposal_id, voter.clone());
+        env.storage().persistent().set(&key, &power);
+        Self::bump_persistent(env, &key);
+    }
 }
 
 // ── Governance helpers ────────────────────────────────────────────────────────
@@ -170,21 +176,31 @@ fn validate_parameter_payload(env: &Env, payload: &ParameterPayload) -> Result<(
 }
 
 /// Checks whether a proposal has reached quorum and approval threshold.
-fn evaluate(proposal: &Proposal, config: &GovConfig) -> bool {
-    let total_votes = proposal.votes_for + proposal.votes_against;
+fn evaluate(proposal: &Proposal, config: &GovConfig) -> Result<bool, GovError> {
+    let total_votes = proposal
+        .votes_for
+        .checked_add(proposal.votes_against)
+        .ok_or(GovError::ArithmeticOverflow)?;
 
     // Quorum: enough participation?
-    let quorum_required = proposal.total_supply_snapshot * config.quorum_bps as i128 / 10_000;
+    let quorum_required = proposal
+        .total_supply_snapshot
+        .checked_mul(config.quorum_bps as i128)
+        .and_then(|r| r.checked_div(10_000))
+        .ok_or(GovError::ArithmeticOverflow)?;
     if total_votes < quorum_required {
-        return false;
+        return Ok(false);
     }
 
     // Approval threshold: enough FOR votes?
     if total_votes == 0 {
-        return false;
+        return Ok(false);
     }
-    let threshold_required = total_votes * config.approval_threshold_bps as i128 / 10_000;
-    proposal.votes_for >= threshold_required
+    let threshold_required = total_votes
+        .checked_mul(config.approval_threshold_bps as i128)
+        .and_then(|r| r.checked_div(10_000))
+        .ok_or(GovError::ArithmeticOverflow)?;
+    Ok(proposal.votes_for >= threshold_required)
 }
 
 // ── Contract ──────────────────────────────────────────────────────────────────
@@ -389,12 +405,19 @@ impl GovernanceContract {
         }
 
         if support {
-            proposal.votes_for += power;
+            proposal.votes_for = proposal
+                .votes_for
+                .checked_add(power)
+                .ok_or(GovError::ArithmeticOverflow)?;
         } else {
-            proposal.votes_against += power;
+            proposal.votes_against = proposal
+                .votes_against
+                .checked_add(power)
+                .ok_or(GovError::ArithmeticOverflow)?;
         }
 
         Storage::mark_voted(&env, proposal_id, &voter);
+        Storage::save_vote_record(&env, proposal_id, &voter, power);
         Storage::save_proposal(&env, &proposal);
         events::emit_vote_cast(&env, proposal_id, &voter, support, power);
         Ok(())
@@ -425,7 +448,7 @@ impl GovernanceContract {
 
         let config = Storage::config(&env)?;
 
-        if evaluate(&proposal, &config) {
+        if evaluate(&proposal, &config)? {
             // Timelock: if delay is 0, go straight to Queued (executable now)
             proposal.status = ProposalStatus::Queued;
             events::emit_proposal_queued(&env, proposal_id, proposal.executable_at);
