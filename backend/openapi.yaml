@@ -2440,3 +2440,257 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+
+  /api/chat/{escrowId}/room-key:
+    post:
+      summary: Distribute encrypted room keys
+      description: >
+        Store per-participant AES-256 session keys (each wrapped with the recipient's
+        Stellar public key via ECIES). Caller must be a participant of the escrow.
+        The server stores but never decrypts these keys.
+      tags: [Chat]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: escrowId
+          required: true
+          schema:
+            type: string
+          description: On-chain escrow ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [encryptedKeys]
+              properties:
+                encryptedKeys:
+                  type: object
+                  description: Map of Stellar address → base64-encoded ECIES-wrapped AES key
+                  additionalProperties:
+                    type: string
+              example:
+                encryptedKeys:
+                  GBXXX: "base64EncodedWrappedKey1=="
+                  GBYYY: "base64EncodedWrappedKey2=="
+      responses:
+        '200':
+          description: Keys stored successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  roomId:
+                    type: string
+                    example: "dispute:42"
+        '400':
+          description: Missing or invalid encryptedKeys
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not a participant in this escrow
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Escrow not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      summary: Fetch your encrypted room key
+      description: >
+        Returns the caller's ECIES-wrapped AES session key for the dispute chat room.
+        Only the key addressed to req.user.address is returned.
+      tags: [Chat]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: escrowId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Encrypted room key
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  roomId:
+                    type: string
+                    example: "dispute:42"
+                  encryptedKey:
+                    type: string
+                    description: Base64-encoded ECIES-wrapped AES-256 key
+        '403':
+          description: Caller is not a participant in this escrow
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Room key not found for this address
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/chat/{escrowId}/messages:
+    post:
+      summary: Send an encrypted message
+      description: >
+        Store an AES-256-GCM encrypted message. The escrow must be in Disputed status.
+        Caller must be a participant. Maximum 500 messages per room.
+      tags: [Chat]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: escrowId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ciphertext, iv, tag]
+              properties:
+                ciphertext:
+                  type: string
+                  description: AES-256-GCM ciphertext, base64-encoded
+                iv:
+                  type: string
+                  description: 12-byte GCM nonce, base64-encoded
+                tag:
+                  type: string
+                  description: 16-byte GCM auth tag, base64-encoded
+      responses:
+        '201':
+          description: Message stored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  senderAddress:
+                    type: string
+                  sentAt:
+                    type: string
+                    format: date-time
+        '400':
+          description: Missing required fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not a participant in this escrow
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Escrow is not in Disputed status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Room message limit (500) reached
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      summary: Get encrypted messages (paginated)
+      description: >
+        Returns paginated encrypted messages for the dispute chat room.
+        Only participants of the escrow may access messages.
+        Messages from other tenants are never returned.
+      tags: [Chat]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: escrowId
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: Paginated message list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        senderAddress:
+                          type: string
+                        ciphertext:
+                          type: string
+                        iv:
+                          type: string
+                        tag:
+                          type: string
+                        sentAt:
+                          type: string
+                          format: date-time
+                  page:
+                    type: integer
+                  limit:
+                    type: integer
+                  total:
+                    type: integer
+                  totalPages:
+                    type: integer
+                  hasNextPage:
+                    type: boolean
+                  hasPreviousPage:
+                    type: boolean
+        '403':
+          description: Caller is not a participant in this escrow
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Escrow not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'

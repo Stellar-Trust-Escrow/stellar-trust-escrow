@@ -50,7 +50,17 @@
 'use client';
 
 import { useCallback, useEffect } from 'react';
+import { Networks } from '@stellar/stellar-sdk';
+import {
+  isConnected as freighterIsConnected,
+  getPublicKey,
+  signTransaction,
+  requestAccess,
+  getNetworkDetails,
+} from '@stellar/freighter-api';
 import { useWalletStore } from '../store/app-store';
+
+const FREIGHTER_INSTALL_URL = 'https://www.freighter.app/';
 
 export function useWallet() {
   const {
@@ -62,6 +72,7 @@ export function useWallet() {
     error,
     setFreighterInstalled,
     startConnect,
+    finishConnect,
     setConnectError,
     disconnect,
   } = useWalletStore();
@@ -69,18 +80,56 @@ export function useWallet() {
   // ── Detect Freighter on mount ──────────────────────────────────────────────
   useEffect(() => {
     setFreighterInstalled(typeof window !== 'undefined' && !!window.freighter);
-  }, []);
+  }, [setFreighterInstalled]);
+
+  // ── Auto-restore connection on mount ───────────────────────────────────────
+  useEffect(() => {
+    const restoreConnection = async () => {
+      if (!isFreighterInstalled) return;
+
+      try {
+        if (await freighterIsConnected()) {
+          const pubKey = await getPublicKey();
+          const networkDetails = await getNetworkDetails();
+          finishConnect({
+            address: pubKey,
+            network: networkDetails.network === 'PUBLIC_NETWORK' ? 'mainnet' : 'testnet',
+          });
+        }
+      } catch {
+        // Silent fail on restore — user can reconnect manually
+      }
+    };
+
+    restoreConnection();
+  }, [isFreighterInstalled, finishConnect]);
 
   // ── Connect ────────────────────────────────────────────────────────────────
   const connect = useCallback(async () => {
     startConnect();
     try {
-      // TODO (contributor — Issue #35): implement Freighter connection
-      setConnectError('Wallet connection not yet implemented. See Issue #35.');
+      if (!isFreighterInstalled) {
+        throw new Error(
+          `Freighter wallet not installed. Install it here: ${FREIGHTER_INSTALL_URL}`,
+        );
+      }
+
+      await requestAccess();
+      const pubKey = await getPublicKey();
+      const networkDetails = await getNetworkDetails();
+
+      finishConnect({
+        address: pubKey,
+        network: networkDetails.network === 'PUBLIC_NETWORK' ? 'mainnet' : 'testnet',
+      });
     } catch (err) {
-      setConnectError(err.message);
+      const message =
+        err.message === 'User rejected access'
+          ? 'You declined wallet connection.'
+          : err.message;
+      setConnectError(message);
     }
-  }, [setConnectError, startConnect]);
+  }, [isFreighterInstalled, startConnect, finishConnect, setConnectError]);
 
   // ── Sign Transaction ───────────────────────────────────────────────────────
   /**
@@ -99,11 +148,28 @@ export function useWallet() {
    * return signedXdr;
    */
   const signTx = useCallback(
-    async (_unsignedXdr) => {
+    async (unsignedXdr) => {
       if (!isConnected) throw new Error('Wallet not connected');
-      throw new Error('signTx not implemented — see Issue #35');
+
+      try {
+        const networkPassphrase =
+          network === 'mainnet' ? Networks.PUBLIC_NETWORK : Networks.TESTNET_NETWORK;
+
+        const signedXdr = await signTransaction(unsignedXdr, {
+          networkPassphrase,
+          accountToSign: address,
+        });
+
+        return signedXdr;
+      } catch (err) {
+        const message =
+          err.message === 'User rejected signing'
+            ? 'Transaction signing was cancelled.'
+            : `Signing failed: ${err.message}`;
+        throw new Error(message);
+      }
     },
-    [isConnected],
+    [isConnected, network, address],
   );
 
   return {

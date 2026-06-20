@@ -21,13 +21,19 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Button from '../../../components/ui/Button';
 import TemplateSelector from '../../../components/escrow/TemplateSelector';
 import StellarAddressInput from '../../../components/ui/StellarAddressInput';
 import XLMAmountInput from '../../../components/ui/XLMAmountInput';
 import templatesData from '../../../data/templates.json';
 import { useToast } from '../../../contexts/ToastContext';
+import { useWallet } from '../../../hooks/useWallet';
+import {
+  buildCreateEscrowTx,
+  broadcastTransaction,
+  isValidStellarAddress,
+} from '../../../lib/stellar';
 
 const STEPS = [
   { id: 1, label: 'Counterparty' },
@@ -67,9 +73,11 @@ function isPositiveAmount(value) {
 }
 
 export default function CreateEscrowPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const templateLibrary = templatesData.templates || [];
 
+  const { address, isConnected, signTx } = useWallet();
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState({
     freelancerAddress: '',
@@ -117,14 +125,10 @@ export default function CreateEscrowPage() {
     setIsSubmitting(true);
     setError(null);
     try {
-      // 1. Build Soroban transaction
-      // 2. Sign with Freighter
-      // 3. Broadcast
-      // 4. Redirect
       throw new Error('Not implemented — see Issue #33');
     } catch (err) {
-      setError(err.message);
-      showToast('Failed to create escrow', 'error');
+      const message = err.message || 'Failed to create escrow';
+      setError(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -192,27 +196,32 @@ export default function CreateEscrowPage() {
       )}
 
       {/* Step Indicator */}
-      <div className="flex items-center gap-2">
-        {STEPS.map((step, i) => (
-          <div key={step.id} className="flex items-center gap-2">
-            <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
+      <nav aria-label="Progress">
+        <ol className="flex items-center gap-2">
+          {STEPS.map((step, i) => (
+            <li key={step.id} className="flex items-center gap-2">
+              <div
+                aria-current={currentStep === step.id ? 'step' : undefined}
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
                 ${
                   currentStep >= step.id ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-500'
                 }`}
-            >
-              {step.id}
-            </div>
-            <span
-              className={`text-sm hidden sm:inline
+              >
+                <span aria-label={`Step ${step.id}: ${step.label}`}>{step.id}</span>
+              </div>
+              <span
+                className={`text-sm hidden sm:inline
                 ${currentStep >= step.id ? 'text-white' : 'text-gray-500'}`}
-            >
-              {step.label}
-            </span>
-            {i < STEPS.length - 1 && <div className="w-8 h-px bg-gray-700 mx-1" />}
-          </div>
-        ))}
-      </div>
+              >
+                {step.label}
+              </span>
+              {i < STEPS.length - 1 && (
+                <div className="w-8 h-px bg-gray-700 mx-1" aria-hidden="true" />
+              )}
+            </li>
+          ))}
+        </ol>
+      </nav>
 
       {/* Step Content */}
       <div className="card space-y-6">
@@ -380,6 +389,7 @@ function StepMilestones({ formData, onAdd, onRemove, onUpdate }) {
           <input
             type="text"
             placeholder="Title (e.g. Initial Design Mockups)"
+            aria-label={`Milestone ${index + 1} title`}
             className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2
                        text-white placeholder-gray-500 text-sm focus:outline-none focus:border-indigo-500"
             value={milestone.title}
@@ -388,6 +398,7 @@ function StepMilestones({ formData, onAdd, onRemove, onUpdate }) {
           <textarea
             rows={2}
             placeholder="Milestone description"
+            aria-label={`Milestone ${index + 1} description`}
             className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2
                        text-white placeholder-gray-500 text-sm focus:outline-none focus:border-indigo-500 resize-none"
             value={milestone.description}
@@ -397,6 +408,7 @@ function StepMilestones({ formData, onAdd, onRemove, onUpdate }) {
             <XLMAmountInput
               value={milestone.amount}
               placeholder="Amount"
+              aria-label={`Milestone ${index + 1} amount`}
               onChange={(event) => onUpdate(index, 'amount', event.target.value)}
               inputClassName="w-32"
               className="w-32"

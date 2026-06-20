@@ -53,4 +53,7 @@ pub enum GovError {
     LockNotExpired = 31,
     NewUnlockTimeTooEarly = 32,
     ZeroLockAmount = 33,
+
+    // Arithmetic
+    ArithmeticOverflow = 35,
 }

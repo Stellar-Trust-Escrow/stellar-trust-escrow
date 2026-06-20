@@ -21,26 +21,43 @@
 'use client';
 
 import { useState } from 'react';
+import { useWallet } from '../../hooks/useWallet';
+import { useToast } from '../../contexts/ToastContext';
+import { buildRaiseDisputeTx, broadcastTransaction } from '../../lib/stellar';
 import Modal from '../ui/Modal';
 
-export default function DisputeModal({ isOpen, onClose, escrowId }) {
+export default function DisputeModal({ isOpen, onClose, escrowId, onSuccess }) {
   const [reason, setReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
+
+  const { address, signTx } = useWallet();
+  const { showToast } = useToast();
 
   const handleRaise = async () => {
     setIsSubmitting(true);
     setError(null);
     try {
-      // TODO (contributor — Issue #41):
-      // 1. Build raise_dispute Soroban transaction
-      // 2. Upload reason to IPFS, get hash
-      // 3. Sign with Freighter
-      // 4. Broadcast
-      // 5. onClose() + show success toast
-      throw new Error('Not implemented — see Issue #41');
+      if (!address) throw new Error('Please connect your wallet first');
+
+      // TODO: Upload reason to IPFS and get hash for better on-chain tracking
+      // For now, we'll pass null/empty
+
+      const unsignedXdr = await buildRaiseDisputeTx({
+        sourceAddress: address,
+        escrowId: BigInt(escrowId).toString(),
+      });
+
+      const signedXdr = await signTx(unsignedXdr);
+      const { hash } = await broadcastTransaction(signedXdr);
+
+      showToast(`Dispute raised: ${hash}`, 'success');
+      setReason('');
+      onClose();
+      if (onSuccess) onSuccess();
     } catch (err) {
       setError(err.message);
+      showToast(err.message || 'Failed to raise dispute', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -55,6 +72,7 @@ export default function DisputeModal({ isOpen, onClose, escrowId }) {
       onConfirm={handleRaise}
       confirmLabel={isSubmitting ? 'Signing…' : 'Confirm Dispute'}
       confirmVariant="danger"
+      isLoading={isSubmitting}
     >
       <div className="space-y-4">
         {/* Warning */}
