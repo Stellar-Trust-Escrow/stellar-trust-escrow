@@ -22,9 +22,9 @@ export default function EscrowDetailScreen() {
   const router = useRouter();
   const [authed, setAuthed] = useState(!isBiometricEnabled());
 
-  const { data: escrow, isLoading, refetch } = useEscrow(authed ? (id ?? null) : null);
+  const { data: escrow, isLoading, refetch } = useEscrow(authed && id ? id : null);
   const { data: milestones = [], isLoading: milestonesLoading } = useMilestones(
-    authed && escrow ? (id ?? null) : null,
+    authed && escrow && id ? id : null,
   );
 
   useEffect(() => {
@@ -39,10 +39,17 @@ export default function EscrowDetailScreen() {
     }
   }, [authed, router]);
 
-  if (!authed) {
+  // Render skeleton while biometric auth is pending
+  if (!authed && isBiometricEnabled()) {
     return (
       <SafeAreaView style={styles.safe}>
-        <EmptyState icon="🔒" title="Authentication required" subtitle="Verifying your identity…" />
+        <View style={styles.content}>
+          <Card style={styles.headerCard}>
+            <View style={[styles.skeleton, { height: 20, marginBottom: 12 }]} />
+            <View style={[styles.skeleton, { height: 40, marginBottom: 8 }]} />
+            <View style={[styles.skeleton, { height: 14 }]} />
+          </Card>
+        </View>
       </SafeAreaView>
     );
   }
@@ -173,6 +180,10 @@ function PartyRow({ label, address, isYou }: { label: string; address: string; i
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#0f0f0f' },
   content: { padding: 16, paddingBottom: 48 },
+  skeleton: {
+    backgroundColor: '#1f2937',
+    borderRadius: 6,
+  },
   headerCard: { marginBottom: 12 },
   row: {
     flexDirection: 'row',

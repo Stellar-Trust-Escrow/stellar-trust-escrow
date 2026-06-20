@@ -31,7 +31,13 @@ export default function RootLayout() {
       (response) => {
         const data = response.notification.request.content.data as Record<string, string>;
         if (data?.escrowId) {
-          void router.push(`/escrow/${data.escrowId}`);
+          // Validate escrowId: only numeric chars, reject path traversal
+          const VALID_ESCROW_ID = /^[0-9]+$/;
+          if (VALID_ESCROW_ID.test(data.escrowId)) {
+            void router.push(`/escrow/${data.escrowId}`);
+          } else {
+            console.error(`[Security] Invalid escrowId in notification: ${data.escrowId}`);
+          }
         }
       },
     );
