@@ -1,0 +1,96 @@
+name: Gas Profiling
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  gas-profile:
+    name: Profile Contract Gas & Size
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+
+      - name: Setup Rust + WASM target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Run gas profiler (PR branch)
+        id: pr_profile
+        run: |
+          bash scripts/gas-reporter.sh
+          echo "report=$(cat gas-report.json | tr '\n' ' ')" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      - name: Checkout main for baseline
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main-baseline
+
+      - name: Run gas profiler (main baseline)
+        id: main_profile
+        run: |
+          cd main-baseline
+          bash scripts/gas-reporter.sh || true
+          cp gas-report.json ../gas-report-main.json
+        continue-on-error: true
+
+      - name: Compare and post PR comment
+        uses: actions/github-script@v7
+        env:
+          GAS_INCREASE_THRESHOLD: '15'
+        with:
+          script: |
+            const fs = require('fs');
+            let pr = {}, main = {};
+            try { pr = JSON.parse(fs.readFileSync('gas-report.json', 'utf8')); } catch {}
+            try { main = JSON.parse(fs.readFileSync('gas-report-main.json', 'utf8')); } catch {}
+
+            const threshold = parseInt(process.env.GAS_INCREASE_THRESHOLD);
+            let rows = '', failed = false;
+            const allKeys = new Set([...Object.keys(pr.wasm_sizes||{}), ...Object.keys(main.wasm_sizes||{})]);
+
+            for (const name of allKeys) {
+              const prSz = pr.wasm_sizes?.[name] ?? 'N/A';
+              const mainSz = main.wasm_sizes?.[name] ?? 'N/A';
+              let delta = '', flag = '✅';
+              if (typeof prSz === 'number' && typeof mainSz === 'number') {
+                const pct = ((prSz - mainSz) / mainSz * 100).toFixed(1);
+                delta = `${pct > 0 ? '+' : ''}${pct}%`;
+                if (parseFloat(pct) > threshold) { flag = '❌'; failed = true; }
+                else if (parseFloat(pct) > 5) flag = '⚠️';
+              }
+              rows += `| ${name} | ${mainSz} KB | ${prSz} KB | ${delta} | ${flag} |\n`;
+            }
+
+            const warnings = [...(pr.warnings||[])].map(w => `> ⚠️ ${w}`).join('\n');
+            const status = failed ? '❌ **Pipeline failed**: gas/size increase exceeds threshold.' : '✅ All checks passed.';
+
+            const body = `## ⛽ Gas Profiling Report\n\n${status}\n\n| Contract | Main (KB) | PR (KB) | Δ | Status |\n|---|---|---|---|---|\n${rows}\n${warnings ? `\n### Warnings\n${warnings}` : ''}\n\n<sub>Threshold: >${threshold}% increase triggers failure. Limit: 512KB per contract.</sub>`;
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+
+            if (failed) core.setFailed('Gas/size regression detected.');

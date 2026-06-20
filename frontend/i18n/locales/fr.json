@@ -1,0 +1,99 @@
+{
+  "nav": { "dashboard": "Tableau de bord", "explorer": "Explorateur", "profile": "Profil" },
+  "wallet": {
+    "connect": "Connecter le Portefeuille",
+    "disconnect": "Déconnecter",
+    "connected": "Connecté",
+    "connecting": "Connexion...",
+    "notConnected": "Non Connecté"
+  },
+  "escrow": {
+    "create": "Créer un Dépôt",
+    "title": "Dépôt",
+    "status": {
+      "active": "Actif",
+      "completed": "Terminé",
+      "disputed": "En Litige",
+      "cancelled": "Annulé"
+    },
+    "fields": {
+      "client": "Client",
+      "freelancer": "Freelance",
+      "amount": "Montant",
+      "deadline": "Échéance",
+      "milestone": "Jalon",
+      "milestones": "Jalons"
+    },
+    "actions": {
+      "submit": "Soumettre le Travail",
+      "approve": "Approuver et Libérer les Fonds",
+      "reject": "Rejeter",
+      "dispute": "Ouvrir un Litige",
+      "cancel": "Annuler le Dépôt"
+    }
+  },
+  "milestone": {
+    "status": {
+      "pending": "En attente",
+      "submitted": "Soumis",
+      "approved": "Approuvé",
+      "rejected": "Rejeté",
+      "disputed": "En Litige"
+    }
+  },
+  "common": {
+    "loading": "Chargement...",
+    "error": "Une erreur s'est produite",
+    "notFound": "Introuvable",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "confirm": "Confirmer",
+    "back": "Retour",
+    "next": "Suivant",
+    "search": "Rechercher",
+    "filter": "Filtrer",
+    "noResults": "Aucun résultat"
+  },
+  "network": { "mainnet": "Réseau Principal", "testnet": "Réseau de Test" },
+  "home": {
+    "howItWorks": "Comment ça marche",
+    "features": { "title": "Pour les Freelances et les Clients" },
+    "cta": {
+      "title": "Prêt à construire la confiance on-chain ?",
+      "desc": "Connectez votre portefeuille Freighter et créez votre premier dépôt en quelques minutes.",
+      "button": "Commencer →"
+    },
+    "how": {
+      "create": {
+        "title": "Créer un Dépôt",
+        "desc": "Le client bloque les fonds et définit les jalons du projet."
+      },
+      "deliver": {
+        "title": "Livrer le Travail",
+        "desc": "Le freelance travaille puis soumet chaque jalon pour révision."
+      },
+      "release": {
+        "title": "Libérer les Fonds",
+        "desc": "Le client approuve, les fonds sont libérés automatiquement."
+      }
+    },
+    "feature": {
+      "lock": {
+        "title": "Blocage par Jalons",
+        "desc": "Les fonds sont bloqués on-chain et libérés uniquement à l'approbation de chaque jalon."
+      },
+      "rep": {
+        "title": "Réputation On-Chain",
+        "desc": "Chaque dépôt complété renforce votre score de réputation vérifiable sur Stellar."
+      },
+      "dispute": {
+        "title": "Résolution des Litiges",
+        "desc": "En cas de problème, un arbitre de confiance peut distribuer les fonds bloqués."
+      },
+      "decentralized": {
+        "title": "Entièrement Décentralisé",
+        "desc": "Sans intermédiaires. Toute la logique vit dans un contrat intelligent Soroban."
+      }
+    }
+  }
+}

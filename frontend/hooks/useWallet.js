@@ -49,61 +49,87 @@
 
 'use client';
 
-/* eslint-disable @typescript-eslint/no-unused-vars */
+import { useCallback, useEffect } from 'react';
+import { Networks } from '@stellar/stellar-sdk';
+import {
+  isConnected as freighterIsConnected,
+  getPublicKey,
+  signTransaction,
+  requestAccess,
+  getNetworkDetails,
+} from '@stellar/freighter-api';
+import { useWalletStore } from '../store/app-store';
 
-import { useState, useCallback, useEffect } from 'react';
+const FREIGHTER_INSTALL_URL = 'https://www.freighter.app/';
 
 export function useWallet() {
-  const [address, setAddress] = useState(null);
-  const [network, setNetwork] = useState(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [isFreighterInstalled, setIsFreighterInstalled] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [error, setError] = useState(null);
+  const {
+    address,
+    network,
+    isConnected,
+    isFreighterInstalled,
+    isConnecting,
+    error,
+    setFreighterInstalled,
+    startConnect,
+    finishConnect,
+    setConnectError,
+    disconnect,
+  } = useWalletStore();
 
   // ── Detect Freighter on mount ──────────────────────────────────────────────
   useEffect(() => {
-    // TODO (contributor — Issue #35):
-    // Check if window.freighter exists (or use isConnected from freighter-api)
-    // setIsFreighterInstalled(typeof window !== 'undefined' && !!window.freighter);
-    setIsFreighterInstalled(false); // placeholder
-  }, []);
+    setFreighterInstalled(typeof window !== 'undefined' && !!window.freighter);
+  }, [setFreighterInstalled]);
 
-  // ── Restore session on mount ───────────────────────────────────────────────
+  // ── Auto-restore connection on mount ───────────────────────────────────────
   useEffect(() => {
-    // TODO (contributor — Issue #35):
-    // const savedAddress = localStorage.getItem('wallet_address');
-    // if (savedAddress) { setAddress(savedAddress); setIsConnected(true); }
-  }, []);
+    const restoreConnection = async () => {
+      if (!isFreighterInstalled) return;
+
+      try {
+        if (await freighterIsConnected()) {
+          const pubKey = await getPublicKey();
+          const networkDetails = await getNetworkDetails();
+          finishConnect({
+            address: pubKey,
+            network: networkDetails.network === 'PUBLIC_NETWORK' ? 'mainnet' : 'testnet',
+          });
+        }
+      } catch {
+        // Silent fail on restore — user can reconnect manually
+      }
+    };
+
+    restoreConnection();
+  }, [isFreighterInstalled, finishConnect]);
 
   // ── Connect ────────────────────────────────────────────────────────────────
   const connect = useCallback(async () => {
-    setIsConnecting(true);
-    setError(null);
+    startConnect();
     try {
-      // TODO (contributor — Issue #35): implement Freighter connection
-      // const access = await requestAccess();
-      // const publicKey = await getPublicKey();
-      // const { networkPassphrase } = await getNetworkDetails();
-      // setAddress(publicKey);
-      // setNetwork(networkPassphrase.includes('Test') ? 'testnet' : 'mainnet');
-      // setIsConnected(true);
-      // localStorage.setItem('wallet_address', publicKey);
-      throw new Error('Freighter integration not yet implemented — see Issue #35');
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setIsConnecting(false);
-    }
-  }, []);
+      if (!isFreighterInstalled) {
+        throw new Error(
+          `Freighter wallet not installed. Install it here: ${FREIGHTER_INSTALL_URL}`,
+        );
+      }
 
-  // ── Disconnect ─────────────────────────────────────────────────────────────
-  const disconnect = useCallback(() => {
-    setAddress(null);
-    setNetwork(null);
-    setIsConnected(false);
-    // TODO: localStorage.removeItem('wallet_address');
-  }, []);
+      await requestAccess();
+      const pubKey = await getPublicKey();
+      const networkDetails = await getNetworkDetails();
+
+      finishConnect({
+        address: pubKey,
+        network: networkDetails.network === 'PUBLIC_NETWORK' ? 'mainnet' : 'testnet',
+      });
+    } catch (err) {
+      const message =
+        err.message === 'User rejected access'
+          ? 'You declined wallet connection.'
+          : err.message;
+      setConnectError(message);
+    }
+  }, [isFreighterInstalled, startConnect, finishConnect, setConnectError]);
 
   // ── Sign Transaction ───────────────────────────────────────────────────────
   /**
@@ -122,12 +148,28 @@ export function useWallet() {
    * return signedXdr;
    */
   const signTx = useCallback(
-    async (_unsignedXdr) => {
+    async (unsignedXdr) => {
       if (!isConnected) throw new Error('Wallet not connected');
-      // TODO (contributor — Issue #35): implement
-      throw new Error('signTx not implemented — see Issue #35');
+
+      try {
+        const networkPassphrase =
+          network === 'mainnet' ? Networks.PUBLIC_NETWORK : Networks.TESTNET_NETWORK;
+
+        const signedXdr = await signTransaction(unsignedXdr, {
+          networkPassphrase,
+          accountToSign: address,
+        });
+
+        return signedXdr;
+      } catch (err) {
+        const message =
+          err.message === 'User rejected signing'
+            ? 'Transaction signing was cancelled.'
+            : `Signing failed: ${err.message}`;
+        throw new Error(message);
+      }
     },
-    [isConnected],
+    [isConnected, network, address],
   );
 
   return {

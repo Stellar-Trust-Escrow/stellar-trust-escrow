@@ -1,7 +1,7 @@
 /**
  * ReputationBadge Component
  *
- * Displays a numerical reputation score with a color-coded ring.
+ * Displays a numerical reputation score with a color-coded ring and hover tooltip.
  *
  * @param {object} props
  * @param {number} props.score  — 0–1000+
@@ -9,12 +9,14 @@
  *
  * TODO (contributor — easy, Issue #28):
  * - Color ring based on score tier (matches BADGE_THRESHOLDS in reputationService)
- * - Add tooltip showing breakdown on hover
  * - Add animated ring fill (CSS conic-gradient) proportional to score
  */
 
+'use client';
+
+import Tooltip from './Tooltip';
+
 export default function ReputationBadge({ score, size = 'md' }) {
-  // TODO (contributor — Issue #28): color based on tier
   const color =
     score >= 500
       ? 'text-amber-400 ring-amber-400/30'
@@ -31,12 +33,23 @@ export default function ReputationBadge({ score, size = 'md' }) {
         ? 'w-16 h-16 text-xl'
         : 'w-12 h-12 text-base';
 
+  const getTier = (score) => {
+    if (score >= 500) return 'Excellent';
+    if (score >= 250) return 'Good';
+    if (score >= 100) return 'Fair';
+    return 'New';
+  };
+
+  const tooltipContent = `${getTier(score)} • Score: ${score}`;
+
   return (
-    <div
-      className={`${sizeClass} ${color} rounded-full ring-2 flex items-center justify-center font-bold`}
-      title={`Reputation score: ${score}`}
-    >
-      {score}
-    </div>
+    <Tooltip content={tooltipContent} position="top">
+      <div
+        className={`${sizeClass} ${color} rounded-full ring-2 flex items-center justify-center font-bold cursor-help`}
+        aria-label={`Reputation: ${getTier(score)} (${score} points)`}
+      >
+        {score}
+      </div>
+    </Tooltip>
   );
 }

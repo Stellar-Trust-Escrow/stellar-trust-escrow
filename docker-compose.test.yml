@@ -1,0 +1,36 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:4000
+    environment:
+      NODE_ENV: test
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3000 >/dev/null 2>&1 || exit 1']
+      interval: 5s
+      retries: 12
+      start_period: 20s
+
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.9.0
+    ports:
+      - '8474:8474'
+      - '3001:3001'
+    depends_on:
+      app:
+        condition: service_healthy
+
+  playwright:
+    image: mcr.microsoft.com/playwright:v1.44.0-jammy
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+    environment:
+      BASE_URL: http://toxiproxy:3001
+      CI: 'true'
+      PLAYWRIGHT_BASE_URL: http://toxiproxy:3001
+    depends_on:
+      - toxiproxy

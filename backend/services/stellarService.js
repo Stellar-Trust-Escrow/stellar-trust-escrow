@@ -7,35 +7,60 @@
  * @module stellarService
  */
 
-/* eslint-disable no-undef */
-/* eslint-disable @typescript-eslint/no-unused-vars */
+import { SorobanRpc, Transaction, Networks } from '@stellar/stellar-sdk';
+import { withSpan } from '../lib/tracing.js';
 
-// TODO (contributor): uncomment when @stellar/stellar-sdk is installed
-// const { SorobanRpc, Transaction, Networks } = require('@stellar/stellar-sdk');
-
-const _RPC_URL = process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org';
+const RPC_URL = process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org';
 const NETWORK = process.env.STELLAR_NETWORK || 'testnet';
-const NETWORK_PASSPHRASE =
-  NETWORK === 'mainnet'
-    ? 'Public Global Stellar Network ; September 2015'
-    : 'Test SDF Network ; September 2015';
+
+export const NETWORK_PASSPHRASE = NETWORK === 'mainnet' ? Networks.PUBLIC : Networks.TESTNET;
+
+/** @returns {SorobanRpc.Server} */
+const getServer = () =>
+  new SorobanRpc.Server(RPC_URL, { allowHttp: RPC_URL.startsWith('http://') });
 
 /**
- * Submits a signed transaction XDR to the Stellar network.
+ * Submits a signed transaction XDR to the Stellar network and polls until settled.
  *
  * @param {string} signedXdr — base64-encoded signed Stellar transaction
  * @returns {Promise<{ hash: string, status: string, errorResultXdr?: string }>}
- *
- * TODO (contributor — hard, Issue #43):
- * 1. Deserialize XDR: new Transaction(signedXdr, NETWORK_PASSPHRASE)
- * 2. Initialize server: new SorobanRpc.Server(RPC_URL)
- * 3. Call server.sendTransaction(tx)
- * 4. Poll server.getTransaction(hash) until status !== 'NOT_FOUND'
- * 5. Return { hash, status: 'SUCCESS'|'FAILED', errorResultXdr? }
  */
-const submitTransaction = async (_signedXdr) => {
-  // TODO: implement
-  throw new Error('submitTransaction not implemented — see Issue #43');
+const submitTransaction = async (signedXdr) => {
+  return withSpan(
+    'stellarService.submitTransaction',
+    { 'stellar.network': NETWORK },
+    async (span) => {
+      const server = getServer();
+      const tx = new Transaction(signedXdr, NETWORK_PASSPHRASE);
+      const sendResult = await server.sendTransaction(tx);
+
+      span.setAttribute('stellar.tx.hash', sendResult.hash);
+
+      if (sendResult.status === 'ERROR') {
+        span.setAttribute('stellar.tx.status', 'FAILED');
+        return {
+          hash: sendResult.hash,
+          status: 'FAILED',
+          errorResultXdr: sendResult.errorResultXdr,
+        };
+      }
+
+      const hash = sendResult.hash;
+      for (let i = 0; i < 30; i++) {
+        await new Promise((r) => setTimeout(r, 2000));
+        const result = await server.getTransaction(hash);
+        if (result.status !== 'NOT_FOUND') {
+          const status = result.status === 'SUCCESS' ? 'SUCCESS' : 'FAILED';
+          span.setAttribute('stellar.tx.status', status);
+          span.setAttribute('stellar.tx.poll_attempts', i + 1);
+          return { hash, status, errorResultXdr: result.resultXdr };
+        }
+      }
+
+      span.setAttribute('stellar.tx.status', 'TIMEOUT');
+      return { hash, status: 'TIMEOUT' };
+    },
+  );
 };
 
 /**
@@ -44,28 +69,39 @@ const submitTransaction = async (_signedXdr) => {
  * @param {number} startLedger — start scanning from this ledger sequence
  * @param {string} contractId  — the escrow contract address
  * @returns {Promise<Array>} array of raw Soroban event objects
- *
- * TODO (contributor — hard, Issue #27):
- * 1. server.getEvents({ startLedger, filters: [{ contractIds: [contractId] }] })
- * 2. Return events array
  */
-const getContractEvents = async (_startLedger, _contractId) => {
-  // TODO: implement
-  throw new Error('getContractEvents not implemented — see Issue #27');
+const getContractEvents = async (startLedger, contractId) => {
+  return withSpan(
+    'stellarService.getContractEvents',
+    {
+      'stellar.start_ledger': startLedger,
+      'stellar.contract_id': contractId,
+    },
+    async (span) => {
+      const server = getServer();
+      const response = await server.getEvents({
+        startLedger,
+        filters: [{ type: 'contract', contractIds: [contractId] }],
+      });
+      const events = response.events ?? [];
+      span.setAttribute('stellar.events.count', events.length);
+      return events;
+    },
+  );
 };
 
 /**
  * Gets the current ledger sequence number.
  *
  * @returns {Promise<number>}
- *
- * TODO (contributor — easy, Issue #43):
- * const health = await server.getHealth();
- * return health.latestLedger;
  */
 const getLatestLedger = async () => {
-  // TODO: implement
-  throw new Error('getLatestLedger not implemented — see Issue #43');
+  return withSpan('stellarService.getLatestLedger', {}, async (span) => {
+    const server = getServer();
+    const health = await server.getLatestLedger();
+    span.setAttribute('stellar.latest_ledger', health.sequence);
+    return health.sequence;
+  });
 };
 
-export { submitTransaction, getContractEvents, getLatestLedger, NETWORK_PASSPHRASE };
+export { submitTransaction, getContractEvents, getLatestLedger };

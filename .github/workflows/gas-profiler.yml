@@ -1,0 +1,155 @@
+name: Gas Profiler
+
+on:
+  pull_request:
+    branches: [develop]
+    paths:
+      - 'contracts/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write # needed to post PR comments
+
+env:
+  HUSKY: 0
+  WASM_SIZE_LIMIT_KB: 100
+  GAS_INCREASE_LIMIT: 15
+
+jobs:
+  gas-profile:
+    name: WASM Size & Gas Profiling
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      # ── Run profiler on the PR branch ──────────────────────────────────────
+
+      - name: Run gas analyzer (PR branch)
+        run: bash scripts/gas-analyzer.sh --save-baseline
+        continue-on-error: true # capture output even on failure
+
+      - name: Save PR analysis
+        run: cp gas-analysis.json gas-analysis-pr.json
+
+      # ── Fetch baseline from main/develop ──────────────────────────────────
+
+      - name: Checkout baseline branch
+        run: |
+          git stash || true
+          git fetch origin develop --depth=1
+          git checkout origin/develop -- gas-baseline.json 2>/dev/null || true
+          git stash pop || true
+
+      # ── Compare PR vs baseline ────────────────────────────────────────────
+
+      - name: Compare against baseline
+        id: compare
+        run: |
+          cp gas-analysis-pr.json gas-analysis.json
+          bash scripts/gas-analyzer.sh --compare 2>&1 | tee gas-compare-output.txt
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+        continue-on-error: true
+
+      # ── Build PR comment ──────────────────────────────────────────────────
+
+      - name: Build PR comment
+        id: comment
+        run: |
+          python3 - <<'PYEOF'
+          import json, os
+
+          try:
+              data = json.load(open("gas-analysis.json"))
+          except Exception:
+              data = {}
+
+          lines = ["## ⛽ Gas & WASM Size Report\n"]
+
+          # WASM sizes
+          sizes = data.get("wasm_sizes", [])
+          limit = data.get("wasm_size_limit_kb", 100)
+          if sizes:
+              lines.append("### WASM Sizes\n")
+              lines.append("| File | Size (KB) | Status |")
+              lines.append("|------|-----------|--------|")
+              for s in sizes:
+                  kb = s["kb"]
+                  status = "✅" if kb <= limit else f"❌ exceeds {limit} KB limit"
+                  lines.append(f"| `{s['file']}` | {kb} KB | {status} |")
+              lines.append("")
+
+          # Gas profiles
+          profiles = data.get("gas_profiles", [])
+          if profiles:
+              lines.append("### Gas Profiles\n")
+              lines.append("| Contract | Function | CPU Instructions | Memory Bytes |")
+              lines.append("|----------|----------|-----------------|--------------|")
+              for p in profiles:
+                  lines.append(f"| {p['contract']} | {p['function']} | {p['cpu']:,} | {p['memory']:,} |")
+              lines.append("")
+
+          # Comparison output
+          try:
+              cmp_out = open("gas-compare-output.txt").read()
+              if cmp_out.strip():
+                  lines.append("<details><summary>Comparison details</summary>\n")
+                  lines.append(f"```\n{cmp_out}\n```\n</details>")
+          except Exception:
+              pass
+
+          body = "\n".join(lines)
+          with open(os.environ["GITHUB_ENV"], "a") as f:
+              # Write to a file instead to avoid env size limits
+              pass
+          with open("pr-comment.md", "w") as f:
+              f.write(body)
+          PYEOF
+
+      - name: Post PR comment
+        if: github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: gas-profiler
+          path: pr-comment.md
+
+      - name: Upload gas analysis artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gas-analysis
+          path: |
+            gas-analysis.json
+            gas-analysis-pr.json
+            gas-compare-output.txt
+          retention-days: 30
+
+      # ── Fail the job if limits exceeded ───────────────────────────────────
+
+      - name: Enforce gas limits
+        run: |
+          cp gas-analysis-pr.json gas-analysis.json
+          bash scripts/gas-analyzer.sh --compare
+        env:
+          WASM_SIZE_LIMIT_KB: ${{ env.WASM_SIZE_LIMIT_KB }}
+          GAS_INCREASE_LIMIT: ${{ env.GAS_INCREASE_LIMIT }}

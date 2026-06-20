@@ -10,18 +10,16 @@
  * @module stellar
  */
 
-/* eslint-disable no-undef */
-/* eslint-disable @typescript-eslint/no-unused-vars */
-
-// TODO (contributor — hard, Issue #35): uncomment and implement
-// import {
-//   SorobanRpc,
-//   TransactionBuilder,
-//   Contract,
-//   Networks,
-//   BASE_FEE,
-//   xdr,
-// } from '@stellar/stellar-sdk';
+import {
+  SorobanRpc,
+  TransactionBuilder,
+  Contract,
+  BASE_FEE,
+  xdr,
+  nativeToScVal,
+  Address,
+  StrKey,
+} from '@stellar/stellar-sdk';
 
 const _NETWORK = process.env.NEXT_PUBLIC_STELLAR_NETWORK || 'testnet';
 const _CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || '';
@@ -55,16 +53,59 @@ const _NETWORK_PASSPHRASE =
  * 6. Return tx.toXDR('base64')
  */
 export async function buildCreateEscrowTx({
-  sourceAddress: _sourceAddress,
-  freelancerAddress: _freelancerAddress,
-  tokenAddress: _tokenAddress,
-  amount: _amount,
-  briefHash: _briefHash,
-  arbiter: _arbiter = null,
-  deadline: _deadline = null,
+  sourceAddress,
+  freelancerAddress,
+  tokenAddress,
+  amount,
+  briefHash,
+  arbiter = null,
+  deadline = null,
 }) {
-  // TODO (contributor — Issue #35): implement
-  throw new Error('buildCreateEscrowTx not implemented — see Issue #35');
+  if (!_CONTRACT_ADDRESS) {
+    throw new Error('Contract address not configured. Set NEXT_PUBLIC_CONTRACT_ADDRESS.');
+  }
+
+  _validateInputs({
+    sourceAddress,
+    freelancerAddress,
+    tokenAddress,
+    amount,
+    briefHash,
+  });
+
+  const server = new SorobanRpc.Server(_SOROBAN_RPC_URL);
+  const account = await server.getAccount(sourceAddress);
+
+  const contract = new Contract(_CONTRACT_ADDRESS);
+
+  const txBuilder = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: _NETWORK_PASSPHRASE,
+  });
+
+  txBuilder.addOperation(
+    contract.call(
+      'create_escrow',
+      new Address(sourceAddress).toScVal(),
+      new Address(freelancerAddress).toScVal(),
+      new Address(tokenAddress).toScVal(),
+      nativeToScVal(BigInt(amount), { type: 'i128' }),
+      xdr.ScVal.scvTypeBytes(Buffer.from(briefHash, 'hex')),
+      arbiter ? xdr.ScVal.scvTypeOption(new Address(arbiter).toScVal()) : xdr.ScVal.scvTypeOption(),
+      deadline ? nativeToScVal(BigInt(deadline), { type: 'u64' }) : xdr.ScVal.scvTypeOption(),
+    ),
+  );
+
+  txBuilder.setTimeout(300);
+  const tx = txBuilder.build();
+
+  const prepared = await server.simulateTransaction(tx);
+  if (SorobanRpc.isSimulationError(prepared)) {
+    throw new Error(`Simulation failed: ${prepared.error}`);
+  }
+
+  const assembled = SorobanRpc.assembleTransaction(tx, prepared).build();
+  return assembled.toXDR('base64');
 }
 
 /**
@@ -81,13 +122,45 @@ export async function buildCreateEscrowTx({
  * TODO (contributor — Issue #35)
  */
 export async function buildAddMilestoneTx({
-  sourceAddress: _sourceAddress,
-  escrowId: _escrowId,
-  title: _title,
-  descriptionHash: _descriptionHash,
-  amount: _amount,
+  sourceAddress,
+  escrowId,
+  title,
+  descriptionHash,
+  amount,
 }) {
-  throw new Error('buildAddMilestoneTx not implemented — see Issue #35');
+  _validateInputs({ sourceAddress, escrowId, title, descriptionHash, amount });
+
+  const server = new SorobanRpc.Server(_SOROBAN_RPC_URL);
+  const account = await server.getAccount(sourceAddress);
+
+  const contract = new Contract(_CONTRACT_ADDRESS);
+
+  const txBuilder = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: _NETWORK_PASSPHRASE,
+  });
+
+  txBuilder.addOperation(
+    contract.call(
+      'add_milestone',
+      new Address(sourceAddress).toScVal(),
+      nativeToScVal(BigInt(escrowId), { type: 'u64' }),
+      xdr.ScVal.scvTypeString(title),
+      xdr.ScVal.scvTypeBytes(Buffer.from(descriptionHash, 'hex')),
+      nativeToScVal(BigInt(amount), { type: 'i128' }),
+    ),
+  );
+
+  txBuilder.setTimeout(300);
+  const tx = txBuilder.build();
+
+  const prepared = await server.simulateTransaction(tx);
+  if (SorobanRpc.isSimulationError(prepared)) {
+    throw new Error(`Simulation failed: ${prepared.error}`);
+  }
+
+  const assembled = SorobanRpc.assembleTransaction(tx, prepared).build();
+  return assembled.toXDR('base64');
 }
 
 /**
@@ -102,11 +175,41 @@ export async function buildAddMilestoneTx({
  * TODO (contributor — Issue #35)
  */
 export async function buildApproveMilestoneTx({
-  sourceAddress: _sourceAddress,
-  escrowId: _escrowId,
-  milestoneId: _milestoneId,
+  sourceAddress,
+  escrowId,
+  milestoneId,
 }) {
-  throw new Error('buildApproveMilestoneTx not implemented — see Issue #35');
+  _validateInputs({ sourceAddress, escrowId, milestoneId });
+
+  const server = new SorobanRpc.Server(_SOROBAN_RPC_URL);
+  const account = await server.getAccount(sourceAddress);
+
+  const contract = new Contract(_CONTRACT_ADDRESS);
+
+  const txBuilder = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: _NETWORK_PASSPHRASE,
+  });
+
+  txBuilder.addOperation(
+    contract.call(
+      'approve_milestone',
+      new Address(sourceAddress).toScVal(),
+      nativeToScVal(BigInt(escrowId), { type: 'u64' }),
+      nativeToScVal(BigInt(milestoneId), { type: 'u32' }),
+    ),
+  );
+
+  txBuilder.setTimeout(300);
+  const tx = txBuilder.build();
+
+  const prepared = await server.simulateTransaction(tx);
+  if (SorobanRpc.isSimulationError(prepared)) {
+    throw new Error(`Simulation failed: ${prepared.error}`);
+  }
+
+  const assembled = SorobanRpc.assembleTransaction(tx, prepared).build();
+  return assembled.toXDR('base64');
 }
 
 /**
@@ -121,11 +224,41 @@ export async function buildApproveMilestoneTx({
  * TODO (contributor — Issue #35)
  */
 export async function buildSubmitMilestoneTx({
-  sourceAddress: _sourceAddress,
-  escrowId: _escrowId,
-  milestoneId: _milestoneId,
+  sourceAddress,
+  escrowId,
+  milestoneId,
 }) {
-  throw new Error('buildSubmitMilestoneTx not implemented — see Issue #35');
+  _validateInputs({ sourceAddress, escrowId, milestoneId });
+
+  const server = new SorobanRpc.Server(_SOROBAN_RPC_URL);
+  const account = await server.getAccount(sourceAddress);
+
+  const contract = new Contract(_CONTRACT_ADDRESS);
+
+  const txBuilder = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: _NETWORK_PASSPHRASE,
+  });
+
+  txBuilder.addOperation(
+    contract.call(
+      'submit_milestone',
+      new Address(sourceAddress).toScVal(),
+      nativeToScVal(BigInt(escrowId), { type: 'u64' }),
+      nativeToScVal(BigInt(milestoneId), { type: 'u32' }),
+    ),
+  );
+
+  txBuilder.setTimeout(300);
+  const tx = txBuilder.build();
+
+  const prepared = await server.simulateTransaction(tx);
+  if (SorobanRpc.isSimulationError(prepared)) {
+    throw new Error(`Simulation failed: ${prepared.error}`);
+  }
+
+  const assembled = SorobanRpc.assembleTransaction(tx, prepared).build();
+  return assembled.toXDR('base64');
 }
 
 /**
@@ -133,8 +266,40 @@ export async function buildSubmitMilestoneTx({
  *
  * TODO (contributor — Issue #35)
  */
-export async function buildRaiseDisputeTx({ sourceAddress: _sourceAddress, escrowId: _escrowId }) {
-  throw new Error('buildRaiseDisputeTx not implemented — see Issue #35');
+export async function buildRaiseDisputeTx({ sourceAddress, escrowId, milestoneId = null }) {
+  _validateInputs({ sourceAddress, escrowId });
+
+  const server = new SorobanRpc.Server(_SOROBAN_RPC_URL);
+  const account = await server.getAccount(sourceAddress);
+
+  const contract = new Contract(_CONTRACT_ADDRESS);
+
+  const txBuilder = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: _NETWORK_PASSPHRASE,
+  });
+
+  txBuilder.addOperation(
+    contract.call(
+      'raise_dispute',
+      new Address(sourceAddress).toScVal(),
+      nativeToScVal(BigInt(escrowId), { type: 'u64' }),
+      milestoneId !== null
+        ? xdr.ScVal.scvTypeOption(nativeToScVal(BigInt(milestoneId), { type: 'u32' }))
+        : xdr.ScVal.scvTypeOption(),
+    ),
+  );
+
+  txBuilder.setTimeout(300);
+  const tx = txBuilder.build();
+
+  const prepared = await server.simulateTransaction(tx);
+  if (SorobanRpc.isSimulationError(prepared)) {
+    throw new Error(`Simulation failed: ${prepared.error}`);
+  }
+
+  const assembled = SorobanRpc.assembleTransaction(tx, prepared).build();
+  return assembled.toXDR('base64');
 }
 
 /**
@@ -184,6 +349,45 @@ export function truncateAddress(address, head = 6, tail = 4) {
  * TODO (contributor — easy, Issue #39): use StrKey.isValidEd25519PublicKey from stellar-sdk
  */
 export function isValidStellarAddress(address) {
-  // TODO: use stellar-sdk StrKey validation
-  return typeof address === 'string' && address.startsWith('G') && address.length === 56;
+  return StrKey.isValidEd25519PublicKey(address);
+}
+
+/**
+ * Helper to validate transaction builder inputs.
+ * Throws descriptive errors for missing or invalid values.
+ *
+ * @param {object} params
+ * @returns {void}
+ * @throws {Error}
+ */
+function _validateInputs(params) {
+  const { sourceAddress, freelancerAddress, tokenAddress, escrowId, amount, briefHash, title, descriptionHash, milestoneId } = params;
+
+  if (sourceAddress && !isValidStellarAddress(sourceAddress)) {
+    throw new Error(`Invalid source address: ${sourceAddress}`);
+  }
+
+  if (freelancerAddress && !isValidStellarAddress(freelancerAddress)) {
+    throw new Error(`Invalid freelancer address: ${freelancerAddress}`);
+  }
+
+  if (tokenAddress && !isValidStellarAddress(tokenAddress)) {
+    throw new Error(`Invalid token address: ${tokenAddress}`);
+  }
+
+  if (amount !== undefined && (Number(amount) <= 0 || !Number.isInteger(Number(amount)))) {
+    throw new Error(`Amount must be a positive integer, got: ${amount}`);
+  }
+
+  if (briefHash !== undefined && !/^[a-f0-9]{64}$/i.test(briefHash)) {
+    throw new Error(`Brief hash must be a 32-byte hex string, got: ${briefHash}`);
+  }
+
+  if (descriptionHash !== undefined && !/^[a-f0-9]{64}$/i.test(descriptionHash)) {
+    throw new Error(`Description hash must be a 32-byte hex string, got: ${descriptionHash}`);
+  }
+
+  if (title !== undefined && !title) {
+    throw new Error('Milestone title cannot be empty');
+  }
 }

@@ -14,11 +14,21 @@ export default {
       control: 'select',
       options: [
         // Escrow
-        'Active', 'Completed', 'Disputed', 'Cancelled',
+        'Active',
+        'Completed',
+        'Disputed',
+        'Cancelled',
         // Milestone
-        'Pending', 'Submitted', 'Approved', 'Rejected',
+        'Pending',
+        'Submitted',
+        'Approved',
+        'Rejected',
         // Reputation
-        'NEW', 'TRUSTED', 'VERIFIED', 'EXPERT', 'ELITE',
+        'NEW',
+        'TRUSTED',
+        'VERIFIED',
+        'EXPERT',
+        'ELITE',
       ],
       description: 'The status value to display. Drives both color and icon.',
     },

@@ -1,0 +1,9 @@
+# Nightly Load Test Scheduler
+# Runs the load test suite every night at 2:00 AM UTC.
+# Install with: crontab load-tests/nightly.cron
+#
+# Environment variables (adjust paths as needed):
+# LOAD_TEST_TARGET_URL — optional, defaults to local harness server
+# PATH — must include node and npm
+
+0 2 * * * cd /home/ajidokwu/Desktop/Drips/AJI/stellar-trust-escrow && /usr/bin/node load-tests/nightly-runner.js >> load-tests/results/nightly.log 2>&1

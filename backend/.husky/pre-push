@@ -1,0 +1,45 @@
+#!/usr/bin/env sh
+
+# 1️⃣ Validate branch name
+echo "🔖 Validating branch name..."
+npx validate-branch-name || {
+  echo "❌ Invalid branch name. Push aborted."
+  exit 1
+}
+
+# 2️⃣ Run backend tests before push
+echo "🧪 Running backend tests..."
+npm test || {
+  echo "❌ Tests failed. Push aborted."
+  exit 1
+}
+
+# 3️⃣ Protect main branch
+# NOTE: do NOT use set -e here — the while read loop exit code is non-zero on EOF
+protected_branch='refs/heads/main'
+allowed_user='ilorahdavid126@gmail.com'
+z40=0000000000000000000000000000000000000000
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [ "$remote_ref" = "$protected_branch" ]; then
+    current_user=$(git config user.email)
+
+    if [ "$current_user" != "$allowed_user" ]; then
+      echo "❌ Only $allowed_user can push directly to main."
+      exit 1
+    fi
+
+    if [ "$local_sha" = "$z40" ]; then
+      echo "❌ Deleting main is not allowed."
+      exit 1
+    fi
+
+    if ! git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null; then
+      echo "❌ Force push to main is not allowed."
+      exit 1
+    fi
+  fi
+done
+
+echo "✅ Pre-push checks passed."
+exit 0

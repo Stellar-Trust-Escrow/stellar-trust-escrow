@@ -1,0 +1,56 @@
+use soroban_sdk::contracterror;
+
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum GovError {
+    // Initialization
+    AlreadyInitialized = 1,
+    NotInitialized = 2,
+
+    // Authorization
+    Unauthorized = 3,
+    AdminOnly = 4,
+
+    // Proposals
+    ProposalNotFound = 5,
+    ProposalNotActive = 6,
+    ProposalNotPassed = 7,
+    ProposalAlreadyExecuted = 8,
+    ProposalAlreadyCancelled = 34,
+    ProposalExpired = 9,
+    TimelockNotElapsed = 10,
+    InvalidProposalType = 11,
+    EmptyDescription = 12,
+
+    // Voting
+    AlreadyVoted = 13,
+    VotingClosed = 14,
+    VotingNotStarted = 15,
+    InsufficientVotingPower = 16,
+
+    // Quorum / threshold
+    QuorumNotReached = 17,
+    ThresholdNotReached = 18,
+
+    // Parameters
+    InvalidParameter = 19,
+    InvalidDuration = 20,
+
+    // Arbitrator DAO
+    AlreadyArbitrator = 21,
+    NotArbitrator = 22,
+    InsufficientStake = 23,
+    StakeCooldownActive = 24,
+    NoStakeToWithdraw = 25,
+    SlashExceedsStake = 26,
+
+    // ve-token (voting escrow)
+    LockDurationTooShort = 27,
+    LockDurationTooLong = 28,
+    LockAlreadyExists = 29,
+    NoLockFound = 30,
+    LockNotExpired = 31,
+    NewUnlockTimeTooEarly = 32,
+    ZeroLockAmount = 33,
+}

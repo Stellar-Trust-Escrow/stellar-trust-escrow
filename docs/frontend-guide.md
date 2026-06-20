@@ -16,6 +16,19 @@ npm run dev
 
 Visit `http://localhost:3000`.
 
+### Testing
+
+```bash
+cd frontend
+npm run test:unit
+npm run test:integration
+npm run test:a11y
+npm run test:coverage
+npm run test:e2e
+```
+
+Use `npm run test:visual:update` when intentional UI changes require new Playwright snapshot baselines.
+
 ---
 
 ## Project Structure
@@ -103,6 +116,10 @@ const handleApprove = async (milestoneId) => {
   console.log('Tx confirmed:', hash);
 };
 ```
+
+### State Management
+
+See the [comprehensive guide](frontend-state-management.md) covering SWR data fetching, WebSocket real-time updates, global Zustand-like store, optimistic patterns, error boundaries, loading skeletons, sync strategies, performance tips, and testing.
 
 ---
 

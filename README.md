@@ -6,6 +6,7 @@
 [![Contributors Welcome](https://img.shields.io/badge/contributors-welcome-brightgreen)](CONTRIBUTING.md)
 [![Built on Stellar](https://img.shields.io/badge/built%20on-Stellar-blueviolet)](https://stellar.org)
 [![Soroban](https://img.shields.io/badge/Soroban-Smart%20Contracts-orange)](https://soroban.stellar.org)
+[![Coverage](https://img.shields.io/github/actions/workflow/status/Stellar-Trust-Escrow/stellar-trust-escrow/coverage.yml?label=coverage&style=flat-square)](https://github.com/Stellar-Trust-Escrow/stellar-trust-escrow/actions/workflows/coverage.yml)
 
 ---
 
@@ -141,6 +142,71 @@ Visit `http://localhost:3000` to see the app.
 
 ---
 
+## 🧪 Local Soroban Sandbox (Docker)
+
+### Prerequisites
+
+- Docker & Docker Compose installed and running
+- Soroban CLI available on your host (for contract deployment)
+
+### Start the Sandbox
+
+```bash
+# From the repository root
+docker compose up -d soroban-sandbox
+
+# Or use the helper script to start the sandbox, deploy contracts,
+# generate dev wallets and wire the frontend config:
+./scripts/start-sandbox.sh
+```
+
+The helper script will:
+
+- Start a local Stellar Quickstart node in Soroban mode (standalone, no public testnet)
+- Deploy core smart contracts to the local network
+- Generate and fund a development account
+- Write contract IDs and Soroban RPC settings into `frontend/.env.local`
+
+### Verify It Is Running
+
+```bash
+# Check the container
+docker ps --filter name=stellar-sandbox
+
+# Check Soroban RPC health
+curl -sf http://localhost:8000/soroban/rpc | jq .
+```
+
+If the RPC endpoint responds and the container is healthy, the sandbox is ready.
+
+### Hot Reloading Contracts
+
+When you change a contract:
+
+```bash
+# Rebuild and redeploy only the changed contract to the existing sandbox
+./scripts/start-sandbox.sh
+```
+
+The script is idempotent and will:
+
+- Rebuild the contract Wasm
+- Upload and redeploy to the already-running sandbox
+- Refresh the contract IDs in `frontend/.env.local`
+
+No full network teardown is required for rapid iteration.
+
+### Teardown
+
+```bash
+# Stop and remove the local Soroban sandbox container
+docker compose down soroban-sandbox
+```
+
+This stops the local network cleanly without touching your database or other services.
+
+---
+
 ## 📁 Project Structure
 
 ```
@@ -170,6 +236,16 @@ stellar-trust-escrow/
 We welcome contributions of all kinds! This repository is designed to be beginner-friendly with clearly scoped issues.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide, or jump straight to [open issues](../../issues).
+
+---
+
+## 🔒 Security
+
+- **Security Model**: [`docs/SECURITY.md`](docs/SECURITY.md)
+- **Privacy Policy**: [`docs/PRIVACY.md`](docs/PRIVACY.md)
+- **Bug Bounty**: [`docs/BUG_BOUNTY.md`](docs/BUG_BOUNTY.md)
+
+Report vulnerabilities to security@stellartrustescrow.example.com.
 
 ---
 

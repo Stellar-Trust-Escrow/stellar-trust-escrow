@@ -1,103 +1,146 @@
-/**
- * Dashboard Page — /dashboard
- *
- * The main landing page after wallet connection. Shows:
- * - Summary stats (active escrows, total value locked, reputation score)
- * - Recent active escrows (as client and freelancer)
- * - Quick action buttons (Create Escrow, View Profile)
- *
- * TODO (contributor — medium, Issue #32):
- * - Connect to API: GET /api/users/:address/escrows
- * - Connect to API: GET /api/users/:address/stats
- * - Connect to API: GET /api/reputation/:address
- * - Replace all placeholder data with real SWR fetches
- * - Add empty state when user has no escrows
- * - Add redirect to home if wallet not connected
- */
+'use client';
 
+import { useState, useEffect, Suspense } from 'react';
+import dynamic from 'next/dynamic';
 import EscrowCard from '../../components/escrow/EscrowCard';
 import ReputationBadge from '../../components/ui/ReputationBadge';
-import StatCard from '../../components/ui/StatCard';
 import Button from '../../components/ui/Button';
+import CardSkeleton from '../../components/ui/CardSkeleton';
+import PageTransition from '../../components/layout/PageTransition';
+import ErrorBoundary from '../../components/error/ErrorBoundary';
+import DashboardTour from '../../components/onboarding/DashboardTour';
+import { usePerformance } from '../../hooks/usePerformance';
+import { useI18n } from '../../i18n/index.jsx';
 
-// TODO (contributor): Replace with real data fetched via SWR
-const PLACEHOLDER_STATS = {
-  activeEscrows: 3,
-  totalValueLocked: '4,250 USDC',
-  reputationScore: 87,
-  completedEscrows: 12,
-};
+const StatWidgets = dynamic(() => import('../../components/dashboard/StatWidgets'), {
+  ssr: false,
+  loading: () => (
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="card animate-pulse">
+          <div className="h-3 w-20 bg-gray-700 rounded mb-3" />
+          <div className="h-8 w-16 bg-gray-700 rounded" />
+        </div>
+      ))}
+    </div>
+  ),
+});
 
-const PLACEHOLDER_ESCROWS = [
-  {
-    id: 1,
-    title: 'Logo Design Project',
-    counterparty: 'GBXYZ...1234',
-    role: 'client',
-    status: 'Active',
-    totalAmount: '500 USDC',
-    milestoneProgress: '2 / 4',
-  },
-  {
-    id: 2,
-    title: 'Smart Contract Audit',
-    counterparty: 'GABC...5678',
-    role: 'freelancer',
-    status: 'Active',
-    totalAmount: '2,000 USDC',
-    milestoneProgress: '1 / 3',
-  },
-];
+const ActivityTimeline = dynamic(() => import('../../components/dashboard/ActivityTimeline'), {
+  loading: () => (
+    <div className="card animate-pulse space-y-4">
+      <div className="h-5 w-36 bg-gray-700 rounded" />
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div key={i} className="h-3 w-full bg-gray-800 rounded" />
+      ))}
+    </div>
+  ),
+});
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+const PLACEHOLDER_ADDRESS = 'GABCD1234';
 
 export default function DashboardPage() {
+  const { t } = useI18n();
+  const [escrows, setEscrows] = useState([]);
+  const [escrowsLoading, setEscrowsLoading] = useState(true);
+  const [reputation, setReputation] = useState(null);
+  const { measureAsync } = usePerformance('DashboardPage');
+
+  useEffect(() => {
+    setEscrowsLoading(true);
+    measureAsync('fetch-escrows', () =>
+      fetch(`${API_BASE}/api/users/${PLACEHOLDER_ADDRESS}/escrows?status=Active&limit=6`)
+        .then((r) => r.json())
+        .then((data) => {
+          setEscrows(Array.isArray(data?.escrows) ? data.escrows : []);
+        })
+        .catch(() => setEscrows([])),
+    ).finally(() => setEscrowsLoading(false));
+  }, [measureAsync]);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/reputation/${PLACEHOLDER_ADDRESS}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data?.error) setReputation(data);
+      })
+      .catch(() => {});
+  }, []);
+
+  const reputationScore = reputation?.totalScore
+    ? Math.min(100, Math.round(Number(reputation.totalScore) / 100))
+    : null;
+
   return (
-    <div className="space-y-8">
-      {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-          <p className="text-gray-400 mt-1">
-            {/* TODO (contributor): show connected wallet address (truncated) */}
-            Welcome back, <span className="text-indigo-400">GABCD...1234</span>
-          </p>
-        </div>
-        <Button href="/escrow/create" variant="primary">
-          + New Escrow
-        </Button>
-      </div>
+    <PageTransition>
+      <ErrorBoundary>
+        <div className="space-y-8" role="main">
+          <DashboardTour />
 
-      {/* Stats Row */}
-      {/*
-        TODO (contributor — Issue #32):
-        Fetch real stats from GET /api/users/:address/stats
-        and replace PLACEHOLDER_STATS
-      */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard label="Active Escrows" value={PLACEHOLDER_STATS.activeEscrows} icon="🔒" />
-        <StatCard label="Total Locked" value={PLACEHOLDER_STATS.totalValueLocked} icon="💰" />
-        <StatCard label="Completed" value={PLACEHOLDER_STATS.completedEscrows} icon="✅" />
-        <div className="card flex flex-col items-center justify-center gap-2">
-          <p className="text-xs text-gray-500 uppercase tracking-wider">Reputation</p>
-          <ReputationBadge score={PLACEHOLDER_STATS.reputationScore} />
-        </div>
-      </div>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-white">{t('nav.dashboard')}</h1>
+              <p className="text-gray-400 mt-1">Welcome back.</p>
+            </div>
+            <div className="flex items-center gap-3">
+              {reputationScore !== null && <ReputationBadge score={reputationScore} />}
+              <Button
+                href="/escrow/create"
+                variant="primary"
+                data-tour="create-escrow"
+                className="focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-950 rounded-lg"
+              >
+                + {t('escrow.create')}
+              </Button>
+            </div>
+          </div>
 
-      {/* Active Escrows */}
-      <section>
-        <h2 className="text-lg font-semibold text-white mb-4">Your Active Escrows</h2>
+          <div
+            data-tour="get-testnet-xlm"
+            className="card rounded-3xl border border-indigo-500/20 bg-gray-950 p-5 text-sm text-gray-300"
+          >
+            Connect your wallet and use the Stellar Friendbot faucet to fund testnet XLM for your
+            first escrow contract experiments.
+          </div>
 
-        {/*
-          TODO (contributor — Issue #32):
-          Map over SWR-fetched escrows instead of PLACEHOLDER_ESCROWS.
-          Show a loading skeleton while data is fetching.
-          Show empty state if no escrows exist.
-        */}
-        <div className="grid gap-4 md:grid-cols-2">
-          {PLACEHOLDER_ESCROWS.map((escrow) => (
-            <EscrowCard key={escrow.id} escrow={escrow} />
-          ))}
+          <section aria-label="Key performance metrics">
+            <h2 className="sr-only">Dashboard Statistics</h2>
+            <Suspense fallback={<div className="h-40 card animate-pulse" />}>
+              <StatWidgets address={PLACEHOLDER_ADDRESS} />
+            </Suspense>
+          </section>
+
+          <section aria-label="Recent activity feed">
+            <Suspense fallback={<div className="h-40 card animate-pulse" />}>
+              <ActivityTimeline address={PLACEHOLDER_ADDRESS} />
+            </Suspense>
+          </section>
+
+          <section aria-label="Active escrow agreements" data-tour="disputes">
+            <h2 className="text-lg font-semibold text-white mb-4">Your Active Escrows</h2>
+            {escrowsLoading ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                <CardSkeleton />
+                <CardSkeleton />
+                <CardSkeleton />
+              </div>
+            ) : escrows.length === 0 ? (
+              <div className="card text-center py-10">
+                <p className="text-gray-400 font-medium">No active escrows yet.</p>
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2" role="list">
+                {escrows.map((escrow) => (
+                  <div key={escrow.id} role="listitem">
+                    <EscrowCard escrow={escrow} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
         </div>
-      </section>
-    </div>
+      </ErrorBoundary>
+    </PageTransition>
   );
 }

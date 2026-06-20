@@ -2,6 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Page transition keyframe */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* Custom base styles */
 @layer base {
   :root {
@@ -12,8 +24,35 @@
     --color-danger: #ef4444; /* red-500 */
   }
 
+  /* Smooth theme transitions */
+  *,
+  *::before,
+  *::after {
+    transition-property: background-color, border-color, color;
+    transition-duration: 200ms;
+    transition-timing-function: ease;
+  }
+
   body {
-    @apply antialiased;
+    @apply antialiased bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100;
+  }
+
+  /* RTL support */
+  [dir='rtl'] {
+    font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+  }
+  [dir='rtl'] .space-x-4 > * + * {
+    margin-left: 0;
+    margin-right: 1rem;
+  }
+  [dir='rtl'] .gap-3 {
+    gap: 0.75rem;
+  }
+  [dir='rtl'] .text-left {
+    text-align: right;
+  }
+  [dir='rtl'] .text-right {
+    text-align: left;
   }
 
   /* Scrollbar styling */
@@ -31,7 +70,32 @@
 @layer components {
   /* Reusable card style */
   .card {
-    @apply bg-gray-900 border border-gray-800 rounded-xl p-6;
+    @apply bg-gray-100 border border-gray-200 rounded-xl p-6 dark:bg-gray-900 dark:border-gray-800
+           transition-[transform,box-shadow] duration-200 ease-out
+           hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20
+           focus-within:ring-2 focus-within:ring-indigo-500 focus-within:ring-offset-2 focus-within:ring-offset-gray-950;
+  }
+
+  /* High-contrast focus indicators for accessibility */
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    @apply outline-none ring-2 ring-indigo-500 ring-offset-2 ring-offset-gray-950;
+  }
+
+  /* Visually hidden content for screen readers */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
   }
 
   /* Status badge styles — TODO (contributor): ensure these match EscrowStatus enum */
@@ -47,4 +111,20 @@
   .badge-cancelled {
     @apply bg-red-500/20 text-red-400 border border-red-500/30;
   }
+}
+
+/* Toast animation */
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.3s ease-out;
 }
