@@ -10,9 +10,9 @@
   "scripts": {
     "dev": "npm run dev -w frontend & npm run dev -w backend",
     "build": "npm run build -w frontend",
-    "lint": "eslint .",
+    "lint": "npx eslint .",
     "lint:sol": "solhint \"contracts/**/*.sol\"",
-    "lint:fix": "eslint . --fix",
+    "lint:fix": "npx eslint . --fix",
     "lint:contracts": "cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings",
     "lint:all": "npm run lint && npm run lint:contracts",
     "format": "prettier --write .",
@@ -31,11 +31,12 @@
     "prepare": "node .husky/install.mjs"
   },
   "devDependencies": {
+    "@eslint/js": "^9.18.0",
     "@typescript-eslint/eslint-plugin": "^8.57.1",
     "@typescript-eslint/parser": "^8.57.1",
     "autocannon": "^8.0.0",
     "cross-env": "^10.1.0",
-    "eslint": "^9.39.4",
+    "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-jsx-a11y": "^6.10.2",
