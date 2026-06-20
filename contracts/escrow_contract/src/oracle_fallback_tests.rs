@@ -75,7 +75,7 @@ mod oracle_fallback_tests {
         );
     }
 
-    /// Both oracles return stale prices → get_price must return OraclePriceStale.
+    /// Both oracles return stale prices → get_price must return OracleStaleFeed.
     #[test]
     fn test_oracle_both_stale_returns_error() {
         let (env, admin, client) = setup();
@@ -94,8 +94,8 @@ mod oracle_fallback_tests {
         let asset = Address::generate(&env);
         let result = client.try_get_price(&asset);
         assert!(
-            matches!(result, Err(Ok(EscrowError::E54))),
-            "should return OraclePriceStale when both oracles are stale"
+            matches!(result, Err(Ok(EscrowError::OracleStaleFeed))),
+            "should return OracleStaleFeed when both oracles are stale"
         );
     }
 
