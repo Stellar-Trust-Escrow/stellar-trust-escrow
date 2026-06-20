@@ -351,13 +351,13 @@ fn rotate_slot(
 
     // Find the next eligible candidate from the registry
     let registry = get_registry(env);
-    let seed = (env.ledger().sequence() as u64)
+    let _seed = (env.ledger().sequence() as u64)
         .wrapping_add(dispute_id)
         .wrapping_add(if is_timeout { 0x1 } else { 0x2 });
 
     let mut replacement: Option<Address> = None;
     let mut best_load: u32 = u32::MAX;
-    let n = registry.len() as u64;
+    let mut best_index: u64 = u64::MAX;
 
     for i in 0..registry.len() {
         let addr = registry.get(i).unwrap();
@@ -373,11 +373,10 @@ fn rotate_slot(
             continue;
         }
         let load = get_load(env, &addr);
-        let tiebreak = seed_index(seed ^ i as u64, n);
-        if load < best_load
-            || (load == best_load && tiebreak < seed_index(seed ^ best_load as u64, n))
-        {
+        // Stable tiebreak: use arbitrator's index in registry order
+        if load < best_load || (load == best_load && (i as u64) < best_index) {
             best_load = load;
+            best_index = i as u64;
             replacement = Some(addr);
         }
     }
