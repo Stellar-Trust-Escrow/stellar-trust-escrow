@@ -61,9 +61,10 @@ jobs:
         id: changes
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git fetch --no-tags --prune --depth=1 origin "${{ github.base_ref }}"
-            BASE_COMMIT=$(git merge-base HEAD "origin/${{ github.base_ref }}")
-            CHANGED=$(git diff --name-only "$BASE_COMMIT"...HEAD)
+            # Fetch the base branch to ensure merge-base works
+            git fetch --no-tags --depth=50 origin "${{ github.base_ref }}"
+            BASE_COMMIT=$(git merge-base HEAD "origin/${{ github.base_ref }}" 2>/dev/null || echo "origin/${{ github.base_ref }}")
+            CHANGED=$(git diff --name-only "$BASE_COMMIT"...HEAD 2>/dev/null || git diff --name-only HEAD~1 HEAD)
           else
             if git rev-parse HEAD^ >/dev/null 2>&1; then
               CHANGED=$(git diff --name-only HEAD^ HEAD)
@@ -141,6 +142,15 @@ jobs:
           name: contract-test-artifacts-${{ github.sha }}
           path: test-artifacts/
           retention-days: 30
+
+      - name: Job Summary
+        if: always()
+        run: |
+          if [ "${{ steps.changes.outputs.changed }}" = "true" ]; then
+            echo "✅ Contract tests completed"
+          else
+            echo "⏭️ No contract changes detected — skipped"
+          fi
 
       - name: Slack Notification on failure
         if: ${{ failure() && env.SLACK_WEBHOOK != '' }}
@@ -242,9 +252,10 @@ jobs:
         id: changes
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git fetch --no-tags --prune --depth=1 origin "${{ github.base_ref }}"
-            BASE_COMMIT=$(git merge-base HEAD "origin/${{ github.base_ref }}")
-            CHANGED=$(git diff --name-only "$BASE_COMMIT"...HEAD)
+            # Fetch the base branch to ensure merge-base works
+            git fetch --no-tags --depth=50 origin "${{ github.base_ref }}"
+            BASE_COMMIT=$(git merge-base HEAD "origin/${{ github.base_ref }}" 2>/dev/null || echo "origin/${{ github.base_ref }}")
+            CHANGED=$(git diff --name-only "$BASE_COMMIT"...HEAD 2>/dev/null || git diff --name-only HEAD~1 HEAD)
           else
             if git rev-parse HEAD^ >/dev/null 2>&1; then
               CHANGED=$(git diff --name-only HEAD^ HEAD)
@@ -269,6 +280,10 @@ jobs:
         if: steps.changes.outputs.changed == 'true'
         run: npm ci
 
+      - name: Generate Prisma Client
+        if: steps.changes.outputs.changed == 'true'
+        run: npm run db:generate -w backend
+
       - name: Lint
         if: steps.changes.outputs.changed == 'true'
         run: npm run lint -w backend
@@ -281,6 +296,15 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
           JWT_SECRET: test-secret-for-ci-only
           STELLAR_NETWORK: testnet
+
+      - name: Job Summary
+        if: always()
+        run: |
+          if [ "${{ steps.changes.outputs.changed }}" = "true" ]; then
+            echo "✅ Backend tests completed (Node ${{ matrix.node-version }})"
+          else
+            echo "⏭️ No backend changes detected — skipped"
+          fi
 
       - name: Slack Notification
         if: ${{ failure() && matrix.node-version == 20 && env.SLACK_WEBHOOK != '' }}
@@ -310,9 +334,10 @@ jobs:
         id: changes
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git fetch --no-tags --prune --depth=1 origin "${{ github.base_ref }}"
-            BASE_COMMIT=$(git merge-base HEAD "origin/${{ github.base_ref }}")
-            CHANGED=$(git diff --name-only "$BASE_COMMIT"...HEAD)
+            # Fetch the base branch to ensure merge-base works
+            git fetch --no-tags --depth=50 origin "${{ github.base_ref }}"
+            BASE_COMMIT=$(git merge-base HEAD "origin/${{ github.base_ref }}" 2>/dev/null || echo "origin/${{ github.base_ref }}")
+            CHANGED=$(git diff --name-only "$BASE_COMMIT"...HEAD 2>/dev/null || git diff --name-only HEAD~1 HEAD)
           else
             if git rev-parse HEAD^ >/dev/null 2>&1; then
               CHANGED=$(git diff --name-only HEAD^ HEAD)
@@ -365,6 +390,15 @@ jobs:
         env:
           NEXT_PUBLIC_API_URL: http://localhost:4000
 
+      - name: Job Summary
+        if: always()
+        run: |
+          if [ "${{ steps.changes.outputs.changed }}" = "true" ]; then
+            echo "✅ Frontend tests completed (Node ${{ matrix.node-version }})"
+          else
+            echo "⏭️ No frontend changes detected — skipped"
+          fi
+
       - name: Slack Notification
         if: ${{ failure() && matrix.node-version == 20 && env.SLACK_WEBHOOK != '' }}
         uses: rtCamp/action-slack-notify@v2
@@ -390,9 +424,10 @@ jobs:
         id: changes
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git fetch --no-tags --prune --depth=1 origin "${{ github.base_ref }}"
-            BASE_COMMIT=$(git merge-base HEAD "origin/${{ github.base_ref }}")
-            CHANGED=$(git diff --name-only "$BASE_COMMIT"...HEAD)
+            # Fetch the base branch to ensure merge-base works
+            git fetch --no-tags --depth=50 origin "${{ github.base_ref }}"
+            BASE_COMMIT=$(git merge-base HEAD "origin/${{ github.base_ref }}" 2>/dev/null || echo "origin/${{ github.base_ref }}")
+            CHANGED=$(git diff --name-only "$BASE_COMMIT"...HEAD 2>/dev/null || git diff --name-only HEAD~1 HEAD)
           else
             if git rev-parse HEAD^ >/dev/null 2>&1; then
               CHANGED=$(git diff --name-only HEAD^ HEAD)
@@ -462,9 +497,10 @@ jobs:
         id: changes
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git fetch --no-tags --prune --depth=1 origin "${{ github.base_ref }}"
-            BASE_COMMIT=$(git merge-base HEAD "origin/${{ github.base_ref }}")
-            CHANGED=$(git diff --name-only "$BASE_COMMIT"...HEAD)
+            # Fetch the base branch to ensure merge-base works
+            git fetch --no-tags --depth=50 origin "${{ github.base_ref }}"
+            BASE_COMMIT=$(git merge-base HEAD "origin/${{ github.base_ref }}" 2>/dev/null || echo "origin/${{ github.base_ref }}")
+            CHANGED=$(git diff --name-only "$BASE_COMMIT"...HEAD 2>/dev/null || git diff --name-only HEAD~1 HEAD)
           else
             if git rev-parse HEAD^ >/dev/null 2>&1; then
               CHANGED=$(git diff --name-only HEAD^ HEAD)
@@ -532,6 +568,15 @@ jobs:
           path: frontend/accessibility-reports/
           retention-days: 30
 
+      - name: Job Summary
+        if: always()
+        run: |
+          if [ "${{ steps.changes.outputs.changed }}" = "true" ]; then
+            echo "✅ Accessibility tests completed"
+          else
+            echo "⏭️ No frontend changes detected — skipped"
+          fi
+
   # ─────────────────────────────────────────
   # 🐳 Docker Build
   # ─────────────────────────────────────────
@@ -548,9 +593,10 @@ jobs:
         id: changes
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git fetch --no-tags --prune --depth=1 origin "${{ github.base_ref }}"
-            BASE_COMMIT=$(git merge-base HEAD "origin/${{ github.base_ref }}")
-            CHANGED=$(git diff --name-only "$BASE_COMMIT"...HEAD)
+            # Fetch the base branch to ensure merge-base works
+            git fetch --no-tags --depth=50 origin "${{ github.base_ref }}"
+            BASE_COMMIT=$(git merge-base HEAD "origin/${{ github.base_ref }}" 2>/dev/null || echo "origin/${{ github.base_ref }}")
+            CHANGED=$(git diff --name-only "$BASE_COMMIT"...HEAD 2>/dev/null || git diff --name-only HEAD~1 HEAD)
           else
             if git rev-parse HEAD^ >/dev/null 2>&1; then
               CHANGED=$(git diff --name-only HEAD^ HEAD)
@@ -585,6 +631,15 @@ jobs:
           target: frontend
           push: false
           tags: stellar-escrow-frontend:${{ github.sha }}
+
+      - name: Job Summary
+        if: always()
+        run: |
+          if [ "${{ steps.changes.outputs.changed }}" = "true" ]; then
+            echo "✅ Docker builds completed"
+          else
+            echo "⏭️ No Docker-related changes detected — skipped"
+          fi
 
       - name: Slack Notification
         if: ${{ always() && env.SLACK_WEBHOOK != '' }}
