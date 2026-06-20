@@ -18,6 +18,7 @@ import { Redis } from 'ioredis';
 import prisma from '../lib/prisma.js';
 import { createModuleLogger } from '../config/logger.js';
 import { getContractEvents, getLatestLedger } from './stellarService.js';
+import * as reputationService from './reputationService.js';
 
 const log = createModuleLogger('service.escrowIndexer');
 
@@ -57,12 +58,20 @@ async function persistCursor(ledger) {
 const parseBigInt = (v) => {
   if (typeof v === 'bigint') return v;
   if (typeof v === 'number') return BigInt(v);
-  try { return BigInt(String(v)); } catch { return BigInt(0); }
+  try {
+    return BigInt(String(v));
+  } catch {
+    return BigInt(0);
+  }
 };
 
 const parseAddress = (v) => {
   if (typeof v === 'string') return v;
-  try { return v.address().toString(); } catch { return String(v); }
+  try {
+    return v.address().toString();
+  } catch {
+    return String(v);
+  }
 };
 
 // ── Event handlers ────────────────────────────────────────────────────────────
@@ -85,7 +94,11 @@ export async function handleDisputeRaised(event) {
     prisma.escrow.updateMany({ where: { id: escrowId }, data: { status: 'Disputed' } }),
     prisma.dispute.upsert({
       where: { escrowId },
-      create: { escrowId, raisedByAddress: String(raisedBy ?? ''), raisedAt: new Date(event.ledgerClosedAt) },
+      create: {
+        escrowId,
+        raisedByAddress: String(raisedBy ?? ''),
+        raisedAt: new Date(event.ledgerClosedAt),
+      },
       update: {},
     }),
   ]);
@@ -95,6 +108,30 @@ export async function handleFundsReleased(event) {
   const escrowId = parseBigInt(event.topic?.[1]);
   const [, amount] = event.value ?? [];
   if (!escrowId || !amount) return;
+
+  // Fetch escrow to get client and freelancer addresses
+  const escrow = await prisma.escrow.findUnique({
+    where: { id: escrowId },
+    select: { clientAddress: true, freelancerAddress: true, tenantId: true },
+  });
+
+  if (escrow) {
+    // Record completion for both parties
+    await reputationService.recordEscrowCompletion(
+      escrow.clientAddress,
+      'client',
+      escrowId,
+      escrow.tenantId,
+    );
+    await reputationService.recordEscrowCompletion(
+      escrow.freelancerAddress,
+      'freelancer',
+      escrowId,
+      escrow.tenantId,
+    );
+  }
+
+  // Update remaining balance
   const released = parseBigInt(amount);
   await prisma.$executeRaw`
     UPDATE escrows
@@ -163,6 +200,35 @@ export async function handleMilestoneSubmitted(event) {
 export async function handleDisputeResolved(event) {
   const escrowId = parseBigInt(event.topic?.[1]);
   if (!escrowId) return;
+
+  // Contract emits resolution outcome in value: [winnerId, ...] or similar
+  // For now, assume the event.value contains winner address indicator
+  // Fetch dispute to determine who won
+  const dispute = await prisma.dispute.findUnique({
+    where: { escrowId },
+    select: { escrowId: true },
+  });
+
+  const escrow = await prisma.escrow.findUnique({
+    where: { id: escrowId },
+    select: { clientAddress: true, freelancerAddress: true, tenantId: true },
+  });
+
+  if (!escrow) return;
+
+  // For dispute resolution, we track that one party won and one lost.
+  // Contract should emit resolution details; for now, assume arbitration favored the freelancer.
+  // (In production, derive from contract's resolution field in event.value)
+  const winnerAddress = escrow.freelancerAddress;
+
+  await reputationService.recordDisputeOutcome(winnerAddress, true, escrowId, escrow.tenantId);
+
+  // Loser's score decreases
+  const loserAddress =
+    winnerAddress === escrow.freelancerAddress ? escrow.clientAddress : escrow.freelancerAddress;
+
+  await reputationService.recordDisputeOutcome(loserAddress, false, escrowId, escrow.tenantId);
+
   await prisma.escrow.updateMany({ where: { id: escrowId }, data: { status: 'Completed' } });
 }
 
@@ -183,19 +249,20 @@ export async function handleReputationUpdated(event) {
 // ── Dispatch ──────────────────────────────────────────────────────────────────
 
 const HANDLERS = {
-  esc_crt:   handleEscrowCreated,
-  mil_add:   handleMilestoneAdded,
-  mil_sub:   handleMilestoneSubmitted,
-  mil_apr:   handleMilestoneApproved,
+  esc_crt: handleEscrowCreated,
+  mil_add: handleMilestoneAdded,
+  mil_sub: handleMilestoneSubmitted,
+  mil_apr: handleMilestoneApproved,
   funds_rel: handleFundsReleased,
-  esc_can:   handleEscrowCancelled,
-  dis_rai:   handleDisputeRaised,
-  dis_res:   handleDisputeResolved,
-  rep_upd:   handleReputationUpdated,
+  esc_can: handleEscrowCancelled,
+  dis_rai: handleDisputeRaised,
+  dis_res: handleDisputeResolved,
+  rep_upd: handleReputationUpdated,
 };
 
 export async function dispatchEvent(event) {
-  const topic = typeof event.topic?.[0] === 'string' ? event.topic[0] : String(event.topic?.[0] ?? '');
+  const topic =
+    typeof event.topic?.[0] === 'string' ? event.topic[0] : String(event.topic?.[0] ?? '');
   const handler = HANDLERS[topic];
   if (!handler) {
     log.warn({ message: 'indexer_unknown_event_type', topic });
@@ -209,11 +276,14 @@ export async function dispatchEvent(event) {
 async function pushToDlq(event, error) {
   try {
     const redis = getRedis();
-    await redis.rpush(DLQ_KEY, JSON.stringify({
-      event,
-      error: error.message,
-      failedAt: new Date().toISOString(),
-    }));
+    await redis.rpush(
+      DLQ_KEY,
+      JSON.stringify({
+        event,
+        error: error.message,
+        failedAt: new Date().toISOString(),
+      }),
+    );
     log.warn({ message: 'indexer_event_dlq', topic: event.topic?.[0], error: error.message });
   } catch (redisErr) {
     log.error({ message: 'indexer_dlq_push_failed', error: redisErr.message });

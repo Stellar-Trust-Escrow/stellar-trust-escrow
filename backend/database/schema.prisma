@@ -43,6 +43,7 @@ model Tenant {
   escrows              Escrow[]
   milestones           Milestone[]
   reputationRecords    ReputationRecord[]
+  reputationEvents     ReputationEvent[]
   disputes             Dispute[]
   disputeEvidence      DisputeEvidence[]
   disputeAppeals       DisputeAppeal[]
@@ -53,6 +54,8 @@ model Tenant {
   kycVerifications     KycVerification[]
   adminAuditLogs       AdminAuditLog[]
   auditLogs            AuditLog[]
+  chatRoomKeys         ChatRoomKey[]
+  chatMessages         ChatMessage[]
 
   @@map("tenants")
 }
@@ -278,11 +281,39 @@ model ReputationRecord {
   updatedAt        DateTime @updatedAt @map("updated_at")
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
+  events ReputationEvent[]
 
   @@index([tenantId, address])
   @@index([tenantId, totalScore(sort: Desc)])
   @@index([totalScore(sort: Desc)])
   @@map("reputation_records")
+}
+
+// ── Reputation Events (Audit & Recalculation) ──────────────────────────────────
+
+enum ReputationEventType {
+  ESCROW_COMPLETED
+  DISPUTE_WON
+  DISPUTE_LOST
+  CANCELLATION
+}
+
+model ReputationEvent {
+  id            String                 @id @default(cuid())
+  tenantId      String                 @map("tenant_id")
+  address       String
+  eventType     ReputationEventType    @map("event_type")
+  escrowId      BigInt?                @map("escrow_id")
+  scoreDelta    Int                    @map("score_delta")
+  createdAt     DateTime               @default(now()) @map("created_at")
+
+  reputationRecord ReputationRecord @relation(fields: [address], references: [address])
+  tenant           Tenant           @relation(fields: [tenantId], references: [id])
+
+  @@unique([address, eventType, escrowId])
+  @@index([tenantId, address, createdAt(sort: Desc)])
+  @@index([address, eventType])
+  @@map("reputation_events")
 }
 
 // ── Disputes ─────────────────────────────────────────────────────────────────

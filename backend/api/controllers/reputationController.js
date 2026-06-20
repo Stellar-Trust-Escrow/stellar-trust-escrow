@@ -4,6 +4,7 @@
  * - getReputation   — single address lookup (Prisma, cached)
  * - getLeaderboard  — top-N by score (ES primary, Prisma fallback, cached)
  * - search          — address autocomplete + full-text (ES primary, Prisma fallback)
+ * - recalculate     — admin-only endpoint to rebuild scores from event history
  *
  * Cache handled by route-level middleware — no manual cache calls here.
  */
@@ -11,6 +12,7 @@
 import prisma from '../../lib/prisma.js';
 import { buildPaginatedResponse, parsePagination } from '../../lib/pagination.js';
 import * as reputationSearch from '../../services/reputationSearchService.js';
+import * as reputationService from '../../services/reputationService.js';
 import { getLogger } from '../../config/logger.js';
 
 const log = getLogger();
@@ -98,4 +100,34 @@ const search = async (req, res) => {
   }
 };
 
-export default { getReputation, getLeaderboard, search };
+/**
+ * POST /api/reputation/admin/recalculate
+ *
+ * Admin-only endpoint to recompute all reputation scores from event history.
+ * Used for corrections after bugs or audits.
+ */
+const recalculate = async (req, res) => {
+  try {
+    const user = req.user || req.auth || {};
+    const userRole = user.role || 'user';
+
+    // Admin-only check
+    if (userRole !== 'admin' && userRole !== 'superadmin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const tenantId = req.tenant?.id;
+    await reputationService.recalculateFromEventHistory(tenantId);
+
+    res.json({
+      success: true,
+      message: 'Reputation scores recalculated from event history',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    logControllerError('reputation.recalculate', err, req);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export default { getReputation, getLeaderboard, search, recalculate };

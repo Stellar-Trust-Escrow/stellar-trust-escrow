@@ -21,6 +21,12 @@ router.get(
 );
 
 /**
+ * @route  POST /api/reputation/admin/recalculate
+ * Admin-only: recompute all scores from event history
+ */
+router.post('/admin/recalculate', reputationController.recalculate);
+
+/**
  * @route  GET /api/reputation/:address
  */
 router.get(
