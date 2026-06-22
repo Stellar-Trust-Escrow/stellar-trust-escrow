@@ -1658,7 +1658,7 @@ mod tests {
         // Now create a scenario where AGAINST strictly wins: quorum=2.
         s.client.set_quorum(&s.admin, &2_u32);
         let id3 = s.client.submit_claim(&claimant, &desc, &100_i128);
-        s.client.vote(&governors.get(2).unwrap(), &id3, &true);  // 1 FOR
+        s.client.vote(&governors.get(2).unwrap(), &id3, &true); // 1 FOR
         s.client.vote(&governors.get(3).unwrap(), &id3, &false); // 1 AGAINST — total=2, tie → Rejected
         let claim3 = s.client.get_claim(&id3);
         assert_eq!(claim3.status, ClaimStatus::Rejected);
