@@ -15,10 +15,10 @@
 import jwt from 'jsonwebtoken';
 import prisma from '../../lib/prisma.js';
 import { createModuleLogger } from '../../config/logger.js';
+import { JWT_SECRET, JWT_ALGORITHM } from '../../config/secrets.js';
 
 const log = createModuleLogger('chatSocket');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'change_this_in_production';
 const DISPUTE_NS_RE = /^\/dispute\/(\d+)$/;
 
 // ── JWT extraction ────────────────────────────────────────────────────────────
@@ -32,7 +32,7 @@ function extractToken(socket) {
 
 function verifyJwt(token) {
   try {
-    const payload = jwt.verify(token, JWT_SECRET);
+    const payload = jwt.verify(token, JWT_SECRET, { algorithms: [JWT_ALGORITHM] });
     return payload;
   } catch {
     return null;

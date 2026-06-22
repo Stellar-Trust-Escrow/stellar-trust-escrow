@@ -15,6 +15,20 @@ jobs:
     environment: staging
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      # Block the deploy if any required secret is missing, weak, or a placeholder.
+      - name: Validate environment secrets
+        working-directory: backend
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          JWT_ACCESS_SECRET: ${{ secrets.JWT_ACCESS_SECRET }}
+          JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
+          MFA_JWT_SECRET: ${{ secrets.MFA_JWT_SECRET }}
+          ADMIN_JWT_SECRET: ${{ secrets.ADMIN_JWT_SECRET }}
+          ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
+        run: node scripts/check-env.js
       - name: Deploying to Staging
         run: |
           echo "Deploying to Staging environment..."

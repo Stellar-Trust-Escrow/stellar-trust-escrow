@@ -9,8 +9,8 @@ import crypto, { randomUUID } from 'crypto';
 import jwt from 'jsonwebtoken';
 import { Keypair, StrKey } from '@stellar/stellar-sdk';
 import sessionService from '../../services/sessionService.js';
+import { JWT_SECRET, JWT_ALGORITHM } from '../../config/secrets.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'change_this_in_production';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
 const NONCE_TTL_MS = 5 * 60 * 1000;
 
@@ -105,6 +105,7 @@ export const verifySignatureAndLogin = async (req, res) => {
 
   const jti = await createSessionJti(address, req);
   const token = jwt.sign({ address, jti, iat: Math.floor(Date.now() / 1000) }, JWT_SECRET, {
+    algorithm: JWT_ALGORITHM,
     expiresIn: JWT_EXPIRES_IN,
   });
 
@@ -118,13 +119,14 @@ export const refreshToken = async (req, res) => {
   }
 
   try {
-    const payload = jwt.verify(authHeader.slice(7), JWT_SECRET);
+    const payload = jwt.verify(authHeader.slice(7), JWT_SECRET, { algorithms: [JWT_ALGORITHM] });
     if (payload.jti && typeof sessionService?.revokeSession === 'function') {
       await sessionService.revokeSession(payload.jti);
     }
 
     const jti = await createSessionJti(payload.address, req);
     const token = jwt.sign({ address: payload.address, jti }, JWT_SECRET, {
+      algorithm: JWT_ALGORITHM,
       expiresIn: JWT_EXPIRES_IN,
     });
 
@@ -139,7 +141,7 @@ export const logout = async (req, res) => {
 
   if (authHeader?.startsWith('Bearer ')) {
     try {
-      const payload = jwt.verify(authHeader.slice(7), JWT_SECRET);
+      const payload = jwt.verify(authHeader.slice(7), JWT_SECRET, { algorithms: [JWT_ALGORITHM] });
       if (payload.jti && typeof sessionService?.revokeSession === 'function') {
         await sessionService.revokeSession(payload.jti);
       }
