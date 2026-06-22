@@ -17,24 +17,23 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { signMessage } from '@stellar/freighter-api';
+import { useWalletStore } from '../store/app-store';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-const TOKEN_KEY = 'ste_auth_token';
 const ADDRESS_KEY = 'ste_auth_address';
 
 export function useAuth(walletAddress) {
-  const [token, setToken] = useState(null);
+  const { token, setToken, clearToken } = useWalletStore();
   const [authAddress, setAuthAddress] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Restore session from localStorage on mount
+  // Restore the address tied to the persisted token on mount.
+  // The token itself is hydrated globally by AppStoreProvider.
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(TOKEN_KEY);
       const storedAddr = localStorage.getItem(ADDRESS_KEY);
-      if (stored && storedAddr) {
-        setToken(stored);
+      if (storedAddr) {
         setAuthAddress(storedAddr);
       }
     } catch {
@@ -108,7 +107,6 @@ export function useAuth(walletAddress) {
       setToken(jwt);
       setAuthAddress(walletAddress);
       try {
-        localStorage.setItem(TOKEN_KEY, jwt);
         localStorage.setItem(ADDRESS_KEY, walletAddress);
       } catch {
         // ignore storage errors
@@ -118,7 +116,7 @@ export function useAuth(walletAddress) {
     } finally {
       setIsLoading(false);
     }
-  }, [walletAddress]);
+  }, [walletAddress, setToken]);
 
   const logout = useCallback(async () => {
     try {
@@ -126,15 +124,14 @@ export function useAuth(walletAddress) {
     } catch {
       // best-effort
     }
-    setToken(null);
+    clearToken();
     setAuthAddress(null);
     try {
-      localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(ADDRESS_KEY);
     } catch {
       // ignore
     }
-  }, []);
+  }, [clearToken]);
 
   return { login, logout, token, authAddress, isAuthenticated, isLoading, error };
 }
