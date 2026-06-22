@@ -185,6 +185,8 @@ pub enum DataKey {
     Proposal(u64),
     /// Whether `voter` has voted on proposal `id`: (proposal_id, voter)
     HasVoted(u64, Address),
+    /// Voting power snapshot for (proposal_id, voter): i128
+    VoteRecord(u64, Address),
     // ── Arbitrator DAO ────────────────────────────────────────────────────────
     /// Registered arbitrator whitelist entry — key: Address, value: bool
     Arbitrator(Address),

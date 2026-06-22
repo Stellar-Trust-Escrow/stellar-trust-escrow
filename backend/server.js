@@ -66,6 +66,7 @@ import { getBackupStatus } from './services/backupMonitor.js';
 import { syncFromPrisma, ensureIndex } from './services/reputationSearchService.js';
 import { createGateway } from './gateway/index.js';
 import queueDashboardRoutes from './api/routes/queueDashboardRoutes.js';
+import chatRoutes from './api/routes/chatRoutes.js';
 
 // Attach Prisma query instrumentation (metrics + traces)
 attachPrismaMetrics(prisma);
@@ -208,6 +209,7 @@ app.use('/api/incidents', incidentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/batch', batchRoutes);
 app.use('/api/search', searchRoutes);
+app.use('/api/chat', chatRoutes);
 app.use('/admin/queues', queueDashboardRoutes);
 app.use('/docs', docsRouter);
 // Alias — acceptance criteria requires /api-docs
@@ -271,6 +273,22 @@ async function startServer() {
         startConnectionMonitoring(prisma);
         // Load secrets first — merges vault/env secrets into process.env
         await initSecrets();
+
+        // ── Stellar / Soroban env validation ───────────────────────────────
+        if (!process.env.SOROBAN_RPC_URL) {
+          throw new Error(
+            '[Config] SOROBAN_RPC_URL is not set. The indexer and broadcast endpoint require a Soroban RPC endpoint.',
+          );
+        }
+        if (
+          process.env.STELLAR_NETWORK === 'testnet' &&
+          process.env.NODE_ENV !== 'development' &&
+          process.env.NODE_ENV !== 'test'
+        ) {
+          throw new Error(
+            `[Config] STELLAR_NETWORK=testnet is not allowed in NODE_ENV=${process.env.NODE_ENV}. Set STELLAR_NETWORK=mainnet for production deployments.`,
+          );
+        }
         logger.info(
           { secretsBackend: process.env.SECRETS_BACKEND || 'env' },
           'Secrets backend loaded',

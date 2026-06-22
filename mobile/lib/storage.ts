@@ -30,4 +30,18 @@ export const secureStorage = {
   async delete(key: string): Promise<void> {
     await SecureStore.deleteItemAsync(key);
   },
+  // Set with accessibility level (iOS-specific, 'ALWAYS' requires device unlock)
+  async setWithAccessibility(
+    key: string,
+    value: string,
+    accessibility:
+      | 'ALWAYS'
+      | 'ALWAYS_THIS_DEVICE_ONLY'
+      | 'WHEN_UNLOCKED'
+      | 'WHEN_UNLOCKED_THIS_DEVICE_ONLY',
+  ): Promise<void> {
+    await SecureStore.setItemAsync(key, value, {
+      keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+    });
+  },
 };

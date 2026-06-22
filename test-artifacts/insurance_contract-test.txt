@@ -1,0 +1,122 @@
+   Compiling stellar-trust-insurance-contract v0.1.0 (/workspaces/stellar-trust-escrow/contracts/insurance_contract)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.93s
+     Running unittests src/lib.rs (/workspaces/stellar-trust-escrow/target/debug/deps/stellar_trust_insurance_contract-91d03fd1629b4573)
+
+running 47 tests
+GAS_PROFILE | insurance_contract | add_governor | cpu=150555 | mem=23285
+Writing test snapshot file for test "gas_profiling::gas_profiling::profile_add_governor" to "test_snapshots/gas_profiling/gas_profiling/profile_add_governor.1.json".
+GAS_PROFILE | insurance_contract | contribute | cpu=309011 | mem=44248
+Writing test snapshot file for test "gas_profiling::gas_profiling::profile_contribute" to "test_snapshots/gas_profiling/gas_profiling/profile_contribute.1.json".
+test gas_profiling::gas_profiling::profile_contribute ... ok
+GAS_PROFILE | insurance_contract | execute_payout | cpu=406320 | mem=61238
+Writing test snapshot file for test "gas_profiling::gas_profiling::profile_execute_payout" to "test_snapshots/gas_profiling/gas_profiling/profile_execute_payout.1.json".
+test gas_profiling::gas_profiling::profile_add_governor ... ok
+GAS_PROFILE | insurance_contract | get_claim | cpu=99389 | mem=13849
+Writing test snapshot file for test "gas_profiling::gas_profiling::profile_get_claim" to "test_snapshots/gas_profiling/gas_profiling/profile_get_claim.1.json".
+test gas_profiling::gas_profiling::profile_execute_payout ... ok
+GAS_PROFILE | insurance_contract | get_contribution | cpu=42106 | mem=7506
+Writing test snapshot file for test "gas_profiling::gas_profiling::profile_get_contribution" to "test_snapshots/gas_profiling/gas_profiling/profile_get_contribution.1.json".
+test gas_profiling::gas_profiling::profile_get_contribution ... ok
+GAS_PROFILE | insurance_contract | get_fund_info | cpu=139181 | mem=19910
+Writing test snapshot file for test "gas_profiling::gas_profiling::profile_get_fund_info" to "test_snapshots/gas_profiling/gas_profiling/profile_get_fund_info.1.json".
+test gas_profiling::gas_profiling::profile_get_claim ... ok
+GAS_PROFILE | insurance_contract | initialize | cpu=73407 | mem=8008
+Writing test snapshot file for test "gas_profiling::gas_profiling::profile_initialize" to "test_snapshots/gas_profiling/gas_profiling/profile_initialize.1.json".
+test gas_profiling::gas_profiling::profile_get_fund_info ... ok
+GAS_PROFILE | insurance_contract | is_governor | cpu=40448 | mem=7381
+Writing test snapshot file for test "gas_profiling::gas_profiling::profile_is_governor" to "test_snapshots/gas_profiling/gas_profiling/profile_is_governor.1.json".
+test gas_profiling::gas_profiling::profile_is_governor ... ok
+GAS_PROFILE | insurance_contract | remove_governor | cpu=144511 | mem=22150
+Writing test snapshot file for test "gas_profiling::gas_profiling::profile_remove_governor" to "test_snapshots/gas_profiling/gas_profiling/profile_remove_governor.1.json".
+test gas_profiling::gas_profiling::profile_initialize ... ok
+GAS_PROFILE | insurance_contract | set_claim_cap | cpu=130266 | mem=21515
+Writing test snapshot file for test "gas_profiling::gas_profiling::profile_set_claim_cap" to "test_snapshots/gas_profiling/gas_profiling/profile_set_claim_cap.1.json".
+test gas_profiling::gas_profiling::profile_remove_governor ... ok
+GAS_PROFILE | insurance_contract | set_quorum | cpu=130099 | mem=21512
+Writing test snapshot file for test "gas_profiling::gas_profiling::profile_set_quorum" to "test_snapshots/gas_profiling/gas_profiling/profile_set_quorum.1.json".
+test gas_profiling::gas_profiling::profile_set_claim_cap ... ok
+GAS_PROFILE | insurance_contract | submit_claim | cpu=172587 | mem=25730
+Writing test snapshot file for test "gas_profiling::gas_profiling::profile_submit_claim" to "test_snapshots/gas_profiling/gas_profiling/profile_submit_claim.1.json".
+test gas_profiling::gas_profiling::profile_submit_claim ... ok
+GAS_PROFILE | insurance_contract | vote | cpu=177387 | mem=27215
+Writing test snapshot file for test "gas_profiling::gas_profiling::profile_vote" to "test_snapshots/gas_profiling/gas_profiling/profile_vote.1.json".
+test gas_profiling::gas_profiling::profile_set_quorum ... ok
+GAS_PROFILE | insurance_contract | withdraw_claim | cpu=136821 | mem=20939
+Writing test snapshot file for test "gas_profiling::gas_profiling::profile_withdraw_claim" to "test_snapshots/gas_profiling/gas_profiling/profile_withdraw_claim.1.json".
+test gas_profiling::gas_profiling::profile_vote ... ok
+Writing test snapshot file for test "tests::test_add_duplicate_governor_fails" to "test_snapshots/tests/test_add_duplicate_governor_fails.1.json".
+test gas_profiling::gas_profiling::profile_withdraw_claim ... ok
+Writing test snapshot file for test "tests::test_add_remove_governor" to "test_snapshots/tests/test_add_remove_governor.1.json".
+test tests::test_add_duplicate_governor_fails ... ok
+Writing test snapshot file for test "tests::test_claim_yield_transfers_tokens" to "test_snapshots/tests/test_claim_yield_transfers_tokens.1.json".
+test tests::test_claim_yield_transfers_tokens ... ok
+Writing test snapshot file for test "tests::test_contribute_below_minimum_fails" to "test_snapshots/tests/test_contribute_below_minimum_fails.1.json".
+test tests::test_contribute_below_minimum_fails ... ok
+Writing test snapshot file for test "tests::test_contribute_transfers_tokens" to "test_snapshots/tests/test_contribute_transfers_tokens.1.json".
+test tests::test_add_remove_governor ... ok
+Writing test snapshot file for test "tests::test_double_initialize_fails" to "test_snapshots/tests/test_double_initialize_fails.1.json".
+test tests::test_double_initialize_fails ... ok
+Writing test snapshot file for test "tests::test_double_vote_fails" to "test_snapshots/tests/test_double_vote_fails.1.json".
+test tests::test_contribute_transfers_tokens ... ok
+Writing test snapshot file for test "tests::test_execute_payout_not_approved_fails" to "test_snapshots/tests/test_execute_payout_not_approved_fails.1.json".
+test tests::test_double_vote_fails ... ok
+test tests::test_execute_payout_not_approved_fails ... ok
+Writing test snapshot file for test "tests::test_initialize_stores_params" to "test_snapshots/tests/test_initialize_stores_params.1.json".
+Writing test snapshot file for test "tests::test_execute_payout_transfers_tokens" to "test_snapshots/tests/test_execute_payout_transfers_tokens.1.json".
+test tests::test_initialize_stores_params ... ok
+Writing test snapshot file for test "tests::test_non_governor_cannot_propose_slash" to "test_snapshots/tests/test_non_governor_cannot_propose_slash.1.json".
+test tests::test_non_governor_cannot_propose_slash ... ok
+Writing test snapshot file for test "tests::test_payout_insufficient_funds_fails" to "test_snapshots/tests/test_payout_insufficient_funds_fails.1.json".
+test tests::test_execute_payout_transfers_tokens ... ok
+Writing test snapshot file for test "tests::test_remove_nonexistent_governor_fails" to "test_snapshots/tests/test_remove_nonexistent_governor_fails.1.json".
+test tests::test_payout_insufficient_funds_fails ... ok
+test tests::test_remove_nonexistent_governor_fails ... ok
+Writing test snapshot file for test "tests::test_set_claim_cap_non_admin_fails" to "test_snapshots/tests/test_set_claim_cap_non_admin_fails.1.json".
+Writing test snapshot file for test "tests::test_set_claim_cap_updates_cap" to "test_snapshots/tests/test_set_claim_cap_updates_cap.1.json".
+test tests::test_set_claim_cap_updates_cap ... ok
+Writing test snapshot file for test "tests::test_set_claim_cap_zero_fails" to "test_snapshots/tests/test_set_claim_cap_zero_fails.1.json".
+test tests::test_set_claim_cap_non_admin_fails ... ok
+Writing test snapshot file for test "tests::test_set_quorum_non_admin_fails" to "test_snapshots/tests/test_set_quorum_non_admin_fails.1.json".
+test tests::test_set_claim_cap_zero_fails ... ok
+Writing test snapshot file for test "tests::test_set_quorum_updates_quorum" to "test_snapshots/tests/test_set_quorum_updates_quorum.1.json".
+test tests::test_set_quorum_non_admin_fails ... ok
+Writing test snapshot file for test "tests::test_set_quorum_zero_fails" to "test_snapshots/tests/test_set_quorum_zero_fails.1.json".
+test tests::test_set_quorum_zero_fails ... ok
+Writing test snapshot file for test "tests::test_slash_exceeds_cap_fails" to "test_snapshots/tests/test_slash_exceeds_cap_fails.1.json".
+test tests::test_set_quorum_updates_quorum ... ok
+Writing test snapshot file for test "tests::test_slash_proposal_lifecycle" to "test_snapshots/tests/test_slash_proposal_lifecycle.1.json".
+test tests::test_slash_exceeds_cap_fails ... ok
+Writing test snapshot file for test "tests::test_slash_rejected_when_against_wins" to "test_snapshots/tests/test_slash_rejected_when_against_wins.1.json".
+test tests::test_slash_rejected_when_against_wins ... ok
+Writing test snapshot file for test "tests::test_stake_deposits_tokens" to "test_snapshots/tests/test_stake_deposits_tokens.1.json".
+test tests::test_stake_deposits_tokens ... ok
+Writing test snapshot file for test "tests::test_submit_claim_exceeds_cap_fails" to "test_snapshots/tests/test_submit_claim_exceeds_cap_fails.1.json".
+test tests::test_submit_claim_exceeds_cap_fails ... ok
+Writing test snapshot file for test "tests::test_submit_claim_returns_id" to "test_snapshots/tests/test_submit_claim_returns_id.1.json".
+test tests::test_submit_claim_returns_id ... ok
+Writing test snapshot file for test "tests::test_unstake_more_than_staked_fails" to "test_snapshots/tests/test_unstake_more_than_staked_fails.1.json".
+test tests::test_unstake_more_than_staked_fails ... ok
+Writing test snapshot file for test "tests::test_unstake_returns_tokens" to "test_snapshots/tests/test_unstake_returns_tokens.1.json".
+test tests::test_unstake_returns_tokens ... ok
+Writing test snapshot file for test "tests::test_vote_approves_at_quorum" to "test_snapshots/tests/test_vote_approves_at_quorum.1.json".
+test tests::test_slash_proposal_lifecycle ... ok
+Writing test snapshot file for test "tests::test_vote_on_nonexistent_claim_fails" to "test_snapshots/tests/test_vote_on_nonexistent_claim_fails.1.json".
+test tests::test_vote_on_nonexistent_claim_fails ... ok
+Writing test snapshot file for test "tests::test_vote_rejects_when_against_wins" to "test_snapshots/tests/test_vote_rejects_when_against_wins.1.json".
+test tests::test_vote_approves_at_quorum ... ok
+Writing test snapshot file for test "tests::test_withdraw_claim" to "test_snapshots/tests/test_withdraw_claim.1.json".
+test tests::test_withdraw_claim ... ok
+Writing test snapshot file for test "tests::test_withdraw_claim_non_claimant_fails" to "test_snapshots/tests/test_withdraw_claim_non_claimant_fails.1.json".
+test tests::test_vote_rejects_when_against_wins ... ok
+Writing test snapshot file for test "tests::test_yield_distributed_proportionally" to "test_snapshots/tests/test_yield_distributed_proportionally.1.json".
+test tests::test_withdraw_claim_non_claimant_fails ... ok
+test tests::test_yield_distributed_proportionally ... ok
+
+test result: ok. 47 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.46s
+
+   Doc-tests stellar_trust_insurance_contract
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

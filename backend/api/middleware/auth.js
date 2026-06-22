@@ -10,6 +10,11 @@ import sessionService from '../../services/sessionService.js';
 import { JWT_SECRET, JWT_ALGORITHM } from '../../config/secrets.js';
 
 export default async function authMiddleware(req, res, next) {
+  if (req.isAdmin) {
+    req.user = req.user ?? { address: req.adminId ?? 'admin' };
+    return next();
+  }
+
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Authentication required' });

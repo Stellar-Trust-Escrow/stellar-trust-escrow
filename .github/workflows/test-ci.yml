@@ -1,0 +1,12 @@
+name: Test CI
+
+on:
+  push:
+    branches: [develop, fix/mobile-security-gaps]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "CI is working"

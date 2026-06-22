@@ -33,7 +33,7 @@ describe('useWallet', () => {
     await act(async () => {
       await result.current.connect();
     });
-    expect(result.current.error).toMatch(/not yet implemented/i);
+    expect(result.current.error).toMatch(/Freighter wallet not installed/i);
     expect(result.current.isConnecting).toBe(false);
   });
 

@@ -55,6 +55,5 @@ pub enum GovError {
     ZeroLockAmount = 33,
 
     // Arithmetic
-    /// A checked arithmetic operation (add/mul) overflowed.
     ArithmeticOverflow = 35,
 }

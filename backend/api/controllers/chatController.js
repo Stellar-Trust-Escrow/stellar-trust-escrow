@@ -14,6 +14,30 @@
 import prisma from '../../lib/prisma.js';
 import { buildPaginatedResponse, parsePagination } from '../../lib/pagination.js';
 
+const MAX_MESSAGES_PER_ROOM = 500;
+
+/** Returns the escrow and validates the caller is a participant.  */
+async function getEscrowOrFail(escrowId, tenantId, callerAddress, res) {
+  const escrow = await prisma.escrow.findFirst({
+    where: { id: BigInt(escrowId), tenantId },
+    select: { clientAddress: true, freelancerAddress: true, arbiterAddress: true, status: true },
+  });
+  if (!escrow) {
+    res.status(404).json({ error: 'Escrow not found' });
+    return null;
+  }
+  const participants = [
+    escrow.clientAddress,
+    escrow.freelancerAddress,
+    escrow.arbiterAddress,
+  ].filter(Boolean);
+  if (!participants.includes(callerAddress)) {
+    res.status(403).json({ error: 'Not a participant in this escrow' });
+    return null;
+  }
+  return escrow;
+}
+
 export const distributeRoomKey = async (req, res) => {
   try {
     const { escrowId } = req.params;
@@ -22,27 +46,15 @@ export const distributeRoomKey = async (req, res) => {
       return res.status(400).json({ error: 'encryptedKeys object required' });
     }
 
-    const escrow = await prisma.escrow.findUnique({
-      where: { id: BigInt(escrowId) },
-      select: { clientAddress: true, freelancerAddress: true, arbiterAddress: true },
-    });
-    if (!escrow) return res.status(404).json({ error: 'Escrow not found' });
-
-    const participants = [
-      escrow.clientAddress,
-      escrow.freelancerAddress,
-      escrow.arbiterAddress,
-    ].filter(Boolean);
-    if (!participants.includes(req.user.address)) {
-      return res.status(403).json({ error: 'Not a participant in this escrow' });
-    }
+    const escrow = await getEscrowOrFail(escrowId, req.tenantId, req.user.address, res);
+    if (!escrow) return;
 
     const roomId = `dispute:${escrowId}`;
     await prisma.$transaction(
       Object.entries(encryptedKeys).map(([address, encryptedKey]) =>
         prisma.chatRoomKey.upsert({
           where: { roomId_address: { roomId, address } },
-          create: { roomId, address, encryptedKey },
+          create: { roomId, address, encryptedKey, tenantId: req.tenantId },
           update: { encryptedKey },
         }),
       ),
@@ -57,8 +69,9 @@ export const distributeRoomKey = async (req, res) => {
 export const getRoomKey = async (req, res) => {
   try {
     const roomId = `dispute:${req.params.escrowId}`;
-    const record = await prisma.chatRoomKey.findUnique({
-      where: { roomId_address: { roomId, address: req.user.address } },
+    // findFirst lets us scope by tenantId to prevent cross-tenant key leakage
+    const record = await prisma.chatRoomKey.findFirst({
+      where: { roomId, address: req.user.address, tenantId: req.tenantId },
     });
     if (!record) return res.status(404).json({ error: 'Room key not found for your address' });
     return res.json({ roomId, encryptedKey: record.encryptedKey });
@@ -75,32 +88,28 @@ export const sendMessage = async (req, res) => {
       return res.status(400).json({ error: 'ciphertext, iv, and tag are required' });
     }
 
-    const escrow = await prisma.escrow.findUnique({
-      where: { id: BigInt(escrowId) },
-      select: { clientAddress: true, freelancerAddress: true, arbiterAddress: true, status: true },
-    });
-    if (!escrow) return res.status(404).json({ error: 'Escrow not found' });
+    const escrow = await getEscrowOrFail(escrowId, req.tenantId, req.user.address, res);
+    if (!escrow) return;
     if (escrow.status !== 'Disputed') {
       return res.status(409).json({ error: 'Chat only available for disputed escrows' });
     }
 
-    const participants = [
-      escrow.clientAddress,
-      escrow.freelancerAddress,
-      escrow.arbiterAddress,
-    ].filter(Boolean);
-    if (!participants.includes(req.user.address)) {
-      return res.status(403).json({ error: 'Not a participant in this escrow' });
+    const roomId = `dispute:${escrowId}`;
+
+    // Enforce per-room message cap to prevent storage abuse
+    const count = await prisma.chatMessage.count({ where: { roomId, tenantId: req.tenantId } });
+    if (count >= MAX_MESSAGES_PER_ROOM) {
+      return res.status(429).json({ error: `Room message limit of ${MAX_MESSAGES_PER_ROOM} reached` });
     }
 
     const message = await prisma.chatMessage.create({
       data: {
-        roomId: `dispute:${escrowId}`,
+        roomId,
         senderAddress: req.user.address,
         ciphertext,
         iv,
         tag,
-        sentAt: new Date(),
+        tenantId: req.tenantId,
       },
       select: { id: true, senderAddress: true, sentAt: true },
     });
@@ -117,37 +126,19 @@ export const getMessages = async (req, res) => {
     const { page, limit, skip } = parsePagination(req.query);
     const roomId = `dispute:${escrowId}`;
 
-    const escrow = await prisma.escrow.findUnique({
-      where: { id: BigInt(escrowId) },
-      select: { clientAddress: true, freelancerAddress: true, arbiterAddress: true },
-    });
-    if (!escrow) return res.status(404).json({ error: 'Escrow not found' });
+    const escrow = await getEscrowOrFail(escrowId, req.tenantId, req.user.address, res);
+    if (!escrow) return;
 
-    const participants = [
-      escrow.clientAddress,
-      escrow.freelancerAddress,
-      escrow.arbiterAddress,
-    ].filter(Boolean);
-    if (!participants.includes(req.user.address)) {
-      return res.status(403).json({ error: 'Not a participant in this escrow' });
-    }
-
+    const where = { roomId, tenantId: req.tenantId };
     const [data, total] = await prisma.$transaction([
       prisma.chatMessage.findMany({
-        where: { roomId },
+        where,
         skip,
         take: limit,
         orderBy: { sentAt: 'asc' },
-        select: {
-          id: true,
-          senderAddress: true,
-          ciphertext: true,
-          iv: true,
-          tag: true,
-          sentAt: true,
-        },
+        select: { id: true, senderAddress: true, ciphertext: true, iv: true, tag: true, sentAt: true },
       }),
-      prisma.chatMessage.count({ where: { roomId } }),
+      prisma.chatMessage.count({ where }),
     ]);
 
     return res.json(buildPaginatedResponse(data, { total, page, limit }));

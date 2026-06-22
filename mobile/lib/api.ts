@@ -16,14 +16,55 @@ export const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Attach Stellar address as identity header on every request
-api.interceptors.request.use((config) => {
-  const address = storage.getString('wallet_address');
-  if (address) {
-    config.headers['X-Stellar-Address'] = address;
+// Attach JWT as Bearer token on every request
+api.interceptors.request.use(async (config) => {
+  const jwt = await (async () => {
+    try {
+      const { secureStorage } = await import('./storage');
+      return await secureStorage.get('auth_jwt');
+    } catch {
+      return null;
+    }
+  })();
+
+  if (jwt) {
+    config.headers.Authorization = `Bearer ${jwt}`;
   }
   return config;
 });
+
+// Handle 401: attempt silent re-auth
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+
+      try {
+        const { useWalletStore } = await import('../store/useWalletStore');
+        const { jwtAuth } = await import('../services/jwtAuth');
+
+        const address = useWalletStore.getState().address;
+        if (!address) throw new Error('No wallet connected');
+
+        const newToken = await jwtAuth.silentRefresh(address);
+        if (!newToken) throw new Error('Silent refresh failed');
+
+        originalRequest.headers.Authorization = `Bearer ${newToken}`;
+        return api(originalRequest);
+      } catch {
+        // Re-auth failed; caller should redirect to connect screen
+        const { useWalletStore } = await import('../store/useWalletStore');
+        useWalletStore.getState().disconnect();
+        return Promise.reject(error);
+      }
+    }
+
+    return Promise.reject(error);
+  },
+);
 
 // ── Typed response helpers ────────────────────────────────────────────────────
 

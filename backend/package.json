@@ -13,7 +13,6 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
-    "check-env": "node scripts/check-env.js",
     "db:migrate": "node database/migrations/migrate.js up",
     "db:migrate:up": "node database/migrations/migrate.js up",
     "db:migrate:down": "node database/migrations/migrate.js down",

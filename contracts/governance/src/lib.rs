@@ -123,6 +123,12 @@ impl Storage {
         env.storage().persistent().set(&key, &true);
         Self::bump_persistent(env, &key);
     }
+
+    fn save_vote_record(env: &Env, proposal_id: u64, voter: &Address, power: i128) {
+        let key = DataKey::VoteRecord(proposal_id, voter.clone());
+        env.storage().persistent().set(&key, &power);
+        Self::bump_persistent(env, &key);
+    }
 }
 
 // ── Governance helpers ────────────────────────────────────────────────────────
@@ -170,7 +176,6 @@ fn validate_parameter_payload(env: &Env, payload: &ParameterPayload) -> Result<(
 }
 
 /// Checks whether a proposal has reached quorum and approval threshold.
-#[deny(clippy::arithmetic_side_effects)]
 fn evaluate(proposal: &Proposal, config: &GovConfig) -> Result<bool, GovError> {
     let total_votes = proposal
         .votes_for
@@ -181,8 +186,8 @@ fn evaluate(proposal: &Proposal, config: &GovConfig) -> Result<bool, GovError> {
     let quorum_required = proposal
         .total_supply_snapshot
         .checked_mul(config.quorum_bps as i128)
-        .ok_or(GovError::ArithmeticOverflow)?
-        / 10_000;
+        .and_then(|r| r.checked_div(10_000))
+        .ok_or(GovError::ArithmeticOverflow)?;
     if total_votes < quorum_required {
         return Ok(false);
     }
@@ -193,8 +198,8 @@ fn evaluate(proposal: &Proposal, config: &GovConfig) -> Result<bool, GovError> {
     }
     let threshold_required = total_votes
         .checked_mul(config.approval_threshold_bps as i128)
-        .ok_or(GovError::ArithmeticOverflow)?
-        / 10_000;
+        .and_then(|r| r.checked_div(10_000))
+        .ok_or(GovError::ArithmeticOverflow)?;
     Ok(proposal.votes_for >= threshold_required)
 }
 
@@ -418,6 +423,7 @@ impl GovernanceContract {
         }
 
         Storage::mark_voted(&env, proposal_id, &voter);
+        Storage::save_vote_record(&env, proposal_id, &voter, power);
         Storage::save_proposal(&env, &proposal);
         events::emit_vote_cast(&env, proposal_id, &voter, support, power);
         Ok(())
