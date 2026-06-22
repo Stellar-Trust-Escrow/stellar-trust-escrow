@@ -1,4 +1,4 @@
-use soroban_sdk::{contractclient, contracttype, symbol_short, Address, Env, Symbol};
+use soroban_sdk::{contractclient, contracttype, symbol_short, Address, Env, Symbol, Vec};
 
 use crate::types::DataKey;
 use crate::EscrowError;
@@ -40,42 +40,48 @@ pub struct UsdMilestone {
     pub completed: bool,
 }
 
-#[allow(dead_code)]
-pub struct OracleConsumer;
+/// Oracle configuration settings.
+#[derive(Clone, Debug)]
+pub struct OracleConfig {
+    pub stale_threshold_seconds: u64,
+}
 
 #[allow(dead_code)]
 impl OracleConsumer {
     /// Fetch and validate the USD/XLM price feed from an external oracle contract.
     ///
-    /// Panics with `stale_feed` if the feed is older than 3 hours.
-    pub fn get_validated_feed(env: &Env, oracle_id: &Address) -> PriceFeed {
+    /// Returns Result<PriceFeed, EscrowError> with:
+    /// - Err(EscrowError::OracleStaleFeed) if the feed is older than the configured threshold
+    /// - Err(EscrowError::OracleInvalidPrice) if the price is non-positive
+    /// - Ok(PriceFeed) if the feed is fresh and valid
+    pub fn get_validated_feed(env: &Env, oracle_id: &Address) -> Result<PriceFeed, EscrowError> {
         let feed: PriceFeed = env.invoke_contract(
             oracle_id,
             &symbol_short!("get_price"),
-            soroban_sdk::vec![env],
+            Vec::new(env),
         );
 
         let now = env.ledger().timestamp();
         if now.saturating_sub(feed.timestamp) > PRICE_STALENESS_THRESHOLD {
-            panic!("stale_feed: oracle price is older than 3 hours");
+            return Err(EscrowError::OracleStaleFeed);
         }
         if feed.price_micro_usd <= 0 {
-            panic!("invalid_feed: oracle price must be positive");
+            return Err(EscrowError::OracleInvalidPrice);
         }
 
-        feed
+        Ok(feed)
     }
 
     /// Convert a USD milestone amount to XLM stroops using the oracle price.
     ///
     /// Emits `oracle_conversion` with `(amount_micro_usd, price_micro_usd,
     /// xlm_stroops, feed_timestamp)`.
-    pub fn usd_to_xlm_stroops(env: &Env, oracle_id: &Address, amount_micro_usd: i128) -> i128 {
-        let feed = Self::get_validated_feed(env, oracle_id);
+    pub fn usd_to_xlm_stroops(env: &Env, oracle_id: &Address, amount_micro_usd: i128) -> Result<i128, EscrowError> {
+        let feed = Self::get_validated_feed(env, oracle_id)?;
         let xlm_stroops = amount_micro_usd
             .checked_mul(10_000_000)
             .and_then(|amount| amount.checked_div(feed.price_micro_usd))
-            .expect("conversion_overflow");
+            .ok_or(EscrowError::OraclePriceConversionFailed)?;
 
         env.events().publish(
             (Symbol::new(env, "oracle_conversion"),),
@@ -87,7 +93,7 @@ impl OracleConsumer {
             ),
         );
 
-        xlm_stroops
+        Ok(xlm_stroops)
     }
 }
 
@@ -128,6 +134,23 @@ pub fn get_fallback_oracle(env: &Env) -> Option<Address> {
         .get(&DataKey::FallbackOracleAddress)
 }
 
+pub fn set_oracle_stale_threshold(env: &Env, threshold_seconds: u64) -> Result<(), EscrowError> {
+    if threshold_seconds == 0 || threshold_seconds > 86_400 {
+        return Err(EscrowError::E19);
+    }
+    env.storage()
+        .instance()
+        .set(&DataKey::OracleStaleThreshold, &threshold_seconds);
+    Ok(())
+}
+
+fn get_oracle_stale_threshold(env: &Env) -> u64 {
+    env.storage()
+        .instance()
+        .get(&DataKey::OracleStaleThreshold)
+        .unwrap_or(PRICE_STALENESS_THRESHOLD)
+}
+
 // ── Price fetching ────────────────────────────────────────────────────────────
 
 /// Fetch the USD price for `asset` from the primary oracle.
@@ -136,9 +159,13 @@ pub fn get_fallback_oracle(env: &Env) -> Option<Address> {
 pub fn get_price_usd(env: &Env, asset: &Address) -> Result<i128, EscrowError> {
     let oracle_addr = get_oracle(env)?;
     let now = env.ledger().timestamp();
+    let threshold = get_oracle_stale_threshold(env);
 
     if let Some(data) = OracleClient::new(env, &oracle_addr).lastprice(asset) {
-        if is_fresh(&data, now) {
+        if is_fresh(&data, now, threshold) {
+            if data.price <= 0 {
+                return Err(EscrowError::OracleInvalidPrice);
+            }
             return Ok(data.price);
         }
     }
@@ -146,14 +173,17 @@ pub fn get_price_usd(env: &Env, asset: &Address) -> Result<i128, EscrowError> {
     // Primary stale or missing — try fallback
     if let Some(fallback_addr) = get_fallback_oracle(env) {
         if let Some(data) = OracleClient::new(env, &fallback_addr).lastprice(asset) {
-            if is_fresh(&data, now) {
+            if is_fresh(&data, now, threshold) {
+                if data.price <= 0 {
+                    return Err(EscrowError::OracleInvalidPrice);
+                }
                 return Ok(data.price);
             }
-            return Err(EscrowError::E54);
+            return Err(EscrowError::OracleStaleFeed);
         }
     }
 
-    Err(EscrowError::E54)
+    Err(EscrowError::OracleStaleFeed)
 }
 
 /// Convert `amount` of `from_asset` to `to_asset` using oracle prices.
@@ -168,17 +198,17 @@ pub fn convert_amount(
     let to_price = get_price_usd(env, to_asset)?;
 
     if to_price == 0 {
-        return Err(EscrowError::E54);
+        return Err(EscrowError::OracleInvalidPrice);
     }
 
     // amount * from_price / to_price  (prices share the same decimal base)
     amount
         .checked_mul(from_price)
         .and_then(|v| v.checked_div(to_price))
-        .ok_or(EscrowError::E54)
+        .ok_or(EscrowError::OraclePriceConversionFailed)
 }
 
 #[inline]
-fn is_fresh(data: &PriceData, now: u64) -> bool {
-    now.saturating_sub(data.timestamp) <= PRICE_STALENESS_THRESHOLD
+fn is_fresh(data: &PriceData, now: u64, threshold: u64) -> bool {
+    now.saturating_sub(data.timestamp) <= threshold
 }
