@@ -11,9 +11,8 @@
 import jwt from 'jsonwebtoken';
 import mfaService from '../../services/mfaService.js';
 import cache from '../../lib/cache.js';
+import { MFA_JWT_SECRET, JWT_ALGORITHM } from '../../config/secrets.js';
 
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) throw new Error('JWT_SECRET environment variable is required');
 const MFA_SESSION_DURATION = 30 * 60 * 1000; // 30 minutes
 
 /**
@@ -77,7 +76,7 @@ export async function requireMfa(req, res, next) {
     // Verify MFA token
     let mfaPayload;
     try {
-      mfaPayload = jwt.verify(mfaToken, JWT_SECRET);
+      mfaPayload = jwt.verify(mfaToken, MFA_JWT_SECRET, { algorithms: [JWT_ALGORITHM] });
     } catch (err) {
       return res.status(403).json({
         error: 'Invalid or expired MFA token',
@@ -180,8 +179,8 @@ export function generateMfaToken(userId, tenantId, method) {
       type: 'mfa',
       iat: Math.floor(Date.now() / 1000),
     },
-    JWT_SECRET,
-    { expiresIn: '30m' }, // MFA token valid for 30 minutes
+    MFA_JWT_SECRET,
+    { algorithm: JWT_ALGORITHM, expiresIn: '30m' }, // MFA token valid for 30 minutes
   );
 }
 

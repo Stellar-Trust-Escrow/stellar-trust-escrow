@@ -128,8 +128,8 @@ describe('MFA Middleware', () => {
     it('should reject expired MFA token', async () => {
       const expiredToken = jwt.sign(
         { userId: 1, tenantId: 'tenant-123', type: 'mfa', method: 'TOTP' },
-        process.env.JWT_SECRET || 'change_this_in_production',
-        { expiresIn: '-1h' }, // Expired
+        process.env.MFA_JWT_SECRET,
+        { algorithm: 'HS256', expiresIn: '-1h' }, // Expired
       );
 
       mfaService.requiresMfa.mockResolvedValue(true);
@@ -254,7 +254,7 @@ describe('MFA Middleware', () => {
       expect(token).toBeTruthy();
       expect(typeof token).toBe('string');
 
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'change_this_in_production');
+      const decoded = jwt.verify(token, process.env.MFA_JWT_SECRET);
 
       expect(decoded.userId).toBe(1);
       expect(decoded.tenantId).toBe('tenant-123');
@@ -265,7 +265,7 @@ describe('MFA Middleware', () => {
     it('should generate token with 30 minute expiration', () => {
       const token = generateMfaToken(1, 'tenant-123', 'WEBAUTHN');
 
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'change_this_in_production');
+      const decoded = jwt.verify(token, process.env.MFA_JWT_SECRET);
 
       const expiresIn = decoded.exp - decoded.iat;
       expect(expiresIn).toBe(30 * 60); // 30 minutes in seconds

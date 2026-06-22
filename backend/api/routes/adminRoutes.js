@@ -8,7 +8,7 @@
 
 import express from 'express';
 const router = express.Router();
-import adminAuth from '../middleware/adminAuth.js';
+import adminAuth, { issueAdminToken, ADMIN_TOKEN_TTL } from '../middleware/adminAuth.js';
 import { requireMfa } from '../middleware/mfaAuth.js';
 import adminController from '../controllers/adminController.js';
 import tenantController from '../controllers/tenantController.js';
@@ -18,6 +18,23 @@ import cache from '../../lib/cache.js';
 
 // Apply admin authentication to all routes in this file
 router.use(adminAuth);
+
+// ── Auth ─────────────────────────────────────────────────────────────────────
+/**
+ * @route  POST /api/admin/auth/login
+ * @desc   Exchange a valid admin API key (validated by adminAuth) for a
+ *         short-lived HMAC-signed admin session token. Subsequent requests
+ *         should send `Authorization: Bearer <token>` instead of the raw key.
+ */
+router.post('/auth/login', (req, res) => {
+  const token = issueAdminToken(req.admin.adminId);
+  res.json({
+    token,
+    tokenType: 'Bearer',
+    expiresIn: ADMIN_TOKEN_TTL,
+    adminId: req.admin.adminId,
+  });
+});
 
 // ── Stats ──────────────────────────────────────────────────────────────────────
 /**

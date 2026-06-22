@@ -4,6 +4,7 @@ import { WebSocketServer } from 'ws';
 import jwt from 'jsonwebtoken';
 import { createModuleLogger } from '../../config/logger.js';
 import prisma from '../../lib/prisma.js';
+import { JWT_ACCESS_SECRET, JWT_ALGORITHM } from '../../config/secrets.js';
 
 const log = createModuleLogger('websocket');
 
@@ -33,9 +34,7 @@ function verifyUpgradeJwt(request) {
     const url = new URL(request.url, `http://${request.headers.host}`);
     const token = url.searchParams.get('token');
     if (!token) return null;
-    const secret = process.env.JWT_ACCESS_SECRET;
-    if (!secret) throw new Error('JWT_ACCESS_SECRET environment variable is required');
-    const decoded = jwt.verify(token, secret);
+    const decoded = jwt.verify(token, JWT_ACCESS_SECRET, { algorithms: [JWT_ALGORITHM] });
     if (decoded.type !== 'access') return null;
     return decoded;
   } catch {
