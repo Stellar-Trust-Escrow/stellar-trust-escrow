@@ -113,4 +113,67 @@ export function createRedisSlidingWindowRateLimiter({
   };
 }
 
+/**
+ * Brute-force guard built on the same Redis client and sliding-window machinery.
+ * Failed attempts are tracked in a per-identifier sliding window; once the
+ * threshold is exceeded the identifier is locked out for a fixed cool-down,
+ * independent of the window. Intended for credential endpoints (e.g. the admin
+ * API key) where only *failures* should count toward the limit.
+ *
+ * All Redis operations fail open on error so an outage can't lock out admins.
+ */
+export function createBruteForceGuard({
+  prefix = 'bruteforce',
+  maxAttempts = 5,
+  windowMs = 15 * 60_000,
+  lockMs = 30 * 60_000,
+  redisClient = redis,
+} = {}) {
+  const failKey = (id) => `${prefix}:fail:${id}`;
+  const lockKey = (id) => `${prefix}:lock:${id}`;
+
+  return {
+    /** Remaining lock time in ms, or 0 if the identifier is not locked. */
+    async lockTtl(id) {
+      try {
+        const ttl = await redisClient.pttl(lockKey(id));
+        return ttl > 0 ? ttl : 0;
+      } catch {
+        return 0;
+      }
+    },
+
+    /**
+     * Records a failed attempt. Once `maxAttempts` failures accumulate inside
+     * the window, the identifier is locked for `lockMs` and the failure counter
+     * is reset.
+     *
+     * @returns {Promise<{ failures: number, locked: boolean, lockMs?: number }>}
+     */
+    async recordFailure(id, now = Date.now()) {
+      try {
+        const key = failKey(id);
+        const count = await record(redisClient, key, windowMs, now);
+        if (count !== null && count >= maxAttempts) {
+          await redisClient.set(lockKey(id), '1', 'PX', lockMs);
+          await redisClient.del(key);
+          return { failures: count, locked: true, lockMs };
+        }
+        return { failures: count ?? 0, locked: false };
+      } catch {
+        return { failures: 0, locked: false };
+      }
+    },
+
+    /** Clears failures and any active lock after a successful authentication. */
+    async reset(id) {
+      try {
+        await redisClient.del(failKey(id), lockKey(id));
+      } catch {
+        // best-effort
+      }
+    },
+  };
+}
+
 export default createRedisSlidingWindowRateLimiter;

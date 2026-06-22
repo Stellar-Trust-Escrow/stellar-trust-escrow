@@ -508,6 +508,7 @@ impl EscrowExtensions {
     ///   are flagged (actual stake deduction handled by reputation contract)
     ///
     /// Anyone can call this after the window closes.
+    #[deny(clippy::arithmetic_side_effects)]
     pub fn resolve_dispute(env: Env, escrow_id: u64) -> Result<bool, ExtError> {
         let key = DataKey::Dispute(escrow_id);
         let mut dispute: ArbitrationDispute = env
@@ -525,14 +526,22 @@ impl EscrowExtensions {
             return Ok(dispute.client_wins.unwrap_or(false));
         }
 
-        let total_weight = dispute.weight_for_client + dispute.weight_for_freelancer;
+        let total_weight = dispute
+            .weight_for_client
+            .checked_add(dispute.weight_for_freelancer)
+            .ok_or(ExtError::ArithmeticOverflow)?;
         if total_weight == 0 {
             // No votes cast — default to no resolution (admin must intervene)
             return Err(ExtError::QuorumNotReached);
         }
 
         // 51 % threshold
-        let client_wins = dispute.weight_for_client * 100 / total_weight >= 51;
+        let client_wins = dispute
+            .weight_for_client
+            .checked_mul(100)
+            .and_then(|v| v.checked_div(total_weight))
+            .ok_or(ExtError::ArithmeticOverflow)?
+            >= 51;
 
         dispute.resolved = true;
         dispute.client_wins = Some(client_wins);
@@ -545,7 +554,11 @@ impl EscrowExtensions {
             dispute.weight_for_client
         };
 
-        let slash = losing_weight * 10_000 / total_weight > SLASH_DISSENT_THRESHOLD_BPS;
+        let slash = losing_weight
+            .checked_mul(10_000)
+            .and_then(|v| v.checked_div(total_weight))
+            .ok_or(ExtError::ArithmeticOverflow)?
+            > SLASH_DISSENT_THRESHOLD_BPS;
 
         if slash {
             for v in dispute.votes.iter() {

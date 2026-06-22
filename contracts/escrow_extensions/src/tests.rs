@@ -2,7 +2,8 @@
 #[allow(clippy::module_inception)]
 mod tests {
     use crate::{
-        BatchEscrowParams, EscrowExtensions, EscrowExtensionsClient, ExtError, FeeRecipient,
+        ArbitrationDispute, BatchEscrowParams, DataKey, EscrowExtensions, EscrowExtensionsClient,
+        ExtError, FeeRecipient,
     };
     use soroban_sdk::{
         testutils::{Address as _, Ledger},
@@ -578,6 +579,43 @@ mod tests {
             pending.unwrap().new_wasm_hash,
             hash,
             "Pending upgrade hash must be unchanged"
+        );
+    }
+
+    // ── Arithmetic overflow hardening ─────────────────────────────────────────
+
+    /// `resolve_dispute` must reject an overflowing weight calculation with
+    /// `ArithmeticOverflow` instead of silently wrapping to a wrong winner.
+    #[test]
+    fn test_resolve_dispute_overflow_returns_arithmetic_overflow() {
+        let s = setup_with_fee(0);
+        let escrow_id = 1u64;
+
+        s.env.as_contract(&s.contract_id, || {
+            let dispute = ArbitrationDispute {
+                escrow_id,
+                voting_opens_at: 0,
+                voting_closes_at: 100,
+                weight_for_client: u64::MAX,
+                weight_for_freelancer: 1,
+                total_stake: 0,
+                votes: Vec::new(&s.env),
+                resolved: false,
+                client_wins: None,
+            };
+            s.env
+                .storage()
+                .persistent()
+                .set(&DataKey::Dispute(escrow_id), &dispute);
+        });
+
+        s.env.ledger().with_mut(|l| l.timestamp = 200);
+
+        let result = s.client.try_resolve_dispute(&escrow_id);
+        assert_eq!(
+            result.unwrap_err().unwrap(),
+            ExtError::ArithmeticOverflow,
+            "weight_for_client.checked_mul(100) must overflow for u64::MAX"
         );
     }
 }

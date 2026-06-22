@@ -70,6 +70,7 @@ mod nft;
 mod nft_tests;
 mod oracle;
 mod oracle_fallback_tests;
+mod oracle_overflow_tests;
 mod oracle_tests;
 mod partial_cancel_tests;
 mod pause_tests;

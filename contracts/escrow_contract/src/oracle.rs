@@ -70,12 +70,17 @@ impl OracleConsumer {
     ///
     /// Emits `oracle_conversion` with `(amount_micro_usd, price_micro_usd,
     /// xlm_stroops, feed_timestamp)`.
-    pub fn usd_to_xlm_stroops(env: &Env, oracle_id: &Address, amount_micro_usd: i128) -> i128 {
+    #[deny(clippy::arithmetic_side_effects)]
+    pub fn usd_to_xlm_stroops(
+        env: &Env,
+        oracle_id: &Address,
+        amount_micro_usd: i128,
+    ) -> Result<i128, EscrowError> {
         let feed = Self::get_validated_feed(env, oracle_id);
         let xlm_stroops = amount_micro_usd
             .checked_mul(10_000_000)
             .and_then(|amount| amount.checked_div(feed.price_micro_usd))
-            .expect("conversion_overflow");
+            .ok_or(EscrowError::OraclePriceConversionFailed)?;
 
         env.events().publish(
             (Symbol::new(env, "oracle_conversion"),),
@@ -87,7 +92,7 @@ impl OracleConsumer {
             ),
         );
 
-        xlm_stroops
+        Ok(xlm_stroops)
     }
 }
 
