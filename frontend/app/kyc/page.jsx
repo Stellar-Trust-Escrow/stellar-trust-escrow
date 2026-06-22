@@ -12,8 +12,10 @@
 
 import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
 import Badge from '../../components/ui/Badge';
 import Spinner from '../../components/ui/Spinner';
+import { useWalletStore } from '../../store/app-store';
 
 // Sumsub React SDK — loaded client-side only (no SSR)
 const SumsubWebSdk = dynamic(() => import('@sumsub/websdk-react'), { ssr: false });
@@ -29,16 +31,24 @@ const STATUS_MESSAGES = {
 };
 
 export default function KycPage() {
-  // TODO (contributor): replace with real wallet address from WalletProvider context
-  const address = 'GABCD1234PLACEHOLDER000000000000000000000000000000000000000';
+  const { address } = useWalletStore();
+  const router = useRouter();
 
   const [status, setStatus] = useState(null);
   const [sdkToken, setSdkToken] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  useEffect(() => {
+    if (!address) {
+      router.replace('/');
+      return;
+    }
+  }, [address, router]);
+
   // Fetch current KYC status on mount
   useEffect(() => {
+    if (!address) return;
     fetch(`${API_BASE}/api/kyc/status/${address}`)
       .then((r) => r.json())
       .then((d) => setStatus(d.status ?? 'Pending'))
@@ -71,6 +81,8 @@ export default function KycPage() {
   };
 
   const handleSdkError = (err) => setError(err?.message ?? 'Verification error');
+
+  if (!address) return null;
 
   if (loading) {
     return (

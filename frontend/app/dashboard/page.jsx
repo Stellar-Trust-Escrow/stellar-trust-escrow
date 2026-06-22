@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
 import EscrowCard from '../../components/escrow/EscrowCard';
 import ReputationBadge from '../../components/ui/ReputationBadge';
 import Button from '../../components/ui/Button';
@@ -11,6 +12,7 @@ import ErrorBoundary from '../../components/error/ErrorBoundary';
 import DashboardTour from '../../components/onboarding/DashboardTour';
 import { usePerformance } from '../../hooks/usePerformance';
 import { useI18n } from '../../i18n/index.jsx';
+import { useWalletStore } from '../../store/app-store';
 
 const StatWidgets = dynamic(() => import('../../components/dashboard/StatWidgets'), {
   ssr: false,
@@ -38,35 +40,44 @@ const ActivityTimeline = dynamic(() => import('../../components/dashboard/Activi
 });
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-const PLACEHOLDER_ADDRESS = 'GABCD1234';
 
 export default function DashboardPage() {
   const { t } = useI18n();
+  const { address } = useWalletStore();
+  const router = useRouter();
   const [escrows, setEscrows] = useState([]);
   const [escrowsLoading, setEscrowsLoading] = useState(true);
   const [reputation, setReputation] = useState(null);
   const { measureAsync } = usePerformance('DashboardPage');
 
   useEffect(() => {
+    if (!address) router.replace('/');
+  }, [address, router]);
+
+  useEffect(() => {
+    if (!address) return;
     setEscrowsLoading(true);
     measureAsync('fetch-escrows', () =>
-      fetch(`${API_BASE}/api/users/${PLACEHOLDER_ADDRESS}/escrows?status=Active&limit=6`)
+      fetch(`${API_BASE}/api/users/${address}/escrows?status=Active&limit=6`)
         .then((r) => r.json())
         .then((data) => {
           setEscrows(Array.isArray(data?.escrows) ? data.escrows : []);
         })
         .catch(() => setEscrows([])),
     ).finally(() => setEscrowsLoading(false));
-  }, [measureAsync]);
+  }, [measureAsync, address]);
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/reputation/${PLACEHOLDER_ADDRESS}`)
+    if (!address) return;
+    fetch(`${API_BASE}/api/reputation/${address}`)
       .then((r) => r.json())
       .then((data) => {
         if (!data?.error) setReputation(data);
       })
       .catch(() => {});
-  }, []);
+  }, [address]);
+
+  if (!address) return null;
 
   const reputationScore = reputation?.totalScore
     ? Math.min(100, Math.round(Number(reputation.totalScore) / 100))
@@ -107,13 +118,13 @@ export default function DashboardPage() {
           <section aria-label="Key performance metrics">
             <h2 className="sr-only">Dashboard Statistics</h2>
             <Suspense fallback={<div className="h-40 card animate-pulse" />}>
-              <StatWidgets address={PLACEHOLDER_ADDRESS} />
+              <StatWidgets address={address} />
             </Suspense>
           </section>
 
           <section aria-label="Recent activity feed">
             <Suspense fallback={<div className="h-40 card animate-pulse" />}>
-              <ActivityTimeline address={PLACEHOLDER_ADDRESS} />
+              <ActivityTimeline address={address} />
             </Suspense>
           </section>
 
