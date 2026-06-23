@@ -23,6 +23,10 @@ env:
   WASM_SIZE_LIMIT_KB: 100
   GAS_INCREASE_LIMIT: 15
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   gas-profile:
     name: WASM Size & Gas Profiling

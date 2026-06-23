@@ -16,6 +16,10 @@ env:
   HUSKY: 0
   SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # ─────────────────────────────────────────
   # 🔒 Security Audit
