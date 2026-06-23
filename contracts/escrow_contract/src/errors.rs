@@ -63,3 +63,8 @@ pub enum EcErr {
     OracleStaleFeed = 67,
     OracleInvalidPrice = 68,
     OraclePriceConversionFailed = 69,
+}
+
+/// Backward-compatible alias — existing code imports `EscrowError`; the oracle
+/// refactor renamed the enum to `EcErr` without updating call sites.
+pub type EscrowError = EcErr;
