@@ -37,4 +37,8 @@ pub enum ExtError {
     NoPendingUpgrade = 41,
     UpgradeAlreadyPending = 42,
     InvalidWasmHash = 43,
+
+    // ── Arithmetic ────────────────────────────────────────────────────────────
+    /// A checked arithmetic operation (add/mul) overflowed.
+    ArithmeticOverflow = 44,
 }

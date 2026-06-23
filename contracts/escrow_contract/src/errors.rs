@@ -63,3 +63,6 @@ pub enum EcErr {
     OracleStaleFeed = 67,
     OracleInvalidPrice = 68,
     OraclePriceConversionFailed = 69,
+}
+
+pub use self::EcErr as EscrowError;

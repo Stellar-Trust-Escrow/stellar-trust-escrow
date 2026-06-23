@@ -79,6 +79,7 @@ pub fn return_stake_on_completion(
 /// Used when a dispute is resolved in favor of the client.
 ///
 /// The slash amount is typically a percentage of the required stake.
+#[deny(clippy::arithmetic_side_effects)]
 pub fn slash_stake_to_client(
     env: &Env,
     meta: &crate::EscrowMeta,
@@ -96,7 +97,12 @@ pub fn slash_stake_to_client(
         return Err(EscrowError::E19);
     }
 
-    let slash_amount = (meta.required_freelancer_stake as u128 * slash_percentage as u128 / 100) as i128;
+    let slash_amount_u128 = (meta.required_freelancer_stake as u128)
+        .checked_mul(slash_percentage as u128)
+        .and_then(|v| v.checked_div(100))
+        .ok_or(EscrowError::ArithmeticOverflow)?;
+    let slash_amount =
+        i128::try_from(slash_amount_u128).map_err(|_| EscrowError::ArithmeticOverflow)?;
 
     if slash_amount > 0 {
         token::Client::new(env, &meta.token).transfer(

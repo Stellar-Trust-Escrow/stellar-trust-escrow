@@ -65,4 +65,8 @@ pub enum InsuranceError {
     InvalidSlashBps = 26,
     /// Nothing to yield-claim
     NoYieldAvailable = 27,
+
+    // ── Arithmetic ────────────────────────────────────────────────────────────
+    /// A checked arithmetic operation (add/mul) overflowed.
+    ArithmeticOverflow = 28,
 }

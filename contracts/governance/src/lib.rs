@@ -266,6 +266,11 @@ impl GovernanceContract {
 
     // ── Proposal creation ─────────────────────────────────────────────────────
 
+    /// Upper bound for `supply_snapshot`. Chosen so that
+    /// `total_supply_snapshot * 10_000` (the widest bps multiplier used in
+    /// `evaluate`) can never overflow `i128`.
+    const MAX_SUPPLY_SNAPSHOT: i128 = i128::MAX / 10_000;
+
     /// Creates a new governance proposal.
     ///
     /// The caller must hold >= `proposal_threshold` tokens.
@@ -318,7 +323,7 @@ impl GovernanceContract {
         let vote_end = vote_start + config.voting_period;
         let executable_at = vote_end + config.timelock_delay;
 
-        if supply_snapshot < 0 {
+        if !(0..=Self::MAX_SUPPLY_SNAPSHOT).contains(&supply_snapshot) {
             return Err(GovError::InvalidParameter);
         }
 
@@ -370,6 +375,7 @@ impl GovernanceContract {
     /// * `voter`       - Must `require_auth()`.
     /// * `proposal_id` - Target proposal.
     /// * `support`     - `true` = vote FOR, `false` = vote AGAINST.
+    #[deny(clippy::arithmetic_side_effects)]
     pub fn cast_vote(
         env: Env,
         voter: Address,
@@ -864,6 +870,7 @@ impl GovernanceContract {
     /// * `arbitrator`  — address to slash.
     /// * `recipient`   — receives the slashed tokens.
     /// * `reason`      — on-chain evidence string (IPFS hash or description).
+    #[deny(clippy::arithmetic_side_effects)]
     pub fn slash_arbitrator(
         env: Env,
         caller: Address,
@@ -889,12 +896,17 @@ impl GovernanceContract {
             return Err(GovError::NotArbitrator);
         }
 
-        let slash_amount = stake * Self::SLASH_PERCENT / 100;
+        let slash_amount = stake
+            .checked_mul(Self::SLASH_PERCENT)
+            .ok_or(GovError::ArithmeticOverflow)?
+            / 100;
         if slash_amount > stake {
             return Err(GovError::SlashExceedsStake);
         }
 
-        let remaining = stake - slash_amount;
+        let remaining = stake
+            .checked_sub(slash_amount)
+            .ok_or(GovError::ArithmeticOverflow)?;
 
         // Transfer slashed amount to recipient
         let config = Storage::config(&env)?;
