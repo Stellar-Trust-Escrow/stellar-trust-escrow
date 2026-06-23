@@ -40,11 +40,8 @@ pub struct UsdMilestone {
     pub completed: bool,
 }
 
-/// Oracle configuration settings.
-#[derive(Clone, Debug)]
-pub struct OracleConfig {
-    pub stale_threshold_seconds: u64,
-}
+#[allow(dead_code)]
+pub struct OracleConsumer;
 
 #[allow(dead_code)]
 impl OracleConsumer {
@@ -55,11 +52,8 @@ impl OracleConsumer {
     /// - Err(EscrowError::OracleInvalidPrice) if the price is non-positive
     /// - Ok(PriceFeed) if the feed is fresh and valid
     pub fn get_validated_feed(env: &Env, oracle_id: &Address) -> Result<PriceFeed, EscrowError> {
-        let feed: PriceFeed = env.invoke_contract(
-            oracle_id,
-            &symbol_short!("get_price"),
-            Vec::new(env),
-        );
+        let feed: PriceFeed =
+            env.invoke_contract(oracle_id, &symbol_short!("get_price"), Vec::new(env));
 
         let now = env.ledger().timestamp();
         if now.saturating_sub(feed.timestamp) > PRICE_STALENESS_THRESHOLD {
@@ -137,16 +131,6 @@ pub fn get_fallback_oracle(env: &Env) -> Option<Address> {
     env.storage()
         .instance()
         .get(&DataKey::FallbackOracleAddress)
-}
-
-pub fn set_oracle_stale_threshold(env: &Env, threshold_seconds: u64) -> Result<(), EscrowError> {
-    if threshold_seconds == 0 || threshold_seconds > 86_400 {
-        return Err(EscrowError::E19);
-    }
-    env.storage()
-        .instance()
-        .set(&DataKey::OracleStaleThreshold, &threshold_seconds);
-    Ok(())
 }
 
 fn get_oracle_stale_threshold(env: &Env) -> u64 {

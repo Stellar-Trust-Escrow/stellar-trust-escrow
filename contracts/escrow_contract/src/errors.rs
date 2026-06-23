@@ -57,9 +57,8 @@ pub enum EcErr {
     E61 = 61,
     E62 = 62,
     E63 = 63,
-    E64 = 64,
-    E65 = 65,
-    E66 = 66,
+    /// A checked arithmetic operation (add/mul/cast) overflowed.
+    ArithmeticOverflow = 64,
     OracleStaleFeed = 67,
     OracleInvalidPrice = 68,
     OraclePriceConversionFailed = 69,
