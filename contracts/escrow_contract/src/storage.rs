@@ -167,6 +167,7 @@ impl StorageManager {
     /// 2. Extracts EscrowMeta fields and stores separately
     /// 3. Stores each milestone with its own key
     /// 4. Removes the v1 storage entry
+    #[deny(clippy::arithmetic_side_effects)]
     fn migrate_v1_to_v2(
         env: &Env,
         start_id: u64,
@@ -224,7 +225,11 @@ impl StorageManager {
                     token: v1_escrow.token,
                     total_amount: v1_escrow.total_amount,
                     // Note: allocated_amount was added in v2, calculate from milestones
-                    allocated_amount: v1_escrow.milestones.iter().map(|m| m.amount).sum(),
+                    allocated_amount: v1_escrow
+                        .milestones
+                        .iter()
+                        .try_fold(0i128, |acc, m| acc.checked_add(m.amount))
+                        .ok_or(crate::EscrowError::E28)?,
                     remaining_balance: v1_escrow.remaining_balance,
                     status: v1_escrow.status,
                     milestone_count: v1_escrow.milestones.len(),
@@ -286,6 +291,9 @@ impl StorageManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{ApprovalRecord, EscrowStatus, OptionalBytesN32};
+    use soroban_sdk::testutils::Address as _;
+    use soroban_sdk::String;
 
     #[test]
     fn test_storage_version_constant() {
@@ -306,5 +314,69 @@ mod tests {
         #[allow(dead_code)]
         fn check_v1_fields(_: &EscrowStateV1) {}
         // The function signature verifies the type exists
+    }
+
+    fn v1_milestone(env: &Env, id: u32, amount: i128) -> Milestone {
+        Milestone {
+            id,
+            title: String::from_str(env, "m"),
+            description_hash: BytesN::from_array(env, &[0u8; 32]),
+            amount,
+            status: MS_APPROVED,
+            submitted_at: None,
+            resolved_at: None,
+            approvals: Vec::<ApprovalRecord>::new(env),
+            rejection_reason: OptionalBytesN32::None,
+            price_condition: crate::OptionalPriceCondition::None,
+            depends_on: None,
+        }
+    }
+
+    /// A v1 escrow whose milestone amounts sum past `i128::MAX` must fail
+    /// migration with `ArithmeticOverflow` instead of silently wrapping
+    /// `allocated_amount` to a wrong (negative) value.
+    #[test]
+    fn test_migrate_v1_to_v2_rejects_overflowing_milestone_sum() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, crate::EscrowContract);
+
+        env.as_contract(&contract_id, || {
+            let client = Address::generate(&env);
+            let freelancer = Address::generate(&env);
+            let token = Address::generate(&env);
+
+            let mut milestones = Vec::new(&env);
+            milestones.push_back(v1_milestone(&env, 0, i128::MAX));
+            milestones.push_back(v1_milestone(&env, 1, 1));
+
+            let v1_escrow = EscrowStateV1 {
+                escrow_id: 1,
+                client,
+                freelancer,
+                token,
+                total_amount: i128::MAX,
+                remaining_balance: 0,
+                status: EscrowStatus::Active,
+                milestones,
+                arbiter: None,
+                created_at: 0,
+                deadline: None,
+                lock_time: None,
+                lock_time_extension: None,
+                brief_hash: BytesN::from_array(&env, &[0u8; 32]),
+            };
+
+            env.storage()
+                .persistent()
+                .set(&DataKey::Escrow(1), &v1_escrow);
+            env.storage().instance().set(&DataKey::EscrowCounter, &1u64);
+
+            let result = StorageManager::migrate_v1_to_v2(&env, 1, MAX_MIGRATION_BATCH);
+            assert_eq!(result, Err(crate::EscrowError::E28));
+
+            // The v1 entry must be left untouched so a retry is possible.
+            assert!(env.storage().persistent().has(&DataKey::Escrow(1)));
+        });
     }
 }

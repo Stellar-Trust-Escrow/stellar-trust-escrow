@@ -41,10 +41,13 @@ pub struct UsdMilestone {
 }
 
 /// Oracle configuration settings.
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct OracleConfig {
     pub stale_threshold_seconds: u64,
 }
+
+pub struct OracleConsumer;
 
 #[allow(dead_code)]
 impl OracleConsumer {
@@ -55,11 +58,8 @@ impl OracleConsumer {
     /// - Err(EscrowError::OracleInvalidPrice) if the price is non-positive
     /// - Ok(PriceFeed) if the feed is fresh and valid
     pub fn get_validated_feed(env: &Env, oracle_id: &Address) -> Result<PriceFeed, EscrowError> {
-        let feed: PriceFeed = env.invoke_contract(
-            oracle_id,
-            &symbol_short!("get_price"),
-            Vec::new(env),
-        );
+        let feed: PriceFeed =
+            env.invoke_contract(oracle_id, &symbol_short!("get_price"), Vec::new(env));
 
         let now = env.ledger().timestamp();
         if now.saturating_sub(feed.timestamp) > PRICE_STALENESS_THRESHOLD {
@@ -76,7 +76,11 @@ impl OracleConsumer {
     ///
     /// Emits `oracle_conversion` with `(amount_micro_usd, price_micro_usd,
     /// xlm_stroops, feed_timestamp)`.
-    pub fn usd_to_xlm_stroops(env: &Env, oracle_id: &Address, amount_micro_usd: i128) -> Result<i128, EscrowError> {
+    pub fn usd_to_xlm_stroops(
+        env: &Env,
+        oracle_id: &Address,
+        amount_micro_usd: i128,
+    ) -> Result<i128, EscrowError> {
         let feed = Self::get_validated_feed(env, oracle_id)?;
         let xlm_stroops = amount_micro_usd
             .checked_mul(10_000_000)
@@ -134,6 +138,7 @@ pub fn get_fallback_oracle(env: &Env) -> Option<Address> {
         .get(&DataKey::FallbackOracleAddress)
 }
 
+#[allow(dead_code)]
 pub fn set_oracle_stale_threshold(env: &Env, threshold_seconds: u64) -> Result<(), EscrowError> {
     if threshold_seconds == 0 || threshold_seconds > 86_400 {
         return Err(EscrowError::E19);
