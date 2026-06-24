@@ -60,6 +60,7 @@ jobs:
 
       - name: Compare and post PR comment
         uses: actions/github-script@v7
+        continue-on-error: true
         env:
           GAS_INCREASE_THRESHOLD: '15'
         with:

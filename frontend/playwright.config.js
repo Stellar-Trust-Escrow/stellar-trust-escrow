@@ -30,7 +30,7 @@ export default defineConfig({
   webServer: process.env.PLAYWRIGHT_DISABLE_WEBSERVER
     ? undefined
     : {
-        command: 'npm run dev:test',
+        command: process.env.CI ? 'npm run start:test' : 'npm run dev:test',
         url: 'http://127.0.0.1:3000',
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,
