@@ -121,6 +121,10 @@ const handleApprove = async (milestoneId) => {
 
 See the [comprehensive guide](frontend-state-management.md) covering SWR data fetching, WebSocket real-time updates, global Zustand-like store, optimistic patterns, error boundaries, loading skeletons, sync strategies, performance tips, and testing.
 
+### Component Library
+
+The shared UI library is documented in [frontend-components.md](frontend-components.md). It includes reusable primitives, design tokens, props examples, and recommended composition patterns.
+
 ---
 
 ## Adding a New Component
