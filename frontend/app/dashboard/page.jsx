@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation';
 import EscrowCard from '../../components/escrow/EscrowCard';
 import ReputationBadge from '../../components/ui/ReputationBadge';
 import Button from '../../components/ui/Button';
-import CardSkeleton from '../../components/ui/CardSkeleton';
+import EscrowCardSkeleton from '../../components/ui/EscrowCardSkeleton';
+import Skeleton from '../../components/ui/Skeleton';
 import PageTransition from '../../components/layout/PageTransition';
 import ErrorBoundary from '../../components/error/ErrorBoundary';
 import DashboardTour from '../../components/onboarding/DashboardTour';
@@ -19,9 +20,9 @@ const StatWidgets = dynamic(() => import('../../components/dashboard/StatWidgets
   loading: () => (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
       {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="card animate-pulse">
-          <div className="h-3 w-20 bg-gray-700 rounded mb-3" />
-          <div className="h-8 w-16 bg-gray-700 rounded" />
+        <div key={i} className="card space-y-3">
+          <Skeleton variant="text" className="w-20" />
+          <Skeleton variant="heading" className="w-16" />
         </div>
       ))}
     </div>
@@ -30,10 +31,10 @@ const StatWidgets = dynamic(() => import('../../components/dashboard/StatWidgets
 
 const ActivityTimeline = dynamic(() => import('../../components/dashboard/ActivityTimeline'), {
   loading: () => (
-    <div className="card animate-pulse space-y-4">
-      <div className="h-5 w-36 bg-gray-700 rounded" />
+    <div className="card space-y-4">
+      <Skeleton variant="heading" className="w-36" />
       {Array.from({ length: 3 }).map((_, i) => (
-        <div key={i} className="h-3 w-full bg-gray-800 rounded" />
+        <Skeleton key={i} variant="text" className="w-full" />
       ))}
     </div>
   ),
@@ -117,13 +118,33 @@ export default function DashboardPage() {
 
           <section aria-label="Key performance metrics">
             <h2 className="sr-only">Dashboard Statistics</h2>
-            <Suspense fallback={<div className="h-40 card animate-pulse" />}>
+            <Suspense
+              fallback={
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="card space-y-3">
+                      <Skeleton variant="text" className="w-20" />
+                      <Skeleton variant="heading" className="w-16" />
+                    </div>
+                  ))}
+                </div>
+              }
+            >
               <StatWidgets address={address} />
             </Suspense>
           </section>
 
           <section aria-label="Recent activity feed">
-            <Suspense fallback={<div className="h-40 card animate-pulse" />}>
+            <Suspense
+              fallback={
+                <div className="card space-y-4">
+                  <Skeleton variant="heading" className="w-36" />
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <Skeleton key={i} variant="text" className="w-full" />
+                  ))}
+                </div>
+              }
+            >
               <ActivityTimeline address={address} />
             </Suspense>
           </section>
@@ -132,9 +153,9 @@ export default function DashboardPage() {
             <h2 className="text-lg font-semibold text-white mb-4">Your Active Escrows</h2>
             {escrowsLoading ? (
               <div className="grid gap-4 md:grid-cols-2">
-                <CardSkeleton />
-                <CardSkeleton />
-                <CardSkeleton />
+                <EscrowCardSkeleton />
+                <EscrowCardSkeleton />
+                <EscrowCardSkeleton />
               </div>
             ) : escrows.length === 0 ? (
               <div className="card text-center py-10">

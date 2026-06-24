@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Button from '../../../../components/ui/Button';
 import CurrencyConverter from '../../../../components/ui/CurrencyConverter';
+import DisputeDetailSkeleton from '../../../../components/ui/DisputeDetailSkeleton';
 
 const MOCK_WORKSPACE = {
   escrowId: 'ESCROW-8729',
@@ -112,6 +113,7 @@ export default function ArbitratorWorkspacePage({ params }) {
   const [saveMessage, setSaveMessage] = useState('');
   const [deployStatus, setDeployStatus] = useState('pending');
   const [actionMessage, setActionMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
 
   const freelancerShare = useMemo(() => 100 - clientShare, [clientShare]);
   const formattedTimestamp = new Date(activeEvidence.timestamp).toLocaleString();
@@ -125,10 +127,16 @@ export default function ArbitratorWorkspacePage({ params }) {
         setNotes(data?.notes ?? '');
       } catch {
         // Silent fallback if API is unavailable.
+      } finally {
+        setIsLoading(false);
       }
     }
     loadNotes();
   }, [workspaceId]);
+
+  if (isLoading) {
+    return <DisputeDetailSkeleton />;
+  }
 
   const saveNotes = async () => {
     setIsSaving(true);
