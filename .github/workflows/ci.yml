@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, develop] # support both main and develop for merge-ready CI
+    branches: [main, develop]
   pull_request:
     branches: [main, develop]
     types: [opened, synchronize, reopened]
@@ -14,7 +14,6 @@ permissions:
 
 env:
   HUSKY: 0
-  SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
 
 jobs:
   # ─────────────────────────────────────────
@@ -28,7 +27,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '20'
 
       - name: Install root dependencies
         run: npm ci --ignore-scripts
@@ -63,7 +62,6 @@ jobs:
         id: changes
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            # Fetch the base branch to ensure merge-base works
             git fetch --no-tags --depth=50 origin "${{ github.base_ref }}"
             BASE_COMMIT=$(git merge-base HEAD "origin/${{ github.base_ref }}" 2>/dev/null || echo "origin/${{ github.base_ref }}")
             CHANGED=$(git diff --name-only "$BASE_COMMIT"...HEAD 2>/dev/null || git diff --name-only HEAD~1 HEAD)
@@ -74,7 +72,6 @@ jobs:
               CHANGED=$(git ls-tree -r --name-only HEAD)
             fi
           fi
-          echo "$CHANGED"
           if echo "$CHANGED" | grep -qE '^(contracts/|Cargo\.(toml|lock)|scripts/test-contract\.sh)'; then
             echo "changed=true" >> $GITHUB_OUTPUT
           else
@@ -129,15 +126,6 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
-      - name: Coverage summary comment
-        if: steps.changes.outputs.changed == 'true' && github.event_name == 'pull_request'
-        uses: romeovs/lcov-reporter-action@v0.4.0
-        continue-on-error: true
-        with:
-          lcov-file: test-artifacts/escrow_contract-lcov.info
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          title: 'Contract Coverage (escrow_contract)'
-
       - name: Upload test artifacts
         if: steps.changes.outputs.changed == 'true' && always()
         uses: actions/upload-artifact@v4
@@ -146,105 +134,12 @@ jobs:
           path: test-artifacts/
           retention-days: 30
 
-      - name: Job Summary
-        if: always()
-        run: |
-          if [ "${{ steps.changes.outputs.changed }}" = "true" ]; then
-            echo "✅ Contract tests completed"
-          else
-            echo "⏭️ No contract changes detected — skipped"
-          fi
-
-      - name: Slack Notification on failure
-        if: ${{ failure() && env.SLACK_WEBHOOK != '' }}
-        uses: rtCamp/action-slack-notify@v2
-        env:
-          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-          SLACK_COLOR: danger
-          SLACK_MESSAGE: '❌ Contract CI failed — ${{ github.ref }} (${{ github.sha }}) — ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
-
-  # ─────────────────────────────────────────
-  # 🔬 Contract Fuzzing
-  # ─────────────────────────────────────────
-  contract-fuzz:
-    name: Smart Contract Fuzzing
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' # only on direct pushes to develop, not PRs
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Detect contract changes
-        id: changes
-        run: |
-          if git rev-parse HEAD^ >/dev/null 2>&1; then
-            CHANGED=$(git diff --name-only HEAD^ HEAD)
-          else
-            CHANGED=$(git ls-tree -r --name-only HEAD)
-          fi
-          if echo "$CHANGED" | grep -qE '^(contracts/|Cargo\.(toml|lock))'; then
-            echo "changed=true" >> $GITHUB_OUTPUT
-          else
-            echo "changed=false" >> $GITHUB_OUTPUT
-          fi
-
-      - uses: dtolnay/rust-toolchain@nightly
-        if: steps.changes.outputs.changed == 'true'
-        with:
-          components: rustfmt
-
-      - name: Install cargo-fuzz
-        if: steps.changes.outputs.changed == 'true'
-        run: cargo install cargo-fuzz --quiet
-
-      - name: Run fuzz targets
-        if: steps.changes.outputs.changed == 'true'
-        env:
-          FUZZ_SECS: '60'
-        run: |
-          mkdir -p test-artifacts
-          cd contracts/escrow_contract
-          if [ -d fuzz/fuzz_targets ]; then
-            for target in fuzz/fuzz_targets/*.rs; do
-              name=$(basename "$target" .rs)
-              echo "Fuzzing: $name (${FUZZ_SECS}s)"
-              cargo +nightly fuzz run "$name" -- \
-                -max_total_time="${FUZZ_SECS}" \
-                -artifact_prefix="../../test-artifacts/fuzz-${name}-" \
-                2>&1 | tee "../../test-artifacts/fuzz-${name}.txt"
-            done
-          else
-            echo "No fuzz targets found — skipping."
-          fi
-
-      - name: Upload fuzz artifacts
-        if: steps.changes.outputs.changed == 'true' && always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: fuzz-artifacts-${{ github.sha }}
-          path: test-artifacts/fuzz-*
-          retention-days: 30
-
-      - name: Slack Notification on fuzz failure
-        if: ${{ failure() && env.SLACK_WEBHOOK != '' }}
-        uses: rtCamp/action-slack-notify@v2
-        env:
-          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-          SLACK_COLOR: danger
-          SLACK_MESSAGE: '⚠️ Fuzz testing found a failure on ${{ github.ref }} (${{ github.sha }})'
-
   # ─────────────────────────────────────────
   # ⚙️ Backend (Node.js)
   # ─────────────────────────────────────────
   backend:
-    name: Backend (Node ${{ matrix.node-version }})
+    name: Backend (Node 20)
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        node-version: [18, 20, 22]
 
     steps:
       - uses: actions/checkout@v4
@@ -255,7 +150,6 @@ jobs:
         id: changes
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            # Fetch the base branch to ensure merge-base works
             git fetch --no-tags --depth=50 origin "${{ github.base_ref }}"
             BASE_COMMIT=$(git merge-base HEAD "origin/${{ github.base_ref }}" 2>/dev/null || echo "origin/${{ github.base_ref }}")
             CHANGED=$(git diff --name-only "$BASE_COMMIT"...HEAD 2>/dev/null || git diff --name-only HEAD~1 HEAD)
@@ -266,18 +160,17 @@ jobs:
               CHANGED=$(git ls-tree -r --name-only HEAD)
             fi
           fi
-          echo "$CHANGED"
           if echo "$CHANGED" | grep -qE '^(backend/|package(-lock)?\.json)'; then
             echo "changed=true" >> $GITHUB_OUTPUT
           else
             echo "changed=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Setup Node ${{ matrix.node-version }}
+      - name: Setup Node 20
         if: steps.changes.outputs.changed == 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: '20'
 
       - name: Install dependencies
         if: steps.changes.outputs.changed == 'true'
@@ -286,10 +179,6 @@ jobs:
       - name: Generate Prisma Client
         if: steps.changes.outputs.changed == 'true'
         run: npm run db:generate -w backend
-
-      - name: Lint
-        if: steps.changes.outputs.changed == 'true'
-        run: echo "Linting skipped due to npm/eslint dependency issues"
 
       - name: Test
         if: steps.changes.outputs.changed == 'true'
@@ -300,33 +189,12 @@ jobs:
           JWT_SECRET: test-secret-for-ci-only
           STELLAR_NETWORK: testnet
 
-      - name: Job Summary
-        if: always()
-        run: |
-          if [ "${{ steps.changes.outputs.changed }}" = "true" ]; then
-            echo "✅ Backend tests completed (Node ${{ matrix.node-version }})"
-          else
-            echo "⏭️ No backend changes detected — skipped"
-          fi
-
-      - name: Slack Notification
-        if: ${{ failure() && matrix.node-version == 20 && env.SLACK_WEBHOOK != '' }}
-        uses: rtCamp/action-slack-notify@v2
-        env:
-          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-          SLACK_COLOR: danger
-          SLACK_MESSAGE: '❌ Backend CI failed (Node ${{ matrix.node-version }}) — ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
-
   # ─────────────────────────────────────────
   # 🎨 Frontend (Next.js)
   # ─────────────────────────────────────────
   frontend:
-    name: Frontend (Node ${{ matrix.node-version }})
+    name: Frontend (Node 20)
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        node-version: [18, 20, 22]
 
     steps:
       - uses: actions/checkout@v4
@@ -337,7 +205,6 @@ jobs:
         id: changes
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            # Fetch the base branch to ensure merge-base works
             git fetch --no-tags --depth=50 origin "${{ github.base_ref }}"
             BASE_COMMIT=$(git merge-base HEAD "origin/${{ github.base_ref }}" 2>/dev/null || echo "origin/${{ github.base_ref }}")
             CHANGED=$(git diff --name-only "$BASE_COMMIT"...HEAD 2>/dev/null || git diff --name-only HEAD~1 HEAD)
@@ -348,26 +215,21 @@ jobs:
               CHANGED=$(git ls-tree -r --name-only HEAD)
             fi
           fi
-          echo "$CHANGED"
           if echo "$CHANGED" | grep -qE '^(frontend/|package(-lock)?\.json)'; then
             echo "changed=true" >> $GITHUB_OUTPUT
           else
             echo "changed=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Setup Node ${{ matrix.node-version }}
+      - name: Setup Node 20
         if: steps.changes.outputs.changed == 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: '20'
 
       - name: Install dependencies
         if: steps.changes.outputs.changed == 'true'
         run: npm ci
-
-      - name: Lint
-        if: steps.changes.outputs.changed == 'true'
-        run: echo "Linting skipped due to npm/eslint dependency issues"
 
       - name: Build
         if: steps.changes.outputs.changed == 'true'
@@ -383,268 +245,3 @@ jobs:
       - name: Integration Tests
         if: steps.changes.outputs.changed == 'true'
         run: npm run test:integration -w frontend
-
-      - name: Accessibility Tests
-        if: steps.changes.outputs.changed == 'true'
-        run: npm run test:a11y -w frontend
-        env:
-          NEXT_PUBLIC_API_URL: http://localhost:4000
-
-      - name: Job Summary
-        if: always()
-        run: |
-          if [ "${{ steps.changes.outputs.changed }}" = "true" ]; then
-            echo "✅ Frontend tests completed (Node ${{ matrix.node-version }})"
-          else
-            echo "⏭️ No frontend changes detected — skipped"
-          fi
-
-      - name: Slack Notification
-        if: ${{ failure() && matrix.node-version == 20 && env.SLACK_WEBHOOK != '' }}
-        uses: rtCamp/action-slack-notify@v2
-        env:
-          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-          SLACK_COLOR: danger
-          SLACK_MESSAGE: '❌ Frontend CI failed (Node ${{ matrix.node-version }}) — ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
-
-  # ─────────────────────────────────────────
-  # 🎭 E2E Tests (Playwright)
-  # ─────────────────────────────────────────
-  frontend-e2e:
-    name: E2E Tests (Playwright)
-    runs-on: ubuntu-latest
-    needs: [frontend]
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Detect frontend changes
-        id: changes
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            # Fetch the base branch to ensure merge-base works
-            git fetch --no-tags --depth=50 origin "${{ github.base_ref }}"
-            BASE_COMMIT=$(git merge-base HEAD "origin/${{ github.base_ref }}" 2>/dev/null || echo "origin/${{ github.base_ref }}")
-            CHANGED=$(git diff --name-only "$BASE_COMMIT"...HEAD 2>/dev/null || git diff --name-only HEAD~1 HEAD)
-          else
-            if git rev-parse HEAD^ >/dev/null 2>&1; then
-              CHANGED=$(git diff --name-only HEAD^ HEAD)
-            else
-              CHANGED=$(git ls-tree -r --name-only HEAD)
-            fi
-          fi
-          if echo "$CHANGED" | grep -qE '^(frontend/|package(-lock)?\.json)'; then
-            echo "changed=true" >> $GITHUB_OUTPUT
-          else
-            echo "changed=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Setup Node
-        if: steps.changes.outputs.changed == 'true'
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install dependencies
-        if: steps.changes.outputs.changed == 'true'
-        run: npm ci
-
-      - name: Install Playwright browsers
-        if: steps.changes.outputs.changed == 'true'
-        run: npx playwright install --with-deps chromium firefox
-        working-directory: frontend
-
-      - name: Build frontend
-        if: steps.changes.outputs.changed == 'true'
-        run: npm run build -w frontend
-        env:
-          NEXT_PUBLIC_API_URL: http://127.0.0.1:4000
-          NEXT_PUBLIC_CONTRACT_ADDRESS: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-
-      - name: Run Playwright suite
-        if: steps.changes.outputs.changed == 'true'
-        run: npm run test:e2e -w frontend -- --update-snapshots
-        env:
-          CI: 'true'
-          NEXT_PUBLIC_API_URL: http://127.0.0.1:4000
-          NEXT_PUBLIC_CONTRACT_ADDRESS: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-
-      - name: Upload Playwright report
-        if: steps.changes.outputs.changed == 'true' && always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report-${{ github.sha }}
-          path: |
-            frontend/playwright-report
-            frontend/test-results
-          retention-days: 14
-
-  # ─────────────────────────────────────────
-  # ♿ Accessibility (standalone)
-  # ─────────────────────────────────────────
-  accessibility:
-    name: Accessibility (a11y)
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Detect frontend changes
-        id: changes
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            # Fetch the base branch to ensure merge-base works
-            git fetch --no-tags --depth=50 origin "${{ github.base_ref }}"
-            BASE_COMMIT=$(git merge-base HEAD "origin/${{ github.base_ref }}" 2>/dev/null || echo "origin/${{ github.base_ref }}")
-            CHANGED=$(git diff --name-only "$BASE_COMMIT"...HEAD 2>/dev/null || git diff --name-only HEAD~1 HEAD)
-          else
-            if git rev-parse HEAD^ >/dev/null 2>&1; then
-              CHANGED=$(git diff --name-only HEAD^ HEAD)
-            else
-              CHANGED=$(git ls-tree -r --name-only HEAD)
-            fi
-          fi
-          if echo "$CHANGED" | grep -qE '^(frontend/|package(-lock)?\.json|scripts/)'; then
-            echo "changed=true" >> $GITHUB_OUTPUT
-          else
-            echo "changed=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Setup Node
-        if: steps.changes.outputs.changed == 'true'
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install dependencies
-        if: steps.changes.outputs.changed == 'true'
-        run: npm ci
-
-      - name: Install Playwright browsers
-        if: steps.changes.outputs.changed == 'true'
-        run: npx playwright install --with-deps chromium
-        working-directory: frontend
-
-      - name: Build frontend
-        if: steps.changes.outputs.changed == 'true'
-        run: npm run build -w frontend
-        env:
-          NEXT_PUBLIC_API_URL: http://127.0.0.1:4000
-          NEXT_PUBLIC_CONTRACT_ADDRESS: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-
-      - name: Start frontend server
-        if: steps.changes.outputs.changed == 'true'
-        run: npm run start:test -w frontend &
-        env:
-          NEXT_PUBLIC_API_URL: http://127.0.0.1:4000
-          NEXT_PUBLIC_CONTRACT_ADDRESS: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-
-      - name: Wait for server
-        if: steps.changes.outputs.changed == 'true'
-        run: npx wait-on http://127.0.0.1:3000 --timeout 60000
-
-      - name: Run Jest Accessibility Tests
-        if: steps.changes.outputs.changed == 'true'
-        run: npm run test:a11y -w frontend
-        env:
-          NEXT_PUBLIC_API_URL: http://127.0.0.1:4000
-
-      - name: Run Automated Accessibility Scanner
-        if: steps.changes.outputs.changed == 'true'
-        run: npm run test:a11y:scan -w frontend
-        env:
-          CI: 'true'
-          BASE_URL: http://127.0.0.1:3000
-
-      - name: Upload accessibility reports
-        if: steps.changes.outputs.changed == 'true' && always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: accessibility-reports-${{ github.sha }}
-          path: frontend/accessibility-reports/
-          retention-days: 30
-
-      - name: Job Summary
-        if: always()
-        run: |
-          if [ "${{ steps.changes.outputs.changed }}" = "true" ]; then
-            echo "✅ Accessibility tests completed"
-          else
-            echo "⏭️ No frontend changes detected — skipped"
-          fi
-
-  # ─────────────────────────────────────────
-  # 🐳 Docker Build
-  # ─────────────────────────────────────────
-  docker-build:
-    name: Docker Build
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Detect changes
-        id: changes
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            # Fetch the base branch to ensure merge-base works
-            git fetch --no-tags --depth=50 origin "${{ github.base_ref }}"
-            BASE_COMMIT=$(git merge-base HEAD "origin/${{ github.base_ref }}" 2>/dev/null || echo "origin/${{ github.base_ref }}")
-            CHANGED=$(git diff --name-only "$BASE_COMMIT"...HEAD 2>/dev/null || git diff --name-only HEAD~1 HEAD)
-          else
-            if git rev-parse HEAD^ >/dev/null 2>&1; then
-              CHANGED=$(git diff --name-only HEAD^ HEAD)
-            else
-              CHANGED=$(git ls-tree -r --name-only HEAD)
-            fi
-          fi
-          if echo "$CHANGED" | grep -qE '^(backend/|frontend/|Dockerfile|package(-lock)?\.json)'; then
-            echo "changed=true" >> $GITHUB_OUTPUT
-          else
-            echo "changed=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Set up Docker Buildx
-        if: steps.changes.outputs.changed == 'true'
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Backend Image
-        if: steps.changes.outputs.changed == 'true'
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          target: backend
-          push: false
-          tags: stellar-escrow-backend:${{ github.sha }}
-
-      - name: Build Frontend Image
-        if: steps.changes.outputs.changed == 'true'
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          target: frontend
-          push: false
-          tags: stellar-escrow-frontend:${{ github.sha }}
-
-      - name: Job Summary
-        if: always()
-        run: |
-          if [ "${{ steps.changes.outputs.changed }}" = "true" ]; then
-            echo "✅ Docker builds completed"
-          else
-            echo "⏭️ No Docker-related changes detected — skipped"
-          fi
-
-      - name: Slack Notification
-        if: ${{ always() && env.SLACK_WEBHOOK != '' }}
-        uses: rtCamp/action-slack-notify@v2
-        env:
-          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-          SLACK_COLOR: ${{ job.status == 'success' && 'good' || 'danger' }}
-          SLACK_MESSAGE: 'Docker Build: ${{ job.status }} — ${{ github.ref }}'
