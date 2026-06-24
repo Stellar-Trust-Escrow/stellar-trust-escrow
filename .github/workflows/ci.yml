@@ -173,7 +173,6 @@ jobs:
   contract-fuzz:
     name: Smart Contract Fuzzing
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' # only on direct pushes to develop, not PRs
 
     steps:
       - uses: actions/checkout@v4
