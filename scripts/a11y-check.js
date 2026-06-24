@@ -18,7 +18,7 @@ let totalViolations = 0;
 try {
   for (const page of PAGES) {
     const tab = await context.newPage();
-    await tab.goto(`${BASE_URL}${page.path}`, { waitUntil: 'networkidle' });
+    await tab.goto(`${BASE_URL}${page.path}`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
 
     const report = await new AxeBuilder({ page: tab }).withTags(['wcag2aa']).analyze();
     const { violations } = report;

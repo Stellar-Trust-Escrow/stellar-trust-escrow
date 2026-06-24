@@ -1,4 +1,5 @@
-import supertest from 'supertest';
+import http from 'node:http';
+import https from 'node:https';
 import { ROLES } from '../middleware/roleGuard.js';
 import { trackUsage } from '../middleware/rateLimiter.js';
 import { RATE_LIMIT_WINDOW_MS } from '../../config/rateLimits.js';
@@ -100,22 +101,36 @@ async function dispatchRequest(app, { method = 'GET', url, body, headers = {} },
     trackUsage(`api:user:${userId}`, RATE_LIMIT_WINDOW_MS);
   }
 
-  try {
-    const agent = supertest(app)[upperMethod.toLowerCase()](url);
+  const port = parentReq.socket?.localPort;
+  const bodyStr =
+    body !== undefined &&
+    body !== null &&
+    ['POST', 'PUT', 'PATCH'].includes(upperMethod)
+      ? JSON.stringify(body)
+      : null;
 
-    for (const [key, value] of Object.entries(headers)) {
-      agent.set(key, value);
-    }
+  const reqHeaders = { 'content-type': 'application/json', ...headers };
+  if (bodyStr) reqHeaders['content-length'] = Buffer.byteLength(bodyStr).toString();
 
-    if (body && (upperMethod === 'POST' || upperMethod === 'PUT' || upperMethod === 'PATCH')) {
-      agent.send(body);
-    }
+  const transport = parentReq.secure ? https : http;
 
-    const response = await agent;
-    return { status: response.status, body: response.body };
-  } catch (err) {
-    return { status: 500, body: { error: err.message } };
-  }
+  return new Promise((resolve) => {
+    const req = transport.request(
+      { hostname: '127.0.0.1', port, path: url, method: upperMethod, headers: reqHeaders },
+      (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          let parsed;
+          try { parsed = JSON.parse(data); } catch { parsed = {}; }
+          resolve({ status: res.statusCode, body: parsed });
+        });
+      },
+    );
+    req.on('error', (err) => resolve({ status: 500, body: { error: err.message } }));
+    if (bodyStr) req.write(bodyStr);
+    req.end();
+  });
 }
 
 export async function handleBatch(req, res) {
