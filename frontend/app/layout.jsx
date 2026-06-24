@@ -36,7 +36,7 @@ export default function RootLayout({ children }) {
         <link rel="dns-prefetch" href={API_ORIGIN} />
         <link rel="preconnect" href={API_ORIGIN} crossOrigin="anonymous" />
       </head>
-      <body className="bg-gray-950 text-gray-100 min-h-screen flex flex-col font-sans">
+      <body className="bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100 min-h-screen flex flex-col font-sans">
         <AppStoreProvider>
           <I18nProvider>
             <ThemeProvider>
@@ -49,7 +49,7 @@ export default function RootLayout({ children }) {
                   <ErrorBoundary>
                     <main
                       id="main-content"
-                      className="flex-1 container mx-auto px-4 py-8 max-w-7xl"
+                      className="flex-1 container mx-auto px-3 sm:px-4 py-8 max-w-7xl"
                     >
                       {children}
                     </main>

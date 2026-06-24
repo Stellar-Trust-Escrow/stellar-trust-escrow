@@ -1,20 +1,17 @@
 /**
  * Create Escrow Page — /escrow/create
  *
- * Multi-step form to create a new escrow agreement.
- *
- * Step 1: Counterparty — enter freelancer address, token, total amount
- * Step 2: Milestones  — add milestone titles, descriptions, amounts
- * Step 3: Review      — confirm all details before signing
- * Step 4: Sign & Submit — Freighter signs, broadcast to Stellar
+ * 5-step wizard:
+ *   1. Parties    — buyer (auto-filled) + seller address
+ *   2. Terms      — project description + deadline
+ *   3. Amount     — token, total amount, milestones
+ *   4. Review     — full summary before signing
+ *   5. Confirm    — Freighter signing
  *
  * TODO (contributor — hard, Issue #33):
- * - Step 1: validate Stellar address format (G..., 56 chars)
- * - Step 2: validate milestone amounts sum <= total_amount
- * - Step 3: show summary with gas estimate
- * - Step 4: build Soroban transaction with stellar-sdk
- * - Step 4: invoke Freighter signTransaction()
- * - Step 4: POST signed XDR to /api/escrows/broadcast
+ * - Step 5: build Soroban transaction with stellar-sdk
+ * - Step 5: invoke Freighter signTransaction()
+ * - Step 5: POST signed XDR to /api/escrows/broadcast
  * - On success: redirect to /escrow/[id]
  */
 
@@ -36,23 +33,23 @@ import {
 } from '../../../lib/stellar';
 
 const STEPS = [
-  { id: 1, label: 'Counterparty' },
-  { id: 2, label: 'Milestones' },
-  { id: 3, label: 'Review' },
-  { id: 4, label: 'Sign' },
+  { id: 1, label: 'Parties' },
+  { id: 2, label: 'Terms' },
+  { id: 3, label: 'Amount' },
+  { id: 4, label: 'Review' },
+  { id: 5, label: 'Confirm' },
 ];
 
 const DEFAULT_MILESTONE = { title: '', description: '', amount: '' };
-
 const DESCRIPTION_MIN_LENGTH = 10;
 
 function applyTemplateToForm(currentForm, template) {
   const milestones =
     Array.isArray(template.milestones) && template.milestones.length > 0
-      ? template.milestones.map((milestone) => ({
-          title: milestone.title || '',
-          description: milestone.description || '',
-          amount: milestone.amount || '',
+      ? template.milestones.map((m) => ({
+          title: m.title || '',
+          description: m.description || '',
+          amount: m.amount || '',
         }))
       : [{ ...DEFAULT_MILESTONE }];
 
@@ -66,11 +63,45 @@ function applyTemplateToForm(currentForm, template) {
   };
 }
 
-/** Returns true when the amount string represents a positive number. */
 function isPositiveAmount(value) {
   const n = Number(value);
   return value !== '' && !Number.isNaN(n) && n > 0;
 }
+
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// ── Validation ────────────────────────────────────────────────────────────────
+
+function validateStep(step, formData) {
+  const errors = {};
+  if (step === 1) {
+    if (!formData.sellerAddress.trim()) {
+      errors.sellerAddress = 'Seller address is required.';
+    } else if (!isValidStellarAddress(formData.sellerAddress.trim())) {
+      errors.sellerAddress = 'Enter a valid Stellar address (G…, 56 characters).';
+    }
+  }
+  if (step === 2) {
+    if (formData.briefDescription.trim().length < DESCRIPTION_MIN_LENGTH) {
+      errors.briefDescription = `Description must be at least ${DESCRIPTION_MIN_LENGTH} characters.`;
+    }
+    if (!formData.deadline) {
+      errors.deadline = 'Deadline is required.';
+    } else if (formData.deadline < todayIso()) {
+      errors.deadline = 'Deadline must be today or in the future.';
+    }
+  }
+  if (step === 3) {
+    if (!isPositiveAmount(formData.totalAmount)) {
+      errors.totalAmount = 'Amount must be a positive number.';
+    }
+  }
+  return errors;
+}
+
+// ── Main Component ────────────────────────────────────────────────────────────
 
 export default function CreateEscrowPage() {
   const router = useRouter();
@@ -80,106 +111,87 @@ export default function CreateEscrowPage() {
   const { address, isConnected, signTx } = useWallet();
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState({
-    freelancerAddress: '',
+    sellerAddress: '',
     tokenAddress: 'usdc',
     totalAmount: '',
     briefDescription: '',
     deadline: '',
     milestones: [{ ...DEFAULT_MILESTONE }],
   });
+  const [stepErrors, setStepErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState(null);
+  const [submitError, setSubmitError] = useState(null);
   const [templateNotice, setTemplateNotice] = useState('');
   const [appliedQueryTemplateId, setAppliedQueryTemplateId] = useState(null);
-
-  // Touched state tracks which fields the user has interacted with
-  const [touched, setTouched] = useState({ totalAmount: false, briefDescription: false });
 
   const { showToast } = useToast();
 
   useEffect(() => {
     const templateId = searchParams.get('template');
-    if (!templateId || templateId === appliedQueryTemplateId) {
-      return;
-    }
-
+    if (!templateId || templateId === appliedQueryTemplateId) return;
     const template = templateLibrary.find((item) => item.id === templateId);
-    if (!template) {
-      return;
-    }
-
-    setFormData((previous) => applyTemplateToForm(previous, template));
+    if (!template) return;
+    setFormData((prev) => applyTemplateToForm(prev, template));
     setCurrentStep(1);
     setTemplateNotice(`Applied template: ${template.name}`);
     setAppliedQueryTemplateId(templateId);
   }, [searchParams, templateLibrary, appliedQueryTemplateId]);
 
   const handleApplyTemplate = (template) => {
-    setFormData((previous) => applyTemplateToForm(previous, template));
+    setFormData((prev) => applyTemplateToForm(prev, template));
     setCurrentStep(1);
     setTemplateNotice(`Applied template: ${template.name}`);
   };
 
-  // TODO (contributor — Issue #33): implement form submission
+  const handleNext = () => {
+    const errors = validateStep(currentStep, formData);
+    if (Object.keys(errors).length > 0) {
+      setStepErrors(errors);
+      return;
+    }
+    setStepErrors({});
+    setCurrentStep((s) => Math.min(STEPS.length, s + 1));
+  };
+
+  const handleBack = () => {
+    setStepErrors({});
+    setCurrentStep((s) => Math.max(1, s - 1));
+  };
+
   const handleSubmit = async () => {
     setIsSubmitting(true);
-    setError(null);
+    setSubmitError(null);
     try {
       throw new Error('Not implemented — see Issue #33');
     } catch (err) {
-      const message = err.message || 'Failed to create escrow';
-      setError(message);
+      setSubmitError(err.message || 'Failed to create escrow');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const addMilestone = () => {
-    setFormData((data) => ({
-      ...data,
-      milestones: [...data.milestones, { ...DEFAULT_MILESTONE }],
-    }));
-  };
+  const addMilestone = () =>
+    setFormData((d) => ({ ...d, milestones: [...d.milestones, { ...DEFAULT_MILESTONE }] }));
 
-  const removeMilestone = (index) => {
-    setFormData((data) => {
-      const nextMilestones = data.milestones.filter(
-        (_, milestoneIndex) => milestoneIndex !== index,
-      );
-      return {
-        ...data,
-        milestones: nextMilestones.length > 0 ? nextMilestones : [{ ...DEFAULT_MILESTONE }],
-      };
+  const removeMilestone = (index) =>
+    setFormData((d) => {
+      const next = d.milestones.filter((_, i) => i !== index);
+      return { ...d, milestones: next.length > 0 ? next : [{ ...DEFAULT_MILESTONE }] };
     });
-  };
 
-  const updateMilestone = (index, field, value) => {
-    setFormData((data) => ({
-      ...data,
-      milestones: data.milestones.map((milestone, milestoneIndex) =>
-        milestoneIndex === index ? { ...milestone, [field]: value } : milestone,
-      ),
+  const updateMilestone = (index, field, value) =>
+    setFormData((d) => ({
+      ...d,
+      milestones: d.milestones.map((m, i) => (i === index ? { ...m, [field]: value } : m)),
     }));
-  };
-
-  // Validation errors (only shown after field is touched)
-  const amountError =
-    touched.totalAmount && formData.totalAmount !== '' && !isPositiveAmount(formData.totalAmount)
-      ? 'Amount must be a positive number.'
-      : null;
-
-  const descriptionError =
-    touched.briefDescription &&
-    formData.briefDescription.length > 0 &&
-    formData.briefDescription.length < DESCRIPTION_MIN_LENGTH
-      ? `Description must be at least ${DESCRIPTION_MIN_LENGTH} characters.`
-      : null;
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-white">Create New Escrow</h1>
-        <p className="text-gray-400 mt-1">Lock funds and define milestones for your project.</p>
+        <h1 className="text-2xl font-bold text-white dark:text-white">Create New Escrow</h1>
+        <p className="text-gray-600 dark:text-gray-400 mt-1">
+          Lock funds and define milestones for your project.
+        </p>
       </div>
 
       <TemplateSelector
@@ -190,33 +202,33 @@ export default function CreateEscrowPage() {
       />
 
       {templateNotice && (
-        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3 text-emerald-300 text-sm">
+        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3 text-emerald-600 dark:text-emerald-300 text-sm">
           {templateNotice}
         </div>
       )}
 
-      {/* Step Indicator */}
+      {/* Progress indicator */}
       <nav aria-label="Progress">
+        <p className="text-sm text-gray-500 mb-3">
+          Step {currentStep} of {STEPS.length}
+        </p>
         <ol className="flex items-center gap-2">
           {STEPS.map((step, i) => (
             <li key={step.id} className="flex items-center gap-2">
               <div
                 aria-current={currentStep === step.id ? 'step' : undefined}
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
-                ${
-                  currentStep >= step.id ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-500'
-                }`}
+                  ${currentStep > step.id ? 'bg-indigo-700 text-white' : currentStep === step.id ? 'bg-indigo-600 text-white' : 'bg-gray-200 dark:bg-gray-800 text-gray-500'}`}
               >
-                <span aria-label={`Step ${step.id}: ${step.label}`}>{step.id}</span>
+                {currentStep > step.id ? '✓' : step.id}
               </div>
               <span
-                className={`text-sm hidden sm:inline
-                ${currentStep >= step.id ? 'text-white' : 'text-gray-500'}`}
+                className={`text-sm hidden sm:inline ${currentStep >= step.id ? 'text-gray-900 dark:text-white' : 'text-gray-500'}`}
               >
                 {step.label}
               </span>
               {i < STEPS.length - 1 && (
-                <div className="w-8 h-px bg-gray-700 mx-1" aria-hidden="true" />
+                <div className="w-6 h-px bg-gray-300 dark:bg-gray-700 mx-1" aria-hidden="true" />
               )}
             </li>
           ))}
@@ -226,25 +238,29 @@ export default function CreateEscrowPage() {
       {/* Step Content */}
       <div className="card space-y-6">
         {currentStep === 1 && (
-          <StepCounterparty
+          <StepParties
             formData={formData}
             setFormData={setFormData}
-            setTouched={setTouched}
-            amountError={amountError}
-            descriptionError={descriptionError}
+            errors={stepErrors}
+            buyerAddress={address}
           />
         )}
         {currentStep === 2 && (
-          <StepMilestones
+          <StepTerms formData={formData} setFormData={setFormData} errors={stepErrors} />
+        )}
+        {currentStep === 3 && (
+          <StepAmount
             formData={formData}
+            setFormData={setFormData}
+            errors={stepErrors}
             onAdd={addMilestone}
             onRemove={removeMilestone}
             onUpdate={updateMilestone}
           />
         )}
-        {currentStep === 3 && <StepReview formData={formData} />}
-        {currentStep === 4 && (
-          <StepSign onSubmit={handleSubmit} isSubmitting={isSubmitting} error={error} />
+        {currentStep === 4 && <StepReview formData={formData} buyerAddress={address} />}
+        {currentStep === 5 && (
+          <StepConfirm onSubmit={handleSubmit} isSubmitting={isSubmitting} error={submitError} />
         )}
       </div>
 
@@ -252,17 +268,23 @@ export default function CreateEscrowPage() {
       <div className="flex flex-col sm:flex-row justify-between gap-4">
         <Button
           variant="secondary"
-          onClick={() => setCurrentStep((step) => Math.max(1, step - 1))}
+          onClick={handleBack}
           disabled={currentStep === 1}
+          className="min-h-[44px]"
         >
           Back
         </Button>
-        {currentStep < 4 ? (
-          <Button variant="primary" onClick={() => setCurrentStep((step) => step + 1)}>
+        {currentStep < STEPS.length ? (
+          <Button variant="primary" onClick={handleNext} className="min-h-[44px]">
             Next →
           </Button>
         ) : (
-          <Button variant="primary" onClick={handleSubmit} isLoading={isSubmitting}>
+          <Button
+            variant="primary"
+            onClick={handleSubmit}
+            isLoading={isSubmitting}
+            className="min-h-[44px]"
+          >
             Sign & Create Escrow
           </Button>
         )}
@@ -273,35 +295,118 @@ export default function CreateEscrowPage() {
 
 // ── Step Sub-components ───────────────────────────────────────────────────────
 
+function FieldError({ id, message }) {
+  if (!message) return null;
+  return (
+    <p id={id} className="mt-1 text-xs text-red-500 dark:text-red-400" role="alert">
+      {message}
+    </p>
+  );
+}
+
 /**
- * Step 1: Enter counterparty details.
+ * Step 1: Parties — buyer (auto-filled) + seller address.
  */
-function StepCounterparty({ formData, setFormData, setTouched, amountError, descriptionError }) {
+function StepParties({ formData, setFormData, errors, buyerAddress }) {
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold text-white">Counterparty & Funds</h2>
+      <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Parties</h2>
+
+      <div>
+        <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
+          Buyer Address <span className="text-gray-400 text-xs">(your connected wallet)</span>
+        </label>
+        <input
+          type="text"
+          readOnly
+          value={buyerAddress || 'Not connected'}
+          className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-4 py-2.5 text-gray-600 dark:text-gray-400 text-sm font-mono cursor-not-allowed"
+          aria-label="Buyer Stellar Address (read-only)"
+        />
+      </div>
 
       <StellarAddressInput
-        id="freelancer-address"
-        label="Freelancer Stellar Address"
+        id="seller-address"
+        label="Seller Stellar Address"
         placeholder="GABCD1234..."
-        value={formData.freelancerAddress}
-        onChange={(val) => setFormData((data) => ({ ...data, freelancerAddress: val }))}
+        value={formData.sellerAddress}
+        onChange={(val) => setFormData((d) => ({ ...d, sellerAddress: val }))}
         required
+        error={errors.sellerAddress}
+        errorId="seller-address-error"
       />
+      <FieldError id="seller-address-error" message={errors.sellerAddress} />
+    </div>
+  );
+}
+
+/**
+ * Step 2: Terms — description + deadline.
+ */
+function StepTerms({ formData, setFormData, errors }) {
+  return (
+    <div className="space-y-4">
+      <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Terms</h2>
+
+      <div>
+        <label htmlFor="brief-description" className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
+          Project Description <span className="text-red-500">*</span>
+        </label>
+        <textarea
+          id="brief-description"
+          rows={4}
+          placeholder="Describe the project scope and deliverables (min 10 characters)…"
+          className={`w-full bg-white dark:bg-gray-800 border rounded-lg px-4 py-2.5
+            text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none resize-none transition-colors
+            ${errors.briefDescription ? 'border-red-500 focus:border-red-400' : 'border-gray-300 dark:border-gray-700 focus:border-indigo-500'}`}
+          value={formData.briefDescription}
+          aria-invalid={!!errors.briefDescription}
+          aria-describedby={errors.briefDescription ? 'brief-description-error' : undefined}
+          onChange={(e) => setFormData((d) => ({ ...d, briefDescription: e.target.value }))}
+        />
+        <FieldError id="brief-description-error" message={errors.briefDescription} />
+      </div>
+
+      <div>
+        <label htmlFor="deadline" className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
+          Deadline <span className="text-red-500">*</span>
+        </label>
+        <input
+          id="deadline"
+          type="date"
+          min={todayIso()}
+          className={`w-full bg-white dark:bg-gray-800 border rounded-lg px-4 py-2.5
+            text-gray-900 dark:text-white focus:outline-none transition-colors
+            ${errors.deadline ? 'border-red-500 focus:border-red-400' : 'border-gray-300 dark:border-gray-700 focus:border-indigo-500'}`}
+          value={formData.deadline}
+          aria-invalid={!!errors.deadline}
+          aria-describedby={errors.deadline ? 'deadline-error' : undefined}
+          onChange={(e) => setFormData((d) => ({ ...d, deadline: e.target.value }))}
+        />
+        <FieldError id="deadline-error" message={errors.deadline} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Step 3: Amount — token, total, milestones.
+ */
+function StepAmount({ formData, setFormData, errors, onAdd, onRemove, onUpdate }) {
+  return (
+    <div className="space-y-6">
+      <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Amount</h2>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label htmlFor="token" className="block text-sm text-gray-400 mb-1">
+          <label htmlFor="token" className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
             Token
           </label>
           <select
             id="token"
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white"
+            className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-4 py-2.5 text-gray-900 dark:text-white"
             value={formData.tokenAddress}
-            onChange={(event) =>
-              setFormData((data) => ({ ...data, tokenAddress: event.target.value }))
-            }
+            onChange={(e) => setFormData((d) => ({ ...d, tokenAddress: e.target.value }))}
           >
             <option value="usdc">USDC</option>
             <option value="xlm">XLM</option>
@@ -309,155 +414,173 @@ function StepCounterparty({ formData, setFormData, setTouched, amountError, desc
           </select>
         </div>
         <div>
-          <label htmlFor="total-amount" className="block text-sm text-gray-400 mb-1">
-            Total Amount
+          <label htmlFor="total-amount" className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
+            Total Amount <span className="text-red-500">*</span>
           </label>
           <XLMAmountInput
             id="total-amount"
             value={formData.totalAmount}
-            onChange={(event) => {
-              setFormData((data) => ({ ...data, totalAmount: event.target.value }));
-              setTouched((t) => ({ ...t, totalAmount: true }));
-            }}
-            onBlur={() => setTouched((t) => ({ ...t, totalAmount: true }))}
-            error={amountError}
+            onChange={(e) => setFormData((d) => ({ ...d, totalAmount: e.target.value }))}
+            error={errors.totalAmount}
             errorId="total-amount-error"
           />
+          <FieldError id="total-amount-error" message={errors.totalAmount} />
         </div>
       </div>
 
-      <div>
-        <label htmlFor="brief-description" className="block text-sm text-gray-400 mb-1">
-          Project Brief <span className="text-gray-600">(optional)</span>
-        </label>
-        <textarea
-          id="brief-description"
-          rows={3}
-          placeholder="Briefly describe the project scope and deliverables…"
-          className={`w-full bg-gray-800 border rounded-lg px-4 py-2.5
-                     text-white placeholder-gray-500 focus:outline-none resize-none transition-colors
-                     ${descriptionError ? 'border-red-500 focus:border-red-400' : 'border-gray-700 focus:border-indigo-500'}`}
-          value={formData.briefDescription}
-          aria-invalid={!!descriptionError}
-          aria-describedby={descriptionError ? 'brief-description-error' : undefined}
-          onChange={(event) => {
-            setFormData((data) => ({ ...data, briefDescription: event.target.value }));
-            setTouched((t) => ({ ...t, briefDescription: true }));
-          }}
-          onBlur={() => setTouched((t) => ({ ...t, briefDescription: true }))}
-        />
-        {descriptionError && (
-          <p id="brief-description-error" className="mt-1 text-xs text-red-400" role="alert">
-            {descriptionError}
-          </p>
-        )}
-        {/* TODO (contributor): upload to IPFS and store hash */}
-      </div>
-    </div>
-  );
-}
-
-/**
- * Step 2: Define milestones.
- */
-function StepMilestones({ formData, onAdd, onRemove, onUpdate }) {
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-white">Milestones</h2>
-        <span className="text-sm text-gray-500">
-          Total:{' '}
-          {formData.milestones.reduce((sum, milestone) => sum + Number(milestone.amount || 0), 0)} /{' '}
-          {formData.totalAmount || '—'} {String(formData.tokenAddress || 'USDC').toUpperCase()}
-        </span>
-      </div>
-
-      {formData.milestones.map((milestone, index) => (
-        <div key={index} className="bg-gray-800 rounded-lg p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-300">Milestone {index + 1}</span>
-            {formData.milestones.length > 1 && (
-              <button
-                type="button"
-                onClick={() => onRemove(index)}
-                className="text-red-400 text-sm hover:text-red-300"
-              >
-                Remove
-              </button>
-            )}
-          </div>
-          <input
-            type="text"
-            placeholder="Title (e.g. Initial Design Mockups)"
-            aria-label={`Milestone ${index + 1} title`}
-            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2
-                       text-white placeholder-gray-500 text-sm focus:outline-none focus:border-indigo-500"
-            value={milestone.title}
-            onChange={(event) => onUpdate(index, 'title', event.target.value)}
-          />
-          <textarea
-            rows={2}
-            placeholder="Milestone description"
-            aria-label={`Milestone ${index + 1} description`}
-            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2
-                       text-white placeholder-gray-500 text-sm focus:outline-none focus:border-indigo-500 resize-none"
-            value={milestone.description}
-            onChange={(event) => onUpdate(index, 'description', event.target.value)}
-          />
-          <div className="flex gap-2 items-center">
-            <XLMAmountInput
-              value={milestone.amount}
-              placeholder="Amount"
-              aria-label={`Milestone ${index + 1} amount`}
-              onChange={(event) => onUpdate(index, 'amount', event.target.value)}
-              inputClassName="w-32"
-              className="w-32"
-            />
-            <span className="text-gray-500 text-sm">
-              {String(formData.tokenAddress || 'USDC').toUpperCase()}
-            </span>
-          </div>
-        </div>
-      ))}
-
-      <button
-        type="button"
-        onClick={onAdd}
-        className="w-full border border-dashed border-gray-700 rounded-lg py-3
-                   text-gray-500 hover:text-gray-400 hover:border-gray-600 text-sm transition-colors"
-      >
-        + Add Milestone
-      </button>
-    </div>
-  );
-}
-
-/**
- * Step 3: Review summary before signing.
- */
-function StepReview({ formData }) {
-  const token = String(formData.tokenAddress || 'USDC').toUpperCase();
-
-  return (
-    <div className="space-y-4">
-      <h2 className="text-lg font-semibold text-white">Review Details</h2>
-      <div className="bg-gray-800 rounded-lg p-4 text-sm text-gray-400 space-y-2">
-        <p>
-          Freelancer: <span className="text-white">{formData.freelancerAddress || '—'}</span>
-        </p>
-        <p>
-          Total Amount:{' '}
-          <span className="text-white">
-            {formData.totalAmount || '—'} {token}
+      {/* Milestones */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Milestones</h3>
+          <span className="text-sm text-gray-500">
+            Total: {formData.milestones.reduce((s, m) => s + Number(m.amount || 0), 0)} /{' '}
+            {formData.totalAmount || '—'} {String(formData.tokenAddress || 'USDC').toUpperCase()}
           </span>
-        </p>
-        <p>
-          Milestones: <span className="text-white">{formData.milestones.length}</span>
-        </p>
+        </div>
+
+        {formData.milestones.map((milestone, index) => (
+          <div key={index} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Milestone {index + 1}
+              </span>
+              {formData.milestones.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => onRemove(index)}
+                  className="text-red-500 text-sm hover:text-red-400 min-h-[44px] px-2"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+            <input
+              type="text"
+              placeholder="Title (e.g. Initial Design Mockups)"
+              aria-label={`Milestone ${index + 1} title`}
+              className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2
+                text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-sm focus:outline-none focus:border-indigo-500"
+              value={milestone.title}
+              onChange={(e) => onUpdate(index, 'title', e.target.value)}
+            />
+            <textarea
+              rows={2}
+              placeholder="Milestone description"
+              aria-label={`Milestone ${index + 1} description`}
+              className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2
+                text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-sm focus:outline-none focus:border-indigo-500 resize-none"
+              value={milestone.description}
+              onChange={(e) => onUpdate(index, 'description', e.target.value)}
+            />
+            <div className="flex gap-2 items-center">
+              <XLMAmountInput
+                value={milestone.amount}
+                placeholder="Amount"
+                aria-label={`Milestone ${index + 1} amount`}
+                onChange={(e) => onUpdate(index, 'amount', e.target.value)}
+                className="w-32"
+                inputClassName="w-32"
+              />
+              <span className="text-gray-500 text-sm">
+                {String(formData.tokenAddress || 'USDC').toUpperCase()}
+              </span>
+            </div>
+          </div>
+        ))}
+
+        <button
+          type="button"
+          onClick={onAdd}
+          className="w-full border border-dashed border-gray-300 dark:border-gray-700 rounded-lg py-3
+            text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 hover:border-gray-400 dark:hover:border-gray-600 text-sm transition-colors min-h-[44px]"
+        >
+          + Add Milestone
+        </button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Step 4: Review — full summary before signing.
+ */
+function StepReview({ formData, buyerAddress }) {
+  const token = String(formData.tokenAddress || 'USDC').toUpperCase();
+  const milestoneTotal = formData.milestones.reduce((s, m) => s + Number(m.amount || 0), 0);
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Review Details</h2>
+
+      <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 text-sm space-y-3">
+        <section>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+            Parties
+          </p>
+          <p className="text-gray-600 dark:text-gray-400">
+            Buyer: <span className="text-gray-900 dark:text-white font-mono">{buyerAddress || '—'}</span>
+          </p>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">
+            Seller:{' '}
+            <span className="text-gray-900 dark:text-white font-mono">
+              {formData.sellerAddress || '—'}
+            </span>
+          </p>
+        </section>
+
+        <hr className="border-gray-200 dark:border-gray-700" />
+
+        <section>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Terms</p>
+          <p className="text-gray-600 dark:text-gray-400">
+            Description:{' '}
+            <span className="text-gray-900 dark:text-white">
+              {formData.briefDescription || '—'}
+            </span>
+          </p>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">
+            Deadline: <span className="text-gray-900 dark:text-white">{formData.deadline || '—'}</span>
+          </p>
+        </section>
+
+        <hr className="border-gray-200 dark:border-gray-700" />
+
+        <section>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+            Amount
+          </p>
+          <p className="text-gray-600 dark:text-gray-400">
+            Total:{' '}
+            <span className="text-gray-900 dark:text-white font-semibold">
+              {formData.totalAmount || '—'} {token}
+            </span>
+          </p>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">
+            Milestones:{' '}
+            <span className="text-gray-900 dark:text-white">{formData.milestones.length}</span>
+            {milestoneTotal > 0 && (
+              <span className="text-gray-500 ml-1">
+                ({milestoneTotal} {token} allocated)
+              </span>
+            )}
+          </p>
+          {formData.milestones.some((m) => m.title) && (
+            <ul className="mt-2 space-y-1 pl-4">
+              {formData.milestones
+                .filter((m) => m.title)
+                .map((m, i) => (
+                  <li key={i} className="text-gray-500 text-xs">
+                    {m.title} — {m.amount || '0'} {token}
+                  </li>
+                ))}
+            </ul>
+          )}
+        </section>
+      </div>
+
       <p className="text-xs text-gray-500">
         ⚠️ By proceeding, you authorize locking{' '}
-        <strong className="text-white">
+        <strong className="text-gray-900 dark:text-white">
           {formData.totalAmount || '0'} {token}
         </strong>{' '}
         in the escrow contract. This action cannot be undone without mutual agreement.
@@ -467,25 +590,28 @@ function StepReview({ formData }) {
 }
 
 /**
- * Step 4: Sign with Freighter.
- * TODO (contributor — Issue #33): build and sign the Soroban transaction
+ * Step 5: Confirm & Sign with Freighter.
  */
-function StepSign({ error }) {
+function StepConfirm({ error }) {
   return (
     <div className="space-y-4 text-center">
-      <h2 className="text-lg font-semibold text-white">Sign & Submit</h2>
-      <p className="text-gray-400 text-sm">
+      <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Confirm & Sign</h2>
+      <p className="text-gray-600 dark:text-gray-400 text-sm">
         Clicking the button below will open your Freighter wallet to sign the transaction. Your
         funds will be locked on-chain once confirmed.
       </p>
       {error && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm">
+        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-600 dark:text-red-400 text-sm">
           {error}
         </div>
       )}
-      <p className="text-xs text-amber-400">
+      <p className="text-xs text-amber-600 dark:text-amber-400">
         🚧 Freighter integration is not yet implemented — see Issue #33
       </p>
     </div>
   );
+}
+
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
 }

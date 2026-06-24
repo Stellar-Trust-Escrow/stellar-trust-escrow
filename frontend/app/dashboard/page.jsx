@@ -100,7 +100,7 @@ export default function DashboardPage() {
                 href="/escrow/create"
                 variant="primary"
                 data-tour="create-escrow"
-                className="focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-950 rounded-lg"
+                className="min-h-[44px] focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-950 rounded-lg"
               >
                 + {t('escrow.create')}
               </Button>
@@ -131,7 +131,7 @@ export default function DashboardPage() {
           <section aria-label="Active escrow agreements" data-tour="disputes">
             <h2 className="text-lg font-semibold text-white mb-4">Your Active Escrows</h2>
             {escrowsLoading ? (
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <CardSkeleton />
                 <CardSkeleton />
                 <CardSkeleton />
@@ -141,7 +141,7 @@ export default function DashboardPage() {
                 <p className="text-gray-400 font-medium">No active escrows yet.</p>
               </div>
             ) : (
-              <div className="grid gap-4 md:grid-cols-2" role="list">
+              <div className="grid gap-4 sm:grid-cols-2" role="list">
                 {escrows.map((escrow) => (
                   <div key={escrow.id} role="listitem">
                     <EscrowCard escrow={escrow} />

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Search, SlidersHorizontal, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import Spinner from '../../components/ui/Spinner';
 import EscrowCard from '../../components/escrow/EscrowCard';
+import EscrowCardSkeleton from '../../components/ui/EscrowCardSkeleton';
 import SearchFilters from '../../components/explorer/SearchFilters';
 import Button from '../../components/ui/Button';
 import EmptyState from '../../components/ui/EmptyState';
@@ -194,9 +195,10 @@ function ExplorerContent() {
 
         <div className="flex-1 min-w-0">
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-24 gap-4 text-gray-400">
-              <Spinner />
-              <p className="text-sm">Loading escrows...</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <EscrowCardSkeleton key={i} />
+              ))}
             </div>
           ) : error ? (
             <div className="text-center py-16">
