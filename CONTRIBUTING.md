@@ -483,3 +483,57 @@ npx playwright install --with-deps chromium firefox
 ```
 
 Questions are welcome in the issue tracker or pull request discussion. Small first contributions are absolutely fine.
+
+---
+
+## Versioning Policy
+
+This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html) (`MAJOR.MINOR.PATCH`).
+
+### What triggers each version component
+
+| Component | When to increment | Examples |
+|---|---|---|
+| MAJOR | Breaking change — existing integrations must change to upgrade | Renamed API field, removed endpoint, contract storage migration, changed JWT format |
+| MINOR | New backward-compatible feature | New endpoint, new optional field, new contract function that doesn't break existing callers |
+| PATCH | Bug fix or internal improvement that doesn't change the API contract | Fixed off-by-one in pagination, improved error message, dependency security patch |
+
+A **breaking change** is any change that requires callers to update their code or data to continue working. When in doubt, treat it as breaking.
+
+### CHANGELOG maintenance
+
+- The CHANGELOG is updated **manually** as part of every PR that changes behaviour.
+- Every entry goes under `## [Unreleased]` until a release is cut.
+- Follow the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format: subsections are `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`.
+- Include the PR or issue number in parentheses: `- Added foo bar (#123)`.
+- Do **not** auto-generate the CHANGELOG from commit messages — the audience is integrators, not Git history readers.
+
+### Release process
+
+1. Create a `release/vX.Y.Z` branch from `develop`.
+2. Move all entries from `## [Unreleased]` to a new `## [X.Y.Z] - YYYY-MM-DD` section in `CHANGELOG.md`.
+3. Update the comparison link at the bottom of `CHANGELOG.md`.
+4. Open a PR targeting `main`. Title: `release: vX.Y.Z`.
+5. After merge, create a Git tag: `git tag -a vX.Y.Z -m "Release vX.Y.Z"` and push it.
+6. Publish a GitHub Release using the CHANGELOG section as the body.
+7. The `.github/workflows/release.yml` workflow validates that the CHANGELOG contains an entry for the tag being released.
+
+### CHANGELOG entry format example
+
+```markdown
+## [3.0.0] - 2026-09-01
+
+> **Breaking change:** Renamed `client_address` to `clientAddress` in all API responses.
+
+### Added
+- `GET /api/escrows/:id/timeline` — ordered list of on-chain events for an escrow (#201)
+
+### Changed
+- Renamed `client_address` field to `clientAddress` in escrow API responses (#200)
+
+### Fixed
+- Cursor pagination no longer skips the last record on page boundaries (#199)
+
+### Security
+- Upgraded `@stellar/stellar-sdk` to address CVE-2026-XXXX (#198)
+```

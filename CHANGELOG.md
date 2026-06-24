@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ProposalAlreadyCancelled` error variant (code 21) in `GovError` (#659)
 - Guard in `cancel_proposal` that returns `ProposalAlreadyCancelled` when the proposal is already in `Cancelled` state (#659)
 - Pause test coverage for `reject_milestone`, `release_funds`, `start_timelock`, `extend_lock_time`, and `process_recurring_payments` returning `ContractPaused` (#660)
+- GitHub Actions step in `release.yml` validates CHANGELOG contains an entry matching the release tag before publishing
 
 ## [2.0.0] - 2026-04-21
 
