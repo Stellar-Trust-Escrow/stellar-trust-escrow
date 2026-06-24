@@ -61,7 +61,7 @@ export default function EscrowCard({ escrow, isLoading = false }) {
       {/* Header Row */}
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex-1 min-w-0">
-          <h3 className="text-white font-semibold truncate group-hover:text-indigo-400 transition-colors">
+          <h3 className="text-gray-900 dark:text-white font-semibold truncate group-hover:text-indigo-400 transition-colors">
             {title}
           </h3>
           <p className="text-xs text-gray-500 mt-0.5">
@@ -85,7 +85,7 @@ export default function EscrowCard({ escrow, isLoading = false }) {
           <span>{t('escrow.fields.milestones')}</span>
           <span>{milestoneProgress}</span>
         </div>
-        <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden shadow-inner">
+        <div className="w-full h-2 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden shadow-inner">
           <div
             className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500 ease-out"
             style={{ width: `${progressPct}%` }}
@@ -95,7 +95,7 @@ export default function EscrowCard({ escrow, isLoading = false }) {
 
       {/* Transaction Hash */}
       {transactionHash && (
-        <div className="mt-3 pt-3 border-t border-gray-800">
+        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-800">
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs text-gray-500">TX:</span>
             <span className="text-xs font-mono text-gray-400 truncate">
@@ -109,7 +109,7 @@ export default function EscrowCard({ escrow, isLoading = false }) {
       )}
 
       {/* Footer */}
-      <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-800">
+      <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-200 dark:border-gray-800">
         <span className="text-xs text-gray-600">#{id}</span>
         <span
           className={`text-xs font-medium ${

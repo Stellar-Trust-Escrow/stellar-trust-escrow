@@ -75,23 +75,23 @@ export default function Modal({
 
       {/* Panel */}
       <div
-        className={`relative w-full ${SIZE_CLASSES[size]} bg-gray-900 border border-gray-800
+        className={`relative w-full ${SIZE_CLASSES[size]} bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800
                     rounded-2xl shadow-2xl p-6 space-y-4`}
       >
         {/* Header */}
         <div className="flex items-start justify-between">
           {title && (
-            <h2 id="modal-title" className="text-lg font-semibold text-white">
+            <h2 id="modal-title" className="text-lg font-semibold text-gray-900 dark:text-white">
               {title}
             </h2>
           )}
           {/* Accessibility: aria-label describes action; focus-visible ring for keyboard users */}
           <button
             onClick={onClose}
-            className="ml-auto text-gray-500 hover:text-white transition-colors p-1 rounded-lg
-                       hover:bg-gray-800 focus:outline-none focus-visible:ring-2
+            className="ml-auto text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors p-1 rounded-lg
+                       hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none focus-visible:ring-2
                        focus-visible:ring-indigo-500 focus-visible:ring-offset-2
-                       focus-visible:ring-offset-gray-900"
+                       focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
             aria-label="Close modal"
             type="button"
           >
@@ -104,7 +104,7 @@ export default function Modal({
 
         {/* Footer with Confirmation Buttons */}
         {isConfirmation && (
-          <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-800">
+          <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-200 dark:border-gray-800">
             <Button variant="secondary" className="flex-1" onClick={onClose}>
               {cancelLabel}
             </Button>

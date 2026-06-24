@@ -204,7 +204,20 @@ export default function AdminDisputesPage() {
 
       <div className="flex flex-col gap-3">
         {loading ? (
-          <div className="text-center py-12 text-gray-500">Loading…</div>
+          <div className="flex flex-col gap-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="card space-y-3 animate-pulse">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-2 flex-1">
+                    <div className="h-4 bg-gray-300 dark:bg-gray-700 rounded w-32" />
+                    <div className="h-3 bg-gray-200 dark:bg-gray-800 rounded w-48" />
+                    <div className="h-3 bg-gray-200 dark:bg-gray-800 rounded w-full" />
+                  </div>
+                  <div className="h-8 w-20 bg-gray-300 dark:bg-gray-700 rounded-lg" />
+                </div>
+              </div>
+            ))}
+          </div>
         ) : disputes.length === 0 ? (
           <div className="card text-center py-12 text-gray-500">No disputes found.</div>
         ) : (

@@ -11,9 +11,11 @@ import { cn } from '../../lib/utils';
 
 const variantClasses = {
   primary: 'bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500',
-  secondary: 'bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700',
-  danger: 'bg-red-900/30 hover:bg-red-900/50 text-red-400 border border-red-800',
-  ghost: 'bg-transparent hover:bg-gray-800 text-gray-400 border border-transparent',
+  secondary:
+    'bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-700',
+  danger: 'bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 border border-red-300 dark:border-red-800',
+  ghost:
+    'bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 border border-transparent',
 };
 
 const sizeClasses = {

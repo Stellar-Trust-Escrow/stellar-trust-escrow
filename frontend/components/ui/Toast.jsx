@@ -30,9 +30,9 @@ export default function Toast({ message, type = 'success', onClose, duration = 4
   };
 
   const bgColors = {
-    success: 'bg-gray-900 border-green-500',
-    error: 'bg-gray-900 border-red-500',
-    info: 'bg-gray-900 border-blue-500',
+    success: 'bg-white dark:bg-gray-900 border-green-500',
+    error: 'bg-white dark:bg-gray-900 border-red-500',
+    info: 'bg-white dark:bg-gray-900 border-blue-500',
   };
 
   return (
@@ -42,10 +42,10 @@ export default function Toast({ message, type = 'success', onClose, duration = 4
       aria-live="assertive"
     >
       {icons[type]}
-      <p className="text-white text-sm font-medium">{message}</p>
+      <p className="text-gray-900 dark:text-white text-sm font-medium">{message}</p>
       <button
         onClick={onClose}
-        className="ml-2 text-gray-400 hover:text-white transition-colors"
+        className="ml-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
         aria-label="Close notification"
       >
         <X className="w-4 h-4" />

@@ -21,8 +21,8 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 function SkeletonCard() {
   return (
     <div className="card animate-pulse">
-      <div className="h-3 w-20 bg-gray-700 rounded mb-3" />
-      <div className="h-8 w-16 bg-gray-700 rounded" />
+      <div className="h-3 w-20 bg-gray-300 dark:bg-gray-700 rounded mb-3" />
+      <div className="h-8 w-16 bg-gray-300 dark:bg-gray-700 rounded" />
     </div>
   );
 }
@@ -54,7 +54,7 @@ function SuccessRateChart({ rate }) {
                 <Tooltip
                   formatter={(v) => [`${v}%`, 'Success']}
                   contentStyle={{
-                    background: '#1f2937',
+                    background: 'var(--color-bg-elevated, #1f2937)',
                     border: 'none',
                     borderRadius: 8,
                     fontSize: 12,

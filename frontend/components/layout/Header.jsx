@@ -85,7 +85,7 @@ export default function Header() {
 
             {/* Hamburger — mobile only */}
             <button
-              className="md:hidden text-gray-400 hover:text-white p-1 rounded transition-colors"
+              className="md:hidden text-gray-400 hover:text-white p-1 rounded transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
               aria-label="Open navigation menu"
               aria-expanded={isMobileMenuOpen}
               onClick={() => setIsMobileMenuOpen(true)}
@@ -103,27 +103,6 @@ export default function Header() {
             </button>
           </div>
         </div>
-
-        {/* Mobile Nav */}
-        {isMobileMenuOpen && (
-          <nav className="md:hidden py-4 border-t border-gray-200 dark:border-gray-800 flex flex-col gap-4">
-            <Link
-              href="/dashboard"
-              className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors px-2"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              {t('nav.dashboard')}
-            </Link>
-            <Link
-              href="/explorer"
-              className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors px-2"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              {t('nav.explorer')}
-            </Link>
-          </nav>
-        )}
-      </div>
 
       <MobileDrawer isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />
     </header>

@@ -34,8 +34,8 @@ import ReputationBadge from '../../../components/ui/ReputationBadge';
 import CurrencyAmount from '../../../components/ui/CurrencyAmount';
 import TransactionHash from '../../../components/ui/TransactionHash';
 import Avatar from '../../../components/ui/Avatar';
-import {
-  buildApproveMilestoneTx,
+import Skeleton from '../../../components/ui/Skeleton';
+import Skeleton from '../../../components/ui/Skeleton';
   buildSubmitMilestoneTx,
   buildRaiseDisputeTx,
   broadcastTransaction,
@@ -201,11 +201,7 @@ export default function EscrowDetailPage({ params }) {
   };
 
   if (isLoading && !fetchedEscrow) {
-    return (
-      <div className="flex items-center justify-center min-h-[40vh] text-gray-400">
-        Loading escrow…
-      </div>
-    );
+    return <EscrowDetailSkeleton />;
   }
 
   return (
@@ -254,7 +250,7 @@ export default function EscrowDetailPage({ params }) {
       </div>
 
       {/* Info Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         <InfoCell label="Total" value={escrow.totalAmount} isAmount />
         <InfoCell label="Remaining" value={escrow.remainingBalance} isAmount />
         <InfoCell label="Created" value={escrow.createdAt} />
@@ -315,6 +311,56 @@ export default function EscrowDetailPage({ params }) {
         escrowId={id}
         onConfirm={handleCancelEscrow}
       />
+    </div>
+  );
+}
+
+function EscrowDetailSkeleton() {
+  return (
+    <div className="space-y-8 max-w-4xl mx-auto" aria-busy="true" aria-label="Loading escrow details">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+        <div className="space-y-2">
+          <Skeleton variant="heading" className="w-64" />
+          <Skeleton variant="text" className="w-24" />
+        </div>
+        <div className="flex gap-2">
+          <Skeleton className="h-9 w-28 rounded-lg" />
+          <Skeleton className="h-9 w-32 rounded-lg" />
+        </div>
+      </div>
+      {/* Info Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="card py-3 space-y-2">
+            <Skeleton variant="text" className="w-16 h-3" />
+            <Skeleton variant="text" className="w-24 h-5" />
+          </div>
+        ))}
+      </div>
+      {/* Parties */}
+      <div className="card grid grid-cols-1 md:grid-cols-2 gap-6">
+        {Array.from({ length: 2 }).map((_, i) => (
+          <div key={i} className="space-y-2">
+            <Skeleton variant="text" className="w-16 h-3" />
+            <div className="flex items-center gap-3">
+              <Skeleton className="w-10 h-10 rounded-full" />
+              <Skeleton variant="text" className="w-40 h-4" />
+            </div>
+          </div>
+        ))}
+      </div>
+      {/* Milestones */}
+      <div className="space-y-3">
+        <Skeleton variant="heading" className="w-28" />
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="card space-y-2">
+            <Skeleton variant="text" className="w-48 h-4" />
+            <Skeleton variant="text" className="w-full h-3" />
+            <Skeleton variant="text" className="w-20 h-3" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
