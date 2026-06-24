@@ -456,7 +456,7 @@ jobs:
 
       - name: Install Playwright browsers
         if: steps.changes.outputs.changed == 'true'
-        run: npx playwright install --with-deps chromium firefox
+        run: npx playwright install --with-deps chromium
         working-directory: frontend
 
       - name: Build frontend
