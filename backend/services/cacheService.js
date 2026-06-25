@@ -174,11 +174,42 @@ async function invalidatePrefix(prefix) {
 
   stats.invalidations++;
   if (redisReady) {
-    const keys = await redis.keys(`${scopedPrefix}*`).catch(() => []);
-    if (keys.length) await redis.del(keys).catch(() => null);
+    // Use SCAN (cursor-based) instead of KEYS to avoid blocking Redis
+    let cursor = 0;
+    do {
+      const result = await redis
+        .scan(cursor, { MATCH: `${scopedPrefix}*`, COUNT: 100 })
+        .catch(() => ({ cursor: 0, keys: [] }));
+      cursor = result.cursor;
+      if (result.keys.length) await redis.del(result.keys).catch(() => null);
+    } while (cursor !== 0);
   }
   for (const key of mem.keys()) {
     if (key.startsWith(scopedPrefix)) mem.del(key);
+  }
+}
+
+/**
+ * Delete every cached entry belonging to a tenant without blocking Redis.
+ * Scans for `tenant:<slug>:*` keys using cursor-based SCAN iteration.
+ * Safe to call on tenant deletion or suspension.
+ *
+ * @param {string} slug  — tenant slug (e.g. "acme")
+ */
+async function flushTenant(slug) {
+  const prefix = `tenant:${slug}:`;
+  if (redisReady) {
+    let cursor = 0;
+    do {
+      const result = await redis
+        .scan(cursor, { MATCH: `${prefix}*`, COUNT: 100 })
+        .catch(() => ({ cursor: 0, keys: [] }));
+      cursor = result.cursor;
+      if (result.keys.length) await redis.del(result.keys).catch(() => null);
+    } while (cursor !== 0);
+  }
+  for (const key of mem.keys()) {
+    if (key.startsWith(prefix)) mem.del(key);
   }
 }
 
@@ -240,6 +271,7 @@ export default {
   setWithTags,
   invalidate,
   invalidatePrefix,
+  flushTenant,
   invalidateTag,
   invalidateTags,
   warm,

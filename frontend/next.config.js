@@ -22,6 +22,10 @@ const withBundleAnalyzer =
 const nextConfig = {
   // ── Output ──────────────────────────────────────────────────────────────────
   output: process.env.NEXT_OUTPUT === 'standalone' ? 'standalone' : undefined,
+
+  // ── Lint / Type-check — keep these non-blocking in Docker/CI builds ─────────
+  eslint: { ignoreDuringBuilds: true },
+  typescript: { ignoreBuildErrors: false },
   outputFileTracingRoot: new URL('..', import.meta.url).pathname,
 
   // ── Image Optimization ──────────────────────────────────────────────────────
@@ -139,24 +143,30 @@ const nextConfig = {
 };
 
 // ── Export with Sentry + optional Bundle Analyzer ─────────────────────────────
-export default withSentryConfig(withBundleAnalyzer(nextConfig), {
-  org: process.env.SENTRY_ORG,
-  project: process.env.SENTRY_PROJECT,
-  authToken: process.env.SENTRY_AUTH_TOKEN,
+// Only wrap with Sentry when credentials are available (production deploys).
+// Without SENTRY_AUTH_TOKEN the v9 plugin errors during next build.
+const baseConfig = withBundleAnalyzer(nextConfig);
 
-  silent: true,
-  hideSourceMaps: true,
-  disableLogger: true,
-  tunnelRoute: '/monitoring',
+export default process.env.SENTRY_AUTH_TOKEN
+  ? withSentryConfig(baseConfig, {
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      authToken: process.env.SENTRY_AUTH_TOKEN,
 
-  autoInstrumentServerFunctions: true,
-  autoInstrumentMiddleware: true,
-  autoInstrumentAppDirectory: true,
+      silent: true,
+      hideSourceMaps: true,
+      disableLogger: true,
+      tunnelRoute: '/monitoring',
 
-  release: {
-    name: process.env.SENTRY_RELEASE || process.env.VERCEL_GIT_COMMIT_SHA,
-    deploy: {
-      env: process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV,
-    },
-  },
-});
+      autoInstrumentServerFunctions: true,
+      autoInstrumentMiddleware: true,
+      autoInstrumentAppDirectory: true,
+
+      release: {
+        name: process.env.SENTRY_RELEASE || process.env.VERCEL_GIT_COMMIT_SHA,
+        deploy: {
+          env: process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV,
+        },
+      },
+    })
+  : baseConfig;

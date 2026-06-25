@@ -6,7 +6,7 @@
  */
 
 import axios from 'axios';
-import { storage } from './storage';
+import { storage, STORAGE_KEYS } from './storage';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:4000';
 

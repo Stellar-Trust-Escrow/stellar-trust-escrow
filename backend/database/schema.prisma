@@ -350,6 +350,11 @@ model Dispute {
   @@index([resolvedAt])
   // Composite index for listing disputes sorted by raisedAt with resolution filter
   @@index([resolvedAt, raisedAt(sort: Desc)])
+  // Covers the admin listDisputes query: filter by tenant + resolution status, sort by raisedAt.
+  // Without this, Postgres must seq-scan the entire tenant partition then sort.
+  @@index([tenantId, resolvedAt, raisedAt(sort: Desc)])
+  // Covers raisedBy filter + date sort within a tenant (dispute history per freelancer)
+  @@index([tenantId, raisedByAddress, raisedAt(sort: Desc)])
   @@map("disputes")
 }
 

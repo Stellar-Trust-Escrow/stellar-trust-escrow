@@ -1,4 +1,4 @@
-import { validationResult, query, param } from 'express-validator';
+import { validationResult, query, param, body } from 'express-validator';
 
 /** Maximum unsigned 64-bit integer (inclusive) for on-chain / DB escrow identifiers. */
 const U64_MAX = 18446744073709551615n;
@@ -81,4 +81,60 @@ export const disputeEscrowIdParamRules = [
         throw new Error('escrowId must be a valid escrow identifier');
       }
     }),
+];
+
+// ── Search API schemas ────────────────────────────────────────────────────────
+
+const SEARCH_MAX_Q_LENGTH = 200;
+
+/**
+ * GET /api/search — query parameters
+ *
+ * | Field  | Required | Type    | Rules                             |
+ * |--------|----------|---------|-----------------------------------|
+ * | q      | no       | string  | max 200 chars, stripped of control chars |
+ * | limit  | no       | integer | 1 ≤ limit ≤ 100                   |
+ * | from   | no       | integer | 0 ≤ from                          |
+ */
+export const searchQueryRules = [
+  query('q')
+    .optional({ values: 'falsy' })
+    .isString()
+    .withMessage('q must be a string')
+    .isLength({ max: SEARCH_MAX_Q_LENGTH })
+    .withMessage(`q must not exceed ${SEARCH_MAX_Q_LENGTH} characters`)
+    // Strip ASCII control characters (U+0000–U+001F and DEL) that could
+    // pollute log output or corrupt Elasticsearch query strings.
+    // eslint-disable-next-line no-control-regex
+    .customSanitizer((v) => v.replace(/[\x00-\x1F\x7F]/g, '')),
+  query('limit')
+    .optional({ values: 'falsy' })
+    .isInt({ min: 1, max: 100 })
+    .withMessage('limit must be an integer between 1 and 100'),
+  query('from')
+    .optional({ values: 'falsy' })
+    .isInt({ min: 0 })
+    .withMessage('from must be a non-negative integer'),
+];
+
+// ── Webhook API schemas ───────────────────────────────────────────────────────
+
+/**
+ * POST /api/webhooks/subscribe — request body
+ *
+ * | Field      | Required | Type     | Rules                         |
+ * |------------|----------|----------|-------------------------------|
+ * | url        | yes      | string   | valid HTTPS URL               |
+ * | eventTypes | yes      | string[] | non-empty, max 20 items       |
+ */
+export const webhookSubscribeRules = [
+  body('url')
+    .notEmpty()
+    .withMessage('url is required')
+    .isURL({ protocols: ['https'], require_protocol: true })
+    .withMessage('url must be a valid HTTPS URL'),
+  body('eventTypes')
+    .isArray({ min: 1, max: 20 })
+    .withMessage('eventTypes must be a non-empty array with at most 20 entries'),
+  body('eventTypes.*').isString().withMessage('each eventType must be a string'),
 ];

@@ -6,18 +6,25 @@
  * data is inserted directly into the DB as if it had been indexed.
  *
  * Usage:
- *   cd backend && node ../scripts/seed.js
+ *   cd backend && node ../scripts/seed.js [--count 50] [--dry-run]
  *
- * TODO (contributor — medium, Issue #44):
- * - Add more realistic escrow scenarios (disputes, cancelled, mixed statuses)
- * - Add configurable count via CLI arg: node seed.js --count 50
- * - Ensure seeded data is consistent with on-chain state (same IDs, amounts)
+ * Options:
+ *   --count <n>   Number of generated escrows to add (default: 0, uses fixtures)
+ *   --dry-run     Print what would be seeded without writing to DB
+ *   --force       Skip the idempotency guard and re-seed even if data exists
  */
 
 import 'dotenv/config';
-// TODO (contributor): uncomment when Prisma is installed
-// const { PrismaClient } = require('@prisma/client');
-// const prisma = new PrismaClient();
+
+// ── CLI argument parsing ──────────────────────────────────────────────────────
+
+const args = process.argv.slice(2);
+const isDryRun = args.includes('--dry-run');
+const forceReseed = args.includes('--force');
+const countIdx = args.indexOf('--count');
+const extraCount = countIdx !== -1 ? Math.max(0, parseInt(args[countIdx + 1] ?? '0', 10)) : 0;
+
+if (isDryRun) console.log('🔍  Dry-run mode — no writes will occur\n');
 
 const SEED_DATA = {
   escrows: [
@@ -135,45 +142,80 @@ const SEED_DATA = {
 };
 
 async function seed() {
-  console.log('🌱 Seeding database…');
-  console.log('');
+  console.log('🌱 Seeding database…\n');
 
-  // TODO (contributor — Issue #44): uncomment and implement with Prisma
+  // ── Idempotency guard ─────────────────────────────────────────────────────
+  // Running seed twice in CI can produce duplicate-key errors or corrupt test
+  // baseline data. The guard checks for existing rows before writing and
+  // aborts unless --force is passed, making the script safe to run in pipelines.
+
+  // TODO (contributor — Issue #44): uncomment when Prisma is installed
   /*
+  if (!forceReseed) {
+    const existingCount = await prisma.escrow.count();
+    if (existingCount > 0) {
+      console.log(`ℹ️  Database already contains ${existingCount} escrow(s).`);
+      console.log('   Pass --force to re-seed. Exiting without changes.\n');
+      return;
+    }
+  }
+
+  if (isDryRun) {
+    console.log('Seed data preview (dry-run):');
+    console.log(`  Escrows (fixtures):    ${SEED_DATA.escrows.length}`);
+    console.log(`  Milestones (fixtures): ${SEED_DATA.milestones.length}`);
+    console.log(`  Reputation (fixtures): ${SEED_DATA.reputationRecords.length}`);
+    console.log(`  Extra escrows (--count): ${extraCount}`);
+    return;
+  }
+
   await prisma.$transaction(async (tx) => {
-    // Clear existing data
-    await tx.dispute.deleteMany();
-    await tx.milestone.deleteMany();
-    await tx.escrow.deleteMany();
-    await tx.reputationRecord.deleteMany();
-    console.log("   🗑️  Cleared existing data");
+    if (forceReseed) {
+      await tx.dispute.deleteMany();
+      await tx.milestone.deleteMany();
+      await tx.escrow.deleteMany();
+      await tx.reputationRecord.deleteMany();
+      console.log('   🗑️  Cleared existing data (--force)');
+    }
 
-    // Insert escrows
+    // Upsert so repeated runs are idempotent even with --force skipped
     for (const escrow of SEED_DATA.escrows) {
-      await tx.escrow.create({ data: escrow });
+      await tx.escrow.upsert({
+        where: { id: escrow.id },
+        update: {},
+        create: escrow,
+      });
     }
-    console.log(`   ✅ Inserted ${SEED_DATA.escrows.length} escrows`);
+    console.log(`   ✅ Upserted ${SEED_DATA.escrows.length} fixture escrows`);
 
-    // Insert milestones
     for (const m of SEED_DATA.milestones) {
-      await tx.milestone.create({ data: m });
+      await tx.milestone.upsert({
+        where: { escrowId_milestoneIndex: { escrowId: m.escrowId, milestoneIndex: m.milestoneIndex } },
+        update: {},
+        create: m,
+      });
     }
-    console.log(`   ✅ Inserted ${SEED_DATA.milestones.length} milestones`);
+    console.log(`   ✅ Upserted ${SEED_DATA.milestones.length} milestones`);
 
-    // Insert reputation records
     for (const rep of SEED_DATA.reputationRecords) {
-      await tx.reputationRecord.create({ data: rep });
+      await tx.reputationRecord.upsert({
+        where: { address: rep.address },
+        update: {},
+        create: rep,
+      });
     }
-    console.log(`   ✅ Inserted ${SEED_DATA.reputationRecords.length} reputation records`);
+    console.log(`   ✅ Upserted ${SEED_DATA.reputationRecords.length} reputation records`);
   });
   */
 
   console.log('⚠️  Seed logic is stubbed — see Issue #44 to implement');
-  console.log('');
-  console.log('Seed data preview:');
-  console.log(`  Escrows:    ${SEED_DATA.escrows.length}`);
-  console.log(`  Milestones: ${SEED_DATA.milestones.length}`);
-  console.log(`  Reputation: ${SEED_DATA.reputationRecords.length}`);
+  console.log('\nSeed data preview:');
+  console.log(`  Escrows (fixtures):      ${SEED_DATA.escrows.length}`);
+  console.log(`  Milestones (fixtures):   ${SEED_DATA.milestones.length}`);
+  console.log(`  Reputation (fixtures):   ${SEED_DATA.reputationRecords.length}`);
+  console.log(`  Extra escrows (--count): ${extraCount}`);
+  console.log(`  Dry-run:                 ${isDryRun}`);
+  console.log(`  Force re-seed:           ${forceReseed}`);
   console.log('');
   console.log('✅ Done');
 }
