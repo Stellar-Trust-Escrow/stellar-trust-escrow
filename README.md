@@ -660,6 +660,40 @@ Being honest about where things stand:
 
 ---
 
+## Changelog
+
+All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+
+### [Unreleased]
+
+#### Added
+- Changelog section added to README for GitHub diff tracking
+- Roadmap phases 2–4 documented
+
+#### Planned
+- Full milestone state machine on-chain (Phase 2)
+- Multi-sig arbiter resolution (Phase 2)
+- DAO-gated milestone approval (Phase 3)
+
+### [0.1.0] — 2026-06-24
+
+#### Added
+- Soroban escrow contract skeleton (`contracts/escrow_contract/`)
+- Express.js REST API with JWT auth, MFA, rate limiting, and tenant scoping
+- PostgreSQL schema via Prisma with tracked migrations
+- Redis cache with in-memory fallback
+- BullMQ webhook delivery system with exponential backoff
+- Elasticsearch full-text search with Prisma `ILIKE` fallback
+- Next.js 14 web dashboard with Freighter wallet integration
+- Expo / React Native mobile app with biometric auth and offline SQLite cache
+- 39 Jest test suites (425 tests)
+- Pre-push Git hook enforcing tests and branch naming conventions
+- `scripts/preflight.js` for pre-deploy environment validation
+- Docker Compose setup for PostgreSQL + Redis + local Stellar node
+- `scripts/start-sandbox.sh` for local Soroban contract deployment
+
+---
+
 ## License
 
 MIT — see [LICENSE](LICENSE) for the full text.
