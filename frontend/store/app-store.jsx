@@ -10,6 +10,7 @@ import {
   useRef,
 } from 'react';
 import { appReducer, createInitialAppState, loadPersistedState, persistState } from './state';
+import { getToken, setToken as persistToken, clearToken as clearPersistedToken } from '../lib/auth/token';
 
 const defaultState = createInitialAppState();
 
@@ -23,6 +24,8 @@ const defaultValue = {
       finishConnect: () => {},
       setConnectError: () => {},
       disconnect: () => {},
+      setToken: () => {},
+      clearToken: () => {},
     },
     admin: {
       setApiKey: () => {},
@@ -69,9 +72,17 @@ export function AppStoreProvider({ children }) {
 
   useEffect(() => {
     const storage = getBrowserStorage();
+    const persisted = loadPersistedState(storage);
     dispatch({
       type: 'APP/HYDRATE',
-      payload: loadPersistedState(storage),
+      payload: {
+        ...persisted,
+        wallet: {
+          ...persisted.wallet,
+          token: getToken(),
+          isHydrated: true,
+        },
+      },
     });
   }, []);
 
@@ -102,7 +113,16 @@ export function AppStoreProvider({ children }) {
           dispatchWithDevtools({ type: 'WALLET/CONNECT_ERROR', payload: message });
         },
         disconnect: () => {
+          clearPersistedToken();
           dispatchWithDevtools({ type: 'WALLET/DISCONNECT' });
+        },
+        setToken: (token) => {
+          persistToken(token);
+          dispatchWithDevtools({ type: 'WALLET/SET_TOKEN', payload: token });
+        },
+        clearToken: () => {
+          clearPersistedToken();
+          dispatchWithDevtools({ type: 'WALLET/CLEAR_TOKEN' });
         },
       },
       admin: {

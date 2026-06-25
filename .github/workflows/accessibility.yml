@@ -13,6 +13,10 @@ permissions:
 env:
   HUSKY: 0
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   accessibility:
     name: Accessibility Scan (WCAG 2.1 AA)

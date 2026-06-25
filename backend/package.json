@@ -8,7 +8,7 @@
     "dev": "nodemon server.js",
     "build": "echo 'No build step required for backend'",
     "start": "node server.js",
-    "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --runInBand --passWithNoTests",
+    "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --runInBand --passWithNoTests --forceExit",
     "test:chaos": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --runInBand --testPathPattern=tests/chaos --passWithNoTests",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

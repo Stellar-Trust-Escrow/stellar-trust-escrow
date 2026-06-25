@@ -12,6 +12,10 @@ permissions:
 env:
   HUSKY: 0
 
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
 jobs:
   stress-test:
     name: Nightly Stress Testing

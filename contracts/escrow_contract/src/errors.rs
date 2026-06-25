@@ -59,8 +59,9 @@ pub enum EcErr {
     E63 = 63,
     /// A checked arithmetic operation (add/mul/cast) overflowed.
     ArithmeticOverflow = 64,
-    /// Oracle-based USD conversion overflowed or could not be completed.
-    OraclePriceConversionFailed = 65,
+    OracleStaleFeed = 67,
+    OracleInvalidPrice = 68,
+    OraclePriceConversionFailed = 69,
 }
 
 pub use self::EcErr as EscrowError;

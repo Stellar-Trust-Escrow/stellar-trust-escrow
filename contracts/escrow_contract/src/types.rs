@@ -746,6 +746,8 @@ pub enum DataKey {
     PlatformFeeSnapshot(u64),
     /// Escrow frozen flag (security freeze) — key: u64, value: bool
     EscrowFrozen(u64),
+    /// Oracle staleness threshold configuration — value: u64
+    OracleStaleThreshold,
     /// Dispute resolution oracle payload by escrow ID — key: u64, value: OracleResolutionPayload
     OracleResolution(u64),
     /// Trusted oracle Ed25519 public key for fallback dispute resolution — value: BytesN<32>

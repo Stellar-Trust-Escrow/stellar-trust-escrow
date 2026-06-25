@@ -8,6 +8,10 @@ on:
     # Run weekly on Monday at 6 AM UTC
     - cron: '0 6 * * 1'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   audit:
     name: Audit Dependencies

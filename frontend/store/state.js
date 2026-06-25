@@ -7,6 +7,8 @@ export const DEFAULT_WALLET_STATE = {
   isFreighterInstalled: false,
   isConnecting: false,
   error: null,
+  token: null,
+  isHydrated: false,
 };
 
 export const DEFAULT_ADMIN_STATE = {
@@ -124,6 +126,23 @@ export function appReducer(state, action) {
         wallet: {
           ...DEFAULT_WALLET_STATE,
           isFreighterInstalled: state.wallet.isFreighterInstalled,
+          isHydrated: state.wallet.isHydrated,
+        },
+      };
+    case 'WALLET/SET_TOKEN':
+      return {
+        ...state,
+        wallet: {
+          ...state.wallet,
+          token: action.payload,
+        },
+      };
+    case 'WALLET/CLEAR_TOKEN':
+      return {
+        ...state,
+        wallet: {
+          ...state.wallet,
+          token: null,
         },
       };
     case 'ADMIN/SET_API_KEY':
