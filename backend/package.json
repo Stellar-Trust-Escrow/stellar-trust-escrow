@@ -69,6 +69,7 @@
     "pino-http": "^8.6.1",
     "prom-client": "^15.1.0",
     "qrcode": "^1.5.3",
+    "rate-limit-redis": "^5.0.0",
     "redis": "^4.7.0",
     "rotating-file-stream": "^2.1.5",
     "sharp": "^0.33.5",
@@ -78,7 +79,8 @@
     "winston": "^3.11.0",
     "winston-daily-rotate-file": "^5.0.0",
     "ws": "^8.20.0",
-    "yaml": "^2.4.2"
+    "yaml": "^2.4.2",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "cross-env": "^10.1.0",
