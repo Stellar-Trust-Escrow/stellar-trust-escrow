@@ -338,12 +338,10 @@ model Dispute {
   /// Whether this dispute was auto-resolved
   autoResolved     Boolean   @default(false) @map("auto_resolved")
 
-  tenant       Tenant            @relation(fields: [tenantId], references: [id])
-  escrow       Escrow            @relation(fields: [escrowId], references: [id])
-  evidence     DisputeEvidence[]
-  appeals      DisputeAppeal[]
-  chatRoomKeys ChatRoomKey[]
-  chatMessages ChatMessage[]
+  tenant   Tenant            @relation(fields: [tenantId], references: [id])
+  escrow   Escrow            @relation(fields: [escrowId], references: [id])
+  evidence DisputeEvidence[]
+  appeals  DisputeAppeal[]
 
   @@index([tenantId, raisedByAddress])
   @@index([tenantId, resolvedAt])
