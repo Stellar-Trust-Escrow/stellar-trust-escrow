@@ -3,6 +3,24 @@
 import { useEffect, useMemo, useState } from 'react';
 import Button from '../../../../components/ui/Button';
 import CurrencyConverter from '../../../../components/ui/CurrencyConverter';
+import DisputeTermsDiff from '../../../../components/dispute/DisputeTermsDiff';
+
+const MOCK_DISPUTE_DIFF = {
+  originalTerms:
+    'The freelancer agrees to deliver a complete smart-contract security audit covering all Rust modules within 14 calendar days of escrow activation. ' +
+    'Milestone 1: Codebase review (500 USDC) — due day 5. ' +
+    'Milestone 2: Vulnerability report (1,000 USDC) — due day 10. ' +
+    'Milestone 3: Final sign-off (500 USDC) — due day 14. ' +
+    'Late delivery beyond 3 days without written client approval forfeits 10% of the outstanding milestone payment.',
+  originalTimestamp: '2026-05-10T09:00:00Z',
+  disputeDescription:
+    'The freelancer delivered the first draft 6 days late and omitted the milestone checklist entirely. ' +
+    'Milestone 1 was completed on day 11, not day 5 as agreed. ' +
+    'Milestone 2 was never formally submitted — only an informal email was sent. ' +
+    'Milestone 3 remains outstanding. ' +
+    'Per the late-delivery clause, the client is entitled to a 10% reduction on each outstanding milestone, totaling 150 USDC.',
+  disputeTimestamp: '2026-05-28T14:35:00Z',
+};
 
 const MOCK_WORKSPACE = {
   escrowId: 'ESCROW-8729',
@@ -320,6 +338,13 @@ export default function ArbitratorWorkspacePage({ params }) {
                 </div>
               </div>
             </div>
+
+            <DisputeTermsDiff
+              originalTerms={MOCK_DISPUTE_DIFF.originalTerms}
+              disputeDescription={MOCK_DISPUTE_DIFF.disputeDescription}
+              originalTimestamp={MOCK_DISPUTE_DIFF.originalTimestamp}
+              disputeTimestamp={MOCK_DISPUTE_DIFF.disputeTimestamp}
+            />
 
             <div className="rounded-[28px] border border-white/10 bg-slate-900/70 p-5 shadow-xl shadow-black/20">
               <div className="mb-4 flex items-center justify-between gap-3">
