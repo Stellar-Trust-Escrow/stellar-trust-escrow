@@ -3,6 +3,7 @@ import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
 import NavigationProgress from '../components/layout/NavigationProgress';
 import { ThemeProvider } from '../contexts/ThemeContext';
+import { PreferencesProvider } from '../contexts/PreferencesContext';
 import { CurrencyProvider } from '../contexts/CurrencyContext';
 import { ToastProvider } from '../contexts/ToastContext';
 import { I18nProvider } from '../i18n/index.jsx';
@@ -37,6 +38,7 @@ export default function RootLayout({ children }) {
       <body className="bg-gray-950 text-gray-100 min-h-screen flex flex-col font-sans">
         <I18nProvider>
           <ThemeProvider>
+            <PreferencesProvider>
             <CurrencyProvider>
               <ToastProvider>
                 <Header />
@@ -53,6 +55,7 @@ export default function RootLayout({ children }) {
                 <ServiceWorkerRegistrar />
               </ToastProvider>
             </CurrencyProvider>
+            </PreferencesProvider>
           </ThemeProvider>
         </I18nProvider>
       </body>

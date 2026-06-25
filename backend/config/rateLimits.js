@@ -40,3 +40,15 @@ export function getLimitForTier(tier) {
 export function getBurstLimitForTier(tier) {
   return BURST_LIMITS[tier] ?? BURST_LIMITS[DEFAULT_TIER];
 }
+
+// ── Route-tier limits ─────────────────────────────────────────────────────────
+// Applied per route group regardless of user tier.
+
+/** Auth endpoints — strict: 10 requests per minute */
+export const AUTH_ROUTE_LIMIT = 10;
+
+/** Write endpoints (POST/PUT/PATCH/DELETE) — moderate: 60 requests per minute */
+export const WRITE_ROUTE_LIMIT = 60;
+
+/** Read endpoints (GET) — relaxed: 300 requests per minute */
+export const READ_ROUTE_LIMIT = 300;
