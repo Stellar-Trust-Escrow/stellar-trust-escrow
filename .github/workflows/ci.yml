@@ -449,6 +449,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: npm
 
       - name: Install dependencies
         if: steps.changes.outputs.changed == 'true'
@@ -466,11 +467,25 @@ jobs:
           NEXT_PUBLIC_API_URL: http://127.0.0.1:4000
           NEXT_PUBLIC_CONTRACT_ADDRESS: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 
+      - name: Start frontend server
+        if: steps.changes.outputs.changed == 'true'
+        run: npm run start:test -w frontend &
+        env:
+          NODE_ENV: production
+          NEXT_PUBLIC_API_URL: http://127.0.0.1:4000
+          NEXT_PUBLIC_CONTRACT_ADDRESS: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+
+      - name: Wait for server
+        if: steps.changes.outputs.changed == 'true'
+        run: npx wait-on http://127.0.0.1:3000 --timeout 60000
+
       - name: Run Playwright suite
         if: steps.changes.outputs.changed == 'true'
         run: npm run test:e2e -w frontend -- --update-snapshots
         env:
           CI: 'true'
+          PLAYWRIGHT_DISABLE_WEBSERVER: '1'
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
           NEXT_PUBLIC_API_URL: http://127.0.0.1:4000
           NEXT_PUBLIC_CONTRACT_ADDRESS: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 
