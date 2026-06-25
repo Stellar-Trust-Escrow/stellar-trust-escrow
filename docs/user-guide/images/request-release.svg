@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450">
+  <rect width="800" height="450" rx="24" fill="#0f172a" />
+  <rect x="40" y="40" width="720" height="80" rx="18" fill="#1f2937" />
+  <text x="60" y="78" fill="#e2e8f0" font-family="Inter, sans-serif" font-size="28" font-weight="700">Request Release</text>
+  <rect x="80" y="150" width="640" height="220" rx="20" fill="#111827" stroke="#475569" stroke-width="2" />
+  <rect x="120" y="190" width="560" height="100" rx="18" fill="#1f2937" />
+  <text x="140" y="230" fill="#f8fafc" font-family="Inter, sans-serif" font-size="22">Seller submits work for review</text>
+  <text x="140" y="255" fill="#94a3b8" font-family="Inter, sans-serif" font-size="16">Buyer checks details before approving payment.</text>
+  <rect x="320" y="310" width="160" height="52" rx="14" fill="#38bdf8" />
+  <text x="400" y="343" fill="#0f172a" font-family="Inter, sans-serif" font-size="18" text-anchor="middle">Request release</text>
+</svg>

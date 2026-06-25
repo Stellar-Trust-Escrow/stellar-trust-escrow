@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450">
+  <rect width="800" height="450" rx="24" fill="#0f172a" />
+  <rect x="40" y="40" width="720" height="80" rx="18" fill="#1f2937" />
+  <text x="60" y="78" fill="#e2e8f0" font-family="Inter, sans-serif" font-size="28" font-weight="700">Create an Escrow Agreement</text>
+  <rect x="60" y="150" width="340" height="70" rx="16" fill="#111827" stroke="#475569" stroke-width="2" />
+  <text x="80" y="190" fill="#f8fafc" font-family="Inter, sans-serif" font-size="20">Buyer</text>
+  <text x="80" y="220" fill="#94a3b8" font-family="Inter, sans-serif" font-size="16">Who is paying</text>
+  <rect x="400" y="150" width="340" height="70" rx="16" fill="#111827" stroke="#475569" stroke-width="2" />
+  <text x="420" y="190" fill="#f8fafc" font-family="Inter, sans-serif" font-size="20">Seller</text>
+  <text x="420" y="220" fill="#94a3b8" font-family="Inter, sans-serif" font-size="16">Who is delivering</text>
+  <rect x="60" y="250" width="680" height="80" rx="16" fill="#111827" stroke="#475569" stroke-width="2" />
+  <text x="80" y="290" fill="#f8fafc" font-family="Inter, sans-serif" font-size="20">Amount and deadline</text>
+  <text x="80" y="320" fill="#94a3b8" font-family="Inter, sans-serif" font-size="16">How much, and when the work is due</text>
+</svg>
