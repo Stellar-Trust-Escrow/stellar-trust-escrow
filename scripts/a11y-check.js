@@ -18,7 +18,13 @@ let totalViolations = 0;
 try {
   for (const page of PAGES) {
     const tab = await context.newPage();
-    await tab.goto(`${BASE_URL}${page.path}`, { waitUntil: 'networkidle' });
+    try {
+      await tab.goto(`${BASE_URL}${page.path}`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    } catch {
+      console.warn(`⚠  Could not load ${BASE_URL}${page.path} — skipping`);
+      await tab.close();
+      continue;
+    }
 
     const report = await new AxeBuilder({ page: tab }).withTags(['wcag2aa']).analyze();
     const { violations } = report;

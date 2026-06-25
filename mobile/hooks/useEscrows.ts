@@ -110,6 +110,10 @@ import {
   getCachedMilestones,
 } from '../services/offlineCache';
 
+// Exponential backoff: 500ms, 1000ms, capped at 10s
+const RETRY_BASE_DELAY_MS = 500;
+const retryDelay = (attempt: number) => Math.min(RETRY_BASE_DELAY_MS * 2 ** attempt, 10_000);
+
 export function useEscrow(id: string | null) {
   return useQuery({
     queryKey: ['escrow', id],
@@ -126,7 +130,9 @@ export function useEscrow(id: string | null) {
     },
     enabled: !!id,
     staleTime: 10_000,
-    retry: 1,
+    gcTime: 5 * 60_000,
+    retry: 2,
+    retryDelay,
   });
 }
 
@@ -136,14 +142,24 @@ export function useEscrowList(params?: Record<string, string | number>) {
     queryFn: async () => {
       const net = await NetInfo.fetch();
       if (!net.isConnected) {
+        const status = params?.status as string | undefined;
+        const limit = typeof params?.limit === 'number' ? params.limit : 20;
+        const offset = typeof params?.offset === 'number' ? params.offset : 0;
+
+        let offline = getCachedEscrows() as Escrow[];
+        if (status) {
+          offline = offline.filter((e) => e.status === status);
+        }
+        const paged = offline.slice(offset, offset + limit);
+
         return {
-          data: getCachedEscrows() as Escrow[],
-          total: 0,
-          page: 1,
-          limit: 20,
-          totalPages: 1,
-          hasNextPage: false,
-          hasPreviousPage: false,
+          data: paged,
+          total: offline.length,
+          page: Math.floor(offset / limit) + 1,
+          limit,
+          totalPages: Math.max(1, Math.ceil(offline.length / limit)),
+          hasNextPage: offset + limit < offline.length,
+          hasPreviousPage: offset > 0,
         };
       }
       const { data } = await escrowApi.list(params);
@@ -151,6 +167,10 @@ export function useEscrowList(params?: Record<string, string | number>) {
       return data;
     },
     staleTime: 15_000,
+    gcTime: 5 * 60_000,
+    retry: 2,
+    retryDelay,
+    refetchOnWindowFocus: false,
   });
 }
 

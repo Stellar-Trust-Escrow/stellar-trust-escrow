@@ -1144,6 +1144,20 @@ impl EscrowContract {
         Ok(())
     }
 
+    /// Set the oracle staleness threshold (in seconds). Admin only.
+    /// Valid range: 1–86400 seconds.
+    pub fn set_oracle_stale_threshold(
+        env: Env,
+        caller: Address,
+        threshold_seconds: u64,
+    ) -> Result<(), EscrowError> {
+        ContractStorage::require_admin(&env, &caller)?;
+        caller.require_auth();
+        oracle::set_oracle_stale_threshold(&env, threshold_seconds)?;
+        ContractStorage::bump_instance_ttl(&env);
+        Ok(())
+    }
+
     /// Fetch the current USD price for `asset` from the configured oracle.
     /// Returns price with `oracle::PRICE_DECIMALS` decimal places.
     pub fn get_price(env: Env, asset: Address) -> Result<i128, EscrowError> {

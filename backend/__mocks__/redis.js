@@ -11,6 +11,7 @@ const mockClient = {
   expire: jest.fn().mockResolvedValue(1),
   sAdd: jest.fn().mockResolvedValue(1),
   sMembers: jest.fn().mockResolvedValue([]),
+  scan: jest.fn().mockResolvedValue({ cursor: 0, keys: [] }),
   on: jest.fn(),
 };
 

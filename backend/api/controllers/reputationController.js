@@ -45,9 +45,12 @@ const getReputation = async (req, res) => {
   }
 };
 
+const LEADERBOARD_MAX_LIMIT = 50;
+
 const getLeaderboard = async (req, res) => {
   try {
-    const { page, limit, skip } = parsePagination(req.query);
+    const { page, skip } = parsePagination(req.query);
+    const limit = Math.min(parsePagination(req.query).limit, LEADERBOARD_MAX_LIMIT);
     const tenantId = req.tenant?.id;
 
     const { hits, total, source } = await reputationSearch.leaderboard({

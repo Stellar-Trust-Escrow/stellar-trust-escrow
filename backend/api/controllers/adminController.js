@@ -9,8 +9,21 @@
 
 import prisma from '../../lib/prisma.js';
 import { TIER_LIMITS } from '../../config/rateLimits.js';
-import { logControllerError } from '../../config/logger.js';
+import { logControllerError, getLogger } from '../../config/logger.js';
 import { getUserUsage } from '../middleware/rateLimiter.js';
+
+const adminLog = getLogger();
+
+// JSON.stringify does not guarantee key order, so two objects with the same
+// contents but different insertion order produce different cache keys.
+// This sorted replacer ensures deterministic serialisation for cache keys.
+function stableStringify(obj) {
+  return JSON.stringify(obj, (_, v) =>
+    v && typeof v === 'object' && !Array.isArray(v)
+      ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b)))
+      : v,
+  );
+}
 
 // Mutable runtime overrides (resets on server restart)
 const runtimeTierLimits = { ...TIER_LIMITS };
@@ -29,7 +42,19 @@ const updateRateLimit = (req, res) => {
   if (isNaN(parsed) || parsed < 1) {
     return res.status(400).json({ error: 'max must be a positive integer' });
   }
+  const previous = runtimeTierLimits[tier];
   runtimeTierLimits[tier] = parsed;
+
+  adminLog.warn({
+    type: 'admin_action',
+    action: 'UPDATE_RATE_LIMIT',
+    tier,
+    previous,
+    updated: parsed,
+    performedBy: req.user?.address ?? 'unknown',
+    requestId: req.id,
+  });
+
   res.json({ tier, max: parsed });
 };
 
@@ -41,6 +66,18 @@ const getUserRateLimitUsage = (req, res) => {
 
 import cache from '../../lib/cache.js';
 import { buildPaginatedResponse, parsePagination } from '../../lib/pagination.js';
+
+/** Deterministic JSON serialiser — sorts object keys recursively. */
+function stableStringify(val) {
+  if (Array.isArray(val)) return `[${val.map(stableStringify).join(',')}]`;
+  if (val !== null && typeof val === 'object') {
+    const pairs = Object.keys(val)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${stableStringify(val[k])}`);
+    return `{${pairs.join(',')}}`;
+  }
+  return JSON.stringify(val);
+}
 
 // ── Users ──────────────────────────────────────────────────────────────────────
 
@@ -55,7 +92,7 @@ const listUsers = async (req, res) => {
 
     const where = search ? { address: { contains: search, mode: 'insensitive' } } : {};
 
-    const cacheKey = `admin:users:${JSON.stringify({ where, page, limit })}`;
+    const cacheKey = `admin:users:${stableStringify({ limit, page, where })}`;
     const cached = await cache.get(cacheKey);
     if (cached) return res.json(cached);
 
@@ -226,7 +263,7 @@ const listDisputes = async (req, res) => {
           ? { resolvedAt: null }
           : {};
 
-    const cacheKey = `admin:disputes:${JSON.stringify({ where, page, limit })}`;
+    const cacheKey = `admin:disputes:${stableStringify({ limit, page, where })}`;
     const cached = await cache.get(cacheKey);
     if (cached) return res.json(cached);
 

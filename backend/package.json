@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "nodemon server.js",
     "build": "echo 'No build step required for backend'",
+    "prestart": "node ../scripts/check-env.js",
     "start": "node server.js",
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --runInBand --passWithNoTests",
     "test:chaos": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --runInBand --testPathPattern=tests/chaos --passWithNoTests",

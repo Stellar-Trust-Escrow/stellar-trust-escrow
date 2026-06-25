@@ -9,11 +9,11 @@ function buildTestApp() {
   const app = express();
   app.use(express.json());
 
-  // Public route — always succeeds
-  app.get('/api/health', (_req, res) => res.status(200).json({ status: 'ok' }));
+  // Public route — always succeeds (prefixed under /api/escrows so it clears BATCH_ALLOWED_ROUTES)
+  app.get('/api/escrows/health', (_req, res) => res.status(200).json({ status: 'ok' }));
 
-  // Public route — always 404
-  app.get('/api/not-found', (_req, res) => res.status(404).json({ error: 'Not found' }));
+  // Public route — always 404 (prefixed under /api/escrows for same reason)
+  app.get('/api/escrows/not-found', (_req, res) => res.status(404).json({ error: 'Not found' }));
 
   // Protected route — requires Authorization header
   app.get('/api/escrows/abc123', (req, res) => {
@@ -43,9 +43,9 @@ describe('POST /api/batch', () => {
 
   it('Test 1 (Mixed Results): returns correct status codes for each sub-request', async () => {
     const res = await request.post('/api/batch').send([
-      { method: 'GET', url: '/api/health' },
-      { method: 'GET', url: '/api/health' },
-      { method: 'GET', url: '/api/not-found' },
+      { method: 'GET', url: '/api/escrows/health' },
+      { method: 'GET', url: '/api/escrows/health' },
+      { method: 'GET', url: '/api/escrows/not-found' },
     ]);
 
     expect(res.status).toBe(200);
@@ -80,7 +80,7 @@ describe('POST /api/batch', () => {
   it('Test 3 (Limit Enforcement): returns 413 when batch exceeds MAX_BATCH_SIZE', async () => {
     const oversizedBatch = Array.from({ length: 21 }, () => ({
       method: 'GET',
-      url: '/api/health',
+      url: '/api/escrows/health',
     }));
 
     const res = await request.post('/api/batch').send(oversizedBatch);
@@ -90,7 +90,9 @@ describe('POST /api/batch', () => {
   });
 
   it('returns 400 when body is not an array', async () => {
-    const res = await request.post('/api/batch').send({ method: 'GET', url: '/api/health' });
+    const res = await request
+      .post('/api/batch')
+      .send({ method: 'GET', url: '/api/escrows/health' });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/array/i);

@@ -24,6 +24,8 @@ const cache = {
 jest.unstable_mockModule('../../services/mfaService.js', () => ({ default: mfaService }));
 jest.unstable_mockModule('../../lib/cache.js', () => ({ default: cache }));
 
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-mfa-secret';
+
 const { requireMfa, requireMfaForHighValue, generateMfaToken } =
   await import('../../api/middleware/mfaAuth.js');
 

@@ -74,6 +74,10 @@ const importUserData = async (req, res) => {
       });
     }
 
+    if (req.user?.address !== address) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
     // Validate import data
     if (!data) {
       return res.status(400).json({

@@ -195,6 +195,10 @@ const updateUserProfile = async (req, res) => {
     const { address } = req.params;
     if (!validateAddress(address, res)) return;
 
+    if (req.user?.address !== address) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
     const { displayName, bio, preferences } = req.body;
 
     const updatedProfile = await prisma.userProfile.upsert({
