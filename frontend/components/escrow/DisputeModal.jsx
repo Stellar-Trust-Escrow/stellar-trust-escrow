@@ -68,15 +68,16 @@ export default function DisputeModal({ isOpen, onClose, escrowId }) {
 
         {/* Reason */}
         <div>
-          <label className="block text-sm text-gray-400 mb-1">
+          <label htmlFor="dispute-reason" className="block text-sm text-gray-400 mb-1">
             Reason for dispute <span className="text-gray-600">(recommended)</span>
           </label>
           <textarea
+            id="dispute-reason"
             rows={4}
             placeholder="Describe the issue clearly. This will be stored with the dispute record…"
             className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5
                        text-white text-sm placeholder-gray-500 resize-none
-                       focus:outline-none focus:border-amber-500"
+                       focus:outline-none focus:border-amber-500 focus-visible:ring-2 focus-visible:ring-amber-500"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             disabled={isSubmitting}

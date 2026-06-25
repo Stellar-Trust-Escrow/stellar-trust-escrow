@@ -19,11 +19,19 @@ function ResolveModal({ dispute, onClose, onConfirm }) {
   if (!dispute) return null;
 
   const totalAmount = dispute.escrow?.totalAmount || '?';
+  const titleId = `resolve-modal-title-${dispute.id}`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+    >
       <div className="card w-full max-w-lg mx-4">
-        <h3 className="text-lg font-semibold text-white mb-1">Resolve Dispute #{dispute.id}</h3>
+        <h3 id={titleId} className="text-lg font-semibold text-white mb-1">
+          Resolve Dispute #{dispute.id}
+        </h3>
         <p className="text-sm text-gray-400 mb-1">
           Escrow ID: <span className="font-mono">{dispute.escrowId?.toString()}</span>
         </p>
@@ -33,50 +41,67 @@ function ResolveModal({ dispute, onClose, onConfirm }) {
 
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div>
-            <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">
+            <label
+              htmlFor={`resolve-client-amount-${dispute.id}`}
+              className="text-xs text-gray-400 uppercase tracking-wider mb-1 block"
+            >
               Client Amount
             </label>
             <input
+              id={`resolve-client-amount-${dispute.id}`}
               type="text"
+              inputMode="decimal"
               value={clientAmount}
               onChange={(e) => setClientAmount(e.target.value)}
               placeholder="e.g. 500"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-indigo-500"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500"
             />
           </div>
           <div>
-            <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">
+            <label
+              htmlFor={`resolve-freelancer-amount-${dispute.id}`}
+              className="text-xs text-gray-400 uppercase tracking-wider mb-1 block"
+            >
               Freelancer Amount
             </label>
             <input
+              id={`resolve-freelancer-amount-${dispute.id}`}
               type="text"
+              inputMode="decimal"
               value={freelancerAmount}
               onChange={(e) => setFreelancerAmount(e.target.value)}
               placeholder="e.g. 500"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-indigo-500"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500"
             />
           </div>
         </div>
 
+        <label htmlFor={`resolve-notes-${dispute.id}`} className="sr-only">
+          Resolution notes
+        </label>
         <textarea
+          id={`resolve-notes-${dispute.id}`}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Resolution notes (optional)…"
           rows={2}
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-indigo-500 mb-4 resize-none"
+          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500 mb-4 resize-none"
         />
 
         <div className="flex gap-2 justify-end">
           <button
+            type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white transition-colors"
+            className="px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
             Cancel
           </button>
           <button
+            type="button"
             onClick={() => onConfirm({ clientAmount, freelancerAmount, notes })}
             disabled={!clientAmount || !freelancerAmount}
-            className="px-4 py-2 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            aria-disabled={!clientAmount || !freelancerAmount}
+            className="px-4 py-2 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
             Confirm Resolution
           </button>
@@ -88,9 +113,13 @@ function ResolveModal({ dispute, onClose, onConfirm }) {
 
 function StatusBadge({ resolved }) {
   return resolved ? (
-    <span className="badge-completed text-xs px-2 py-0.5 rounded-full">Resolved</span>
+    <span role="status" aria-label="Status: Resolved" className="badge-completed text-xs px-2 py-0.5 rounded-full">
+      Resolved
+    </span>
   ) : (
-    <span className="badge-disputed text-xs px-2 py-0.5 rounded-full">Open</span>
+    <span role="status" aria-label="Status: Open" className="badge-disputed text-xs px-2 py-0.5 rounded-full">
+      Open
+    </span>
   );
 }
 
@@ -160,7 +189,11 @@ export default function AdminDisputesPage() {
   return (
     <div>
       {toast && (
-        <div className="fixed top-6 right-6 z-50 bg-emerald-800 border border-emerald-500/40 text-emerald-100 text-sm px-4 py-3 rounded-lg shadow-xl">
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed top-6 right-6 z-50 bg-emerald-800 border border-emerald-500/40 text-emerald-100 text-sm px-4 py-3 rounded-lg shadow-xl"
+        >
           ✅ {toast}
         </div>
       )}
@@ -177,19 +210,25 @@ export default function AdminDisputesPage() {
         </div>
         <a
           href="/admin"
-          className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors"
+          className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded"
         >
           ← Dashboard
         </a>
       </div>
 
       {/* Filter tabs */}
-      <div className="flex gap-1 mb-4 bg-gray-900 border border-gray-800 rounded-lg p-1 w-fit">
+      <div
+        role="group"
+        aria-label="Filter disputes by status"
+        className="flex gap-1 mb-4 bg-gray-900 border border-gray-800 rounded-lg p-1 w-fit"
+      >
         {filterTabs.map((t) => (
           <button
             key={t.value}
+            type="button"
             onClick={() => setFilter(t.value)}
-            className={`text-sm px-4 py-1.5 rounded-md transition-colors ${filter === t.value ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-white'}`}
+            aria-pressed={filter === t.value}
+            className={`text-sm px-4 py-1.5 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${filter === t.value ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-white'}`}
           >
             {t.label}
           </button>
@@ -197,7 +236,10 @@ export default function AdminDisputesPage() {
       </div>
 
       {error && (
-        <div className="bg-red-900/20 border border-red-500/30 text-red-400 text-sm rounded-lg px-4 py-3 mb-4">
+        <div
+          role="alert"
+          className="bg-red-900/20 border border-red-500/30 text-red-400 text-sm rounded-lg px-4 py-3 mb-4"
+        >
           ⚠️ {error}
         </div>
       )}
@@ -258,8 +300,10 @@ export default function AdminDisputesPage() {
                 {!d.resolvedAt && (
                   <button
                     id={`resolve-dispute-${d.id}`}
+                    type="button"
                     onClick={() => setSelectedDispute(d)}
-                    className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors shrink-0"
+                    aria-label={`Resolve dispute #${d.id}`}
+                    className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                   >
                     Resolve
                   </button>
@@ -272,25 +316,29 @@ export default function AdminDisputesPage() {
 
       {/* Pagination */}
       {pagination.pages > 1 && (
-        <div className="flex justify-center gap-2 mt-4">
+        <nav aria-label="Dispute list pagination" className="flex justify-center gap-2 mt-4">
           <button
+            type="button"
             onClick={() => fetchDisputes(pagination.page - 1, filter)}
             disabled={pagination.page <= 1}
-            className="text-sm px-3 py-1.5 rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            aria-label="Previous page"
+            className="text-sm px-3 py-1.5 rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
             ← Prev
           </button>
-          <span className="text-sm text-gray-500 px-2 py-1.5">
+          <span className="text-sm text-gray-500 px-2 py-1.5" aria-live="polite" aria-atomic="true">
             {pagination.page} / {pagination.pages}
           </span>
           <button
+            type="button"
             onClick={() => fetchDisputes(pagination.page + 1, filter)}
             disabled={pagination.page >= pagination.pages}
-            className="text-sm px-3 py-1.5 rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            aria-label="Next page"
+            className="text-sm px-3 py-1.5 rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
             Next →
           </button>
-        </div>
+        </nav>
       )}
     </div>
   );

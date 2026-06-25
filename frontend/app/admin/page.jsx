@@ -114,23 +114,31 @@ export default function AdminDashboard() {
         <div className="card max-w-md mx-auto">
           <h2 className="text-lg font-semibold text-white mb-4">Admin Authentication</h2>
           <form onSubmit={handleLogin} className="flex flex-col gap-3">
+            <label htmlFor="admin-api-key" className="sr-only">
+              Admin API key
+            </label>
             <input
               type="password"
               id="admin-api-key"
               value={inputKey}
               onChange={(e) => setInputKey(e.target.value)}
               placeholder="Enter admin API key"
-              className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
+              autoComplete="current-password"
+              className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500"
               required
             />
             <button
               type="submit"
-              className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 rounded-lg transition-colors"
+              className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
             >
               Authenticate
             </button>
           </form>
-          {error && <p className="text-red-400 text-sm mt-3">⚠️ {error}</p>}
+          {error && (
+            <p role="alert" className="text-red-400 text-sm mt-3">
+              ⚠️ {error}
+            </p>
+          )}
         </div>
       )}
 

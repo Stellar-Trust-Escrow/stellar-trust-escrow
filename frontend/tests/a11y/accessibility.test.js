@@ -222,4 +222,51 @@ describe('Accessibility - ARIA Implementation', () => {
     const results = await axeRunner(container);
     expect(results).toHaveNoViolations();
   });
+
+  it('dialog modal should have role and aria-labelledby', async () => {
+    const { container } = render(
+      <div role="dialog" aria-modal="true" aria-labelledby="modal-heading">
+        <h2 id="modal-heading">Resolve Dispute #42</h2>
+        <form>
+          <label htmlFor="client-amount">Client Amount</label>
+          <input id="client-amount" type="text" />
+          <label htmlFor="freelancer-amount">Freelancer Amount</label>
+          <input id="freelancer-amount" type="text" />
+          <label htmlFor="resolve-notes">Resolution notes</label>
+          <textarea id="resolve-notes" />
+          <button type="button">Cancel</button>
+          <button type="button">Confirm Resolution</button>
+        </form>
+      </div>,
+    );
+
+    const results = await axeRunner(container);
+    expect(results).toHaveNoViolations();
+  });
+
+  it('status filter group should use aria-pressed on toggle buttons', async () => {
+    const { container } = render(
+      <div role="group" aria-label="Filter disputes by status">
+        <button type="button" aria-pressed="true">Open</button>
+        <button type="button" aria-pressed="false">Resolved</button>
+        <button type="button" aria-pressed="false">All</button>
+      </div>,
+    );
+
+    const results = await axeRunner(container);
+    expect(results).toHaveNoViolations();
+  });
+
+  it('pagination nav should have aria-label and live region', async () => {
+    const { container } = render(
+      <nav aria-label="Dispute list pagination">
+        <button type="button" disabled aria-label="Previous page">← Prev</button>
+        <span aria-live="polite" aria-atomic="true">1 / 5</span>
+        <button type="button" aria-label="Next page">Next →</button>
+      </nav>,
+    );
+
+    const results = await axeRunner(container);
+    expect(results).toHaveNoViolations();
+  });
 });
