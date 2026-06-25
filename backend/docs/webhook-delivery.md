@@ -55,21 +55,35 @@ Each webhook request contains a JSON body with the following structure:
 
 ## Signature verification
 
-Requests are signed with HMAC-SHA256 using the subscription secret. The signature is sent in the `X-Webhook-Signature` header.
+Requests are signed with HMAC-SHA256 using the subscription secret. The signature is sent in the `X-Webhook-Signature` header with the `sha256=` prefix and is computed over `timestamp + rawBody`. Consumers should reject deliveries whose `X-Webhook-Timestamp` is more than 5 minutes old.
 
 Verify by computing:
 
 ```js
-const signature = crypto.createHmac('sha256', secret).update(JSON.stringify(body)).digest('hex');
+const signature = `sha256=${crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex')}`;
 ```
 
-Then compare it to the received header.
+Then compare it to the received header using a constant-time comparison.
 
 ### Additional headers
 
-- `X-Webhook-Signature`: HMAC-SHA256 signature of the request body.
+- `X-Webhook-Signature`: `sha256=` prefixed HMAC-SHA256 signature of `timestamp + rawBody`.
+- `X-Webhook-Timestamp`: timestamp used in the signature input.
 - `X-Webhook-Delivery-Id`: unique delivery identifier.
 - `X-Webhook-Event-Type`: event type that triggered the delivery.
+
+### Python example
+
+```python
+import hashlib
+import hmac
+
+
+def verify_webhook(raw_body: bytes, received_signature: str, timestamp: str, secret: str) -> bool:
+    expected = hmac.new(secret.encode('utf-8'), f"{timestamp}.{raw_body.decode('utf-8')}".encode('utf-8'), hashlib.sha256).hexdigest()
+    provided = received_signature.removeprefix("sha256=")
+    return hmac.compare_digest(expected, provided)
+```
 
 ## Retry behavior
 
@@ -78,5 +92,6 @@ Webhook deliveries are retried automatically with exponential backoff. The worke
 ## Delivery and subscription history
 
 - `GET /api/webhooks` — list webhook subscriptions for the authenticated account.
+- `POST /api/webhooks/:id/rotate-secret` — rotate the signing secret for a subscription.
 - `DELETE /api/webhooks/:id` — remove a subscription.
 - `GET /api/webhooks/:id/deliveries` — view delivery history, including attempts, response codes, and errors.

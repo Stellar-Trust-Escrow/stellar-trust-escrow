@@ -5,16 +5,17 @@ import { withTenantScopeBypassed } from '../lib/tenantContext.js';
 import { enqueueWebhookDelivery } from '../queues/webhookQueue.js';
 
 const SIGNATURE_HEADER = 'X-Webhook-Signature';
+const TIMESTAMP_HEADER = 'X-Webhook-Timestamp';
 const DELIVERY_ID_HEADER = 'X-Webhook-Delivery-Id';
 const EVENT_TYPE_HEADER = 'X-Webhook-Event-Type';
 const DEFAULT_RETRY_ATTEMPTS = 5;
 const DEFAULT_BACKOFF_DELAY_MS = 5000;
 
-function buildWebhookPayload(eventType, payload, deliveryId) {
+function buildWebhookPayload(eventType, payload, deliveryId, timestamp = new Date().toISOString()) {
   return {
     eventType,
     deliveryId,
-    timestamp: new Date().toISOString(),
+    timestamp,
     data: payload,
   };
 }
@@ -23,8 +24,10 @@ function generateSecret() {
   return crypto.randomBytes(32).toString('hex');
 }
 
-function signPayload(secret, payload) {
-  return crypto.createHmac('sha256', secret).update(JSON.stringify(payload)).digest('hex');
+function signPayload(secret, timestamp, body) {
+  const normalizedBody = typeof body === 'string' ? body : JSON.stringify(body);
+  const signingInput = `${timestamp}.${normalizedBody}`;
+  return `sha256=${crypto.createHmac('sha256', secret).update(signingInput).digest('hex')}`;
 }
 
 async function createSubscription({ url, eventTypes, createdBy }) {
@@ -71,6 +74,18 @@ async function deleteSubscription({ id, createdBy }) {
   return deleted.count > 0;
 }
 
+async function rotateSecret({ id, createdBy }) {
+  const newSecret = generateSecret();
+  return prisma.webhookSubscription.update({
+    where: { id, createdBy },
+    data: { secret: newSecret },
+    select: {
+      id: true,
+      secret: true,
+    },
+  });
+}
+
 async function getDeliveryHistory({ subscriptionId, createdBy, page = 1, limit = 30 }) {
   const skip = (page - 1) * limit;
   const [deliveries, total] = await Promise.all([
@@ -113,11 +128,13 @@ async function queueSubscriptionWebhook(subscription, payload, eventType) {
     },
   });
 
-  const signedPayload = buildWebhookPayload(eventType, payload, delivery.id);
-  const signature = signPayload(subscription.secret, signedPayload);
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const signedPayload = buildWebhookPayload(eventType, payload, delivery.id, new Date().toISOString());
+  const signature = signPayload(subscription.secret, timestamp, signedPayload);
   const headers = {
     'Content-Type': 'application/json',
     [SIGNATURE_HEADER]: signature,
+    [TIMESTAMP_HEADER]: timestamp,
     [DELIVERY_ID_HEADER]: delivery.id,
     [EVENT_TYPE_HEADER]: eventType,
   };
@@ -159,11 +176,13 @@ export {
   createSubscription,
   listSubscriptions,
   deleteSubscription,
+  rotateSecret,
   getDeliveryHistory,
   queueEventWebhooks,
   signPayload,
   buildWebhookPayload,
   SIGNATURE_HEADER,
+  TIMESTAMP_HEADER,
   DELIVERY_ID_HEADER,
   EVENT_TYPE_HEADER,
 };
@@ -172,6 +191,7 @@ export default {
   createSubscription,
   listSubscriptions,
   deleteSubscription,
+  rotateSecret,
   getDeliveryHistory,
   queueEventWebhooks,
   signPayload,

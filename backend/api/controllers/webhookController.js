@@ -88,9 +88,28 @@ const getDeliveries = async (req, res) => {
   }
 };
 
+const rotateSecret = async (req, res) => {
+  try {
+    const subscriptionId = req.params.id || req.body?.id || req.body?.subscriptionId;
+    const updated = await webhookService.rotateSecret({
+      id: subscriptionId,
+      createdBy: req.user?.address || null,
+    });
+
+    if (!updated) {
+      return res.status(404).json({ error: 'Webhook subscription not found' });
+    }
+
+    res.json({ data: updated });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
 export default {
   subscribe,
   listSubscriptions,
   deleteSubscription,
   getDeliveries,
+  rotateSecret,
 };

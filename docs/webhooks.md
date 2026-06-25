@@ -325,13 +325,14 @@ Common fields inside `data`:
 
 ## Signature Verification
 
-Every delivery is signed with HMAC-SHA256 using the subscription `secret` issued at creation time. The signature covers the **entire serialised JSON body** of the request.
+Every delivery is signed with HMAC-SHA256 using the subscription `secret` issued at creation time. The signature covers the **timestamp + full serialised JSON body** of the request and is sent as the `X-Webhook-Signature` header with the `sha256=` prefix.
 
 ### Headers sent with every delivery
 
 | Header                    | Description                                               |
 |---------------------------|-----------------------------------------------------------|
-| `X-Webhook-Signature`     | Hex-encoded HMAC-SHA256 signature of the request body     |
+| `X-Webhook-Signature`     | `sha256=` prefixed HMAC-SHA256 signature of `timestamp + body` |
+| `X-Webhook-Timestamp`     | Unix timestamp in seconds used in the signature input     |
 | `X-Webhook-Delivery-Id`   | Unique delivery ID (matches `deliveryId` in the payload)  |
 | `X-Webhook-Event-Type`    | Event type code that triggered this delivery              |
 | `Content-Type`            | Always `application/json`                                 |
@@ -339,35 +340,35 @@ Every delivery is signed with HMAC-SHA256 using the subscription `secret` issued
 ### How the signature is computed
 
 ```js
-const signature = crypto
+const timestamp = req.headers['x-webhook-timestamp'];
+const signature = `sha256=${crypto
   .createHmac('sha256', secret)
-  .update(JSON.stringify(body))
-  .digest('hex');
+  .update(`${timestamp}.${rawBody}`)
+  .digest('hex')}`;
 ```
 
-The signing input is `JSON.stringify(body)` where `body` is the full parsed JSON object received — the same object you would get by calling `JSON.parse(rawRequestBody)`.
+The signing input is `${timestamp}.${rawBody}` where `rawBody` is the exact raw request bytes received from the transport layer. Consumers should verify against the raw body rather than a re-serialised JSON object and reject timestamps older than 5 minutes to prevent replay attacks.
 
 ### Verification example (Node.js)
 
 ```js
 import crypto from 'crypto';
 
-function verifyWebhook(rawBody, receivedSignature, secret) {
+function verifyWebhook(rawBody, receivedSignature, timestamp, secret) {
   const expected = crypto
     .createHmac('sha256', secret)
-    .update(rawBody) // use the raw bytes, not re-serialised JSON
+    .update(`${timestamp}.${rawBody}`)
     .digest('hex');
 
-  return crypto.timingSafeEqual(
-    Buffer.from(expected, 'hex'),
-    Buffer.from(receivedSignature, 'hex'),
-  );
+  const provided = receivedSignature.replace(/^sha256=/, '');
+  return crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(provided, 'hex'));
 }
 
 // Express example
 app.post('/hooks', express.raw({ type: 'application/json' }), (req, res) => {
   const sig = req.headers['x-webhook-signature'];
-  if (!verifyWebhook(req.body, sig, process.env.WEBHOOK_SECRET)) {
+  const timestamp = req.headers['x-webhook-timestamp'];
+  if (!verifyWebhook(req.body, sig, timestamp, process.env.WEBHOOK_SECRET)) {
     return res.status(401).send('Invalid signature');
   }
   const event = JSON.parse(req.body);
@@ -376,7 +377,20 @@ app.post('/hooks', express.raw({ type: 'application/json' }), (req, res) => {
 });
 ```
 
-> **Important:** compare using a constant-time function (`crypto.timingSafeEqual`) to prevent timing attacks. Never use `===` for signature comparison.
+### Verification example (Python)
+
+```python
+import hashlib
+import hmac
+
+
+def verify_webhook(raw_body: bytes, received_signature: str, timestamp: str, secret: str) -> bool:
+    expected = hmac.new(secret.encode('utf-8'), f"{timestamp}.{raw_body.decode('utf-8')}".encode('utf-8'), hashlib.sha256).hexdigest()
+    provided = received_signature.removeprefix("sha256=")
+    return hmac.compare_digest(expected, provided)
+```
+
+> **Important:** compare using a constant-time function (`crypto.timingSafeEqual` in Node.js or `hmac.compare_digest` in Python) to prevent timing attacks. Never use `===` or direct string equality for signature comparison.
 
 ---
 

@@ -5,6 +5,7 @@ const prismaMock = {
     create: jest.fn(),
     findMany: jest.fn(),
     deleteMany: jest.fn(),
+    update: jest.fn(),
   },
   webhookDelivery: {
     create: jest.fn(),
@@ -88,6 +89,36 @@ describe('Webhook Service and Worker', () => {
       expect.objectContaining({ eventType: 'esc_crt', deliveryId: 'delivery_1' }),
       expect.objectContaining({ 'X-Webhook-Signature': expect.any(String) }),
       expect.objectContaining({ attempts: 5 }),
+    );
+  });
+
+  it('signs deliveries with timestamped sha256 headers', async () => {
+    const subscription = { id: 'sub_1', url: 'https://example.com/webhook', secret: 'secret123' };
+    prismaMock.webhookSubscription.findMany.mockResolvedValue([subscription]);
+    prismaMock.webhookDelivery.create.mockResolvedValue({ id: 'delivery_1' });
+    prismaMock.webhookDelivery.update.mockResolvedValue({});
+    queueMock.enqueueWebhookDelivery.mockResolvedValue({});
+
+    const { default: webhookService } = await import('../services/webhookService.js');
+    await webhookService.queueEventWebhooks('esc_crt', { ledger: '100' });
+
+    const [, , , headers] = queueMock.enqueueWebhookDelivery.mock.calls[0];
+    expect(headers['X-Webhook-Timestamp']).toMatch(/^\d+$/);
+    expect(headers['X-Webhook-Signature']).toMatch(/^sha256=[a-f0-9]{64}$/);
+  });
+
+  it('rotates a webhook subscription secret', async () => {
+    prismaMock.webhookSubscription.update.mockResolvedValue({ id: 'sub_1', secret: 'new-secret' });
+
+    const { default: webhookService } = await import('../services/webhookService.js');
+    const result = await webhookService.rotateSecret({ id: 'sub_1', createdBy: '0xABC' });
+
+    expect(result).toEqual({ id: 'sub_1', secret: 'new-secret' });
+    expect(prismaMock.webhookSubscription.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'sub_1', createdBy: '0xABC' },
+        data: expect.objectContaining({ secret: expect.any(String) }),
+      }),
     );
   });
 
