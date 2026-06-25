@@ -396,6 +396,8 @@ chore/<name> | test/<name>
 
 ## API Reference
 
+The complete route-by-route reference, including authentication, examples, status codes, and error shapes, is in [`docs/api/`](docs/api/README.md).
+
 ### Authentication
 
 All protected endpoints require a `Bearer` token in the `Authorization` header. Tokens are obtained by signing a nonce with your Stellar private key — no username/password.
