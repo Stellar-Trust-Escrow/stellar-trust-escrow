@@ -18,17 +18,21 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { useWallet } from '../../hooks/useWallet';
 import { useI18n } from '../../i18n/index.jsx';
+import { useNotifications } from '../../hooks/useNotifications';
 import WalletStatus from '../ui/WalletStatus';
 import MobileDrawer from './MobileDrawer';
 import ThemeToggle from './ThemeToggle';
 import CurrencySelector from '../ui/CurrencySelector';
 import NetworkIndicator from './NetworkIndicator';
+import NotificationPanel from './NotificationPanel';
 
 export default function Header() {
   const wallet = useWallet();
   const { t } = useI18n();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const { notifications, unreadCount, markRead, markAllRead } = useNotifications();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 0);
@@ -82,6 +86,47 @@ export default function Header() {
 
             {/* Theme Toggle */}
             <ThemeToggle />
+
+            {/* Notification Bell */}
+            <div className="relative">
+              <button
+                aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
+                aria-expanded={isNotifOpen}
+                aria-haspopup="dialog"
+                onClick={() => setIsNotifOpen((o) => !o)}
+                className="relative text-gray-400 hover:text-white p-1 rounded transition-colors"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="w-6 h-6"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+                  />
+                </svg>
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-indigo-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {isNotifOpen && (
+                <NotificationPanel
+                  notifications={notifications}
+                  onMarkRead={markRead}
+                  onMarkAllRead={markAllRead}
+                  onClose={() => setIsNotifOpen(false)}
+                />
+              )}
+            </div>
 
             {/* Hamburger — mobile only */}
             <button
