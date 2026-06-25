@@ -4,6 +4,7 @@ import { scheduledQueue } from '../queues/index.js';
 import { archiveCompletedEscrows } from '../services/escrowArchiveService.js';
 import { syncFromPrisma } from '../services/reputationSearchService.js';
 import { runGarbageCollector } from '../services/ipfsGarbageCollector.js';
+import { runDisputeEscalationJob } from '../services/disputeEscalationService.js';
 
 // Daily cleanup at 2AM UTC
 cron.schedule(
@@ -63,5 +64,18 @@ cron.schedule(
   },
   { timezone: 'UTC' },
 );
+
+// Dispute auto-escalation — every 30 minutes
+cron.schedule('*/30 * * * *', async () => {
+  console.log('[Scheduler] Running dispute auto-escalation check');
+  try {
+    const count = await runDisputeEscalationJob();
+    if (count > 0) {
+      console.log(`[Scheduler] Escalated ${count} dispute(s)`);
+    }
+  } catch (err) {
+    console.warn('[DisputeEscalation] Job failed:', err?.message || err);
+  }
+});
 
 console.log('[Scheduler] Started - queues ready for cron jobs');

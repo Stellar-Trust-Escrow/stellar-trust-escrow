@@ -49,3 +49,53 @@ export function scopeCacheTag(tag, tenant = getCurrentTenant()) {
   if (!tenant) return tag;
   return `tenant:${tenant.slug || tenant.id}:tag:${tag}`;
 }
+
+// ── Knex tenant scope ─────────────────────────────────────────────────────────
+
+/**
+ * Apply automatic tenant_id scoping to a Knex query builder.
+ *
+ * Usage:
+ *   const rows = await tenantScope(knex('escrows')).where({ status: 'Active' });
+ *
+ * If the scope is bypassed (e.g. admin context) or no tenant is active,
+ * the query is returned unmodified.
+ *
+ * @param {import('knex').Knex.QueryBuilder} qb - Knex query builder
+ * @param {string} [column='tenant_id'] - column name to filter on
+ * @returns {import('knex').Knex.QueryBuilder}
+ */
+export function tenantScope(qb, column = 'tenant_id') {
+  if (isTenantScopeBypassed()) return qb;
+  const id = getCurrentTenantId();
+  if (!id) return qb;
+  return qb.where(column, id);
+}
+
+// ── Tenant-scoped audit helpers ───────────────────────────────────────────────
+
+/**
+ * Returns a Prisma `where` fragment that scopes to the current tenant.
+ * Use inside any prisma.auditLog / prisma.adminAuditLog query.
+ *
+ *   const where = tenantAuditFilter({ actor: 'G...' });
+ *   await prisma.auditLog.findMany({ where });
+ */
+export function tenantAuditFilter(extra = {}) {
+  const id = getCurrentTenantId();
+  if (!id || isTenantScopeBypassed()) return extra;
+  return { tenantId: id, ...extra };
+}
+
+/**
+ * Scope a Prisma query object to the current tenant by injecting tenantId.
+ * Works for any model that has a tenantId field.
+ *
+ *   const where = withTenantId({ status: 'Active' });
+ *   await prisma.escrow.findMany({ where });
+ */
+export function withTenantId(where = {}) {
+  const id = getCurrentTenantId();
+  if (!id || isTenantScopeBypassed()) return where;
+  return { tenantId: id, ...where };
+}

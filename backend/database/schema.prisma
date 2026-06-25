@@ -169,6 +169,11 @@ model RefreshToken {
   userId     Int       @map("user_id")
   tenantId   String    @map("tenant_id")
   tokenHash  String    @unique @map("token_hash")
+  /// Token family — all rotations from the same login share a family_id.
+  /// Reuse detection revokes the entire family.
+  familyId   String?   @map("family_id")
+  /// Whether this token has already been consumed (rotated or used once).
+  used       Boolean   @default(false) @map("used")
   deviceInfo Json?     @map("device_info")
   ipAddress  String?   @map("ip_address")
   userAgent  String?   @map("user_agent")
@@ -182,6 +187,7 @@ model RefreshToken {
 
   @@index([userId, tenantId])
   @@index([tokenHash])
+  @@index([familyId])
   @@index([expiresAt])
   @@index([isActive])
   @@map("refresh_tokens")
@@ -306,6 +312,10 @@ model Dispute {
   resolutionType   String?   @map("resolution_type")
   /// Whether this dispute was auto-resolved
   autoResolved     Boolean   @default(false) @map("auto_resolved")
+  /// Timestamp of most recent escalation (NULL = never escalated)
+  escalatedAt      DateTime? @map("escalated_at")
+  /// How many times this dispute has been escalated
+  escalationCount  Int       @default(0) @map("escalation_count")
 
   tenant       Tenant            @relation(fields: [tenantId], references: [id])
   escrow       Escrow            @relation(fields: [escrowId], references: [id])
