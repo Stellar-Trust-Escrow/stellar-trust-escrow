@@ -238,6 +238,10 @@ pub fn emit_contract_paused(env: &Env, admin: &Address) {
     env.events().publish((ev::CONTRACT_PAUSED,), admin.clone());
 }
 
+pub fn emit_limits_updated(env: &Env, min: i128, max: i128) {
+    env.events().publish((ev::LIMITS_UPDATED,), (min, max));
+}
+
 pub fn emit_contract_unpaused(env: &Env, admin: &Address) {
     env.events()
         .publish((ev::CONTRACT_UNPAUSED,), admin.clone());

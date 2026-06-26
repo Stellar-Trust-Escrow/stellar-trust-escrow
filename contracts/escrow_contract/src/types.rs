@@ -752,4 +752,8 @@ pub enum DataKey {
     OracleResolution(u64),
     /// Trusted oracle Ed25519 public key for fallback dispute resolution — value: BytesN<32>
     TrustedOracleKey,
+    /// Admin-configurable minimum escrow amount — value: i128
+    MinEscrowAmount,
+    /// Admin-configurable maximum escrow amount — value: i128
+    MaxEscrowAmount,
 }

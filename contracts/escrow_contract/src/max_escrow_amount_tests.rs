@@ -1,10 +1,3 @@
-//! # MAX_ESCROW_AMOUNT Boundary Tests
-//!
-//! Verifies that `create_escrow` and `create_recurring_escrow` enforce the
-//! `MAX_ESCROW_AMOUNT` cap, and that the boundary values behave correctly:
-//! - `total_amount == MAX_ESCROW_AMOUNT` → accepted
-//! - `total_amount == MAX_ESCROW_AMOUNT + 1` → `InvalidEscrowAmount`
-
 #[cfg(test)]
 #[allow(clippy::module_inception)]
 mod max_escrow_amount_tests {
@@ -12,9 +5,8 @@ mod max_escrow_amount_tests {
 
     use crate::{
         EscrowContract, EscrowContractClient, EscrowError, MultisigConfig, MAX_ESCROW_AMOUNT,
+        MIN_ESCROW_AMOUNT,
     };
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
 
     fn setup() -> (
         Env,
@@ -56,9 +48,6 @@ mod max_escrow_amount_tests {
         }
     }
 
-    // ── create_escrow boundary tests ──────────────────────────────────────────
-
-    /// `total_amount == MAX_ESCROW_AMOUNT` must be accepted.
     #[test]
     fn test_create_escrow_at_max_amount_accepted() {
         let (env, admin, client_addr, freelancer, contract) = setup();
@@ -82,7 +71,6 @@ mod max_escrow_amount_tests {
         );
     }
 
-    /// `total_amount == MAX_ESCROW_AMOUNT + 1` must be rejected with `InvalidEscrowAmount`.
     #[test]
     fn test_create_escrow_above_max_amount_rejected() {
         let (env, admin, client_addr, freelancer, contract) = setup();
@@ -104,7 +92,6 @@ mod max_escrow_amount_tests {
         assert_eq!(result, Err(Ok(EscrowError::E19)));
     }
 
-    /// Zero `total_amount` must also be rejected with `InvalidEscrowAmount`.
     #[test]
     fn test_create_escrow_zero_amount_rejected() {
         let (env, admin, client_addr, freelancer, contract) = setup();
@@ -123,5 +110,136 @@ mod max_escrow_amount_tests {
             &no_multisig(&env),
         );
         assert_eq!(result, Err(Ok(EscrowError::E19)));
+    }
+
+    #[test]
+    fn test_create_escrow_at_min_amount_accepted() {
+        let (env, admin, client_addr, freelancer, contract) = setup();
+        let token = register_token(&env, &admin, &client_addr, MIN_ESCROW_AMOUNT + 1_000_000);
+
+        let result = contract.try_create_escrow(
+            &client_addr,
+            &freelancer,
+            &token,
+            &MIN_ESCROW_AMOUNT,
+            &hash32(&env),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
+        assert!(
+            result.is_ok(),
+            "expected Ok at MIN_ESCROW_AMOUNT, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_create_escrow_below_min_amount_rejected() {
+        let (env, admin, client_addr, freelancer, contract) = setup();
+        let token = register_token(&env, &admin, &client_addr, 1_000_000);
+
+        let result = contract.try_create_escrow(
+            &client_addr,
+            &freelancer,
+            &token,
+            &(MIN_ESCROW_AMOUNT - 1),
+            &hash32(&env),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
+        assert_eq!(result, Err(Ok(EscrowError::E19)));
+    }
+
+    #[test]
+    fn test_set_escrow_limits_enforced_on_create() {
+        let (env, admin, client_addr, freelancer, contract) = setup();
+
+        contract.set_escrow_limits(&admin, &1_000, &5_000);
+
+        let token = register_token(&env, &admin, &client_addr, 10_000_000);
+
+        // below new min
+        let result = contract.try_create_escrow(
+            &client_addr,
+            &freelancer,
+            &token,
+            &500,
+            &hash32(&env),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
+        assert_eq!(result, Err(Ok(EscrowError::E19)));
+
+        // above new max
+        let result = contract.try_create_escrow(
+            &client_addr,
+            &freelancer,
+            &token,
+            &5_001,
+            &hash32(&env),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
+        assert_eq!(result, Err(Ok(EscrowError::E19)));
+
+        // at new max boundary
+        let result = contract.try_create_escrow(
+            &client_addr,
+            &freelancer,
+            &token,
+            &5_000,
+            &hash32(&env),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
+        assert!(
+            result.is_ok(),
+            "expected Ok at new max boundary, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_set_escrow_limits_invalid_inputs_rejected() {
+        let (_env, admin, _client_addr, _freelancer, contract) = setup();
+
+        // min > max
+        assert_eq!(
+            contract.try_set_escrow_limits(&admin, &5_000, &1_000),
+            Err(Ok(EscrowError::E19))
+        );
+
+        // zero min
+        assert_eq!(
+            contract.try_set_escrow_limits(&admin, &0, &1_000),
+            Err(Ok(EscrowError::E19))
+        );
+
+        // negative min
+        assert_eq!(
+            contract.try_set_escrow_limits(&admin, &-1, &1_000),
+            Err(Ok(EscrowError::E19))
+        );
+    }
+
+    #[test]
+    fn test_set_escrow_limits_non_admin_rejected() {
+        let (_env, _admin, client_addr, _freelancer, contract) = setup();
+
+        let result = contract.try_set_escrow_limits(&client_addr, &1_000, &5_000);
+        assert!(result.is_err());
     }
 }

@@ -1724,7 +1724,18 @@ impl EscrowContract {
         deadline: Option<u64>,
         lock_time: Option<u64>,
     ) -> Result<(), EscrowError> {
-        if total_amount <= 0 || total_amount > MAX_ESCROW_AMOUNT {
+        let min: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::MinEscrowAmount)
+            .unwrap_or(MIN_ESCROW_AMOUNT);
+        let max: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::MaxEscrowAmount)
+            .unwrap_or(MAX_ESCROW_AMOUNT);
+
+        if total_amount < min || total_amount > max {
             return Err(EscrowError::E19);
         }
 
@@ -1771,10 +1782,6 @@ impl EscrowContract {
             if a == &client || a == &freelancer {
                 return Err(EscrowError::E3);
             }
-        }
-
-        if total_amount < MIN_ESCROW_AMOUNT {
-            return Err(EscrowError::E19);
         }
 
         Self::validate_escrow_inputs(&env, total_amount, deadline, lock_time)?;
@@ -2819,6 +2826,31 @@ impl EscrowContract {
         ContractStorage::bump_instance_ttl(&env);
 
         events::emit_max_milestones_set(&env, new_max);
+        Ok(())
+    }
+
+    pub fn set_escrow_limits(
+        env: Env,
+        caller: Address,
+        min_amount: i128,
+        max_amount: i128,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_admin(&env, &caller)?;
+
+        if min_amount <= 0 || max_amount <= 0 || min_amount > max_amount {
+            return Err(EscrowError::E19);
+        }
+
+        env.storage()
+            .instance()
+            .set(&DataKey::MinEscrowAmount, &min_amount);
+        env.storage()
+            .instance()
+            .set(&DataKey::MaxEscrowAmount, &max_amount);
+        ContractStorage::bump_instance_ttl(&env);
+
+        events::emit_limits_updated(&env, min_amount, max_amount);
         Ok(())
     }
 
