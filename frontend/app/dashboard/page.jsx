@@ -61,7 +61,7 @@ export default function DashboardPage() {
       fetch(`${API_BASE}/api/users/${address}/escrows?status=Active&limit=6`)
         .then((r) => r.json())
         .then((data) => {
-          setEscrows(Array.isArray(data?.escrows) ? data.escrows : []);
+          setEscrows(Array.isArray(data?.data) ? data.data : []);
         })
         .catch(() => setEscrows([])),
     ).finally(() => setEscrowsLoading(false));
@@ -144,7 +144,7 @@ export default function DashboardPage() {
               <div className="grid gap-4 md:grid-cols-2" role="list">
                 {escrows.map((escrow) => (
                   <div key={escrow.id} role="listitem">
-                    <EscrowCard escrow={escrow} />
+                    <EscrowCard escrow={escrow} userAddress={address} />
                   </div>
                 ))}
               </div>

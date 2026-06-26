@@ -15,6 +15,8 @@ function validateAddress(address, res) {
 
 const ESCROW_SUMMARY_SELECT = {
   id: true,
+  clientAddress: true,
+  freelancerAddress: true,
   status: true,
   totalAmount: true,
   remainingBalance: true,
