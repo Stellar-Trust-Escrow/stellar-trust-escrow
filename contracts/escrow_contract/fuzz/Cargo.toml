@@ -1,0 +1,37 @@
+[package]
+name = "stellar-trust-escrow-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+soroban-sdk = { version = "21.0.0", features = ["testutils"] }
+stellar-trust-escrow-contract = { path = ".." }
+
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "fuzz_create_escrow"
+path = "fuzz_targets/fuzz_create_escrow.rs"
+doc = false
+
+[[bin]]
+name = "fuzz_release_funds"
+path = "fuzz_targets/fuzz_release_funds.rs"
+doc = false
+
+[[bin]]
+name = "fuzz_raise_dispute"
+path = "fuzz_targets/fuzz_raise_dispute.rs"
+doc = false
+
+[[bin]]
+name = "fuzz_submit_ruling"
+path = "fuzz_targets/fuzz_submit_ruling.rs"
+doc = false
