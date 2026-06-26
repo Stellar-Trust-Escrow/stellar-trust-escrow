@@ -8,6 +8,7 @@ Base path: `/api/webhooks`. The gateway requires JWT for every route; API keys a
 | --- | --- | --- |
 | POST | `/api/webhooks/subscribe` | Create subscription |
 | GET | `/api/webhooks` | List subscriptions |
+| POST | `/api/webhooks/:id/rotate-secret` | Rotate a subscription secret |
 | DELETE | `/api/webhooks/:id` | Delete subscription |
 | GET | `/api/webhooks/:id/deliveries` | Delivery history |
 
@@ -47,6 +48,24 @@ curl http://localhost:3001/api/webhooks -H "Authorization: Bearer $TOKEN"
 | 200 | `{data: subscriptions}`; secrets omitted |
 | 401/403/404/429/500 | Shared responses |
 
+## POST `/api/webhooks/:id/rotate-secret`
+
+Rotate the signing secret for a webhook subscription. The previous secret stops working immediately after the rotation.
+
+```bash
+curl -X POST http://localhost:3001/api/webhooks/cmc9x7h3q0001w9j1a2b3c4d5/rotate-secret -H "Authorization: Bearer $TOKEN"
+```
+
+```json
+{"data":{"id":"cmc9x7h3q0001w9j1a2b3c4d5","secret":"4a1e0d54d7e0bf6cc93cb0f0d6c91f6d1f0d9690c4a7d7f91d2f7a8a3d0cd0af"}}
+```
+
+| Status | Response |
+| --- | --- |
+| 200 | `{data: { id, secret }}` |
+| 404 | `{"error":"Webhook subscription not found"}` |
+| 401/403/429/500 | Shared responses |
+
 ## DELETE `/api/webhooks/:id`
 
 ```bash
@@ -81,7 +100,7 @@ Unknown/differently owned subscriptions return `200` with an empty list.
 
 ## Delivered request
 
-Headers: `X-Webhook-Signature`, `X-Webhook-Delivery-Id`, and `X-Webhook-Event-Type`. Signature is lowercase hex HMAC-SHA256 of the exact JSON body using the subscription secret.
+Headers: `X-Webhook-Signature`, `X-Webhook-Timestamp`, `X-Webhook-Delivery-Id`, and `X-Webhook-Event-Type`. Signature is the `sha256=` prefixed HMAC-SHA256 of `timestamp + rawBody` using the subscription secret.
 
 ```json
 {"eventType":"funds_rel","deliveryId":"cmc9yb6pk0002w9j1e6f7g8h9","timestamp":"2026-06-25T11:25:02.000Z","data":{"escrowId":"1042","amount":"750000000","recipient":"GDQP2WX3YJQZC6KLE5Q7PH7L4QK6RFKX2HM5FMVNNK7KXQMS3RYM4B7A"}}
