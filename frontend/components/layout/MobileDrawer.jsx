@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 const NAV_LINKS = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/explorer', label: 'Explorer' },
+  { href: '/help', label: 'Help' },
 ];
 
 export default function MobileDrawer({ isOpen, onClose }) {

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450">
+  <rect width="800" height="450" rx="24" fill="#0f172a" />
+  <rect x="40" y="40" width="720" height="80" rx="18" fill="#1f2937" />
+  <text x="60" y="78" fill="#e2e8f0" font-family="Inter, sans-serif" font-size="28" font-weight="700">Connect Your Wallet</text>
+  <rect x="60" y="150" width="320" height="220" rx="18" fill="#111827" stroke="#475569" stroke-width="2" />
+  <text x="90" y="190" fill="#f8fafc" font-family="Inter, sans-serif" font-size="22">1. Choose Wallet</text>
+  <text x="90" y="230" fill="#94a3b8" font-family="Inter, sans-serif" font-size="18">Select your preferred wallet app.</text>
+  <rect x="420" y="150" width="320" height="220" rx="18" fill="#111827" stroke="#475569" stroke-width="2" />
+  <text x="450" y="190" fill="#f8fafc" font-family="Inter, sans-serif" font-size="22">2. Approve Connection</text>
+  <text x="450" y="230" fill="#94a3b8" font-family="Inter, sans-serif" font-size="18">Your wallet will ask to connect.</text>
+  <line x1="320" y1="250" x2="420" y2="250" stroke="#38bdf8" stroke-width="4" stroke-linecap="round" />
+  <circle cx="320" cy="250" r="8" fill="#38bdf8" />
+</svg>

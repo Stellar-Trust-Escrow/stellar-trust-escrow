@@ -70,6 +70,12 @@ export default function Header() {
             >
               {t('nav.explorer')}
             </Link>
+            <Link
+              href="/help"
+              className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white text-sm transition-colors"
+            >
+              Help
+            </Link>
             {/* TODO (contributor): add Leaderboard link */}
           </nav>
 
@@ -165,6 +171,13 @@ export default function Header() {
               onClick={() => setIsMobileMenuOpen(false)}
             >
               {t('nav.explorer')}
+            </Link>
+            <Link
+              href="/help"
+              className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors px-2"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              Help
             </Link>
           </nav>
         )}
