@@ -445,6 +445,69 @@ If you want an issue, leave a comment so maintainers know it is in progress.
 - Windows: use PowerShell for npm and Docker commands. Install Visual Studio Build Tools for native Rust builds, or use WSL if you want Linux-style contract tooling and bash-based helper scripts like `scripts/test-contract.sh`.
 - Docker Desktop works well for local Postgres on all three platforms.
 
+## Fuzz Testing
+
+The escrow contract includes [cargo-fuzz](https://rust-fuzz.github.io/book/cargo-fuzz.html) targets for discovering edge-case bugs that unit tests miss — invalid UTF-8, extreme integer values, and unexpected state combinations.
+
+### Prerequisites
+
+```bash
+# Install cargo-fuzz (requires nightly Rust)
+rustup toolchain install nightly
+cargo +nightly install cargo-fuzz
+```
+
+### Available fuzz targets
+
+| Target                | Entry point tested | What it catches |
+|-----------------------|--------------------|-----------------|
+| `fuzz_create_escrow`  | `create_escrow`    | Panics from extreme amounts, invalid addresses, past deadlines |
+| `fuzz_release_funds`  | `release_funds`    | Double-release, wrong caller, fund leaks |
+| `fuzz_raise_dispute`  | `raise_dispute`    | Double-dispute, unauthorized access, invalid milestone IDs |
+| `fuzz_submit_ruling`  | `resolve_dispute`  | Invalid splits, unauthorized callers, fund conservation |
+
+### Running locally
+
+```bash
+cd contracts/escrow_contract/fuzz
+
+# Run a single target for 60 seconds
+cargo +nightly fuzz run fuzz_create_escrow -- -max_total_time=60
+
+# Run all targets (configurable duration via FUZZ_SECS, default 60)
+FUZZ_SECS=${FUZZ_SECS:-60}
+for target in fuzz_create_escrow fuzz_release_funds fuzz_raise_dispute fuzz_submit_ruling; do
+  cargo +nightly fuzz run "$target" -- -max_total_time=$FUZZ_SECS
+done
+```
+
+### CI integration
+
+Add to your CI workflow:
+
+```yaml
+- name: Fuzz test escrow contract
+  env:
+    FUZZ_SECS: 60
+  run: |
+    rustup toolchain install nightly
+    cargo +nightly install cargo-fuzz
+    cd contracts/escrow_contract/fuzz
+    for target in fuzz_create_escrow fuzz_release_funds fuzz_raise_dispute fuzz_submit_ruling; do
+      cargo +nightly fuzz run "$target" -- -max_total_time=$FUZZ_SECS
+    done
+```
+
+### Crash triage
+
+Any crashes found by the fuzzer are saved to `fuzz/artifacts/<target>/`. To reproduce:
+
+```bash
+cargo +nightly fuzz run fuzz_create_escrow fuzz/artifacts/fuzz_create_escrow/<crash-file>
+```
+
+Add confirmed crash inputs to `fuzz/corpus/<target>/` as regression test cases.
+
 ## Troubleshooting
 
 ### `npm ci` fails early
