@@ -73,13 +73,17 @@ function ExplorerContent() {
     }
   }, []);
 
-  // Save scroll position before navigating to detail
+  // Save scroll position before navigating away (detail page, back button)
   useEffect(() => {
-    const handleBeforeUnload = () => {
-      sessionStorage.setItem(SCROLL_KEY, String(window.scrollY));
+    const saveScroll = () => sessionStorage.setItem(SCROLL_KEY, String(window.scrollY));
+    window.addEventListener('beforeunload', saveScroll);
+    // Also capture click-based navigation on escrow card links
+    const listEl = listRef.current;
+    if (listEl) listEl.addEventListener('click', saveScroll, { capture: true });
+    return () => {
+      window.removeEventListener('beforeunload', saveScroll);
+      if (listEl) listEl.removeEventListener('click', saveScroll, { capture: true });
     };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
 
   // Sentinel element triggers next page load
@@ -186,18 +190,22 @@ function ExplorerContent() {
                 ))}
               </div>
 
-              {/* Sentinel for IntersectionObserver */}
-              <div ref={sentinelRef} className="h-1" aria-hidden="true" />
+              {/* Sentinel for IntersectionObserver — must sit below last card */}
+              <div ref={sentinelRef} data-testid="scroll-sentinel" className="h-1" aria-hidden="true" />
 
-              {/* Bottom state */}
-              <div className="flex justify-center py-8 text-sm text-gray-500">
+              {/* Bottom state — aria-live so screen readers announce updates */}
+              <div
+                aria-live="polite"
+                aria-atomic="true"
+                className="flex justify-center py-8 text-sm text-gray-500"
+              >
                 {loading && (
                   <span className="flex items-center gap-2">
                     <Spinner size="sm" />
                     Loading more...
                   </span>
                 )}
-                {!loading && !hasMore && (
+                {!loading && !hasMore && escrows.length > 0 && (
                   <span>All escrows loaded</span>
                 )}
               </div>
