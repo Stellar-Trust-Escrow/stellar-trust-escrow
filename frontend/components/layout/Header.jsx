@@ -23,10 +23,12 @@ import MobileDrawer from './MobileDrawer';
 import ThemeToggle from './ThemeToggle';
 import CurrencySelector from '../ui/CurrencySelector';
 import NetworkIndicator from './NetworkIndicator';
+import { useWalletStore } from '../../store/app-store';
 
 export default function Header() {
   const wallet = useWallet();
   const { t } = useI18n();
+  const { address } = useWalletStore();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -66,7 +68,14 @@ export default function Header() {
             >
               {t('nav.explorer')}
             </Link>
-            {/* TODO (contributor): add Leaderboard link */}
+            {address && (
+              <Link
+                href="/profile"
+                className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white text-sm transition-colors"
+              >
+                Profile
+              </Link>
+            )}
           </nav>
 
           {/* Right Side */}

@@ -2,15 +2,16 @@
 
 import { useState, useRef, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Search, SlidersHorizontal, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, SlidersHorizontal, X } from 'lucide-react';
 import Spinner from '../../components/ui/Spinner';
 import EscrowCard from '../../components/escrow/EscrowCard';
 import SearchFilters from '../../components/explorer/SearchFilters';
-import Button from '../../components/ui/Button';
 import EmptyState from '../../components/ui/EmptyState';
 import ErrorBoundary from '../../components/error/ErrorBoundary';
+import { useInfiniteEscrows } from '../../hooks/useInfiniteEscrows';
+import { useIntersectionObserver } from '../../hooks/useIntersectionObserver';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+const SCROLL_KEY = 'explorer-scroll-y';
 
 const DEFAULT_FILTERS = {
   statuses: [],
@@ -20,36 +21,6 @@ const DEFAULT_FILTERS = {
   dateTo: '',
   sort: 'createdAt:desc',
 };
-
-function normaliseEscrow(e) {
-  return {
-    id: String(e.id),
-    title: `Escrow #${e.id}`,
-    status: e.status,
-    totalAmount: `${Number(e.totalAmount).toLocaleString()} USDC`,
-    milestoneProgress: '0 / 0',
-    counterparty: e.clientAddress
-      ? `${e.clientAddress.slice(0, 4)}…${e.clientAddress.slice(-4)}`
-      : '—',
-    role: 'client',
-  };
-}
-
-function buildQuery({ search, filters, page, limit }) {
-  const params = new URLSearchParams();
-  params.set('page', String(page));
-  params.set('limit', String(limit));
-  if (search) params.set('search', search);
-  if (filters.statuses.length) params.set('status', filters.statuses.join(','));
-  if (filters.minAmount) params.set('minAmount', filters.minAmount);
-  if (filters.maxAmount) params.set('maxAmount', filters.maxAmount);
-  if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
-  if (filters.dateTo) params.set('dateTo', filters.dateTo);
-  const [sortBy, sortOrder] = filters.sort.split(':');
-  params.set('sortBy', sortBy);
-  params.set('sortOrder', sortOrder);
-  return params.toString();
-}
 
 function filtersFromUrl(sp) {
   const statusParam = sp.get('status') || '';
@@ -65,79 +36,73 @@ function filtersFromUrl(sp) {
   };
 }
 
-const PAGE_SIZE = 12;
-
 function ExplorerContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [search, setSearch] = useState(searchParams.get('search') || '');
   const [debouncedSearch, setDebouncedSearch] = useState(search);
   const [filters, setFilters] = useState(() => filtersFromUrl(searchParams));
-  const [page, setPage] = useState(Number(searchParams.get('page') || 1));
   const [showFilters, setShowFilters] = useState(false);
-  const [escrows, setEscrows] = useState([]);
-  const [meta, setMeta] = useState({
-    total: 0,
-    totalPages: 0,
-    hasNextPage: false,
-    hasPreviousPage: false,
-  });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const listRef = useRef(null);
 
   const debounceTimer = useRef(null);
   useEffect(() => {
     clearTimeout(debounceTimer.current);
-    debounceTimer.current = setTimeout(() => {
-      setDebouncedSearch(search);
-      setPage(1);
-    }, 300);
+    debounceTimer.current = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(debounceTimer.current);
   }, [search]);
 
   useEffect(() => {
     const params = new URLSearchParams();
     if (debouncedSearch) params.set('search', debouncedSearch);
-    if (page > 1) params.set('page', String(page));
     router.replace(`/explorer?${params.toString()}`, { scroll: false });
-  }, [debouncedSearch, page, router]);
+  }, [debouncedSearch, router]);
+
+  const { escrows, hasMore, loading, initialLoading, error, fetchNext } = useInfiniteEscrows({
+    search: debouncedSearch,
+    filters,
+    limit: 12,
+  });
+
+  // Restore scroll position when navigating back
+  useEffect(() => {
+    const saved = sessionStorage.getItem(SCROLL_KEY);
+    if (saved) {
+      window.scrollTo({ top: Number(saved) });
+      sessionStorage.removeItem(SCROLL_KEY);
+    }
+  }, []);
+
+  // Save scroll position before navigating to detail
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      sessionStorage.setItem(SCROLL_KEY, String(window.scrollY));
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
+
+  // Sentinel element triggers next page load
+  const { ref: sentinelRef, isIntersecting } = useIntersectionObserver({
+    rootMargin: '200px',
+    threshold: 0,
+    triggerOnce: false,
+  });
 
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    const qs = buildQuery({ search: debouncedSearch, filters, page, limit: PAGE_SIZE });
-    fetch(`${API_BASE}/api/escrows?${qs}`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`API error ${r.status}`);
-        return r.json();
-      })
-      .then(({ data, total, totalPages, hasNextPage, hasPreviousPage }) => {
-        if (cancelled) return;
-        setEscrows((data || []).map(normaliseEscrow));
-        setMeta({ total: total || 0, totalPages: totalPages || 0, hasNextPage, hasPreviousPage });
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err.message);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [debouncedSearch, filters, page]);
+    if (isIntersecting && hasMore && !loading) {
+      fetchNext();
+    }
+  }, [isIntersecting, hasMore, loading, fetchNext]);
 
   const handleFilterChange = useCallback((key, value) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
-    setPage(1);
   }, []);
 
   const handleReset = useCallback(() => {
     setFilters(DEFAULT_FILTERS);
     setSearch('');
     setDebouncedSearch('');
-    setPage(1);
   }, []);
 
   const activeFilterCount =
@@ -192,13 +157,13 @@ function ExplorerContent() {
           </div>
         )}
 
-        <div className="flex-1 min-w-0">
-          {loading ? (
+        <div className="flex-1 min-w-0" ref={listRef}>
+          {initialLoading ? (
             <div className="flex flex-col items-center justify-center py-24 gap-4 text-gray-400">
               <Spinner />
               <p className="text-sm">Loading escrows...</p>
             </div>
-          ) : error ? (
+          ) : error && escrows.length === 0 ? (
             <div className="text-center py-16">
               <p className="text-red-400 mb-3">Failed to load escrows</p>
               <p className="text-gray-500 text-sm">{error}</p>
@@ -212,42 +177,34 @@ function ExplorerContent() {
               actionHref={activeFilterCount > 0 ? undefined : '/escrow/create'}
             />
           ) : (
-            <div
-              className={`grid gap-4 ${showFilters ? 'md:grid-cols-2' : 'md:grid-cols-2 lg:grid-cols-3'}`}
-            >
-              {escrows.map((escrow) => (
-                <EscrowCard key={escrow.id} escrow={escrow} />
-              ))}
-            </div>
+            <>
+              <div
+                className={`grid gap-4 ${showFilters ? 'md:grid-cols-2' : 'md:grid-cols-2 lg:grid-cols-3'}`}
+              >
+                {escrows.map((escrow) => (
+                  <EscrowCard key={escrow.id} escrow={escrow} />
+                ))}
+              </div>
+
+              {/* Sentinel for IntersectionObserver */}
+              <div ref={sentinelRef} className="h-1" aria-hidden="true" />
+
+              {/* Bottom state */}
+              <div className="flex justify-center py-8 text-sm text-gray-500">
+                {loading && (
+                  <span className="flex items-center gap-2">
+                    <Spinner size="sm" />
+                    Loading more...
+                  </span>
+                )}
+                {!loading && !hasMore && (
+                  <span>All escrows loaded</span>
+                )}
+              </div>
+            </>
           )}
         </div>
       </div>
-
-      {!loading && meta.totalPages > 1 && (
-        <div className="flex items-center justify-center gap-3 pt-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={!meta.hasPreviousPage}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-          >
-            <ChevronLeft size={14} />
-            Prev
-          </Button>
-          <span className="text-sm text-gray-400">
-            Page {page} of {meta.totalPages || 1}
-          </span>
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={!meta.hasNextPage}
-            onClick={() => setPage((p) => p + 1)}
-          >
-            Next
-            <ChevronRight size={14} />
-          </Button>
-        </div>
-      )}
     </div>
   );
 }
