@@ -51,7 +51,9 @@ export function useInfiniteEscrows({ search = '', filters = {}, limit = 12 } = {
   const inflightRef = useRef(false);
   const cursorRef = useRef(null);
 
-  // Reset and reload when search/filters change
+  // Reset and reload when search/filters change.
+  // JSON.stringify(filters) in the dep array avoids stale closures when filter
+  // objects are recreated on every render but have the same logical value.
   useEffect(() => {
     let cancelled = false;
     inflightRef.current = false;
@@ -69,12 +71,17 @@ export function useInfiniteEscrows({ search = '', filters = {}, limit = 12 } = {
         if (!r.ok) throw new Error(`API error ${r.status}`);
         return r.json();
       })
-      .then(({ data, next_cursor, has_more }) => {
+      .then((json) => {
         if (cancelled) return;
-        setEscrows((data || []).map(normaliseEscrow));
-        cursorRef.current = next_cursor || null;
-        setCursor(next_cursor || null);
-        setHasMore(Boolean(has_more));
+        // Support both cursor-based (`next_cursor`/`has_more`) and legacy
+        // page-based (`totalPages`) API shapes during migration.
+        const items = json.data || json.escrows || [];
+        const nextCursor = json.next_cursor ?? null;
+        const more = json.has_more !== undefined ? Boolean(json.has_more) : Boolean(nextCursor);
+        setEscrows(items.map(normaliseEscrow));
+        cursorRef.current = nextCursor;
+        setCursor(nextCursor);
+        setHasMore(more);
       })
       .catch((err) => {
         if (!cancelled) setError(err.message);
@@ -102,11 +109,14 @@ export function useInfiniteEscrows({ search = '', filters = {}, limit = 12 } = {
       const qs = buildQuery({ search, filters, cursor: cursorRef.current, limit });
       const res = await fetch(`${API_BASE}/api/escrows?${qs}`);
       if (!res.ok) throw new Error(`API error ${res.status}`);
-      const { data, next_cursor, has_more } = await res.json();
-      setEscrows((prev) => [...prev, ...(data || []).map(normaliseEscrow)]);
-      cursorRef.current = next_cursor || null;
-      setCursor(next_cursor || null);
-      setHasMore(Boolean(has_more));
+      const json = await res.json();
+      const items = json.data || json.escrows || [];
+      const nextCursor = json.next_cursor ?? null;
+      const more = json.has_more !== undefined ? Boolean(json.has_more) : Boolean(nextCursor);
+      setEscrows((prev) => [...prev, ...items.map(normaliseEscrow)]);
+      cursorRef.current = nextCursor;
+      setCursor(nextCursor);
+      setHasMore(more);
     } catch (err) {
       setError(err.message);
     } finally {
