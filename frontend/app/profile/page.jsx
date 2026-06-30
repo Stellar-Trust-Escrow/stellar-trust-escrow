@@ -180,7 +180,7 @@ export default function ProfilePage() {
 
       {/* Summary stats */}
       <ErrorBoundary>
-        <section aria-label="Account statistics">
+        <section aria-label="Account statistics" data-testid="profile-stats">
           <h2 className="text-lg font-semibold text-white mb-4">Overview</h2>
           {statsLoading ? (
             <div className="flex justify-center py-8"><Spinner /></div>

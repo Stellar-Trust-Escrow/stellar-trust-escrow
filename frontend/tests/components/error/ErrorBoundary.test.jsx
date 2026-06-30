@@ -1,7 +1,8 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import ErrorBoundary from '../../../components/error/ErrorBoundary';
 
-// Suppress console.error noise from intentional throws in tests
+// Suppress console.error noise from intentional throws in tests.
+// React re-throws errors in dev mode, which would clutter test output.
 beforeEach(() => {
   jest.spyOn(console, 'error').mockImplementation(() => {});
 });
