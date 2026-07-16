@@ -2,13 +2,14 @@
 
 import { useState, useRef, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Search, SlidersHorizontal, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, SlidersHorizontal, X, ChevronDown } from 'lucide-react';
 import Spinner from '../../components/ui/Spinner';
 import EscrowCard from '../../components/escrow/EscrowCard';
 import SearchFilters from '../../components/explorer/SearchFilters';
 import Button from '../../components/ui/Button';
 import EmptyState from '../../components/ui/EmptyState';
 import ErrorBoundary from '../../components/error/ErrorBoundary';
+import { useInfiniteScroll } from '../../hooks/useInfiniteScroll';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -73,71 +74,60 @@ function ExplorerContent() {
   const [search, setSearch] = useState(searchParams.get('search') || '');
   const [debouncedSearch, setDebouncedSearch] = useState(search);
   const [filters, setFilters] = useState(() => filtersFromUrl(searchParams));
-  const [page, setPage] = useState(Number(searchParams.get('page') || 1));
   const [showFilters, setShowFilters] = useState(false);
-  const [escrows, setEscrows] = useState([]);
-  const [meta, setMeta] = useState({
-    total: 0,
-    totalPages: 0,
-    hasNextPage: false,
-    hasPreviousPage: false,
-  });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
   const debounceTimer = useRef(null);
   useEffect(() => {
     clearTimeout(debounceTimer.current);
     debounceTimer.current = setTimeout(() => {
       setDebouncedSearch(search);
-      setPage(1);
     }, 300);
     return () => clearTimeout(debounceTimer.current);
   }, [search]);
 
+  // Keep the URL in sync so search is shareable / restorable (no page param,
+  // since position is now scroll-driven rather than page-driven).
   useEffect(() => {
     const params = new URLSearchParams();
     if (debouncedSearch) params.set('search', debouncedSearch);
-    if (page > 1) params.set('page', String(page));
     router.replace(`/explorer?${params.toString()}`, { scroll: false });
-  }, [debouncedSearch, page, router]);
+  }, [debouncedSearch, router]);
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    const qs = buildQuery({ search: debouncedSearch, filters, page, limit: PAGE_SIZE });
-    fetch(`${API_BASE}/api/escrows?${qs}`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`API error ${r.status}`);
-        return r.json();
-      })
-      .then(({ data, total, totalPages, hasNextPage, hasPreviousPage }) => {
-        if (cancelled) return;
-        setEscrows((data || []).map(normaliseEscrow));
-        setMeta({ total: total || 0, totalPages: totalPages || 0, hasNextPage, hasPreviousPage });
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err.message);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [debouncedSearch, filters, page]);
+  // Fetch a single page of results for the infinite-scroll hook.
+  const fetchPage = useCallback(
+    async (pageNum, limit) => {
+      const qs = buildQuery({ search: debouncedSearch, filters, page: pageNum, limit });
+      const res = await fetch(`${API_BASE}/api/escrows?${qs}`);
+      if (!res.ok) throw new Error(`API error ${res.status}`);
+      const { data, hasNextPage } = await res.json();
+      return { items: (data || []).map(normaliseEscrow), hasNextPage };
+    },
+    [debouncedSearch, filters],
+  );
+
+  const {
+    items: escrows,
+    loading: initialLoading,
+    loadingMore,
+    error,
+    hasNextPage,
+    sentinelRef,
+    loadMore,
+    reset,
+  } = useInfiniteScroll({
+    fetchPage,
+    limit: PAGE_SIZE,
+    deps: [debouncedSearch, filters],
+  });
 
   const handleFilterChange = useCallback((key, value) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
-    setPage(1);
   }, []);
 
   const handleReset = useCallback(() => {
     setFilters(DEFAULT_FILTERS);
     setSearch('');
     setDebouncedSearch('');
-    setPage(1);
   }, []);
 
   const activeFilterCount =
@@ -169,6 +159,7 @@ function ExplorerContent() {
             <button
               onClick={() => setSearch('')}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+              aria-label="Clear search"
             >
               <X size={14} />
             </button>
@@ -177,31 +168,40 @@ function ExplorerContent() {
 
         <button
           onClick={() => setShowFilters((v) => !v)}
+          aria-expanded={showFilters}
+          aria-controls="explorer-filters"
           className="flex items-center gap-2 px-4 py-2.5 rounded-lg border bg-gray-900 border-gray-800 text-gray-300"
         >
           <SlidersHorizontal size={15} />
           Filters
-          {activeFilterCount > 0 && <span className="text-xs">{activeFilterCount}</span>}
+          {activeFilterCount > 0 && (
+            <span className="text-xs bg-indigo-600 text-white rounded-full px-1.5 py-0.5">
+              {activeFilterCount}
+            </span>
+          )}
         </button>
       </div>
 
       <div className={`flex gap-6 ${showFilters ? 'items-start' : ''}`}>
         {showFilters && (
-          <div className="w-56 flex-shrink-0 card">
+          <div id="explorer-filters" className="w-56 flex-shrink-0 card">
             <SearchFilters filters={filters} onChange={handleFilterChange} onReset={handleReset} />
           </div>
         )}
 
         <div className="flex-1 min-w-0">
-          {loading ? (
+          {initialLoading ? (
             <div className="flex flex-col items-center justify-center py-24 gap-4 text-gray-400">
               <Spinner />
-              <p className="text-sm">Loading escrows...</p>
+              <p className="text-sm">Loading escrows…</p>
             </div>
           ) : error ? (
-            <div className="text-center py-16">
+            <div role="alert" className="text-center py-16 card border-red-500/30 bg-red-500/10">
               <p className="text-red-400 mb-3">Failed to load escrows</p>
-              <p className="text-gray-500 text-sm">{error}</p>
+              <p className="text-gray-500 text-sm mb-4">{error}</p>
+              <Button variant="secondary" size="sm" onClick={reset}>
+                Try again
+              </Button>
             </div>
           ) : escrows.length === 0 ? (
             <EmptyState
@@ -212,42 +212,66 @@ function ExplorerContent() {
               actionHref={activeFilterCount > 0 ? undefined : '/escrow/create'}
             />
           ) : (
-            <div
-              className={`grid gap-4 ${showFilters ? 'md:grid-cols-2' : 'md:grid-cols-2 lg:grid-cols-3'}`}
-            >
-              {escrows.map((escrow) => (
-                <EscrowCard key={escrow.id} escrow={escrow} />
-              ))}
-            </div>
+            <>
+              {/* WAI-ARIA feed pattern: a scrollable stream of articles.
+                  aria-busy communicates background loading to assistive tech. */}
+              <div
+                role="feed"
+                aria-busy={loadingMore}
+                aria-label="Escrow results"
+                className={`grid gap-4 ${showFilters ? 'md:grid-cols-2' : 'md:grid-cols-2 lg:grid-cols-3'}`}
+              >
+                {escrows.map((escrow, index) => (
+                  <article
+                    key={escrow.id}
+                    role="article"
+                    aria-posinset={index + 1}
+                    aria-setsize={-1}
+                    aria-label={`Escrow ${escrow.title}`}
+                  >
+                    <EscrowCard escrow={escrow} />
+                  </article>
+                ))}
+              </div>
+
+              {/* Live region announces load progress to screen readers. */}
+              <div aria-live="polite" className="sr-only">
+                {loadingMore ? 'Loading more escrows…' : ''}
+              </div>
+
+              {hasNextPage ? (
+                <div className="flex flex-col items-center gap-3 pt-6">
+                  {loadingMore && <Spinner size="sm" />}
+                  {/* Manual trigger — keyboard / screen-reader friendly
+                      fallback to the scroll sentinel. */}
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={loadMore}
+                    disabled={loadingMore}
+                    aria-label="Load more escrows"
+                  >
+                    {loadingMore ? (
+                      'Loading…'
+                    ) : (
+                      <>
+                        Load more
+                        <ChevronDown size={14} />
+                      </>
+                    )}
+                  </Button>
+                  {/* Sentinel: observer fires loadMore as it nears the viewport. */}
+                  <div ref={sentinelRef} aria-hidden="true" className="h-px w-full" />
+                </div>
+              ) : (
+                <p className="text-center text-sm text-gray-500 pt-6" role="status">
+                  You&apos;ve reached the end of the list.
+                </p>
+              )}
+            </>
           )}
         </div>
       </div>
-
-      {!loading && meta.totalPages > 1 && (
-        <div className="flex items-center justify-center gap-3 pt-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={!meta.hasPreviousPage}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-          >
-            <ChevronLeft size={14} />
-            Prev
-          </Button>
-          <span className="text-sm text-gray-400">
-            Page {page} of {meta.totalPages || 1}
-          </span>
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={!meta.hasNextPage}
-            onClick={() => setPage((p) => p + 1)}
-          >
-            Next
-            <ChevronRight size={14} />
-          </Button>
-        </div>
-      )}
     </div>
   );
 }
@@ -259,7 +283,7 @@ export default function ExplorerPage() {
         fallback={
           <div className="flex flex-col items-center justify-center py-24 gap-4 text-gray-400">
             <Spinner />
-            <p className="text-sm">Loading escrows...</p>
+            <p className="text-sm">Loading escrows…</p>
           </div>
         }
       >
