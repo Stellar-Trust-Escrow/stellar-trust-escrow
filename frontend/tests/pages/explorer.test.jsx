@@ -93,7 +93,7 @@ describe('ExplorerPage — infinite scroll', () => {
 
     setIntersecting(true);
 
-    expect(await screen.findAllByRole('article')).toHaveLength(24);
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(24));
     expect(screen.getByText('Escrow #13')).toBeInTheDocument();
   });
 
@@ -108,7 +108,7 @@ describe('ExplorerPage — infinite scroll', () => {
     const loadMore = await screen.findByRole('button', { name: /load more escrows/i });
     fireEvent.click(loadMore);
 
-    expect(await screen.findAllByRole('article')).toHaveLength(24);
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(24));
   });
 
   it('shows the end-of-list message when no more pages exist', async () => {

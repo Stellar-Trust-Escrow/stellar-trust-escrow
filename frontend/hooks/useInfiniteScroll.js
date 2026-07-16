@@ -47,8 +47,7 @@ export function useInfiniteScroll({ fetchPage, limit = 12, rootMargin = '300px',
   const [error, setError] = useState(null);
 
   // Guards against concurrent fetches (e.g. observer firing while a manual
-  // load is in flight) and against state updates after unmount. Starts true
-  // so the very first (mount) load is not discarded before the effect runs.
+  // load is in flight) and against state updates after unmount.
   const inFlight = useRef(false);
   const mounted = useRef(true);
   useEffect(() => {
@@ -66,19 +65,9 @@ export function useInfiniteScroll({ fetchPage, limit = 12, rootMargin = '300px',
       else setLoading(true);
       setError(null);
       try {
-        console.error(
-          '[LOADPAGE] target=' + targetPage + ' append=' + append + ' mounted=' + mounted.current,
-        );
         const { items: nextItems, hasNextPage: more } = await fetchPage(targetPage, limit);
-        console.error('[LOADPAGE] got ' + (nextItems || []).length + ' items');
         if (!mounted.current) return;
-        setItems((prev) => {
-          const next = append ? [...prev, ...nextItems] : nextItems;
-          console.error(
-            '[SETITEMS] prev=' + prev.length + ' got=' + nextItems.length + ' -> ' + next.length,
-          );
-          return next;
-        });
+        setItems((prev) => (append ? [...prev, ...nextItems] : nextItems));
         setHasNextPage(more);
         setPage(targetPage + 1);
       } catch (err) {
@@ -97,7 +86,6 @@ export function useInfiniteScroll({ fetchPage, limit = 12, rootMargin = '300px',
 
   // First load + reset when upstream query (search/filters) changes.
   const reset = useCallback(() => {
-    console.error('[RESET] clearing items');
     setItems([]);
     setPage(1);
     setHasNextPage(false);
@@ -107,16 +95,12 @@ export function useInfiniteScroll({ fetchPage, limit = 12, rootMargin = '300px',
 
   // Append the next page on demand (scroll sentinel or manual button).
   const loadMore = useCallback(() => {
-    console.error(
-      '[LOADMORE] inFlight=' + inFlight.current + ' hasNext=' + hasNextPage + ' page=' + page,
-    );
     if (inFlight.current || !hasNextPage) return;
     loadPage(page, { append: true });
   }, [loadPage, hasNextPage, page]);
 
   // Initial load on mount, and a clean reload whenever `deps` change.
   useEffect(() => {
-    console.error('[DEPS] reset fired deps=' + JSON.stringify(deps));
     reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
