@@ -235,6 +235,7 @@ Stellar-Crowd-Fund-Escrow/
 │   └── start-sandbox.sh               # Local Stellar Quickstart + contract deploy
 │
 ├── docs/                              # Architecture, security, contributing guides
+│   └── dispute-resolution-guide.md     # On-chain dispute lifecycle and backend workflow
 ├── .husky/pre-push                    # Enforces tests + branch naming before push
 ├── docker-compose.yml                 # PostgreSQL + Redis + local Stellar node
 └── package.json                       # npm workspaces root
