@@ -557,6 +557,38 @@ pub struct SlashRecord {
     pub disputed: bool,
 }
 
+/// A deadline extension request requiring mutual participant consent.
+///
+/// Either the client or freelancer can propose an extension.
+/// Both parties must approve for the extension to take effect.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct DeadlineExtensionRequest {
+    /// The escrow ID this extension request belongs to.
+    pub escrow_id: u64,
+
+    /// Address of the party requesting the extension.
+    pub requester: Address,
+
+    /// Proposed new deadline (ledger timestamp).
+    pub new_deadline: u64,
+
+    /// Reason for the extension request.
+    pub reason: String,
+
+    /// When the extension was requested (ledger timestamp).
+    pub requested_at: u64,
+
+    /// Whether the counterparty has approved this extension.
+    pub counterparty_approved: bool,
+
+    /// Ledger timestamp when the counterparty approved (if they did).
+    pub approved_at: Option<u64>,
+
+    /// True if the request has been rejected or cancelled.
+    pub cancelled: bool,
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // META-TRANSACTIONS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -752,4 +784,8 @@ pub enum DataKey {
     OracleResolution(u64),
     /// Trusted oracle Ed25519 public key for fallback dispute resolution — value: BytesN<32>
     TrustedOracleKey,
+    /// Deadline extension request by escrow ID — key: u64, value: DeadlineExtensionRequest
+    DeadlineExtensionRequest(u64),
+    /// Escrow IDs with active deadline extension requests indexed by requester — key: Address, value: Vec<u64>
+    DeadlineExtensionsByRequester(Address),
 }

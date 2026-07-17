@@ -407,6 +407,56 @@ pub fn emit_deadline_extended(env: &Env, escrow_id: u64, old_deadline: u64, new_
     );
 }
 
+/// Emitted when a deadline extension is requested by one party.
+///
+/// # Arguments
+/// * `escrow_id` - The escrow ID
+/// * `requester` - The party requesting the extension
+/// * `new_deadline` - The proposed new deadline
+/// * `reason` - Reason for the extension
+pub fn emit_deadline_extension_requested(
+    env: &Env,
+    escrow_id: u64,
+    requester: &Address,
+    new_deadline: u64,
+    reason: &soroban_sdk::String,
+) {
+    env.events().publish(
+        (ev::DEADLINE_EXTENSION_REQUESTED, escrow_id),
+        (requester.clone(), new_deadline, reason.clone()),
+    );
+}
+
+/// Emitted when a deadline extension request is approved by the counterparty.
+///
+/// # Arguments
+/// * `escrow_id` - The escrow ID
+/// * `approver` - The party who approved the extension
+/// * `new_deadline` - The approved deadline
+pub fn emit_deadline_extension_approved(
+    env: &Env,
+    escrow_id: u64,
+    approver: &Address,
+    new_deadline: u64,
+) {
+    env.events().publish(
+        (ev::DEADLINE_EXTENSION_APPROVED, escrow_id),
+        (approver.clone(), new_deadline),
+    );
+}
+
+/// Emitted when a deadline extension request is cancelled.
+///
+/// # Arguments
+/// * `escrow_id` - The escrow ID
+/// * `requester` - The party who requested the extension
+pub fn emit_deadline_extension_cancelled(env: &Env, escrow_id: u64, requester: &Address) {
+    env.events().publish(
+        (ev::DEADLINE_EXTENSION_CANCELLED, escrow_id),
+        requester.clone(),
+    );
+}
+
 /// Emitted when a partial cancellation is performed.
 ///
 /// # Arguments
