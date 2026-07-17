@@ -79,6 +79,9 @@ pub const LOCK_TIME_EXTENDED: Symbol = symbol_short!("lock_ext");
 pub const CLIENT_ROLE_TRANSFERRED: Symbol = symbol_short!("cl_role");
 pub const ARBITER_UPDATED: Symbol = symbol_short!("arb_upd");
 pub const DEADLINE_EXTENDED: Symbol = symbol_short!("dl_ext");
+pub const DEADLINE_EXTENSION_REQUESTED: Symbol = symbol_short!("dl_req");
+pub const DEADLINE_EXTENSION_APPROVED: Symbol = symbol_short!("dl_apr");
+pub const DEADLINE_EXTENSION_CANCELLED: Symbol = symbol_short!("dl_can");
 
 // ── Reputation ────────────────────────────────────────────────────────────────
 
