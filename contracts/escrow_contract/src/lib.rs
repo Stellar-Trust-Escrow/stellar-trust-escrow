@@ -3452,13 +3452,7 @@ impl EscrowContract {
         );
 
         // Emit the event
-        events::emit_deadline_extension_requested(
-            &env,
-            escrow_id,
-            &caller,
-            new_deadline,
-            &reason,
-        );
+        events::emit_deadline_extension_requested(&env, escrow_id, &caller, new_deadline, &reason);
 
         Ok(())
     }
@@ -3492,7 +3486,8 @@ impl EscrowContract {
         }
 
         // Retrieve the extension request
-        let mut extension_request = ContractStorage::load_deadline_extension_request(&env, escrow_id)?;
+        let mut extension_request =
+            ContractStorage::load_deadline_extension_request(&env, escrow_id)?;
 
         // Check that the request is not already approved or cancelled
         if extension_request.counterparty_approved {
@@ -3550,7 +3545,8 @@ impl EscrowContract {
         let _meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
 
         // Retrieve the extension request
-        let mut extension_request = ContractStorage::load_deadline_extension_request(&env, escrow_id)?;
+        let mut extension_request =
+            ContractStorage::load_deadline_extension_request(&env, escrow_id)?;
 
         // Check that the request is not already cancelled
         if extension_request.cancelled {
@@ -7843,7 +7839,8 @@ mod tests {
             &None,
             &Some(deadline),
             &None,
-            &None, &no_multisig(&env),
+            &None,
+            &no_multisig(&env),
         );
 
         let new_deadline = deadline + 500;
@@ -7891,7 +7888,8 @@ mod tests {
             &None,
             &Some(deadline),
             &None,
-            &None, &no_multisig(&env),
+            &None,
+            &no_multisig(&env),
         );
 
         let new_deadline = deadline + 500;
@@ -7929,7 +7927,8 @@ mod tests {
             &None,
             &Some(deadline),
             &None,
-            &None, &no_multisig(&env),
+            &None,
+            &no_multisig(&env),
         );
 
         // Cancel the escrow
@@ -7970,18 +7969,15 @@ mod tests {
             &None,
             &Some(deadline),
             &None,
-            &None, &no_multisig(&env),
+            &None,
+            &no_multisig(&env),
         );
 
         let now = env.ledger().timestamp();
         let reason = String::from_str(&env, "Need more time");
 
-        let result = client.try_request_deadline_extension(
-            &escrow_client,
-            &escrow_id,
-            &now,
-            &reason,
-        );
+        let result =
+            client.try_request_deadline_extension(&escrow_client, &escrow_id, &now, &reason);
         assert!(matches!(result, Err(Ok(EscrowError::E30))));
     }
 
@@ -8008,7 +8004,8 @@ mod tests {
             &None,
             &Some(deadline),
             &None,
-            &None, &no_multisig(&env),
+            &None,
+            &no_multisig(&env),
         );
 
         // Try to set a new deadline before the current one
@@ -8047,7 +8044,8 @@ mod tests {
             &None,
             &Some(deadline),
             &None,
-            &None, &no_multisig(&env),
+            &None,
+            &no_multisig(&env),
         );
 
         let new_deadline = deadline + 500;
@@ -8089,7 +8087,8 @@ mod tests {
             &None,
             &Some(deadline),
             &None,
-            &None, &no_multisig(&env),
+            &None,
+            &no_multisig(&env),
         );
 
         let new_deadline = deadline + 500;
@@ -8137,7 +8136,8 @@ mod tests {
             &None,
             &Some(deadline),
             &None,
-            &None, &no_multisig(&env),
+            &None,
+            &no_multisig(&env),
         );
 
         let new_deadline = deadline + 500;
@@ -8174,7 +8174,8 @@ mod tests {
             &None,
             &Some(deadline),
             &None,
-            &None, &no_multisig(&env),
+            &None,
+            &no_multisig(&env),
         );
 
         let new_deadline = deadline + 500;
@@ -8211,7 +8212,8 @@ mod tests {
             &None,
             &Some(deadline),
             &None,
-            &None, &no_multisig(&env),
+            &None,
+            &no_multisig(&env),
         );
 
         let new_deadline = deadline + 500;
@@ -8255,7 +8257,8 @@ mod tests {
             &None,
             &Some(deadline),
             &None,
-            &None, &no_multisig(&env),
+            &None,
+            &no_multisig(&env),
         );
 
         let new_deadline = deadline + 500;
@@ -8300,12 +8303,8 @@ mod tests {
         let reason = String::from_str(&env, "Need more time");
 
         // Freelancer requests extension
-        let result = client.try_request_deadline_extension(
-            &freelancer,
-            &escrow_id,
-            &new_deadline,
-            &reason,
-        );
+        let result =
+            client.try_request_deadline_extension(&freelancer, &escrow_id, &new_deadline, &reason);
         assert!(result.is_ok());
 
         // Check the request was created with freelancer as requester
