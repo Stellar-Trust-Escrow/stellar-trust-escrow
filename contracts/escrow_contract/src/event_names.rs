@@ -103,3 +103,4 @@ pub const ADMIN_PROPOSED: Symbol = symbol_short!("adm_prop");
 pub const ADMIN_CHANGED: Symbol = symbol_short!("adm_chg");
 pub const CONTRACT_PAUSED: Symbol = symbol_short!("paused");
 pub const CONTRACT_UNPAUSED: Symbol = symbol_short!("unpaused");
+pub const EMERGENCY_WITHDRAWAL: Symbol = symbol_short!("emg_wth");

@@ -243,6 +243,13 @@ pub fn emit_contract_unpaused(env: &Env, admin: &Address) {
         .publish((ev::CONTRACT_UNPAUSED,), admin.clone());
 }
 
+pub fn emit_emergency_withdrawal(env: &Env, escrow_id: u64, recipient: &Address, amount: i128) {
+    env.events().publish(
+        (ev::EMERGENCY_WITHDRAWAL, escrow_id),
+        (recipient.clone(), amount),
+    );
+}
+
 pub fn emit_cancellation_executed(
     env: &Env,
     escrow_id: u64,

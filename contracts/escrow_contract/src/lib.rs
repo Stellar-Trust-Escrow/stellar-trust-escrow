@@ -904,9 +904,23 @@ impl ContractStorage {
 
     fn require_not_paused(env: &Env) -> Result<(), EscrowError> {
         if Self::is_paused(env) {
-            return Err(EscrowError::E31);
+            return Err(EscrowError::ContractPaused);
         }
         Ok(())
+    }
+
+    fn get_pause_initiated_at(env: &Env) -> u64 {
+        env.storage()
+            .instance()
+            .get(&DataKey::PauseInitiatedAt)
+            .unwrap_or(0_u64)
+    }
+
+    fn set_pause_initiated_at(env: &Env, timestamp: u64) {
+        env.storage()
+            .instance()
+            .set(&DataKey::PauseInitiatedAt, &timestamp);
+        Self::bump_instance_ttl(env);
     }
 
     fn _get_migration_cursor(env: &Env) -> u64 {
@@ -4054,11 +4068,13 @@ impl EscrowContract {
         }
 
         ContractStorage::set_paused(&env, true);
+        ContractStorage::set_pause_initiated_at(&env, env.ledger().timestamp());
         events::emit_contract_paused(&env, &caller);
         Ok(())
     }
 
     /// Unpauses the contract, resuming normal operation.
+    /// Requires at least 48 hours (172,800 seconds) to have elapsed since pause.
     pub fn unpause(env: Env, caller: Address) -> Result<(), EscrowError> {
         caller.require_auth();
         ContractStorage::require_admin(&env, &caller)?;
@@ -4067,9 +4083,65 @@ impl EscrowContract {
             return Ok(());
         }
 
+        let initiated_at = ContractStorage::get_pause_initiated_at(&env);
+        let now = env.ledger().timestamp();
+        if now < initiated_at + 172_800 {
+            return Err(EscrowError::UnpauseTooEarly);
+        }
+
         ContractStorage::set_paused(&env, false);
         events::emit_contract_unpaused(&env, &caller);
         Ok(())
+    }
+
+    /// Emergency fund recovery — admin only, contract must be paused.
+    ///
+    /// Sends the escrow's entire `remaining_balance` back to the original client
+    /// (depositor). This is a nuclear refund mechanism, not a dispute-resolution
+    /// tool: it intentionally favours the depositor. Escrows that are already
+    /// Completed or Cancelled have no remaining balance and are rejected.
+    ///
+    /// **Security model**: The admin can never redirect funds to an arbitrary
+    /// address — only back to the party who deposited them. This prevents the
+    /// admin key from being used as a rug-pull vector.
+    ///
+    /// **CEI compliance**: State is updated before the external token transfer
+    /// (effects-before-interaction), and the entire body is wrapped in
+    /// `with_reentrancy_guard` to match the protection level of `release_funds`.
+    pub fn emergency_withdraw(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_admin(&env, &caller)?;
+        if !ContractStorage::is_paused(&env) {
+            return Err(EscrowError::ContractPaused);
+        }
+
+        ContractStorage::with_reentrancy_guard(&env, || {
+            let mut meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
+            if meta.status != EscrowStatus::Active {
+                return Err(EscrowError::E9);
+            }
+
+            let amount = meta.remaining_balance;
+
+            meta.remaining_balance = 0;
+            meta.status = EscrowStatus::Cancelled;
+            ContractStorage::save_escrow_meta(&env, &meta);
+
+            if amount > 0 {
+                token::Client::new(&env, &meta.token).transfer(
+                    &env.current_contract_address(),
+                    &meta.client,
+                    &amount,
+                );
+            }
+
+            events::emit_emergency_withdrawal(&env, escrow_id, &meta.client, amount);
+            Ok(())
+        })
     }
 
     /// Returns the current pause state of the contract.
@@ -6757,6 +6829,7 @@ mod tests {
         let (_env, admin, _, _, _, _, client) = setup_pause_escrow(100);
         client.pause(&admin);
         assert!(client.is_paused());
+        _env.ledger().with_mut(|l| l.timestamp += 172_800);
         client.unpause(&admin);
         assert!(!client.is_paused());
     }
@@ -6924,6 +6997,8 @@ mod tests {
             &50_i128,
         );
         assert!(result.is_err(), "add_milestone should fail while paused");
+
+        env.ledger().with_mut(|l| l.timestamp += 172_800);
 
         client.unpause(&admin);
         assert!(!client.is_paused());
