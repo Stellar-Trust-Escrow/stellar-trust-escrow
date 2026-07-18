@@ -20,12 +20,16 @@ import {
   Address,
   StrKey,
   scValToNative,
+  Keypair,
+  hash,
 } from '@stellar/stellar-sdk';
+import { signMessage } from '@stellar/freighter-api';
 
 const _NETWORK = process.env.NEXT_PUBLIC_STELLAR_NETWORK || 'testnet';
 const _CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || '';
 const _SOROBAN_RPC_URL =
   process.env.NEXT_PUBLIC_SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org';
+const _SIGNED_MESSAGE_PREFIX = 'Stellar Signed Message:\n';
 
 const _NETWORK_PASSPHRASE =
   _NETWORK === 'mainnet'
@@ -179,6 +183,70 @@ function _hashString(value) {
     hash = Math.imul(hash, 16777619);
   }
   return hash >>> 0;
+}
+
+/**
+ * Builds and signs the profile ownership message with Freighter.
+ *
+ * @param {string} address - Connected wallet public key
+ * @param {number} [timestamp=Date.now()]
+ * @returns {Promise<{ message: string, signature: string, publicKey: string, timestamp: number }>}
+ */
+export async function signIdentityMessage(address, timestamp = Date.now()) {
+  if (!isValidStellarAddress(address)) {
+    throw new Error(`Invalid Stellar address: ${address}`);
+  }
+
+  const message = `Trustchain identity: ${address} at ${timestamp}`;
+  const result = await signMessage(message, { address, accountToSign: address });
+  const signature = result?.signedMessage ?? result?.signature ?? result;
+  const publicKey = result?.signerAddress ?? result?.publicKey ?? address;
+
+  if (typeof signature !== 'string' || !signature) {
+    throw new Error('Freighter returned an invalid identity signature');
+  }
+
+  return { message, signature, publicKey, timestamp };
+}
+
+/**
+ * Verifies an identity message signature locally with the Stellar SDK.
+ *
+ * @param {string} message
+ * @param {string} signature - Base64-encoded Ed25519 signature
+ * @param {string} publicKey - Stellar public key
+ * @returns {boolean}
+ */
+export function verifyIdentitySignature(message, signature, publicKey) {
+  try {
+    const messageBytes = _encodeUtf8(`${_SIGNED_MESSAGE_PREFIX}${message}`);
+    const messageHash = hash(messageBytes);
+    const signatureBytes = _decodeBase64(signature);
+    return Keypair.fromPublicKey(publicKey).verify(messageHash, signatureBytes);
+  } catch {
+    return false;
+  }
+}
+
+function _encodeUtf8(value) {
+  if (typeof TextEncoder !== 'undefined') {
+    return new TextEncoder().encode(value);
+  }
+
+  if (typeof Buffer !== 'undefined') {
+    return Buffer.from(value, 'utf8');
+  }
+
+  throw new Error('UTF-8 encoding is not supported in this environment');
+}
+
+function _decodeBase64(value) {
+  if (typeof Buffer !== 'undefined') {
+    return Buffer.from(value, 'base64');
+  }
+
+  const binary = atob(value);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 
 /**
