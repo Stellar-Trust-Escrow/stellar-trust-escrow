@@ -20,6 +20,7 @@ import {
   Address,
   StrKey,
   scValToNative,
+  Account,
   Keypair,
   hash,
 } from '@stellar/stellar-sdk';
@@ -40,9 +41,8 @@ const _NETWORK_PASSPHRASE =
  * Fetches an address's on-chain reputation record by simulating the
  * `get_reputation` contract call.
  *
- * The profile address is also used as the simulation source account. A valid
- * but unfunded address therefore produces a fetch error that callers should
- * present as a graceful fallback.
+ * A disposable source account keeps simulation independent from whether the
+ * profile address is funded. This read-only transaction is never submitted.
  *
  * @param {string} address - Stellar public key
  * @returns {Promise<{
@@ -67,7 +67,7 @@ export async function getReputation(address) {
   }
 
   const server = new SorobanRpc.Server(_SOROBAN_RPC_URL);
-  const account = await server.getAccount(address);
+  const account = new Account(Keypair.random().publicKey(), '0');
   const contract = new Contract(_CONTRACT_ADDRESS);
 
   const transaction = new TransactionBuilder(account, {
@@ -219,7 +219,7 @@ export async function signIdentityMessage(address, timestamp = Date.now()) {
  */
 export function verifyIdentitySignature(message, signature, publicKey) {
   try {
-    const messageBytes = _encodeUtf8(`${_SIGNED_MESSAGE_PREFIX}${message}`);
+    const messageBytes = new TextEncoder().encode(`${_SIGNED_MESSAGE_PREFIX}${message}`);
     const messageHash = hash(messageBytes);
     const signatureBytes = _decodeBase64(signature);
     return Keypair.fromPublicKey(publicKey).verify(messageHash, signatureBytes);
@@ -228,21 +228,9 @@ export function verifyIdentitySignature(message, signature, publicKey) {
   }
 }
 
-function _encodeUtf8(value) {
-  if (typeof TextEncoder !== 'undefined') {
-    return new TextEncoder().encode(value);
-  }
-
-  if (typeof Buffer !== 'undefined') {
-    return Buffer.from(value, 'utf8');
-  }
-
-  throw new Error('UTF-8 encoding is not supported in this environment');
-}
-
 function _decodeBase64(value) {
   if (typeof Buffer !== 'undefined') {
-    return Buffer.from(value, 'base64');
+    return Uint8Array.from(Buffer.from(value, 'base64'));
   }
 
   const binary = atob(value);
