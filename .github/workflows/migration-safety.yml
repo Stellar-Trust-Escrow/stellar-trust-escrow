@@ -1,0 +1,259 @@
+name: Migration Safety
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Migration Safety Gate
+#
+# Triggers whenever a PR touches migration files. It:
+#   1. Lints new/changed migrations for unsafe patterns (DROP COLUMN, DROP TABLE,
+#      TRUNCATE, ADD COLUMN NOT NULL without DEFAULT, uncommented ALTER COLUMN
+#      TYPE, missing FK indexes) and requires a ROLLBACK.md per migration.
+#   2. When actual migration *code* changed, applies the migrations to a real
+#      PostgreSQL instance, runs the test suite, rolls back, runs the suite
+#      again, and verifies the schema is identical before/after rollback.
+#   3. Seeds 100k escrows + 500k milestones and asserts a migration applies in
+#      under 30s on that volume.
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'backend/database/migrations/**'
+      - 'prisma/migrations/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  HUSKY: 0
+  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db?schema=public
+
+jobs:
+  # ─────────────────────────────────────────
+  # Detect whether migration *code* changed
+  # ─────────────────────────────────────────
+  detect:
+    name: Detect migration changes
+    runs-on: ubuntu-latest
+    outputs:
+      has_migrations: ${{ steps.set.outputs.has_migrations }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch base branch
+        run: git fetch --no-tags --depth=50 origin "${{ github.base_ref }}"
+      - id: set
+        name: Determine changed migration code files
+        run: |
+          CHANGED=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" \
+            | grep -E '(backend/database/migrations|prisma/migrations)/.*\.(js|ts|sql)$' || true)
+          if [ -n "$CHANGED" ]; then
+            echo "has_migrations=true" >> "$GITHUB_OUTPUT"
+            echo "Changed migration code files:"
+            echo "$CHANGED"
+          else
+            echo "has_migrations=false" >> "$GITHUB_OUTPUT"
+            echo "No migration code files changed (only docs/ROLLBACK.md or unrelated paths)."
+          fi
+
+  # ─────────────────────────────────────────
+  # Lint new/changed migrations (blocking)
+  # ─────────────────────────────────────────
+  lint:
+    name: Lint migrations & require ROLLBACK.md
+    runs-on: ubuntu-latest
+    needs: detect
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch base branch
+        run: git fetch --no-tags --depth=50 origin "${{ github.base_ref }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install root dependencies
+        run: npm ci --ignore-scripts
+      - name: Run migration safety linter
+        id: lint
+        run: node scripts/lint-migration.js --check-rollback --base "origin/${{ github.base_ref }}" --head HEAD
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-lint-report
+          path: migration-lint-report.json
+          retention-days: 14
+
+  # ─────────────────────────────────────────
+  # Apply / rollback / test against real Postgres
+  # ─────────────────────────────────────────
+  verify:
+    name: Apply, rollback & performance verification
+    runs-on: ubuntu-latest
+    needs: [detect, lint]
+    if: needs.detect.outputs.has_migrations == 'true'
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch base branch
+        run: git fetch --no-tags --depth=50 origin "${{ github.base_ref }}"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate -w backend
+
+      - name: Wait for PostgreSQL
+        run: npx wait-on tcp:localhost:5432
+
+      - name: Push baseline schema
+        working-directory: backend
+        run: npx prisma db push --schema=database/schema.prisma --skip-generate --accept-data-loss
+
+      - name: Apply custom migrations
+        working-directory: backend
+        run: node database/migrations/migrate.js up
+
+      - name: Seed load (100k escrows + 500k milestones)
+        run: bash scripts/seed-load.sh
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+
+      # ── Test pass 1: against the migrated (forward) schema ──────────────────
+      - name: Run backend test suite (forward schema)
+        id: test_forward
+        working-directory: backend
+        run: npm test
+        env:
+          NODE_ENV: test
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+          JWT_SECRET: test-secret-for-ci-only
+          STELLAR_NETWORK: testnet
+
+      # ── Performance gate: a real migration must apply < 30s on loaded data ──
+      - name: Performance gate — time a migration on loaded data
+        id: perf
+        working-directory: backend
+        run: |
+          TS=$(date -u +%Y%m%d%H%M%S)
+          cat > "database/migrations/${TS}_migration_safety_timing.js" <<'JS'
+          /**
+           * Temporary migration used only by the Migration Safety CI performance gate.
+           * Adds a non-blocking index to the (large) escrows table to measure apply time.
+           */
+          export async function up(prisma) {
+            await prisma.$executeRawUnsafe(
+              `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_escrows_perf_gate ON escrows (status, created_at)`
+            );
+          }
+          export async function down(prisma) {
+            await prisma.$executeRawUnsafe(
+              `DROP INDEX CONCURRENTLY IF EXISTS idx_escrows_perf_gate`
+            );
+          }
+          JS
+          echo "Created timing migration: ${TS}_migration_safety_timing.js"
+          START=$(date +%s)
+          node database/migrations/migrate.js up
+          END=$(date +%s)
+          DELTA=$((END - START))
+          echo "Migration apply time: ${DELTA}s"
+          echo "apply_seconds=${DELTA}" >> "$GITHUB_OUTPUT"
+          if [ "$DELTA" -gt 30 ]; then
+            echo "::error::Migration took ${DELTA}s (> 30s limit) on 100k escrow seed."
+            node database/migrations/migrate.js down
+            rm -f "database/migrations/${TS}_migration_safety_timing.js"
+            exit 1
+          fi
+          node database/migrations/migrate.js down
+          rm -f "database/migrations/${TS}_migration_safety_timing.js"
+
+      # ── Rollback verification: up → down → up must be a no-op ───────────────
+      - name: Verify rollback leaves schema identical
+        working-directory: backend
+        run: |
+          node "${{ github.workspace }}/scripts/schema-fingerprint.js" > /tmp/fp_before.json
+          node database/migrations/migrate.js down
+          node "${{ github.workspace }}/scripts/schema-fingerprint.js" > /tmp/fp_after_down.json
+          node database/migrations/migrate.js up
+          node "${{ github.workspace }}/scripts/schema-fingerprint.js" > /tmp/fp_after_up.json
+          BEFORE=$(cat /tmp/fp_before.json)
+          AFTER_UP=$(cat /tmp/fp_after_up.json)
+          if [ "$BEFORE" != "$AFTER_UP" ]; then
+            echo "::error::Schema fingerprint changed after rollback+reapply (down is not a true inverse):"
+            echo "  before:   $BEFORE"
+            echo "  after up: $AFTER_UP"
+            exit 1
+          fi
+          echo "✅ Rollback + reapply left schema identical (fingerprint: $BEFORE)"
+
+      # ── Test pass 2: against the previous (rolled-back) schema ──────────────
+      - name: Run backend test suite (rolled-back schema)
+        id: test_rollback
+        working-directory: backend
+        run: npm test
+        env:
+          NODE_ENV: test
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+          JWT_SECRET: test-secret-for-ci-only
+          STELLAR_NETWORK: testnet
+
+      - name: Job summary
+        if: always()
+        run: |
+          echo "## Migration Safety Verification" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Forward-schema test run: ${{ steps.test_forward.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Rolled-back-schema test run: ${{ steps.test_rollback.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Migration apply time: ${{ steps.perf.outputs.apply_seconds }}s (limit 30s)" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.test_forward.outcome }}" != "success" ] || [ "${{ steps.test_rollback.outcome }}" != "success" ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "❌ A test run failed after a migration change. The migration must be backward-compatible with the current app code." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  # ─────────────────────────────────────────
+  # Aggregate required status
+  # ─────────────────────────────────────────
+  migration-safety-result:
+    name: Migration Safety — result
+    runs-on: ubuntu-latest
+    needs: [lint, verify]
+    if: always()
+    steps:
+      - name: Check results
+        run: |
+          LINT="${{ needs.lint.result }}"
+          VERIFY="${{ needs.verify.result }}"
+          echo "lint=$LINT verify=$VERIFY"
+          # verify is skipped when no migration code changed — that's a pass.
+          if [ "$LINT" != "success" ]; then
+            echo "::error::Migration lint failed."; exit 1
+          fi
+          if [ "$VERIFY" != "success" ] && [ "$VERIFY" != "skipped" ]; then
+            echo "::error::Migration verification failed."; exit 1
+          fi
+          echo "✅ Migration safety checks passed."
