@@ -1,18 +1,29 @@
-import { clsx } from 'clsx';
+export function Skeleton({ className = '' }) {
+  return <div className={`animate-pulse rounded bg-gray-200 dark:bg-gray-700 ${className}`} />;
+}
 
-const Skeleton = ({ className, variant = 'text', ...props }) => {
-  const base = 'animate-pulse bg-gray-200 dark:bg-gray-700';
+export function EscrowCardSkeleton() {
+  return (
+    <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-5 w-16 rounded-full" />
+      </div>
+      <Skeleton className="h-3 w-40" />
+      <div className="flex items-center justify-between pt-1">
+        <Skeleton className="h-4 w-20" />
+        <Skeleton className="h-4 w-16" />
+      </div>
+    </div>
+  );
+}
 
-  const variants = {
-    text: 'h-4 w-[60%] rounded',
-    heading: 'h-6 w-[70%] rounded-lg mb-2',
-    card: 'h-32 rounded-xl',
-    image: 'h-48 w-full rounded-xl',
-    line: 'h-px bg-gray-300 dark:bg-gray-600',
-    table: 'h-10 rounded',
-  };
-
-  return <div className={clsx(base, variants[variant], className)} {...props} />;
-};
-
-export default Skeleton;
+export function EscrowListSkeleton({ count = 5 }) {
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: count }).map((_, i) => (
+        <EscrowCardSkeleton key={i} />
+      ))}
+    </div>
+  );
+}

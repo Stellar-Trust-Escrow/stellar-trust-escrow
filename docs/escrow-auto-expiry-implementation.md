@@ -13,6 +13,7 @@ This document verifies the complete implementation of the escrow auto-expiry fea
 ### Core Functions
 
 #### 1. `expire_escrow` (Private Helper)
+
 - **Location:** `contracts/escrow_contract/src/lib.rs:802-830`
 - **Purpose:** Handles the actual expiry logic
 - **Key Operations:**
@@ -24,6 +25,7 @@ This document verifies the complete implementation of the escrow auto-expiry fea
   - Emits `RentExpired` event with refund details
 
 #### 2. `collect_rent` (Public Entry Point)
+
 - **Location:** `contracts/escrow_contract/src/lib.rs:4153-4157`
 - **Visibility:** Public - callable by anyone
 - **Purpose:** Trigger rent collection, which may trigger expiry if rent has expired
@@ -35,6 +37,7 @@ This document verifies the complete implementation of the escrow auto-expiry fea
   5. Returns the amount of rent collected
 
 #### 3. `collect_rent` (Private Storage Handler)
+
 - **Location:** `contracts/escrow_contract/src/lib.rs:790-800`
 - **Purpose:** Private implementation of rent collection
 - **Logic:**
@@ -44,6 +47,7 @@ This document verifies the complete implementation of the escrow auto-expiry fea
   - If not expired, saves updated escrow metadata
 
 #### 4. `collect_rent_due` (Private Helper)
+
 - **Location:** `contracts/escrow_contract/src/lib.rs:712-762`
 - **Purpose:** Calculate and collect rent for elapsed periods
 - **Features:**
@@ -67,6 +71,7 @@ The implementation includes a sophisticated storage rent system:
 ### Error Handling
 
 All operations use typed error codes:
+
 - **E2:** Not initialized
 - **E4:** Unauthorized (not admin)
 - **E8:** Escrow not found (after expiry)
@@ -78,6 +83,7 @@ All operations use typed error codes:
 ### Primary Tests
 
 #### 1. `test_expired_escrow_is_cleaned_up_by_collect_rent` (5946-6002)
+
 - Verifies basic expiry and cleanup
 - Checks:
   - Rent collection triggers expiry
@@ -87,6 +93,7 @@ All operations use typed error codes:
   - `get_milestone` returns E8 after expiry
 
 #### 2. `test_expire_escrow_rent_depletion_complete_cleanup` (7143-7232)
+
 - Comprehensive expiry test with advanced checks
 - Verifies:
   - Rent reserve calculation
@@ -106,12 +113,14 @@ All operations use typed error codes:
 ### Code Quality
 
 ✅ **Clippy:** No warnings
+
 ```bash
 cargo clippy -- -D warnings
 # Result: Finished `dev` profile [unoptimized + debuginfo] target(s) in 46.13s
 ```
 
 ✅ **Format:** Code passes rustfmt checks
+
 ```bash
 cargo fmt --check
 # Result: (no output = success)
@@ -120,6 +129,7 @@ cargo fmt --check
 ### Tests
 
 ✅ **Unit Tests:** 152 passed, 0 failed, 12 ignored
+
 ```bash
 cargo test --lib --release
 # Result: test result: ok. 152 passed; 0 failed; 12 ignored
@@ -128,6 +138,7 @@ cargo test --lib --release
 ### Build
 
 ✅ **WASM Build:** Successful compilation to WASM target
+
 ```bash
 cargo build --target wasm32-unknown-unknown --release
 # Result: Finished `release` profile [optimized] target(s) in 15.79s
@@ -136,20 +147,24 @@ cargo build --target wasm32-unknown-unknown --release
 ## Security Analysis
 
 ### Reentrancy Protection
+
 - The `with_reentrancy_guard` wrapper prevents recursive calls during expiry
 - Rent collection is protected by the same guard
 
 ### Arithmetic Safety
+
 - All calculations use checked arithmetic (checked_add, checked_mul)
 - Overflow returns E20 error
 - Saturating operations used where appropriate for timestamp math
 
 ### Access Control
+
 - `collect_rent` can be called by anyone (public)
 - Admin functions properly verify authorization
 - Storage access is scoped correctly
 
 ### Rent Manipulation Prevention
+
 - Rent is only charged for complete elapsed periods
 - Repeated view calls within the same period cannot double-charge
 - Period boundaries are strictly enforced
@@ -158,6 +173,7 @@ cargo build --target wasm32-unknown-unknown --release
 ## Feature Completeness
 
 ### Happy Path ✅
+
 - Escrow created with rent reserve
 - Rent collected over multiple periods
 - When rent depletes, `collect_rent` triggers expiry
@@ -165,12 +181,14 @@ cargo build --target wasm32-unknown-unknown --release
 - All storage cleaned up
 
 ### Error Handling ✅
+
 - Overflow in arithmetic returns E20
 - Unauthorized calls return E4
 - Non-existent escrows return E8
 - Invalid calculations handled gracefully
 
 ### Edge Cases ✅
+
 - Escrow with no milestones
 - Escrow with multiple milestones
 - Escrow with cancellation requests
@@ -182,6 +200,7 @@ cargo build --target wasm32-unknown-unknown --release
 ## Documentation
 
 ### Entry Points
+
 - `collect_rent(env: Env, escrow_id: u64) -> Result<i128, EscrowError>`
   - **Public:** Yes
   - **Access:** Anyone
@@ -189,12 +208,14 @@ cargo build --target wasm32-unknown-unknown --release
   - **Errors:** E2 (not initialized), E8 (not found), E20 (overflow)
 
 ### Storage Management
+
 - Escrow metadata automatically cleaned on expiry
 - Milestone entries removed
 - Associated records (recurring config, cancellation, slash) removed
 - All persistent storage keys properly namespaced
 
 ### Events
+
 - `RentCollected(escrow_id, amount_collected, remaining_balance, expires_at)`
 - `RentExpired(escrow_id, total_refunded, remaining_balance)`
 
