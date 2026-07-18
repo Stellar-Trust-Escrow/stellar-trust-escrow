@@ -117,6 +117,8 @@ jobs:
       - name: Post sticky PR comment
         if: github.event_name == 'pull_request'
         uses: marocchino/sticky-pull-request-comment@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           header: gas-profiler
           path: pr-comment.md
