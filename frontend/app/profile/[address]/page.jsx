@@ -1,14 +1,21 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import ReputationCard from '../../../components/profile/ReputationCard';
 import CopyButton from '../../../components/ui/CopyButton';
 import TruncatedAddress from '../../../components/ui/TruncatedAddress';
 import StatCard from '../../../components/ui/StatCard';
+import Button from '../../../components/ui/Button';
+import Badge from '../../../components/ui/Badge';
+import Modal from '../../../components/ui/Modal';
+import { useWallet } from '../../../hooks/useWallet';
 import {
   generateIdenticon,
   getReputation,
   isValidStellarAddress,
+  signIdentityMessage,
+  verifyIdentitySignature,
 } from '../../../lib/stellar';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
@@ -45,6 +52,17 @@ export default function ProfilePage({ params }) {
   const [stats, setStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(isValidAddress);
   const [statsError, setStatsError] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyMeta, setHistoryMeta] = useState(null);
+  const [historyLoading, setHistoryLoading] = useState(isValidAddress);
+  const [historyError, setHistoryError] = useState(null);
+  const [verificationOpen, setVerificationOpen] = useState(false);
+  const [verification, setVerification] = useState(null);
+  const [verificationError, setVerificationError] = useState(null);
+  const [verificationLoading, setVerificationLoading] = useState(false);
+  const { address: walletAddress, isConnected } = useWallet();
+  const isOwnProfile = isConnected && walletAddress === address;
 
   useEffect(() => {
     if (!isValidAddress) return;
@@ -69,6 +87,62 @@ export default function ProfilePage({ params }) {
       cancelled = true;
     };
   }, [address, isValidAddress]);
+
+  useEffect(() => {
+    if (!isValidAddress) return;
+
+    const controller = new AbortController();
+    setHistoryLoading(true);
+    setHistoryError(null);
+    setHistory([]);
+
+    fetch(
+      `${API_BASE}/api/users/${address}/escrows?role=all&page=${historyPage}&limit=10`,
+      { signal: controller.signal },
+    )
+      .then((response) => {
+        if (!response.ok) throw new Error(`History request failed: ${response.status}`);
+        return response.json();
+      })
+      .then((result) => {
+        setHistory(result.data ?? []);
+        setHistoryMeta(result);
+      })
+      .catch((error) => {
+        if (error.name !== 'AbortError') {
+          setHistoryError('Escrow history is currently unavailable.');
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setHistoryLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [address, historyPage, isValidAddress]);
+
+  const handleVerifyOwnership = async () => {
+    if (!isOwnProfile) return;
+
+    setVerificationLoading(true);
+    setVerificationError(null);
+
+    try {
+      const signedIdentity = await signIdentityMessage(walletAddress);
+      const verified = verifyIdentitySignature(
+        signedIdentity.message,
+        signedIdentity.signature,
+        signedIdentity.publicKey,
+      );
+      setVerification({ ...signedIdentity, verified });
+      setVerificationOpen(true);
+    } catch (error) {
+      setVerification(null);
+      setVerificationError(error.message || 'Identity signing was cancelled.');
+      setVerificationOpen(true);
+    } finally {
+      setVerificationLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!isValidAddress) return;
@@ -151,6 +225,13 @@ export default function ProfilePage({ params }) {
             >
               View on Stellar Expert
             </a>
+            {isOwnProfile && (
+              <div className="mt-4">
+                <Button onClick={handleVerifyOwnership} isLoading={verificationLoading}>
+                  Verify ownership
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -215,6 +296,117 @@ export default function ProfilePage({ params }) {
           </div>
         )}
       </section>
+
+      <section className="space-y-4" aria-labelledby="profile-history-heading">
+        <div className="flex items-center justify-between gap-4">
+          <h2 id="profile-history-heading" className="text-xl font-semibold text-white">
+            History
+          </h2>
+          {historyMeta && (
+            <span className="text-sm text-gray-500">
+              Page {historyMeta.page} of {Math.max(1, historyMeta.totalPages)}
+            </span>
+          )}
+        </div>
+
+        {historyLoading && (
+          <div className="card text-gray-400" role="status">
+            Loading escrow history…
+          </div>
+        )}
+
+        {historyError && (
+          <div className="card text-amber-300" role="status">
+            {historyError}
+          </div>
+        )}
+
+        {!historyLoading && !historyError && history.length === 0 && (
+          <div className="card text-gray-400">No history yet</div>
+        )}
+
+        {!historyLoading && !historyError && history.length > 0 && (
+          <div className="space-y-3" role="list" aria-label="Escrow history">
+            {/* Participant addresses are absent from this endpoint, so role is not displayed. */}
+            {history.map((escrow) => (
+              <Link
+                key={String(escrow.id)}
+                href={`/escrow/${escrow.id}`}
+                className="card flex items-center justify-between gap-4 hover:border-indigo-500/40"
+                role="listitem"
+              >
+                <div>
+                  <p className="text-white font-semibold">Escrow #{String(escrow.id)}</p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {formatXlm(escrow.totalAmount)}
+                  </p>
+                </div>
+                <Badge status={escrow.status} />
+              </Link>
+            ))}
+          </div>
+        )}
+
+        {!historyError && historyMeta && historyMeta.totalPages > 1 && (
+          <div className="flex justify-between gap-3">
+            <Button
+              variant="secondary"
+              disabled={!historyMeta.hasPreviousPage}
+              onClick={() => setHistoryPage((page) => Math.max(1, page - 1))}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={!historyMeta.hasNextPage}
+              onClick={() => setHistoryPage((page) => page + 1)}
+            >
+              Next
+            </Button>
+          </div>
+        )}
+      </section>
+
+      <Modal
+        isOpen={verificationOpen}
+        onClose={() => setVerificationOpen(false)}
+        title="Ownership verification"
+        size="lg"
+      >
+        {verificationError && (
+          <p className="text-red-400" role="alert">
+            {verificationError}
+          </p>
+        )}
+
+        {verification && (
+          <div className="space-y-4">
+            <p
+              className={verification.verified ? 'text-emerald-400' : 'text-red-400'}
+              role="status"
+            >
+              {verification.verified
+                ? 'Signature verified successfully.'
+                : 'Signature verification failed.'}
+            </p>
+            <div>
+              <p className="text-xs uppercase tracking-wider text-gray-500">Public key</p>
+              <p className="font-mono text-sm text-gray-300 break-all mt-1">
+                {verification.publicKey}
+              </p>
+            </div>
+            <div>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs uppercase tracking-wider text-gray-500">Signature</p>
+                <CopyButton text={verification.signature} label="Signature" />
+              </div>
+              <p className="font-mono text-sm text-gray-300 break-all mt-1">
+                {verification.signature}
+              </p>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
