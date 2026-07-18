@@ -23,5 +23,7 @@ export default {
     '^redis$': '<rootDir>/__mocks__/redis.js',
     // Prisma ESM client → CJS-compatible mock
     '^@prisma/client$': '<rootDir>/__mocks__/@prisma/client.js',
+    // Mock sharp to avoid loading native bindings during tests (Windows CI/workstations)
+    '^sharp$': '<rootDir>/__mocks__/sharp.cjs',
   },
 };
