@@ -95,8 +95,8 @@ beforeEach(() => {
 
 describe('escrowController', () => {
   describe('listEscrows', () => {
-    it('returns 200 with paginated escrow list (cache miss)', async () => {
-      const req = { query: { page: '1', limit: '10' } };
+    it('returns 200 with a cursor-paginated escrow list (cache miss)', async () => {
+      const req = { query: { limit: '10', include_total: 'true' } };
       const res = createMockRes();
 
       prismaMock.escrow.findMany.mockResolvedValue(fixtures.escrows);
@@ -106,10 +106,14 @@ describe('escrowController', () => {
 
       expect(res.json).toHaveBeenCalled();
       expect(res.body.data).toHaveLength(fixtures.escrows.length);
-      expect(res.body.total).toBe(fixtures.escrows.length);
+      expect(res.body.pagination).toEqual({
+        next_cursor: null,
+        limit: 10,
+        total: fixtures.escrows.length,
+      });
     });
 
-    it('returns the normalized paginated response shape', async () => {
+    it('returns the normalized cursor response shape without a total by default', async () => {
       const req = { query: {} };
       const res = createMockRes();
 
@@ -117,13 +121,12 @@ describe('escrowController', () => {
 
       expect(res.json).toHaveBeenCalledWith({
         data: [],
-        page: 1,
-        limit: 20,
-        total: 0,
-        totalPages: 0,
-        hasNextPage: false,
-        hasPreviousPage: false,
+        pagination: {
+          next_cursor: null,
+          limit: 20,
+        },
       });
+      expect(prismaMock.escrow.count).not.toHaveBeenCalled();
     });
 
     it('applies status filter correctly', async () => {
@@ -177,12 +180,43 @@ describe('escrowController', () => {
     it('returns 500 on error', async () => {
       const req = { query: {} };
       const res = createMockRes();
-      prismaMock.$transaction.mockRejectedValue(new Error('DB Error'));
+      prismaMock.escrow.findMany.mockRejectedValue(new Error('DB Error'));
 
       await escrowController.listEscrows(req, res);
 
       expect(res.status).toHaveBeenCalledWith(500);
       expect(res.body.error).toBe('DB Error');
+    });
+
+    it('returns 400 when limit exceeds 100', async () => {
+      const req = { query: { limit: '101' } };
+      const res = createMockRes();
+
+      await escrowController.listEscrows(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(prismaMock.escrow.findMany).not.toHaveBeenCalled();
+    });
+
+    it('returns INVALID_CURSOR for a malformed cursor', async () => {
+      const req = { query: { cursor: 'not+a+cursor' } };
+      const res = createMockRes();
+
+      await escrowController.listEscrows(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.body.code).toBe('INVALID_CURSOR');
+    });
+
+    it('include_total=true adds exactly one count query', async () => {
+      const req = { query: { include_total: 'true' } };
+      const res = createMockRes();
+      prismaMock.escrow.count.mockResolvedValue(42);
+
+      await escrowController.listEscrows(req, res);
+
+      expect(prismaMock.escrow.count).toHaveBeenCalledTimes(1);
+      expect(res.body.pagination.total).toBe(42);
     });
   });
 

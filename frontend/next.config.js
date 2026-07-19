@@ -37,7 +37,13 @@ const nextConfig = {
 
   // ── Image Optimization ──────────────────────────────────────────────────────
   images: {
-    remotePatterns: [],
+    remotePatterns: [
+      { protocol: 'https', hostname: 'ipfs.io', pathname: '/ipfs/**' },
+      { protocol: 'https', hostname: 'dweb.link', pathname: '/ipfs/**' },
+      { protocol: 'https', hostname: 'cloudflare-ipfs.com', pathname: '/ipfs/**' },
+      { protocol: 'https', hostname: 'gateway.pinata.cloud', pathname: '/ipfs/**' },
+      { protocol: 'https', hostname: '*.ipfs.dweb.link' },
+    ],
     formats: ['image/avif', 'image/webp'],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920],
     imageSizes: [16, 32, 48, 64, 96, 128, 256],

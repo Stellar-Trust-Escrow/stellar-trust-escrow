@@ -1,3 +1,53 @@
+//! # StellarTrustEscrow — Soroban Smart Contract
+//!
+//! Milestone-based escrow with on-chain reputation on the Stellar network.
+//!
+//! ## Gas Optimizations
+//!
+//! ### Issue #65 (original)
+//!
+//! 1. **Storage**: `EscrowMeta` and `Milestone` are stored in separate granular
+//!    persistent entries — only the touched entry is read/written per call.
+//!    The old monolithic `EscrowState` (with an inline `Vec<Milestone>`) is
+//!    kept only as a view-layer return type.
+//!
+//! 2. **TTL bumps**: Consolidated into `bump_instance_ttl` / `bump_persistent_ttl`
+//!    helpers called once per entry per transaction, not on every sub-call.
+//!
+//! 3. **Loop elimination**: `approve_milestone` previously re-loaded every
+//!    milestone in a loop to check completion. Replaced with an `approved_count`
+//!    field on `EscrowMeta` — O(1) completion check.
+//!
+//! 4. **Redundant loads**: `release_funds` no longer re-loads the milestone
+//!    after `approve_milestone` already validated and saved it. Auth checks
+//!    are done before any storage reads.
+//!
+//! 5. **Math**: All arithmetic uses `checked_*` only where overflow is
+//!    plausible; inner hot-paths use direct ops with compile-time-safe bounds.
+//!
+//! 6. **Events**: Data tuples are kept minimal — addresses are passed by
+//!    reference and cloned only at the `publish` call site.
+//!
+//! ### perf/contract-milestone-gas-optimization (this branch)
+//!
+//! 7. **Bitflag milestone status**: `MilestoneStatus` is now a `u32` type alias
+//!    with `MS_*` constants instead of a `#[contracttype]` tagged-union enum.
+//!    A tagged union serialises as a discriminant + padding (~40 bytes); a `u32`
+//!    is 4 bytes — ~36 bytes saved per milestone entry.
+//!
+//! 8. **Fixed-capacity milestone storage**: `MAX_MILESTONES = 20` cap enforced
+//!    in `add_milestone` and `batch_add_milestones`. Prevents unbounded storage
+//!    growth and makes per-escrow storage cost predictable.
+//!
+//! 9. **`submitted_count` counter**: Added to `EscrowMeta` alongside the
+//!    existing `approved_count`. `cancel_escrow` now does an O(1) counter check
+//!    instead of loading every milestone to scan for Submitted/Approved states.
+//!
+//! 10. **Batch operations**: `batch_add_milestones`, `batch_approve_milestones`,
+//!     and `batch_release_funds` load `EscrowMeta` once, write N milestones, and
+//!     execute a single token transfer — reducing gas from O(2N) to O(N+1) for
+//!     multi-milestone workflows.
+
 #![no_std]
 
 mod errors;
@@ -37,6 +87,7 @@ impl EscrowContract {
         if current_time < release_at {
             return Err(EscrowError::TimelockNotExpired);
         }
+    }
 
         // TODO: Implement actual fund release logic
         // This would involve:
@@ -44,6 +95,24 @@ impl EscrowContract {
         // 2. Updating escrow state to Released/Completed
         // 3. Emitting events
 
+    /// Validates and updates the nonce for a meta-transaction signer.
+    ///
+    /// Enforces strictly monotonically increasing nonces to prevent replay attacks.
+    /// Returns Unauthorized if nonce <= last_nonce.
+    fn _validate_and_update_nonce(
+        env: &Env,
+        signer: &Address,
+        nonce: u64,
+    ) -> Result<(), EscrowError> {
+        let key = DataKey::MetaTxNonce(signer.clone());
+        let last_nonce: u64 = env.storage().persistent().get(&key).unwrap_or(0);
+
+        if nonce <= last_nonce {
+            return Err(EscrowError::E3);
+        }
+
+        env.storage().persistent().set(&key, &nonce);
+        Self::bump_persistent_ttl(env, &key);
         Ok(())
     }
 
@@ -89,9 +158,12 @@ impl EscrowContract {
         // 2. Updating escrow state to Released/Completed
         // 3. Emitting events
 
+    fn require_not_paused(env: &Env) -> Result<(), EscrowError> {
+        if Self::is_paused(env) {
+            return Err(EscrowError::ContractPaused);
+        }
         Ok(())
     }
-}
 
 // ===== Tests =====
 #[cfg(test)]

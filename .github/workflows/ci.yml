@@ -2,10 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [main, develop] # support both main and develop for merge-ready CI
+    branches: [main, develop, 'ci-verify/**']
   pull_request:
     branches: [main, develop]
     types: [opened, synchronize, reopened]
+  workflow_dispatch:
 
 permissions:
   contents: read

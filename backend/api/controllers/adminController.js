@@ -66,6 +66,7 @@ const getUserRateLimitUsage = (req, res) => {
 
 import cache from '../../lib/cache.js';
 import { buildPaginatedResponse, parsePagination } from '../../lib/pagination.js';
+import keyRotationService from '../../services/keyRotationService.js';
 
 /** Deterministic JSON serialiser — sorts object keys recursively. */
 function stableStringify(val) {
@@ -496,6 +497,44 @@ const updateSettings = async (req, res) => {
     });
   } catch (err) {
     logControllerError('admin.updateSettings', err, req);
+// ── Key Management ─────────────────────────────────────────────────────────────
+
+const rotateKeys = async (req, res) => {
+  try {
+    const newKey = await keyRotationService.rotateKey();
+    
+    // Log action
+    await prisma.adminAuditLog.create({
+      data: {
+        action: 'KEY_ROTATED',
+        targetAddress: 'system',
+        reason: 'Manual rotation triggered',
+        performedBy: req.user?.address || 'admin',
+        performedAt: new Date(),
+      },
+    });
+
+    res.json({ message: 'Key rotated successfully', kid: newKey.kid });
+  } catch (err) {
+    logControllerError('admin.rotateKeys', err, req);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+const listKeys = async (req, res) => {
+  try {
+    const validKeys = await keyRotationService.getValidPublicKeys();
+    
+    // Omit any private keys if accidentally passed by service (though service shouldn't return them here)
+    const sanitizedKeys = validKeys.map(k => ({
+      kid: k.kid,
+      algorithm: k.algorithm,
+      publicKey: k.publicKey
+    }));
+
+    res.json({ keys: sanitizedKeys });
+  } catch (err) {
+    logControllerError('admin.listKeys', err, req);
     res.status(500).json({ error: err.message });
   }
 };
@@ -792,6 +831,8 @@ export default {
   getRateLimits,
   updateRateLimit,
   getUserRateLimitUsage,
+  rotateKeys,
+  listKeys,
   getMetrics,
   listArbiters,
   registerArbiter,

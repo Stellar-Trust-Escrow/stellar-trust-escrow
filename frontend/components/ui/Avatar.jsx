@@ -17,11 +17,18 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 
 const SIZE = {
   sm: 'w-8 h-8 text-xs',
   md: 'w-10 h-10 text-sm',
   lg: 'w-16 h-16 text-xl',
+};
+
+const SIZE_PX = {
+  sm: 32,
+  md: 40,
+  lg: 64,
 };
 
 function getInitials(address) {
@@ -32,13 +39,16 @@ function getInitials(address) {
 export default function Avatar({ src, address = '', size = 'md', className = '', alt = 'Avatar' }) {
   const [imgFailed, setImgFailed] = useState(false);
   const sizeClass = SIZE[size] ?? SIZE.md;
+  const px = SIZE_PX[size] ?? SIZE_PX.md;
   const base = `rounded-2xl flex-shrink-0 ${sizeClass} ${className}`;
 
   if (src && !imgFailed) {
     return (
-      <img
+      <Image
         src={src}
         alt={alt}
+        width={px}
+        height={px}
         className={`${base} object-cover`}
         onError={() => setImgFailed(true)}
       />

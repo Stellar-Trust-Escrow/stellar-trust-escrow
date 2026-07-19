@@ -9,6 +9,7 @@ module.exports = {
     '^next/navigation$': '<rootDir>/tests/__mocks__/next/navigation.js',
     '^next/image$': '<rootDir>/tests/__mocks__/next/image.jsx',
   },
+  transformIgnorePatterns: ['/node_modules/(?!nuqs/)'],
   transform: {
     '^.+\\.[jt]sx?$': [
       'babel-jest',

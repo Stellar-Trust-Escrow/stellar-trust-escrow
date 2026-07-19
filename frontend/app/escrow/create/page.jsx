@@ -24,11 +24,15 @@ import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Button from '../../../components/ui/Button';
 import TemplateSelector from '../../../components/escrow/TemplateSelector';
+import TemplatePickerModal from '../../../components/templates/TemplatePickerModal';
+import SaveTemplateModal from '../../../components/templates/SaveTemplateModal';
 import StellarAddressInput from '../../../components/ui/StellarAddressInput';
 import XLMAmountInput from '../../../components/ui/XLMAmountInput';
 import templatesData from '../../../data/templates.json';
 import { useToast } from '../../../contexts/ToastContext';
 import { useWallet } from '../../../hooks/useWallet';
+import { getTemplate } from '../../../hooks/useEscrowTemplates';
+import { applyBackendTemplateToForm } from '../../../lib/templates';
 import {
   buildCreateEscrowTx,
   broadcastTransaction,
@@ -91,6 +95,9 @@ export default function CreateEscrowPage() {
   const [error, setError] = useState(null);
   const [templateNotice, setTemplateNotice] = useState('');
   const [appliedQueryTemplateId, setAppliedQueryTemplateId] = useState(null);
+  const [showPicker, setShowPicker] = useState(false);
+  const [showSave, setShowSave] = useState(false);
+  const [appliedBackendTemplateId, setAppliedBackendTemplateId] = useState(null);
 
   // Touched state tracks which fields the user has interacted with
   const [touched, setTouched] = useState({ totalAmount: false, briefDescription: false });
@@ -118,6 +125,39 @@ export default function CreateEscrowPage() {
     setFormData((previous) => applyTemplateToForm(previous, template));
     setCurrentStep(1);
     setTemplateNotice(`Applied template: ${template.name}`);
+  };
+
+  // Shared/template URL (?templateId=...) loads a saved template from the API.
+  useEffect(() => {
+    const templateId = searchParams.get('templateId');
+    if (!templateId || templateId === appliedBackendTemplateId) {
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const template = await getTemplate(templateId);
+        if (cancelled || !template) return;
+        setFormData((previous) => applyBackendTemplateToForm(previous, template));
+        setCurrentStep(1);
+        setTemplateNotice(`Loaded from template: ${template.name}`);
+        setAppliedBackendTemplateId(templateId);
+      } catch {
+        // Template may be private or unavailable — ignore silently.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams, appliedBackendTemplateId]);
+
+  const handleLoadFromBackend = (template) => {
+    setFormData((previous) => applyBackendTemplateToForm(previous, template));
+    setCurrentStep(1);
+    setTemplateNotice(`Loaded from template: ${template.name}`);
+    setShowPicker(false);
   };
 
   // TODO (contributor — Issue #33): implement form submission
@@ -182,6 +222,16 @@ export default function CreateEscrowPage() {
         <p className="text-gray-400 mt-1">Lock funds and define milestones for your project.</p>
       </div>
 
+      <div className="flex justify-end">
+        <Button
+          variant="secondary"
+          onClick={() => setShowPicker(true)}
+          className="min-h-touch"
+        >
+          Load template
+        </Button>
+      </div>
+
       <TemplateSelector
         baseTemplates={templateLibrary}
         formData={formData}
@@ -197,7 +247,33 @@ export default function CreateEscrowPage() {
 
       {/* Step Indicator */}
       <nav aria-label="Progress">
-        <ol className="flex items-center gap-2">
+        {/* Mobile: collapse the step indicator into a single progress bar */}
+        <div className="sm:hidden mb-2">
+          <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+            <span className="font-medium text-white">
+              Step {currentStep}: {STEPS[currentStep - 1]?.label}
+            </span>
+            <span>
+              {currentStep} / {STEPS.length}
+            </span>
+          </div>
+          <div
+            className="w-full h-2 bg-gray-800 rounded-full overflow-hidden"
+            role="progressbar"
+            aria-valuemin={1}
+            aria-valuemax={STEPS.length}
+            aria-valuenow={currentStep}
+            aria-label={`Step ${currentStep} of ${STEPS.length}: ${STEPS[currentStep - 1]?.label}`}
+          >
+            <div
+              className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500"
+              style={{ width: `${(currentStep / STEPS.length) * 100}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Desktop: full step indicator */}
+        <ol className="hidden sm:flex items-center gap-2">
           {STEPS.map((step, i) => (
             <li key={step.id} className="flex items-center gap-2">
               <div
@@ -243,6 +319,17 @@ export default function CreateEscrowPage() {
           />
         )}
         {currentStep === 3 && <StepReview formData={formData} />}
+        {currentStep === 3 && (
+          <div className="flex justify-end">
+            <Button
+              variant="secondary"
+              onClick={() => setShowSave(true)}
+              className="min-h-touch"
+            >
+              Save as template
+            </Button>
+          </div>
+        )}
         {currentStep === 4 && (
           <StepSign onSubmit={handleSubmit} isSubmitting={isSubmitting} error={error} />
         )}
@@ -267,6 +354,13 @@ export default function CreateEscrowPage() {
           </Button>
         )}
       </div>
+
+      <TemplatePickerModal
+        isOpen={showPicker}
+        onClose={() => setShowPicker(false)}
+        onSelect={handleLoadFromBackend}
+      />
+      <SaveTemplateModal isOpen={showSave} onClose={() => setShowSave(false)} formData={formData} />
     </div>
   );
 }

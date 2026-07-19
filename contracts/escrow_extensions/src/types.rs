@@ -102,3 +102,54 @@ pub enum DataKey {
     /// Storage version for migration.
     StorageVersion,
 }
+use soroban_sdk::{contracttype, Address};
+
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct VestingSchedule {
+    pub escrow_id: u64,
+    pub cliff_seconds: u64,
+    pub duration_seconds: u64,
+    pub total_amount: i128,
+    pub claimed_amount: i128,
+    pub start_ledger: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct RecurringSchedule {
+    pub escrow_id: u64,
+    pub payment_amount: i128,
+    pub interval_seconds: u64,
+    pub total_payments: u32,
+    pub payments_processed: u32,
+    pub paused: bool,
+    pub start_ledger: u64,
+    pub last_payment_ledger: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub enum DelegatedRole {
+    SubmitMilestone,
+    ApproveMilestone,
+    RaiseDispute,
+}
+
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct RoleDelegation {
+    pub delegator: Address,
+    pub delegate: Address,
+    pub role: DelegatedRole,
+    pub escrow_id: u64,
+    pub expires_at_ledger: u64,
+}
+
+#[contracttype]
+pub enum DataKey {
+    VestingSchedule(u64),
+    RecurringSchedule(u64),
+    Delegation(u64, DelegatedRole),
+    CoreContract,
+}

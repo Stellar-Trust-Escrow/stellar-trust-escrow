@@ -15,9 +15,12 @@ import tenantController from '../controllers/tenantController.js';
 import * as featureFlagController from '../controllers/featureFlagController.js';
 import { getAuditLog, rotateSecrets } from '../../lib/secrets.js';
 import cache from '../../lib/cache.js';
+import auditRoutes from './auditRoutes.js';
 
 // Apply admin authentication to all routes in this file
 router.use(adminAuth);
+
+router.use('/audit', auditRoutes);
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
 /**
@@ -137,6 +140,20 @@ router.get('/settings', adminController.getSettings);
  * @security Requires MFA verification
  */
 router.patch('/settings', requireMfa, adminController.updateSettings);
+
+// ── Key Management ─────────────────────────────────────────────────────────────
+/**
+ * @route  POST /api/admin/keys/rotate
+ * @desc   Trigger a manual JWT signing key rotation
+ * @security Requires MFA verification
+ */
+router.post('/keys/rotate', requireMfa, adminController.rotateKeys);
+
+/**
+ * @route  GET /api/admin/keys
+ * @desc   List active key versions with metadata (no private keys)
+ */
+router.get('/keys', adminController.listKeys);
 
 // ── Audit Logs ─────────────────────────────────────────────────────────────────
 /**

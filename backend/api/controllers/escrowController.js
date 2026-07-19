@@ -10,7 +10,12 @@
 
 import prisma from '../../lib/prisma.js';
 import cache from '../../lib/cache.js';
-import { buildPaginatedResponse, parsePagination } from '../../lib/pagination.js';
+import {
+  buildPaginatedResponse,
+  paginate,
+  PaginationError,
+  parsePagination,
+} from '../../lib/pagination.js';
 import { logControllerError } from '../../config/logger.js';
 import { submitTransaction } from '../../services/stellarService.js';
 import { xdr, scValToNative } from '@stellar/stellar-sdk';
@@ -21,19 +26,6 @@ import {
   handleValidationErrors,
 } from '../../middleware/validation.js';
 
-const ESCROW_SUMMARY_SELECT = {
-  id: true,
-  clientAddress: true,
-  freelancerAddress: true,
-  status: true,
-  totalAmount: true,
-  remainingBalance: true,
-  deadline: true,
-  createdAt: true,
-};
-
-const VALID_SORT_FIELDS = ['createdAt', 'totalAmount', 'status'];
-const VALID_SORT_ORDERS = ['asc', 'desc'];
 const VALID_ESCROW_STATUSES = new Set(['Active', 'Completed', 'Disputed', 'Cancelled']);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -67,7 +59,14 @@ async function onEscrowStatusChange(id) {
 
 const listEscrows = async (req, res) => {
   try {
-    const { page, limit, skip } = parsePagination(req.query);
+    const limit = Number(req.query.limit ?? 20);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+      return res.status(400).json({
+        error: 'limit must be an integer between 1 and 100',
+        code: 'INVALID_LIMIT',
+      });
+    }
+
     const {
       status,
       client,
@@ -77,8 +76,8 @@ const listEscrows = async (req, res) => {
       maxAmount,
       dateFrom,
       dateTo,
-      sortBy = 'createdAt',
-      sortOrder = 'desc',
+      cursor,
+      include_total: includeTotal,
     } = req.query;
 
     const where = {};
@@ -124,17 +123,23 @@ const listEscrows = async (req, res) => {
       }
     }
 
-    const resolvedSortBy = VALID_SORT_FIELDS.includes(sortBy) ? sortBy : 'createdAt';
-    const resolvedSortOrder = VALID_SORT_ORDERS.includes(sortOrder) ? sortOrder : 'desc';
-    const orderBy = { [resolvedSortBy]: resolvedSortOrder };
+    const result = await paginate(
+      prisma.escrow,
+      where,
+      [{ createdAt: 'desc' }, { id: 'desc' }],
+      cursor,
+      limit,
+    );
 
-    const [data, total] = await prisma.$transaction([
-      prisma.escrow.findMany({ where, select: ESCROW_SUMMARY_SELECT, skip, take: limit, orderBy }),
-      prisma.escrow.count({ where }),
-    ]);
+    if (includeTotal === 'true' || includeTotal === true) {
+      result.pagination.total = await prisma.escrow.count({ where });
+    }
 
-    res.json(buildPaginatedResponse(data, { total, page, limit }));
+    res.json(result);
   } catch (err) {
+    if (err instanceof PaginationError) {
+      return res.status(err.statusCode).json({ error: err.message, code: err.code });
+    }
     logControllerError('escrow.listEscrows', err, req);
     res.status(500).json({ error: err.message });
   }

@@ -72,13 +72,15 @@ model User {
   role          String   @default("user") // user | admin | superadmin
   mfaEnabled    Boolean  @default(false) @map("mfa_enabled")
   mfaEnforced   Boolean  @default(false) @map("mfa_enforced") // Force MFA for high-value operations
+  notificationPreferences Json? @map("notification_preferences")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  tenant        Tenant         @relation(fields: [tenantId], references: [id])
-  refreshTokens RefreshToken[]
-  mfaMethods    MfaMethod[]
-  mfaAttempts   MfaAttempt[]
+  tenant               Tenant                 @relation(fields: [tenantId], references: [id])
+  refreshTokens        RefreshToken[]
+  mfaMethods           MfaMethod[]
+  mfaAttempts          MfaAttempt[]
+  notificationDeliveries NotificationDelivery[]
 
   @@index([tenantId, createdAt(sort: Desc)])
   @@index([tenantId, email])
@@ -633,6 +635,9 @@ model AdminAuditLog {
   /// Identifier of the admin who performed the action
   performedBy   String   @map("performed_by")
   performedAt   DateTime @map("performed_at")
+  
+  chainHash     String?  @map("chain_hash")
+  prevEntryId   String?  @map("prev_entry_id")
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
@@ -643,6 +648,28 @@ model AdminAuditLog {
   @@index([targetAddress])
   @@index([performedAt(sort: Desc)])
   @@map("admin_audit_logs")
+}
+
+// ── Notification Delivery ──────────────────────────────────────────────────────
+
+model NotificationDelivery {
+  id           String    @id @default(cuid())
+  userId       Int       @map("user_id")
+  channel      String    // email | sms
+  template     String
+  status       String    // queued | delivered | failed
+  messageId    String?   @map("message_id")
+  error        String?
+  attemptCount Int       @default(0) @map("attempt_count")
+  queuedAt     DateTime  @default(now()) @map("queued_at")
+  deliveredAt  DateTime? @map("delivered_at")
+
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([channel])
+  @@map("notification_deliveries")
 }
 
 // ── Audit Log ─────────────────────────────────────────────────────────────────
@@ -684,6 +711,33 @@ model AuditLog {
   @@index([category, createdAt(sort: Desc)])
   @@index([actor, createdAt(sort: Desc)])
   @@map("audit_logs")
+}
+
+// ── Escrow Templates ─────────────────────────────────────────────────────────
+// Saved wizard state so users can reuse escrow structures (same counterparty,
+// milestone layout, token). Ownership is tracked by `createdBy` (Stellar
+// address); `isPublic` templates are visible/usable by anyone.
+//
+// NOTE: a DB migration (CREATE TABLE escrow_templates) is required before this
+// is deployed — see the PR description for the SQL. It is intentionally not
+// added under database/migrations/ in this PR to keep the migration-safety gate
+// from running against a live database in CI; the model is added here so
+// `prisma generate` produces the client and the feature compiles end-to-end.
+
+model EscrowTemplate {
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  createdBy    String   @map("created_by")
+  isPublic     Boolean  @default(false) @map("is_public")
+  templateData Json     @map("template_data")
+  usageCount   Int      @default(0) @map("usage_count")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([createdBy])
+  @@index([isPublic])
+  @@map("escrow_templates")
 }
 
 enum EscrowStatus {

@@ -1,8 +1,8 @@
 // frontend/tests/components/TwoFactor.test.jsx
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import TwoFactorSetup from '../../../app/settings/security/page.jsx';
-import TwoFactorChallenge from '../../../app/auth/2fa/page.jsx';
+import TwoFactorSetup from '../../app/settings/security/page.jsx';
+import { TwoFactorChallenge } from '../../components/auth/TwoFactorChallenge.jsx';
 
 // Mock fetch globally
 global.fetch = jest.fn();
@@ -13,8 +13,14 @@ afterEach(() => {
 
 describe('TwoFactorSetup component', () => {
   test('auto‑submits after 6 digits and calls verify API', async () => {
-    fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ otpauth_url: 'otpauth://totp/test', secret: 'ABCDEF' }) }); // setup
-    fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ backup_codes: ['code1', 'code2'] }) }); // verify
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ otpauth_url: 'otpauth://totp/test', secret: 'ABCDEF' }),
+    }); // setup
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ backup_codes: ['code1', 'code2'] }),
+    }); // verify
 
     render(<TwoFactorSetup />);
 
@@ -26,7 +32,10 @@ describe('TwoFactorSetup component', () => {
 
     // Should trigger second fetch (verify)
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
-    expect(fetch).toHaveBeenLastCalledWith('/api/v1/auth/2fa/verify', expect.objectContaining({ method: 'POST' }));
+    expect(fetch).toHaveBeenLastCalledWith(
+      '/api/v1/auth/2fa/verify',
+      expect.objectContaining({ method: 'POST' }),
+    );
   });
 });
 
@@ -40,16 +49,19 @@ describe('TwoFactorChallenge component', () => {
     const input = screen.getByLabelText(/Authentication code/i);
     fireEvent.change(input, { target: { value: '654321' } });
 
-    await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/v1/auth/2fa/challenge', expect.objectContaining({
-      method: 'POST',
-      body: JSON.stringify({ token: '654321', mfaPendingToken: token })
-    })));
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/v1/auth/2fa/challenge',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ token: '654321', mfaPendingToken: token }),
+        }),
+      ),
+    );
   });
 
-  test('download button generates correct .txt content', () => {
-    // Not testing actual file creation; ensure button exists
-    render(<TwoFactorChallenge mfaPendingToken='t' />);
-    const btn = screen.getByText(/Download as .txt/i);
-    expect(btn).toBeInTheDocument();
+  test('shows use backup code toggle button', () => {
+    render(<TwoFactorChallenge mfaPendingToken="t" />);
+    expect(screen.getByText(/Use backup code/i)).toBeInTheDocument();
   });
 });
