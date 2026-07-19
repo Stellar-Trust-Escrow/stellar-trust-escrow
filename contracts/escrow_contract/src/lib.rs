@@ -3137,7 +3137,10 @@ impl EscrowContract {
         }
 
         let now = env.ledger().timestamp();
-        votes.push_back(ApprovalRecord { signer: caller.clone(), approved_at: now });
+        votes.push_back(ApprovalRecord {
+            signer: caller.clone(),
+            approved_at: now,
+        });
         env.storage().persistent().set(&vote_key, &votes);
 
         env.events().publish(
@@ -3226,9 +3229,10 @@ impl EscrowContract {
     ) -> soroban_sdk::Vec<ApprovalRecord> {
         env.storage()
             .persistent()
-            .get::<DataKey, soroban_sdk::Vec<ApprovalRecord>>(
-                &DataKey::MilestoneVotes(escrow_id, milestone_id),
-            )
+            .get::<DataKey, soroban_sdk::Vec<ApprovalRecord>>(&DataKey::MilestoneVotes(
+                escrow_id,
+                milestone_id,
+            ))
             .unwrap_or_else(|| soroban_sdk::Vec::new(&env))
     }
 
