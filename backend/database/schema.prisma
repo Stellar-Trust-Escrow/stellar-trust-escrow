@@ -684,6 +684,9 @@ model AuditLog {
   actor      String
   /// Primary resource identifier (escrow id, address, dispute id, etc.)
   resourceId String?  @map("resource_id")
+  escrowId   BigInt?  @map("escrow_id")
+  fromState  String?  @map("from_state")
+  toState    String?  @map("to_state")
   /// Snapshot of relevant state at the time of the event (JSON)
   metadata   Json?
   /// HTTP status code or outcome code
@@ -702,6 +705,7 @@ model AuditLog {
   @@index([action])
   @@index([actor])
   @@index([resourceId])
+  @@index([escrowId])
   @@index([createdAt(sort: Desc)])
   // Composite indexes for common admin filter combinations
   @@index([category, action])
