@@ -70,10 +70,6 @@ export async function up(prisma) {
       FOR EACH ROW
       EXECUTE FUNCTION update_updated_at_column()
   `);
-
-  await prisma.$executeRawUnsafe(`
-    ALTER TABLE users DROP COLUMN IF EXISTS refresh_token
-  `);
 }
 
 export async function down(prisma) {
