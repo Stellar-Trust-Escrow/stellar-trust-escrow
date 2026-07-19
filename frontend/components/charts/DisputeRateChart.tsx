@@ -1,5 +1,14 @@
 import React, { useMemo } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  ReferenceLine,
+} from 'recharts';
 import { exportToCSV } from '../../lib/csvExport';
 
 interface DisputeRateChartProps {
@@ -8,7 +17,7 @@ interface DisputeRateChartProps {
     dispute_rate: number[];
   };
   isLoading: boolean;
-  isError: any;
+  isError: unknown;
 }
 
 export const DisputeRateChart: React.FC<DisputeRateChartProps> = ({ data, isLoading, isError }) => {
@@ -47,7 +56,7 @@ export const DisputeRateChart: React.FC<DisputeRateChartProps> = ({ data, isLoad
           <h3 className="font-semibold text-slate-800">Dispute Rate</h3>
           <p className="text-sm text-slate-500">% of escrows disputed</p>
         </div>
-        <button 
+        <button
           onClick={handleExport}
           disabled={!chartData.length}
           className="px-3 py-1.5 text-sm font-medium text-slate-600 bg-slate-50 hover:bg-slate-100 rounded-md transition-colors border border-slate-200 disabled:opacity-50"
@@ -59,14 +68,40 @@ export const DisputeRateChart: React.FC<DisputeRateChartProps> = ({ data, isLoad
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-            <XAxis dataKey="date" tick={{fontSize: 12, fill: '#64748b'}} tickLine={false} axisLine={false} />
-            <YAxis tick={{fontSize: 12, fill: '#64748b'}} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}%`} />
-            <Tooltip 
-              contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-              formatter={(value: number) => [`${value}%`, 'Dispute Rate']}
+            <XAxis
+              dataKey="date"
+              tick={{ fontSize: 12, fill: '#64748b' }}
+              tickLine={false}
+              axisLine={false}
             />
-            <ReferenceLine y={5} stroke="#ef4444" strokeDasharray="3 3" label={{ position: 'top', value: '5% Threshold', fill: '#ef4444', fontSize: 10 }} />
-            <Line type="monotone" dataKey="rate" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3, fill: '#8b5cf6', strokeWidth: 0 }} activeDot={{ r: 5 }} />
+            <YAxis
+              tick={{ fontSize: 12, fill: '#64748b' }}
+              tickLine={false}
+              axisLine={false}
+              tickFormatter={(value) => `${value}%`}
+            />
+            <Tooltip
+              contentStyle={{
+                borderRadius: '8px',
+                border: 'none',
+                boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+              }}
+              formatter={((value: number) => [`${value}%`, 'Dispute Rate']) as never}
+            />
+            <ReferenceLine
+              y={5}
+              stroke="#ef4444"
+              strokeDasharray="3 3"
+              label={{ position: 'top', value: '5% Threshold', fill: '#ef4444', fontSize: 10 }}
+            />
+            <Line
+              type="monotone"
+              dataKey="rate"
+              stroke="#8b5cf6"
+              strokeWidth={2}
+              dot={{ r: 3, fill: '#8b5cf6', strokeWidth: 0 }}
+              activeDot={{ r: 5 }}
+            />
           </LineChart>
         </ResponsiveContainer>
       </div>

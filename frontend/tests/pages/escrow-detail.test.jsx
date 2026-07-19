@@ -81,7 +81,7 @@ describe('EscrowDetailPage', () => {
   it('closes dispute modal when Cancel is clicked', () => {
     renderWithAppProviders(<EscrowDetailPage params={params} />);
     fireEvent.click(screen.getByRole('button', { name: /Raise Dispute/ }));
-    fireEvent.click(screen.getByText('Cancel'));
+    fireEvent.click(screen.getAllByText('Cancel')[0]);
     // Modal should close - the backdrop should be gone
     expect(screen.queryByText(/freeze all funds/)).not.toBeInTheDocument();
   });

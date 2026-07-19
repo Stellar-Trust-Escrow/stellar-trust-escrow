@@ -28,6 +28,7 @@ permissions:
 env:
   HUSKY: 0
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db?schema=public
+  DIRECT_URL: postgresql://postgres:postgres@localhost:5432/test_db?schema=public
 
 jobs:
   # ─────────────────────────────────────────

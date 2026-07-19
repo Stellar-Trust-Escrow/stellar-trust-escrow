@@ -76,4 +76,14 @@ router.get(
   escrowController.getEscrow,
 );
 
+/**
+ * @route  GET /api/escrows/:id/audit/export
+ */
+import { exportBundle } from '../controllers/auditController.js';
+router.get(
+  '/:id/audit/export',
+  validateEscrowId,
+  exportBundle,
+);
+
 export default router;

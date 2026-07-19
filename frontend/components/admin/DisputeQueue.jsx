@@ -31,7 +31,7 @@ export default function DisputeQueue({ apiKey }) {
             'Content-Type': 'application/json',
             'x-admin-api-key': apiKey,
           },
-        }
+        },
       );
 
       if (!res.ok) {
@@ -50,8 +50,9 @@ export default function DisputeQueue({ apiKey }) {
   };
 
   const sortDisputes = (disputesToSort) => {
+    if (!Array.isArray(disputesToSort)) return [];
     const { key, direction } = sortConfig;
-    
+
     return [...disputesToSort].sort((a, b) => {
       let aValue = a[key];
       let bValue = b[key];
@@ -61,7 +62,7 @@ export default function DisputeQueue({ apiKey }) {
         // Sort by escalation count (higher first), then by time until escalation (sooner first)
         const countCompare = (b.escalationCount || 0) - (a.escalationCount || 0);
         if (countCompare !== 0) return countCompare;
-        
+
         const aTime = a.autoEscalateAt ? new Date(a.autoEscalateAt).getTime() : Infinity;
         const bTime = b.autoEscalateAt ? new Date(b.autoEscalateAt).getTime() : Infinity;
         return aTime - bTime;
@@ -112,27 +113,27 @@ export default function DisputeQueue({ apiKey }) {
 
   const getTimeUntilEscalation = (autoEscalateAt) => {
     if (!autoEscalateAt) return '—';
-    
+
     const now = new Date();
     const escalateTime = new Date(autoEscalateAt);
     const diffMs = escalateTime - now;
-    
+
     if (diffMs <= 0) return 'Overdue';
-    
+
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
     const diffDays = Math.floor(diffHours / 24);
-    
+
     if (diffDays > 0) return `${diffDays}d ${diffHours % 24}h`;
     return `${diffHours}h`;
   };
 
   const getEscalationRiskColor = (escalationCount, autoEscalateAt) => {
     if (!autoEscalateAt) return 'text-gray-400';
-    
+
     const now = new Date();
     const escalateTime = new Date(autoEscalateAt);
     const diffHours = (escalateTime - now) / (1000 * 60 * 60);
-    
+
     if (diffHours <= 0) return 'text-red-400';
     if (diffHours <= 24) return 'text-orange-400';
     if (escalationCount >= 2) return 'text-amber-400';
@@ -167,9 +168,7 @@ export default function DisputeQueue({ apiKey }) {
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full">
-            <caption className="sr-only">
-              Table of open disputes sorted by escalation risk
-            </caption>
+            <caption className="sr-only">Table of open disputes sorted by escalation risk</caption>
             <thead>
               <tr className="border-b border-gray-700">
                 <th
@@ -245,10 +244,12 @@ export default function DisputeQueue({ apiKey }) {
                     </div>
                   </td>
                   <td className="py-3 px-4">
-                    <div className={`flex items-center gap-2 ${getEscalationRiskColor(
-                      dispute.escalationCount,
-                      dispute.autoEscalateAt
-                    )}`}>
+                    <div
+                      className={`flex items-center gap-2 ${getEscalationRiskColor(
+                        dispute.escalationCount,
+                        dispute.autoEscalateAt,
+                      )}`}
+                    >
                       <Clock className="w-4 h-4" />
                       <span>{getTimeUntilEscalation(dispute.autoEscalateAt)}</span>
                     </div>
