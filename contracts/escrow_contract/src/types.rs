@@ -507,6 +507,26 @@ pub struct CancellationRequest {
     pub counterparty_approved: bool,
 }
 
+/// A mutual-consent cancellation proposal requiring approval from the other party.
+///
+/// Either the client or freelancer can propose; the counterparty must accept
+/// within 24 hours. On acceptance the escrow is split per `client_refund_bps`
+/// and the agreed terms hash is anchored on-chain.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct CancellationProposal {
+    /// The escrow ID this proposal belongs to.
+    pub escrow_id: u64,
+    /// Address of the party who proposed cancellation.
+    pub proposer: Address,
+    /// Client refund share in basis points (0–10000). Contractor receives the remainder.
+    pub client_refund_bps: u32,
+    /// SHA-256 hash of the cancellation terms agreed by the proposer.
+    pub terms_hash: BytesN<32>,
+    /// Ledger timestamp when the proposal was created.
+    pub proposed_at: u64,
+}
+
 /// Oracle-signed resolution payload for fallback dispute resolution.
 ///
 /// Submitted by any caller once the grace period has elapsed.
@@ -728,6 +748,8 @@ pub enum DataKey {
     AdminThreshold,
     /// Contract pause state — value: bool
     Paused,
+    /// Timestamp when pause was initiated — value: u64
+    PauseInitiatedAt,
     /// Cancellation request by escrow ID — key: u64, value: CancellationRequest
     CancellationRequest(u64),
     /// Slash record by escrow ID — key: u64, value: SlashRecord
@@ -788,4 +810,6 @@ pub enum DataKey {
     DeadlineExtensionRequest(u64),
     /// Escrow IDs with active deadline extension requests indexed by requester — key: Address, value: Vec<u64>
     DeadlineExtensionsByRequester(Address),
+    /// Mutual-consent cancellation proposal by escrow ID — key: u64, value: CancellationProposal
+    CancellationProposal(u64),
 }

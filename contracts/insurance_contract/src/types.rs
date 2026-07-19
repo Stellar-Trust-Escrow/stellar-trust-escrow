@@ -109,6 +109,13 @@ pub enum DataKey {
     SlashVote(u32, Address),
     /// Configured slash ceiling in bps (default 4000 = 40%) — instance.
     MaxSlashBps,
+    // ── Insurance opt-in ──────────────────────────────────────────────────────
+    /// Whether an escrow has opted into insurance — key: escrow_id (String), value: OptInRecord
+    OptedIn(String),
+    /// Total nominal coverage currently active — instance.
+    ActiveCoverage,
+    /// Base premium rate in bps — instance (default 50 = 0.5%).
+    BasePremiumBps,
 }
 
 /// Mutable aggregate stats stored under DataKey::FundStats.
@@ -143,6 +150,22 @@ pub enum SlashStatus {
     Approved,
     Rejected,
     Executed,
+}
+
+/// Record stored when an escrow opts into insurance coverage.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct OptInRecord {
+    /// Address of the client who paid the premium.
+    pub client: Address,
+    /// Total escrow amount covered.
+    pub coverage_amount: i128,
+    /// Premium paid (in token base units).
+    pub premium_paid: i128,
+    /// Ledger timestamp when opt-in was recorded.
+    pub opted_in_at: u64,
+    /// Ledger timestamp when coverage expires (0 = no expiry).
+    pub expires_at: u64,
 }
 
 /// A governance-approved slash proposal.

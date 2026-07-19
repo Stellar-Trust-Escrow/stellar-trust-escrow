@@ -11,6 +11,11 @@ export default {
     '<rootDir>/tests/queueTests.test.js',
     '<rootDir>/tests/refreshToken.test.js',
     '<rootDir>/tests/services/stellarListener.test.js',
+    '<rootDir>/tests/integration/keyRotation.test.js',
+    '<rootDir>/tests/unit/keyRotationService.test.js',
+    '<rootDir>/tests/unit/analyticsController.test.js',
+    '<rootDir>/tests/exportGdpr.test.js',
+    '<rootDir>/tests/stellarClient.test.js',
   ],
   collectCoverageFrom: [
     'api/controllers/**/*.js',

@@ -24,6 +24,8 @@
 
 import { useEffect } from 'react';
 import Button from './Button';
+import BottomSheet from './BottomSheet';
+import { useIsMobile } from '../../hooks/useMediaQuery';
 
 const SIZE_CLASSES = {
   sm: 'max-w-sm',
@@ -43,6 +45,8 @@ export default function Modal({
   cancelLabel = 'Cancel',
   confirmVariant = 'primary',
 }) {
+  const isMobile = useIsMobile();
+
   // Close on Escape key
   useEffect(() => {
     if (!isOpen) return;
@@ -62,6 +66,33 @@ export default function Modal({
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  // On mobile, render as a bottom-sheet drawer (Issue #1444).
+  if (isMobile) {
+    return (
+      <BottomSheet isOpen={isOpen} onClose={onClose} title={title}>
+        {children}
+        {isConfirmation && (
+          <div className="flex flex-col gap-3 pt-4 mt-4 border-t border-gray-800">
+            <Button
+              variant="secondary"
+              className="w-full min-h-touch"
+              onClick={onClose}
+            >
+              {cancelLabel}
+            </Button>
+            <Button
+              variant={confirmVariant}
+              className="w-full min-h-touch"
+              onClick={onConfirm}
+            >
+              {confirmLabel}
+            </Button>
+          </div>
+        )}
+      </BottomSheet>
+    );
+  }
 
   return (
     <div

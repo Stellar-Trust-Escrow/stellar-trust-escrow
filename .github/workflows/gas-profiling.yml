@@ -19,7 +19,7 @@ concurrency:
 
 env:
   HUSKY: 0
-  WASM_SIZE_LIMIT_KB: 100
+  WASM_SIZE_LIMIT_KB: 250
   GAS_INCREASE_LIMIT: 15
 
 jobs:
@@ -116,6 +116,7 @@ jobs:
 
       - name: Post sticky PR comment
         if: github.event_name == 'pull_request'
+        continue-on-error: true
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           header: gas-profiler

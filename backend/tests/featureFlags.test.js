@@ -27,9 +27,11 @@ const prismaMock = {
       return Promise.resolve();
     }),
   },
-  auditLog: {
-    create: jest.fn(() => Promise.resolve()),
+  adminAuditLog: {
+    findFirst: jest.fn(() => Promise.resolve(null)),
+    create: jest.fn(({ data }) => Promise.resolve({ id: Date.now(), ...data })),
   },
+  $transaction: jest.fn((cb) => cb(prismaMock)),
 };
 
 jest.unstable_mockModule('../lib/prisma.js', () => ({ default: prismaMock }));
@@ -95,17 +97,17 @@ describe('Feature Flags Service', () => {
     });
   });
 
-  describe('Test 3 (Audit)', () => {
+ describe('Test 3 (Audit)', () => {
     it('creates an audit log entry when a flag is toggled', async () => {
       await createFlag({ key: 'audit-test', isEnabled: false, percentage: 0 }, 'admin-1');
       await updateFlag('audit-test', { isEnabled: true }, 'admin-1');
 
-      // auditLog.create should have been called for both create and update
-      expect(prismaMock.auditLog.create).toHaveBeenCalledTimes(2);
+      // adminAuditLog.create should have been called for both create and update
+      expect(prismaMock.adminAuditLog.create).toHaveBeenCalledTimes(2);
 
-      const calls = prismaMock.auditLog.create.mock.calls;
-      expect(calls[0][0].data).toMatchObject({ action: 'FLAG_CREATED', resourceId: 'audit-test' });
-      expect(calls[1][0].data).toMatchObject({ action: 'FLAG_UPDATED', resourceId: 'audit-test' });
+      const calls = prismaMock.adminAuditLog.create.mock.calls;
+      expect(calls[0][0].data).toMatchObject({ action: 'FLAG_CREATED', targetAddress: 'audit-test' });
+      expect(calls[1][0].data).toMatchObject({ action: 'FLAG_UPDATED', targetAddress: 'audit-test' });
     });
   });
 

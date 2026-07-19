@@ -38,6 +38,7 @@
     "jwt-decode": "^4.0.0",
     "lucide-react": "^0.383.0",
     "next": "^15.2.4",
+    "nuqs": "^2.9.0",
     "react": "^18",
     "react-day-picker": "^10.0.1",
     "react-dom": "^18",
@@ -52,10 +53,12 @@
     "@axe-core/playwright": "^4.11.3",
     "@opentelemetry/core": "^2.9.0",
     "@playwright/test": "^1.52.0",
+    "@chromatic-com/storybook": "^3.2.7",
     "@storybook/addon-a11y": "^8.6.18",
     "@storybook/addon-essentials": "^8.6.14",
     "@storybook/addon-interactions": "^8.6.14",
     "@storybook/blocks": "^8.6.14",
+    "@storybook/test": "^8.6.14",
     "@storybook/nextjs": "^8.6.18",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
@@ -84,5 +87,8 @@
   "validate-branch-name": {
     "pattern": "^(main|develop|live)$|^(feature|fix|refactor|hotfix|release|conflict|docs|chore|test)\\/[A-Za-z0-9._-]+$",
     "errorMsg": "Branch name structure: feature/NV-1234-new-feature\nAllowed prefixes: feature, fix, refactor, hotfix, release, conflict, docs, chore, test"
+  },
+  "overrides": {
+    "webpack": "5.101.2"
   }
 }

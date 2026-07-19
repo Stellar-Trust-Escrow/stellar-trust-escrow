@@ -43,7 +43,10 @@ import batchRoutes from './api/routes/batchRoutes.js';
 import webhookRoutes from './api/routes/webhookRoutes.js';
 import wellKnownRoutes from './api/routes/wellKnownRoutes.js';
 import webhooksV1Routes from './api/routes/webhooks.js';
+import insuranceRoutes from './api/routes/insuranceRoutes.js';
+import metricsRoutes from './api/routes/metricsRoutes.js';
 import tenantMiddleware from './api/middleware/tenant.js';
+import templateRoutes from './api/routes/templateRoutes.js';
 import auditMiddleware from './api/middleware/audit.js';
 import { createWebSocketServer, pool } from './api/websocket/handlers.js';
 import cache from './lib/cache.js';
@@ -72,6 +75,7 @@ import { syncFromPrisma, ensureIndex } from './services/reputationSearchService.
 import { createGateway } from './gateway/index.js';
 import queueDashboardRoutes from './api/routes/queueDashboardRoutes.js';
 import chatRoutes from './api/routes/chatRoutes.js';
+import { startAnalyticsWorker } from './workers/analyticsWorker.js';
 
 // Attach Prisma query instrumentation (metrics + traces)
 attachPrismaMetrics(prisma);
@@ -117,7 +121,7 @@ app.use(cookieParser());
 app.use(sanitizeInputs);
 app.use(csrfProtection);
 app.use('/uploads', express.static('uploads'));
-app.use(auditMiddleware);
+app.use(auditMiddleware());
 
 // ── Sentry tracing handler — after body parsers, before routes ────────────────
 app.use(sentryTracingHandler);
@@ -217,6 +221,10 @@ app.use('/api/v1/admin/analytics', analyticsRoutes);
 app.use('/api/batch', batchRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/v1/templates', templateRoutes);
+app.use('/api/insurance', insuranceRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/metrics', metricsRoutes);
 app.use('/admin/queues', queueDashboardRoutes);
 app.use('/.well-known', wellKnownRoutes);
 app.use('/docs', docsRouter);
@@ -335,6 +343,9 @@ async function startServer() {
           Sentry.captureException(err, { tags: { component: 'indexer' } });
         });
         startRpcMonitor();
+
+        startAnalyticsWorker();
+        logger.info('[Analytics] Worker + cron started');
 
         // Reputation ES sync — ensure index + initial sync on startup
         ensureIndex().then(() =>

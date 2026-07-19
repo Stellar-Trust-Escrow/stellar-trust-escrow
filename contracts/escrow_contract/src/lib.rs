@@ -67,6 +67,7 @@ mod high_value_multisig_tests;
 mod lock_time_enforcement_tests;
 mod max_escrow_amount_tests;
 mod meta_snapshot_tests;
+mod mutual_cancellation_tests;
 mod nft;
 mod nft_tests;
 mod oracle;
@@ -84,11 +85,11 @@ mod upgrade_tests;
 pub use errors::EscrowError;
 use storage::StorageManager;
 pub use types::{
-    ApprovalRecord, DataKey, EscrowFeeSnapshot, EscrowState, EscrowStatus, EscrowTemplate, FeeTier,
-    Milestone, MilestoneStatus, MilestoneTemplate, MultisigConfig, OptionalBytesN32,
-    OptionalPriceCondition, OptionalTimelock, OracleResolutionPayload, PriceCondition,
-    PriceDirection, RecurringInterval, RecurringScheduleStatus, ReputationRecord, Timelock,
-    MS_APPROVED, MS_DISPUTED, MS_PENDING, MS_REJECTED, MS_RELEASED, MS_SUBMITTED,
+    ApprovalRecord, CancellationProposal, DataKey, EscrowFeeSnapshot, EscrowState, EscrowStatus,
+    EscrowTemplate, FeeTier, Milestone, MilestoneStatus, MilestoneTemplate, MultisigConfig,
+    OptionalBytesN32, OptionalPriceCondition, OptionalTimelock, OracleResolutionPayload,
+    PriceCondition, PriceDirection, RecurringInterval, RecurringScheduleStatus, ReputationRecord,
+    Timelock, MS_APPROVED, MS_DISPUTED, MS_PENDING, MS_REJECTED, MS_RELEASED, MS_SUBMITTED,
 };
 use types::{CancellationRequest, DeadlineExtensionRequest, RecurringPaymentConfig, SlashRecord};
 use types::{FundPayload, ProposalPayload, ProposalType};
@@ -121,6 +122,7 @@ mod storage;
 pub const MAX_ESCROW_AMOUNT: i128 = 100_000_000_000_000_000i128;
 
 const CANCELLATION_DISPUTE_PERIOD: u64 = 120_960;
+const CANCELLATION_PROPOSAL_TTL: u64 = 86_400;
 const SLASH_DISPUTE_PERIOD: u64 = 51_840;
 const SLASH_PERCENTAGE: u64 = 10;
 const RENT_PERIOD_SECONDS: u64 = 86_400;
@@ -673,6 +675,34 @@ impl ContractStorage {
             .remove(&DataKey::CancellationRequest(escrow_id));
     }
 
+    // ── Mutual-consent cancellation proposal ──────────────────────────────────
+
+    fn load_cancellation_proposal(
+        env: &Env,
+        escrow_id: u64,
+    ) -> Result<CancellationProposal, EscrowError> {
+        let key = DataKey::CancellationProposal(escrow_id);
+        let proposal = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(EscrowError::NoCancellationProposal)?;
+        Self::bump_persistent_ttl(env, &key);
+        Ok(proposal)
+    }
+
+    fn save_cancellation_proposal(env: &Env, proposal: &CancellationProposal) {
+        let key = DataKey::CancellationProposal(proposal.escrow_id);
+        env.storage().persistent().set(&key, proposal);
+        Self::bump_persistent_ttl(env, &key);
+    }
+
+    fn remove_cancellation_proposal(env: &Env, escrow_id: u64) {
+        env.storage()
+            .persistent()
+            .remove(&DataKey::CancellationProposal(escrow_id));
+    }
+
     fn load_slash_record(env: &Env, escrow_id: u64) -> Result<SlashRecord, EscrowError> {
         let key = DataKey::SlashRecord(escrow_id);
         let record = env
@@ -1039,9 +1069,23 @@ impl ContractStorage {
 
     fn require_not_paused(env: &Env) -> Result<(), EscrowError> {
         if Self::is_paused(env) {
-            return Err(EscrowError::E31);
+            return Err(EscrowError::ContractPaused);
         }
         Ok(())
+    }
+
+    fn get_pause_initiated_at(env: &Env) -> u64 {
+        env.storage()
+            .instance()
+            .get(&DataKey::PauseInitiatedAt)
+            .unwrap_or(0_u64)
+    }
+
+    fn set_pause_initiated_at(env: &Env, timestamp: u64) {
+        env.storage()
+            .instance()
+            .set(&DataKey::PauseInitiatedAt, &timestamp);
+        Self::bump_instance_ttl(env);
     }
 
     fn _get_migration_cursor(env: &Env) -> u64 {
@@ -4252,11 +4296,13 @@ impl EscrowContract {
         }
 
         ContractStorage::set_paused(&env, true);
+        ContractStorage::set_pause_initiated_at(&env, env.ledger().timestamp());
         events::emit_contract_paused(&env, &caller);
         Ok(())
     }
 
     /// Unpauses the contract, resuming normal operation.
+    /// Requires at least 48 hours (172,800 seconds) to have elapsed since pause.
     pub fn unpause(env: Env, caller: Address) -> Result<(), EscrowError> {
         caller.require_auth();
         ContractStorage::require_admin(&env, &caller)?;
@@ -4265,9 +4311,65 @@ impl EscrowContract {
             return Ok(());
         }
 
+        let initiated_at = ContractStorage::get_pause_initiated_at(&env);
+        let now = env.ledger().timestamp();
+        if now < initiated_at + 172_800 {
+            return Err(EscrowError::UnpauseTooEarly);
+        }
+
         ContractStorage::set_paused(&env, false);
         events::emit_contract_unpaused(&env, &caller);
         Ok(())
+    }
+
+    /// Emergency fund recovery — admin only, contract must be paused.
+    ///
+    /// Sends the escrow's entire `remaining_balance` back to the original client
+    /// (depositor). This is a nuclear refund mechanism, not a dispute-resolution
+    /// tool: it intentionally favours the depositor. Escrows that are already
+    /// Completed or Cancelled have no remaining balance and are rejected.
+    ///
+    /// **Security model**: The admin can never redirect funds to an arbitrary
+    /// address — only back to the party who deposited them. This prevents the
+    /// admin key from being used as a rug-pull vector.
+    ///
+    /// **CEI compliance**: State is updated before the external token transfer
+    /// (effects-before-interaction), and the entire body is wrapped in
+    /// `with_reentrancy_guard` to match the protection level of `release_funds`.
+    pub fn emergency_withdraw(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_admin(&env, &caller)?;
+        if !ContractStorage::is_paused(&env) {
+            return Err(EscrowError::ContractPaused);
+        }
+
+        ContractStorage::with_reentrancy_guard(&env, || {
+            let mut meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
+            if meta.status != EscrowStatus::Active {
+                return Err(EscrowError::E9);
+            }
+
+            let amount = meta.remaining_balance;
+
+            meta.remaining_balance = 0;
+            meta.status = EscrowStatus::Cancelled;
+            ContractStorage::save_escrow_meta(&env, &meta);
+
+            if amount > 0 {
+                token::Client::new(&env, &meta.token).transfer(
+                    &env.current_contract_address(),
+                    &meta.client,
+                    &amount,
+                );
+            }
+
+            events::emit_emergency_withdrawal(&env, escrow_id, &meta.client, amount);
+            Ok(())
+        })
     }
 
     /// Returns the current pause state of the contract.
@@ -5031,6 +5133,214 @@ impl EscrowContract {
         events::emit_dispute_raised(&env, escrow_id, &caller);
 
         Ok(())
+    }
+
+    // ── Mutual-Consent Cancellation ─────────────────────────────────────────────
+
+    /// Proposes a mutual-consent cancellation with a custom client refund percentage.
+    ///
+    /// Either the client or freelancer can call this. The proposal stores the
+    /// agreed terms hash on-chain and the counterparty must accept within 24 hours.
+    ///
+    /// # Arguments
+    /// * `escrow_id` - The escrow to propose cancelling
+    /// * `client_refund_bps` - Client's refund share in basis points (0–10000)
+    /// * `terms_hash` - SHA-256 hash of the cancellation terms (must be non-zero)
+    pub fn propose_cancellation(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+        client_refund_bps: u32,
+        terms_hash: BytesN<32>,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_initialized(&env)?;
+        ContractStorage::require_not_paused(&env)?;
+        ContractStorage::require_not_frozen(&env, escrow_id)?;
+
+        let meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
+
+        // Only client or freelancer can propose
+        if caller != meta.client && caller != meta.freelancer {
+            return Err(EscrowError::E3);
+        }
+
+        // Must be Active
+        if meta.status != EscrowStatus::Active {
+            return Err(EscrowError::InvalidEscrowState);
+        }
+
+        // Validate BPS range
+        if client_refund_bps > 10_000 {
+            return Err(EscrowError::E19);
+        }
+
+        // Validate terms hash is non-zero
+        let zero_hash = BytesN::from_array(&env, &[0u8; 32]);
+        if terms_hash == zero_hash {
+            return Err(EscrowError::E19);
+        }
+
+        // No existing proposal allowed
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::CancellationProposal(escrow_id))
+        {
+            return Err(EscrowError::E33);
+        }
+
+        let now = env.ledger().timestamp();
+        let proposal = CancellationProposal {
+            escrow_id,
+            proposer: caller.clone(),
+            client_refund_bps,
+            terms_hash: terms_hash.clone(),
+            proposed_at: now,
+        };
+        ContractStorage::save_cancellation_proposal(&env, &proposal);
+
+        events::emit_cancellation_proposed(
+            &env,
+            escrow_id,
+            &caller,
+            client_refund_bps,
+            &terms_hash,
+        );
+
+        Ok(())
+    }
+
+    /// Accepts a pending mutual-consent cancellation proposal.
+    ///
+    /// Only the counterparty (non-proposer) may call this. The proposal must not
+    /// have expired (24-hour window). On acceptance the escrow is split per the
+    /// stored `client_refund_bps` and both parties receive their share.
+    ///
+    /// CEI: all state is committed before any external token transfer.
+    ///
+    /// # Arguments
+    /// * `escrow_id` - The escrow with the pending proposal
+    pub fn accept_cancellation(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_initialized(&env)?;
+        ContractStorage::require_not_paused(&env)?;
+        ContractStorage::require_not_frozen(&env, escrow_id)?;
+
+        ContractStorage::with_reentrancy_guard(&env, || {
+            let proposal = ContractStorage::load_cancellation_proposal(&env, escrow_id)?;
+
+            // Proposer cannot accept their own proposal
+            if caller == proposal.proposer {
+                panic_with_error!(env, EscrowError::CannotAcceptOwnProposal);
+            }
+
+            // Check expiry (24 hours)
+            let now = env.ledger().timestamp();
+            if now >= proposal.proposed_at + CANCELLATION_PROPOSAL_TTL {
+                return Err(EscrowError::ProposalExpired);
+            }
+
+            let mut meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
+
+            // Must still be Active
+            if meta.status != EscrowStatus::Active {
+                return Err(EscrowError::InvalidEscrowState);
+            }
+
+            // Compute split
+            let client_received = meta
+                .remaining_balance
+                .checked_mul(proposal.client_refund_bps as i128)
+                .ok_or(EscrowError::E20)?
+                .checked_div(10_000)
+                .ok_or(EscrowError::E20)?;
+            let contractor_received = meta
+                .remaining_balance
+                .checked_sub(client_received)
+                .ok_or(EscrowError::E20)?;
+
+            // CEI: commit state changes BEFORE external calls
+            meta.remaining_balance = 0;
+            meta.status = EscrowStatus::Cancelled;
+            Self::remove_from_vec_index(
+                &env,
+                &DataKey::EscrowsByStatus(EscrowStatus::Active),
+                escrow_id,
+            );
+            Self::append_to_vec_index(
+                &env,
+                &DataKey::EscrowsByStatus(EscrowStatus::Cancelled),
+                escrow_id,
+            );
+            ContractStorage::save_escrow_meta(&env, &meta);
+            ContractStorage::remove_fee_snapshot(&env, escrow_id);
+            ContractStorage::remove_cancellation_proposal(&env, escrow_id);
+
+            // Now execute external token transfers
+            let token = token::Client::new(&env, &meta.token);
+            let contract_addr = env.current_contract_address();
+
+            if client_received > 0 {
+                token.transfer(&contract_addr, &meta.client, &client_received);
+            }
+            if contractor_received > 0 {
+                token.transfer(&contract_addr, &meta.freelancer, &contractor_received);
+            }
+
+            events::emit_mutual_cancellation_completed(
+                &env,
+                escrow_id,
+                client_received,
+                contractor_received,
+                &proposal.terms_hash,
+            );
+
+            Ok(())
+        })
+    }
+
+    /// Rejects (deletes) a pending mutual-consent cancellation proposal.
+    ///
+    /// Callable by either party to the escrow. If the caller is the proposer
+    /// this acts as a unilateral withdrawal of the offer. If the caller is
+    /// the counterparty this declines the proposal.
+    ///
+    /// # Arguments
+    /// * `escrow_id` - The escrow with the pending proposal
+    pub fn reject_cancellation(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_initialized(&env)?;
+        ContractStorage::require_not_paused(&env)?;
+
+        let meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
+
+        // Only client or freelancer can reject
+        if caller != meta.client && caller != meta.freelancer {
+            return Err(EscrowError::E3);
+        }
+
+        // Proposal must exist
+        let _proposal = ContractStorage::load_cancellation_proposal(&env, escrow_id)?;
+
+        ContractStorage::remove_cancellation_proposal(&env, escrow_id);
+
+        events::emit_cancellation_rejected(&env, escrow_id, &caller);
+
+        Ok(())
+    }
+
+    /// Returns the pending mutual-consent cancellation proposal for an escrow, if any.
+    pub fn get_cancellation_proposal(env: Env, escrow_id: u64) -> Option<CancellationProposal> {
+        ContractStorage::load_cancellation_proposal(&env, escrow_id).ok()
     }
 
     // ── Slash Dispute Functions ───────────────────────────────────────────────────
@@ -6956,6 +7266,7 @@ mod tests {
         let (_env, admin, _, _, _, _, client) = setup_pause_escrow(100);
         client.pause(&admin);
         assert!(client.is_paused());
+        _env.ledger().with_mut(|l| l.timestamp += 172_800);
         client.unpause(&admin);
         assert!(!client.is_paused());
     }
@@ -7123,6 +7434,8 @@ mod tests {
             &50_i128,
         );
         assert!(result.is_err(), "add_milestone should fail while paused");
+
+        env.ledger().with_mut(|l| l.timestamp += 172_800);
 
         client.unpause(&admin);
         assert!(!client.is_paused());

@@ -18,9 +18,12 @@
  * @param {string[]} [props.acceptedTypes]    — MIME types, default: common doc/image types
  * @param {number}   [props.maxSizeBytes]     — default 10 MB
  * @param {number}   [props.maxFiles]         — default 10
- * @param {string}   [props.className]
+ * @param {string}  [props.className]
  */
 
+// TOUCH AUDIT (Issue #1444): the drop zone has a min 140px height (well above the
+// 44px minimum) and the per-file cancel control enforces a 44x44px hit area, so
+// the whole upload area is thumb-friendly on mobile.
 import { useCallback, useRef, useState, useId } from 'react';
 import { Upload, X, FileText, Image, Film, File, CheckCircle, AlertCircle } from 'lucide-react';
 
@@ -118,10 +121,11 @@ function FileRow({ file, onCancel }) {
       {!isCancelled && (
         <button
           onClick={() => onCancel(file.id)}
-          className="flex-shrink-0 text-gray-600 hover:text-red-400 p-1 rounded-lg hover:bg-white/5 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+          // TOUCH AUDIT (Issue #1444): min 44x44px hit area for the cancel control.
+          className="flex-shrink-0 min-h-touch min-w-touch flex items-center justify-center text-gray-600 hover:text-red-400 rounded-lg hover:bg-white/5 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
           aria-label={isDone ? `Remove ${file.name}` : `Cancel upload of ${file.name}`}
         >
-          <X size={14} />
+          <X size={16} />
         </button>
       )}
     </li>
@@ -324,7 +328,7 @@ export default function FileDropZone({
         onKeyDown={isFull ? undefined : onKeyDown}
         className={`
           relative flex flex-col items-center justify-center gap-4
-          border-2 border-dashed rounded-2xl p-10 cursor-pointer
+          border-2 border-dashed rounded-2xl p-10 min-h-[140px] cursor-pointer
           transition-all duration-250 select-none
           focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-950
           ${isFull ? 'opacity-40 cursor-not-allowed' : ''}
