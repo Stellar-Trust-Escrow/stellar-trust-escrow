@@ -1,0 +1,69 @@
+name: SBOM and License Compliance
+
+on:
+  pull_request:
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - 'backend/package.json'
+      - 'backend/package-lock.json'
+      - 'frontend/package.json'
+      - 'frontend/package-lock.json'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'contracts/**'
+
+jobs:
+  sbom-and-license:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: |
+          npm install -g @cyclonedx/cyclonedx-cli
+          cargo install cargo-cyclonedx
+
+      - name: Generate SBOM (Backend)
+        run: |
+          cd backend || true
+          # Note: If there's no package-lock.json, cyclonedx-npm works better with dependencies installed
+          npm install --package-lock-only || true
+          npx @cyclonedx/cyclonedx-npm --output-format JSON --output-file ../sbom-backend.json
+
+      - name: Generate SBOM (Frontend)
+        run: |
+          cd frontend || true
+          npm install --package-lock-only || true
+          npx @cyclonedx/cyclonedx-npm --output-format JSON --output-file ../sbom-frontend.json
+
+      - name: Generate SBOM (Rust Contracts)
+        run: |
+          cargo cyclonedx --format json --output-cdx sbom-contracts.json
+
+      - name: Merge SBOMs
+        run: |
+          # Only merge files that were successfully created
+          FILES=""
+          [ -f sbom-backend.json ] && FILES="$FILES sbom-backend.json"
+          [ -f sbom-frontend.json ] && FILES="$FILES sbom-frontend.json"
+          [ -f sbom-contracts.json ] && FILES="$FILES sbom-contracts.json"
+          cyclonedx-cli merge --input-files $FILES --output-file sbom-full.json
+
+      - name: Upload SBOM Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: sbom-full
+          path: sbom-full.json
+
+      - name: Enforce License Compliance
+        run: node scripts/check-licenses.js
