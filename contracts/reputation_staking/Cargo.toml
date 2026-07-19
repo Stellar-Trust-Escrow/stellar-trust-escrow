@@ -3,7 +3,7 @@ name = "stellar-trust-reputation-staking"
 version = "0.1.0"
 edition = "2021"
 publish = false
-description = "On-chain reputation staking — bond tokens to qualify as arbiter, slash bond on disputed ruling"
+description = "On-chain reputation staking - bond tokens to qualify as arbiter, slash bond on disputed ruling"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
