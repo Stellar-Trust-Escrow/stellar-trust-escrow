@@ -153,6 +153,55 @@ export const activeEscrowsGauge = new client.Gauge({
   registers: [register],
 });
 
+export const escrowsCompletedTotal = new client.Counter({
+  name: 'stellar_trust_escrows_completed_total',
+  help: 'Total number of escrows completed',
+  registers: [register],
+});
+
+export const escrowsCancelledTotal = new client.Counter({
+  name: 'stellar_trust_escrows_cancelled_total',
+  help: 'Total number of escrows cancelled',
+  registers: [register],
+});
+
+export const escrowVolumeUsd = new client.Gauge({
+  name: 'stellar_trust_escrow_volume_usd',
+  help: 'Cumulative escrow volume in USD-equivalent',
+  registers: [register],
+});
+
+export const disputeRateGauge = new client.Gauge({
+  name: 'stellar_trust_dispute_rate',
+  help: 'Rolling 30-day dispute rate (disputes / created)',
+  registers: [register],
+});
+
+export const feeRevenueTotal = new client.Gauge({
+  name: 'stellar_trust_fee_revenue_total',
+  help: 'Cumulative platform fee revenue in USD-equivalent',
+  registers: [register],
+});
+
+export const milestoneApprovalRateGauge = new client.Gauge({
+  name: 'stellar_trust_milestone_approval_rate',
+  help: 'Ratio of approved to submitted milestones',
+  registers: [register],
+});
+
+export const medianResolutionDaysGauge = new client.Gauge({
+  name: 'stellar_trust_median_resolution_days',
+  help: 'Median days from dispute raised to resolved (rolling 30d)',
+  registers: [register],
+});
+
+export const milestoneApprovalLatency = new client.Histogram({
+  name: 'stellar_trust_milestone_approval_seconds',
+  help: 'Time from milestone submission to approval in seconds',
+  buckets: [3_600, 86_400, 259_200, 604_800], // 1h, 1d, 3d, 7d
+  registers: [register],
+});
+
 // ── Circuit Breaker Metrics ───────────────────────────────────────────────────
 
 export const circuitBreakerState = new client.Gauge({

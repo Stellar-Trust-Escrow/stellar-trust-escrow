@@ -6,9 +6,11 @@ edition = "2021"
 [dependencies]
 soroban-sdk = { version = "21.0.0" }
 serde = { version = "1.0", features = ["derive"] }
+stellar-trust-shared = { path = "../shared" }
 
 [dev-dependencies]
 soroban-sdk = { version = "21.0.0", features = ["testutils"] }
+ed25519-dalek = "2.1"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
