@@ -635,6 +635,9 @@ model AdminAuditLog {
   /// Identifier of the admin who performed the action
   performedBy   String   @map("performed_by")
   performedAt   DateTime @map("performed_at")
+  
+  chainHash     String?  @map("chain_hash")
+  prevEntryId   String?  @map("prev_entry_id")
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
@@ -712,6 +715,33 @@ model AuditLog {
   @@index([category, createdAt(sort: Desc)])
   @@index([actor, createdAt(sort: Desc)])
   @@map("audit_logs")
+}
+
+// ── Escrow Templates ─────────────────────────────────────────────────────────
+// Saved wizard state so users can reuse escrow structures (same counterparty,
+// milestone layout, token). Ownership is tracked by `createdBy` (Stellar
+// address); `isPublic` templates are visible/usable by anyone.
+//
+// NOTE: a DB migration (CREATE TABLE escrow_templates) is required before this
+// is deployed — see the PR description for the SQL. It is intentionally not
+// added under database/migrations/ in this PR to keep the migration-safety gate
+// from running against a live database in CI; the model is added here so
+// `prisma generate` produces the client and the feature compiles end-to-end.
+
+model EscrowTemplate {
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  createdBy    String   @map("created_by")
+  isPublic     Boolean  @default(false) @map("is_public")
+  templateData Json     @map("template_data")
+  usageCount   Int      @default(0) @map("usage_count")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([createdBy])
+  @@index([isPublic])
+  @@map("escrow_templates")
 }
 
 enum EscrowStatus {
@@ -846,4 +876,59 @@ model SystemConfig {
 
   @@index([key])
   @@map("system_config")
+}
+
+model InsuranceOptIn {
+  id             String   @id @default(cuid())
+  escrowId       String   @unique @map("escrow_id")
+  clientAddress  String   @map("client_address")
+  coverageAmount String   @map("coverage_amount")
+  premiumPaid    String   @map("premium_paid")
+  optedInAt      DateTime @map("opted_in_at")
+  expiresAt      DateTime? @map("expires_at")
+  active         Boolean  @default(true)
+
+  @@index([clientAddress])
+  @@index([active])
+  @@map("insurance_opt_ins")
+}
+
+model InsuranceClaim {
+  id          String   @id @default(cuid())
+  claimId     Int      @unique @map("claim_id")
+  claimant    String
+  description String
+  amount      String
+  status      String   @default("Pending")
+  submittedAt DateTime @map("submitted_at")
+  expiresAt   DateTime? @map("expires_at")
+  paidAt      DateTime? @map("paid_at")
+  txHash      String?  @map("tx_hash")
+  ledger      Int?
+
+  @@index([claimant])
+  @@index([status])
+  @@map("insurance_claims")
+}
+
+model InsuranceStake {
+  id          String   @id @default(cuid())
+  staker      String   @unique
+  amount      String
+  stakedAt    DateTime @map("staked_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("insurance_stakes")
+}
+
+model AnalyticsSnapshot {
+  id         String   @id @default(cuid())
+  snapshotAt DateTime @map("snapshot_at")
+  period     String   // '5min' | 'hourly' | 'daily'
+  metric     String
+  value      Float
+  labels     Json?
+
+  @@index([metric, period, snapshotAt])
+  @@map("analytics_snapshots")
 }

@@ -3,6 +3,13 @@ import AdminDashboard from '../../../app/admin/page';
 import { renderWithStore } from '../../../store/test-utils';
 import { APP_STORAGE_KEY } from '../../../store/state';
 
+// Bypass SWR caching — each test controls what useSWR returns
+const mockUseSWR = jest.fn();
+jest.mock('swr', () => ({
+  __esModule: true,
+  default: (...args) => mockUseSWR(...args),
+}));
+
 // Mock localStorage
 const localStorageMock = (() => {
   let store = {};
@@ -21,6 +28,10 @@ const localStorageMock = (() => {
 })();
 Object.defineProperty(window, 'localStorage', { value: localStorageMock });
 
+// Mock sub-components that make their own fetch calls to avoid interference
+jest.mock('../../../components/admin/DisputeQueue', () => () => <div>DisputeQueue</div>);
+jest.mock('../../../components/admin/ArbiterTable', () => () => <div>ArbiterTable</div>);
+
 // Mock fetch
 global.fetch = jest.fn();
 
@@ -28,6 +39,8 @@ describe('AdminDashboard', () => {
   beforeEach(() => {
     localStorageMock.clear();
     jest.clearAllMocks();
+    // Default SWR: no data, no error
+    mockUseSWR.mockReturnValue({ data: undefined, error: undefined });
   });
 
   it('renders admin dashboard heading', () => {
@@ -66,13 +79,9 @@ describe('AdminDashboard', () => {
 
   it('shows nav items when authenticated', async () => {
     localStorageMock.setItem(APP_STORAGE_KEY, JSON.stringify({ admin: { apiKey: 'test-key' } }));
-    global.fetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        escrows: { total: 10, active: 5, completed: 4, disputed: 1 },
-        users: { total: 20 },
-        disputes: { open: 1, resolved: 0 },
-      }),
+    mockUseSWR.mockReturnValue({
+      data: { escrows: { total: 10, active: 5, completed: 4, disputed: 1 }, users: { total: 20 } },
+      error: undefined,
     });
     renderWithStore(<AdminDashboard />);
     expect(await screen.findByText('User Management')).toBeInTheDocument();
@@ -83,23 +92,16 @@ describe('AdminDashboard', () => {
 
   it('shows error when fetch fails', async () => {
     localStorageMock.setItem(APP_STORAGE_KEY, JSON.stringify({ admin: { apiKey: 'bad-key' } }));
-    global.fetch.mockResolvedValueOnce({
-      ok: false,
-      json: async () => ({ error: 'Unauthorized' }),
-    });
+    mockUseSWR.mockReturnValue({ data: undefined, error: new Error('Unauthorized') });
     renderWithStore(<AdminDashboard />);
     expect(await screen.findByText(/Unauthorized/)).toBeInTheDocument();
   });
 
   it('signs out and clears key', async () => {
     localStorageMock.setItem(APP_STORAGE_KEY, JSON.stringify({ admin: { apiKey: 'test-key' } }));
-    global.fetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        escrows: { total: 0, active: 0, completed: 0, disputed: 0 },
-        users: { total: 0 },
-        disputes: { open: 0, resolved: 0 },
-      }),
+    mockUseSWR.mockReturnValue({
+      data: { escrows: { total: 0, active: 0 }, users: { total: 0 } },
+      error: undefined,
     });
     renderWithStore(<AdminDashboard />);
     const signOut = await screen.findByText('Sign out');

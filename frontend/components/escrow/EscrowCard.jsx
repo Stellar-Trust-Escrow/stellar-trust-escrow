@@ -4,6 +4,12 @@
  * Summary card shown in list views (Dashboard, Explorer).
  * Links to the full Escrow Details page.
  *
+ * TOUCH AUDIT (Issue #1444):
+ * - The whole card is a single tappable <Link> (large hit area).
+ * - The inline CopyButton was given a min 44x44px hit area (see CopyButton.jsx).
+ * - The transaction-hash row uses a divider so it never overflows on 375px.
+ * - Card widths are driven by the parent grid (single column on mobile).
+ *
  * @param {object} props
  * @param {object} props.escrow
  * @param {number}  props.escrow.id

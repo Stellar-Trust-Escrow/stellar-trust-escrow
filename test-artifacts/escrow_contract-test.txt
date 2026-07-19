@@ -1,166 +1,197 @@
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.73s
-     Running unittests src/lib.rs (/workspaces/stellar-trust-escrow/target/debug/deps/stellar_trust_escrow_contract-a8d35e5cc1e3866a)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.31s
+     Running unittests src/lib.rs (/home/merlinthewhiz/Documents/stellar-trust-escrow/target/debug/deps/stellar_trust_escrow_contract-9f4d0b26f1e59f77)
 
-running 160 tests
-Writing test snapshot file for test "admin_transfer_tests::admin_transfer_tests::test_accept_admin_wrong_acceptor_rejected" to "test_snapshots/admin_transfer_tests/admin_transfer_tests/test_accept_admin_wrong_acceptor_rejected.1.json".
-Writing test snapshot file for test "admin_transfer_tests::admin_transfer_tests::test_accept_admin_without_proposal_fails" to "test_snapshots/admin_transfer_tests/admin_transfer_tests/test_accept_admin_without_proposal_fails.1.json".
-test admin_transfer_tests::admin_transfer_tests::test_accept_admin_without_proposal_fails ... ok
-Writing test snapshot file for test "admin_transfer_tests::admin_transfer_tests::test_pending_admin_cleared_after_accept" to "test_snapshots/admin_transfer_tests/admin_transfer_tests/test_pending_admin_cleared_after_accept.1.json".
-test admin_transfer_tests::admin_transfer_tests::test_pending_admin_cleared_after_accept ... ok
+running 188 tests
 Writing test snapshot file for test "admin_transfer_tests::admin_transfer_tests::test_propose_admin_non_admin_rejected" to "test_snapshots/admin_transfer_tests/admin_transfer_tests/test_propose_admin_non_admin_rejected.1.json".
-test admin_transfer_tests::admin_transfer_tests::test_accept_admin_wrong_acceptor_rejected ... ok
+Writing test snapshot file for test "admin_transfer_tests::admin_transfer_tests::test_accept_admin_without_proposal_fails" to "test_snapshots/admin_transfer_tests/admin_transfer_tests/test_accept_admin_without_proposal_fails.1.json".
 Writing test snapshot file for test "admin_transfer_tests::admin_transfer_tests::test_two_step_admin_transfer_full" to "test_snapshots/admin_transfer_tests/admin_transfer_tests/test_two_step_admin_transfer_full.1.json".
-test admin_transfer_tests::admin_transfer_tests::test_propose_admin_non_admin_rejected ... ok
+Writing test snapshot file for test "admin_transfer_tests::admin_transfer_tests::test_pending_admin_cleared_after_accept" to "test_snapshots/admin_transfer_tests/admin_transfer_tests/test_pending_admin_cleared_after_accept.1.json".
 Writing test snapshot file for test "arbiter_reputation_tests::arbiter_reputation_tests::test_admin_can_set_min_reputation" to "test_snapshots/arbiter_reputation_tests/arbiter_reputation_tests/test_admin_can_set_min_reputation.1.json".
+Writing test snapshot file for test "admin_transfer_tests::admin_transfer_tests::test_accept_admin_wrong_acceptor_rejected" to "test_snapshots/admin_transfer_tests/admin_transfer_tests/test_accept_admin_wrong_acceptor_rejected.1.json".
+test admin_transfer_tests::admin_transfer_tests::test_propose_admin_non_admin_rejected ... ok
+Writing test snapshot file for test "arbiter_reputation_tests::arbiter_reputation_tests::test_arbiter_with_insufficient_reputation" to "test_snapshots/arbiter_reputation_tests/arbiter_reputation_tests/test_arbiter_with_insufficient_reputation.1.json".
 test arbiter_reputation_tests::arbiter_reputation_tests::test_admin_can_set_min_reputation ... ok
 test admin_transfer_tests::admin_transfer_tests::test_two_step_admin_transfer_full ... ok
-Writing test snapshot file for test "arbiter_reputation_tests::arbiter_reputation_tests::test_arbiter_fails_after_threshold_increase" to "test_snapshots/arbiter_reputation_tests/arbiter_reputation_tests/test_arbiter_fails_after_threshold_increase.1.json".
-Writing test snapshot file for test "arbiter_reputation_tests::arbiter_reputation_tests::test_arbiter_with_insufficient_reputation" to "test_snapshots/arbiter_reputation_tests/arbiter_reputation_tests/test_arbiter_with_insufficient_reputation.1.json".
-test arbiter_reputation_tests::arbiter_reputation_tests::test_arbiter_with_insufficient_reputation ... ok
-Writing test snapshot file for test "arbiter_reputation_tests::arbiter_reputation_tests::test_arbiter_with_sufficient_reputation" to "test_snapshots/arbiter_reputation_tests/arbiter_reputation_tests/test_arbiter_with_sufficient_reputation.1.json".
-test arbiter_reputation_tests::arbiter_reputation_tests::test_arbiter_with_sufficient_reputation ... ok
-test arbiter_reputation_tests::arbiter_reputation_tests::test_arbiter_fails_after_threshold_increase ... ok
 Writing test snapshot file for test "arbiter_reputation_tests::arbiter_reputation_tests::test_no_arbiter_bypasses_check" to "test_snapshots/arbiter_reputation_tests/arbiter_reputation_tests/test_no_arbiter_bypasses_check.1.json".
-Writing test snapshot file for test "batch_add_milestones_cap_tests::batch_add_milestones_cap_tests::test_batch_add_milestones_at_cap" to "test_snapshots/batch_add_milestones_cap_tests/batch_add_milestones_cap_tests/test_batch_add_milestones_at_cap.1.json".
-test arbiter_reputation_tests::arbiter_reputation_tests::test_no_arbiter_bypasses_check ... ok
-Writing test snapshot file for test "batch_add_milestones_cap_tests::batch_add_milestones_cap_tests::test_batch_add_milestones_past_cap" to "test_snapshots/batch_add_milestones_cap_tests/batch_add_milestones_cap_tests/test_batch_add_milestones_past_cap.1.json".
-test batch_add_milestones_cap_tests::batch_add_milestones_cap_tests::test_batch_add_milestones_at_cap ... ok
-Writing test snapshot file for test "batch_approve_release_e2e_tests::batch_approve_release_e2e_tests::test_batch_approve_and_release_e2e" to "test_snapshots/batch_approve_release_e2e_tests/batch_approve_release_e2e_tests/test_batch_approve_and_release_e2e.1.json".
-test batch_add_milestones_cap_tests::batch_add_milestones_cap_tests::test_batch_add_milestones_past_cap ... ok
+Writing test snapshot file for test "arbiter_reputation_tests::arbiter_reputation_tests::test_arbiter_fails_after_threshold_increase" to "test_snapshots/arbiter_reputation_tests/arbiter_reputation_tests/test_arbiter_fails_after_threshold_increase.1.json".
+test admin_transfer_tests::admin_transfer_tests::test_accept_admin_without_proposal_fails ... ok
+test admin_transfer_tests::admin_transfer_tests::test_accept_admin_wrong_acceptor_rejected ... ok
+Writing test snapshot file for test "arbiter_reputation_tests::arbiter_reputation_tests::test_arbiter_with_sufficient_reputation" to "test_snapshots/arbiter_reputation_tests/arbiter_reputation_tests/test_arbiter_with_sufficient_reputation.1.json".
+test admin_transfer_tests::admin_transfer_tests::test_pending_admin_cleared_after_accept ... ok
 Writing test snapshot file for test "bridge_tests::bridge_tests::test_approved_wrapped_token_rejected_without_finalization" to "test_snapshots/bridge_tests/bridge_tests/test_approved_wrapped_token_rejected_without_finalization.1.json".
-test bridge_tests::bridge_tests::test_approved_wrapped_token_rejected_without_finalization ... ok
+test arbiter_reputation_tests::arbiter_reputation_tests::test_arbiter_with_insufficient_reputation ... ok
+Writing test snapshot file for test "batch_add_milestones_cap_tests::batch_add_milestones_cap_tests::test_batch_add_milestones_at_cap" to "test_snapshots/batch_add_milestones_cap_tests/batch_add_milestones_cap_tests/test_batch_add_milestones_at_cap.1.json".
 Writing test snapshot file for test "bridge_tests::bridge_tests::test_bridge_confirmation_finalized_at_threshold" to "test_snapshots/bridge_tests/bridge_tests/test_bridge_confirmation_finalized_at_threshold.1.json".
+Writing test snapshot file for test "batch_approve_release_e2e_tests::batch_approve_release_e2e_tests::test_batch_approve_and_release_e2e" to "test_snapshots/batch_approve_release_e2e_tests/batch_approve_release_e2e_tests/test_batch_approve_and_release_e2e.1.json".
 test bridge_tests::bridge_tests::test_bridge_confirmation_finalized_at_threshold ... ok
-Writing test snapshot file for test "bridge_tests::bridge_tests::test_bridge_confirmation_threshold_enforcement" to "test_snapshots/bridge_tests/bridge_tests/test_bridge_confirmation_threshold_enforcement.1.json".
-test bridge_tests::bridge_tests::test_bridge_confirmation_threshold_enforcement ... ok
+test arbiter_reputation_tests::arbiter_reputation_tests::test_no_arbiter_bypasses_check ... ok
+test bridge_tests::bridge_tests::test_approved_wrapped_token_rejected_without_finalization ... ok
 Writing test snapshot file for test "bridge_tests::bridge_tests::test_bridge_confirmation_tracked_below_threshold" to "test_snapshots/bridge_tests/bridge_tests/test_bridge_confirmation_tracked_below_threshold.1.json".
-test bridge_tests::bridge_tests::test_bridge_confirmation_tracked_below_threshold ... ok
+Writing test snapshot file for test "batch_add_milestones_cap_tests::batch_add_milestones_cap_tests::test_batch_add_milestones_past_cap" to "test_snapshots/batch_add_milestones_cap_tests/batch_add_milestones_cap_tests/test_batch_add_milestones_past_cap.1.json".
 Writing test snapshot file for test "bridge_tests::bridge_tests::test_bridge_confirmation_updated_incrementally" to "test_snapshots/bridge_tests/bridge_tests/test_bridge_confirmation_updated_incrementally.1.json".
-test bridge_tests::bridge_tests::test_bridge_confirmation_updated_incrementally ... ok
+Writing test snapshot file for test "bridge_tests::bridge_tests::test_bridge_confirmation_threshold_enforcement" to "test_snapshots/bridge_tests/bridge_tests/test_bridge_confirmation_threshold_enforcement.1.json".
+test bridge_tests::bridge_tests::test_bridge_confirmation_tracked_below_threshold ... ok
 Writing test snapshot file for test "bridge_tests::bridge_tests::test_canonical_token_metadata_preserved" to "test_snapshots/bridge_tests/bridge_tests/test_canonical_token_metadata_preserved.1.json".
-test bridge_tests::bridge_tests::test_canonical_token_metadata_preserved ... ok
+test bridge_tests::bridge_tests::test_bridge_confirmation_updated_incrementally ... ok
 Writing test snapshot file for test "bridge_tests::bridge_tests::test_re_registering_token_updates_canonical_record" to "test_snapshots/bridge_tests/bridge_tests/test_re_registering_token_updates_canonical_record.1.json".
-test bridge_tests::bridge_tests::test_re_registering_token_updates_canonical_record ... ok
+test bridge_tests::bridge_tests::test_canonical_token_metadata_preserved ... ok
 Writing test snapshot file for test "bridge_tests::bridge_tests::test_unapproved_wrapped_token_rejected_on_escrow_creation" to "test_snapshots/bridge_tests/bridge_tests/test_unapproved_wrapped_token_rejected_on_escrow_creation.1.json".
-test batch_approve_release_e2e_tests::batch_approve_release_e2e_tests::test_batch_approve_and_release_e2e ... ok
+test bridge_tests::bridge_tests::test_re_registering_token_updates_canonical_record ... ok
 Writing test snapshot file for test "bridge_tests::bridge_tests::test_unregistered_token_not_recognized" to "test_snapshots/bridge_tests/bridge_tests/test_unregistered_token_not_recognized.1.json".
 test bridge_tests::bridge_tests::test_unregistered_token_not_recognized ... ok
 Writing test snapshot file for test "bridge_tests::bridge_tests::test_wrapped_token_registered_and_recognized" to "test_snapshots/bridge_tests/bridge_tests/test_wrapped_token_registered_and_recognized.1.json".
-test bridge_tests::bridge_tests::test_unapproved_wrapped_token_rejected_on_escrow_creation ... ok
+test arbiter_reputation_tests::arbiter_reputation_tests::test_arbiter_with_sufficient_reputation ... ok
 test bridge_tests::bridge_tests::test_wrapped_token_registered_and_recognized ... ok
-Writing test snapshot file for test "event_tests::event_tests::test_event_cancellation_executed_topics_and_payload" to "test_snapshots/event_tests/event_tests/test_event_cancellation_executed_topics_and_payload.1.json".
 Writing test snapshot file for test "event_tests::event_tests::test_admin_override_release_funds_before_timelock_expires" to "test_snapshots/event_tests/event_tests/test_admin_override_release_funds_before_timelock_expires.1.json".
-test event_tests::event_tests::test_event_cancellation_executed_topics_and_payload ... ok
-Writing test snapshot file for test "event_tests::event_tests::test_event_cancellation_requested_topics_and_payload" to "test_snapshots/event_tests/event_tests/test_event_cancellation_requested_topics_and_payload.1.json".
-test event_tests::event_tests::test_admin_override_release_funds_before_timelock_expires ... ok
+test arbiter_reputation_tests::arbiter_reputation_tests::test_arbiter_fails_after_threshold_increase ... ok
+test bridge_tests::bridge_tests::test_unapproved_wrapped_token_rejected_on_escrow_creation ... ok
 Writing test snapshot file for test "event_tests::event_tests::test_event_contract_paused_and_unpaused" to "test_snapshots/event_tests/event_tests/test_event_contract_paused_and_unpaused.1.json".
+test bridge_tests::bridge_tests::test_bridge_confirmation_threshold_enforcement ... ok
+Writing test snapshot file for test "event_tests::event_tests::test_event_cancellation_requested_topics_and_payload" to "test_snapshots/event_tests/event_tests/test_event_cancellation_requested_topics_and_payload.1.json".
 test event_tests::event_tests::test_event_contract_paused_and_unpaused ... ok
+Writing test snapshot file for test "event_tests::event_tests::test_event_cancellation_executed_topics_and_payload" to "test_snapshots/event_tests/event_tests/test_event_cancellation_executed_topics_and_payload.1.json".
 Writing test snapshot file for test "event_tests::event_tests::test_event_dispute_raised_topics_and_payload" to "test_snapshots/event_tests/event_tests/test_event_dispute_raised_topics_and_payload.1.json".
-test event_tests::event_tests::test_event_cancellation_requested_topics_and_payload ... ok
+test event_tests::event_tests::test_admin_override_release_funds_before_timelock_expires ... ok
 Writing test snapshot file for test "event_tests::event_tests::test_event_dispute_resolved_topics_and_payload" to "test_snapshots/event_tests/event_tests/test_event_dispute_resolved_topics_and_payload.1.json".
-test event_tests::event_tests::test_event_dispute_raised_topics_and_payload ... ok
-Writing test snapshot file for test "event_tests::event_tests::test_event_escrow_cancelled_topics_and_payload" to "test_snapshots/event_tests/event_tests/test_event_escrow_cancelled_topics_and_payload.1.json".
-test event_tests::event_tests::test_event_dispute_resolved_topics_and_payload ... ok
+test batch_approve_release_e2e_tests::batch_approve_release_e2e_tests::test_batch_approve_and_release_e2e ... ok
 Writing test snapshot file for test "event_tests::event_tests::test_event_escrow_created_topics_and_payload" to "test_snapshots/event_tests/event_tests/test_event_escrow_created_topics_and_payload.1.json".
-test event_tests::event_tests::test_event_escrow_cancelled_topics_and_payload ... ok
-Writing test snapshot file for test "event_tests::event_tests::test_event_lock_time_expired_on_approve" to "test_snapshots/event_tests/event_tests/test_event_lock_time_expired_on_approve.1.json".
+Writing test snapshot file for test "event_tests::event_tests::test_event_escrow_cancelled_topics_and_payload" to "test_snapshots/event_tests/event_tests/test_event_escrow_cancelled_topics_and_payload.1.json".
+test event_tests::event_tests::test_event_cancellation_executed_topics_and_payload ... ok
+test event_tests::event_tests::test_event_dispute_resolved_topics_and_payload ... ok
 test event_tests::event_tests::test_event_escrow_created_topics_and_payload ... ok
+Writing test snapshot file for test "event_tests::event_tests::test_event_lock_time_expired_on_approve" to "test_snapshots/event_tests/event_tests/test_event_lock_time_expired_on_approve.1.json".
+test event_tests::event_tests::test_event_cancellation_requested_topics_and_payload ... ok
 Writing test snapshot file for test "event_tests::event_tests::test_event_milestone_added_topics_and_payload" to "test_snapshots/event_tests/event_tests/test_event_milestone_added_topics_and_payload.1.json".
-test event_tests::event_tests::test_event_lock_time_expired_on_approve ... ok
 Writing test snapshot file for test "event_tests::event_tests::test_event_milestone_approved_and_funds_released" to "test_snapshots/event_tests/event_tests/test_event_milestone_approved_and_funds_released.1.json".
-test event_tests::event_tests::test_event_milestone_added_topics_and_payload ... ok
+test event_tests::event_tests::test_event_escrow_cancelled_topics_and_payload ... ok
 Writing test snapshot file for test "event_tests::event_tests::test_event_milestone_disputed_topics_and_payload" to "test_snapshots/event_tests/event_tests/test_event_milestone_disputed_topics_and_payload.1.json".
-test event_tests::event_tests::test_event_milestone_approved_and_funds_released ... ok
-Writing test snapshot file for test "event_tests::event_tests::test_event_milestone_rejected_topics_and_payload" to "test_snapshots/event_tests/event_tests/test_event_milestone_rejected_topics_and_payload.1.json".
-test event_tests::event_tests::test_event_milestone_disputed_topics_and_payload ... ok
+test event_tests::event_tests::test_event_dispute_raised_topics_and_payload ... ok
+test batch_add_milestones_cap_tests::batch_add_milestones_cap_tests::test_batch_add_milestones_at_cap ... ok
+test batch_add_milestones_cap_tests::batch_add_milestones_cap_tests::test_batch_add_milestones_past_cap ... ok
 Writing test snapshot file for test "event_tests::event_tests::test_event_milestone_submitted_topics_and_payload" to "test_snapshots/event_tests/event_tests/test_event_milestone_submitted_topics_and_payload.1.json".
-test event_tests::event_tests::test_event_milestone_rejected_topics_and_payload ... ok
-Writing test snapshot file for test "event_tests::event_tests::test_event_ordering_full_lifecycle" to "test_snapshots/event_tests/event_tests/test_event_ordering_full_lifecycle.1.json".
-test event_tests::event_tests::test_event_milestone_submitted_topics_and_payload ... ok
 Writing test snapshot file for test "event_tests::event_tests::test_event_reputation_updated_topics_and_payload" to "test_snapshots/event_tests/event_tests/test_event_reputation_updated_topics_and_payload.1.json".
+Writing test snapshot file for test "event_tests::event_tests::test_event_milestone_rejected_topics_and_payload" to "test_snapshots/event_tests/event_tests/test_event_milestone_rejected_topics_and_payload.1.json".
+test event_tests::event_tests::test_event_milestone_added_topics_and_payload ... ok
+Writing test snapshot file for test "event_tests::event_tests::test_event_ordering_full_lifecycle" to "test_snapshots/event_tests/event_tests/test_event_ordering_full_lifecycle.1.json".
+test event_tests::event_tests::test_event_milestone_disputed_topics_and_payload ... ok
 test event_tests::event_tests::test_event_reputation_updated_topics_and_payload ... ok
-test event_tests::event_tests::test_event_ordering_full_lifecycle ... ok
-Writing test snapshot file for test "event_tests::event_tests::test_timelock_workflow_with_release_funds" to "test_snapshots/event_tests/event_tests/test_timelock_workflow_with_release_funds.1.json".
+test event_tests::event_tests::test_event_lock_time_expired_on_approve ... ok
 Writing test snapshot file for test "governance_escalation_tests::governance_escalation_tests::test_escalate_fails_for_unauthorized_caller" to "test_snapshots/governance_escalation_tests/governance_escalation_tests/test_escalate_fails_for_unauthorized_caller.1.json".
-test governance_escalation_tests::governance_escalation_tests::test_escalate_fails_for_unauthorized_caller ... ok
-Writing test snapshot file for test "governance_escalation_tests::governance_escalation_tests::test_escalate_fails_when_below_threshold" to "test_snapshots/governance_escalation_tests/governance_escalation_tests/test_escalate_fails_when_below_threshold.1.json".
-test event_tests::event_tests::test_timelock_workflow_with_release_funds ... ok
 Writing test snapshot file for test "governance_escalation_tests::governance_escalation_tests::test_escalate_fails_when_not_disputed" to "test_snapshots/governance_escalation_tests/governance_escalation_tests/test_escalate_fails_when_not_disputed.1.json".
-test governance_escalation_tests::governance_escalation_tests::test_escalate_fails_when_below_threshold ... ok
+Writing test snapshot file for test "event_tests::event_tests::test_timelock_workflow_with_release_funds" to "test_snapshots/event_tests/event_tests/test_timelock_workflow_with_release_funds.1.json".
+test event_tests::event_tests::test_event_milestone_submitted_topics_and_payload ... ok
 test governance_escalation_tests::governance_escalation_tests::test_high_value_threshold_constant ... ok
 Writing test snapshot file for test "governance_escalation_tests::governance_escalation_tests::test_set_and_get_governance_contract" to "test_snapshots/governance_escalation_tests/governance_escalation_tests/test_set_and_get_governance_contract.1.json".
+Writing test snapshot file for test "governance_escalation_tests::governance_escalation_tests::test_escalate_fails_when_below_threshold" to "test_snapshots/governance_escalation_tests/governance_escalation_tests/test_escalate_fails_when_below_threshold.1.json".
 test governance_escalation_tests::governance_escalation_tests::test_set_and_get_governance_contract ... ok
-test governance_escalation_tests::governance_escalation_tests::test_escalate_fails_when_not_disputed ... ok
-Writing test snapshot file for test "lock_time_enforcement_tests::lock_time_enforcement_tests::test_lock_time_prevents_early_release" to "test_snapshots/lock_time_enforcement_tests/lock_time_enforcement_tests/test_lock_time_prevents_early_release.1.json".
+test event_tests::event_tests::test_event_ordering_full_lifecycle ... ok
 Writing test snapshot file for test "lock_time_enforcement_tests::lock_time_enforcement_tests::test_lock_time_allows_release_after_expiry" to "test_snapshots/lock_time_enforcement_tests/lock_time_enforcement_tests/test_lock_time_allows_release_after_expiry.1.json".
-test lock_time_enforcement_tests::lock_time_enforcement_tests::test_lock_time_prevents_early_release ... ok
+test governance_escalation_tests::governance_escalation_tests::test_escalate_fails_when_not_disputed ... ok
 Writing test snapshot file for test "max_escrow_amount_tests::max_escrow_amount_tests::test_create_escrow_above_max_amount_rejected" to "test_snapshots/max_escrow_amount_tests/max_escrow_amount_tests/test_create_escrow_above_max_amount_rejected.1.json".
-test lock_time_enforcement_tests::lock_time_enforcement_tests::test_lock_time_allows_release_after_expiry ... ok
+test event_tests::event_tests::test_event_milestone_approved_and_funds_released ... ok
 Writing test snapshot file for test "max_escrow_amount_tests::max_escrow_amount_tests::test_create_escrow_at_max_amount_accepted" to "test_snapshots/max_escrow_amount_tests/max_escrow_amount_tests/test_create_escrow_at_max_amount_accepted.1.json".
-test max_escrow_amount_tests::max_escrow_amount_tests::test_create_escrow_above_max_amount_rejected ... ok
+Writing test snapshot file for test "lock_time_enforcement_tests::lock_time_enforcement_tests::test_lock_time_prevents_early_release" to "test_snapshots/lock_time_enforcement_tests/lock_time_enforcement_tests/test_lock_time_prevents_early_release.1.json".
+test event_tests::event_tests::test_event_milestone_rejected_topics_and_payload ... ok
 Writing test snapshot file for test "max_escrow_amount_tests::max_escrow_amount_tests::test_create_escrow_zero_amount_rejected" to "test_snapshots/max_escrow_amount_tests/max_escrow_amount_tests/test_create_escrow_zero_amount_rejected.1.json".
+test max_escrow_amount_tests::max_escrow_amount_tests::test_create_escrow_above_max_amount_rejected ... ok
 test max_escrow_amount_tests::max_escrow_amount_tests::test_create_escrow_zero_amount_rejected ... ok
+Writing test snapshot file for test "mutual_cancellation_tests::mutual_cancellation_tests::test_accept_cancellation_fails_after_escrow_cancelled" to "test_snapshots/mutual_cancellation_tests/mutual_cancellation_tests/test_accept_cancellation_fails_after_escrow_cancelled.1.json".
+test governance_escalation_tests::governance_escalation_tests::test_escalate_fails_when_below_threshold ... ok
+Writing test snapshot file for test "meta_snapshot_tests::meta_snapshot_tests::test_get_escrow_meta_state_snapshots" to test event_tests::event_tests::test_timelock_workflow_with_release_funds ... "oktest_snapshots/meta_snapshot_tests/meta_snapshot_tests/test_get_escrow_meta_state_snapshots.1.json
+".
+test governance_escalation_tests::governance_escalation_tests::test_escalate_fails_for_unauthorized_caller ... ok
+Writing test snapshot file for test "mutual_cancellation_tests::mutual_cancellation_tests::test_accept_expired_proposal" to "test_snapshots/mutual_cancellation_tests/mutual_cancellation_tests/test_accept_expired_proposal.1.json".
+Writing test snapshot file for test "mutual_cancellation_tests::mutual_cancellation_tests::test_propose_on_non_active_escrow" to "test_snapshots/mutual_cancellation_tests/mutual_cancellation_tests/test_propose_on_non_active_escrow.1.json".
+Writing test snapshot file for test "mutual_cancellation_tests::mutual_cancellation_tests::test_full_propose_accept_flow_exact_amounts" to "test_snapshots/mutual_cancellation_tests/mutual_cancellation_tests/test_full_propose_accept_flow_exact_amounts.1.json".
+test mutual_cancellation_tests::mutual_cancellation_tests::test_accept_expired_proposal ... ok
+test lock_time_enforcement_tests::lock_time_enforcement_tests::test_lock_time_allows_release_after_expiry ... ok
+Writing test snapshot file for test "mutual_cancellation_tests::mutual_cancellation_tests::test_propose_while_pending_rejected" to "test_snapshots/mutual_cancellation_tests/mutual_cancellation_tests/test_propose_while_pending_rejected.1.json".
+test mutual_cancellation_tests::mutual_cancellation_tests::test_accept_cancellation_fails_after_escrow_cancelled ... ok
 test max_escrow_amount_tests::max_escrow_amount_tests::test_create_escrow_at_max_amount_accepted ... ok
-Writing test snapshot file for test "nft_tests::nft_gated_tests::test_nft_gated_escrow_returns_valid_id" to "test_snapshots/nft_tests/nft_gated_tests/test_nft_gated_escrow_returns_valid_id.1.json".
-test nft_tests::nft_gated_tests::test_nft_gated_escrow_returns_valid_id ... ok
-Writing test snapshot file for test "nft_tests::nft_gated_tests::test_nft_holder_can_create_escrow" to "test_snapshots/nft_tests/nft_gated_tests/test_nft_holder_can_create_escrow.1.json".
-Writing test snapshot file for test "meta_snapshot_tests::meta_snapshot_tests::test_get_escrow_meta_state_snapshots" to "test_snapshots/meta_snapshot_tests/meta_snapshot_tests/test_get_escrow_meta_state_snapshots.1.json".
-test nft_tests::nft_gated_tests::test_nft_holder_can_create_escrow ... ok
-Writing test snapshot file for test "nft_tests::nft_gated_tests::test_non_holder_cannot_create_escrow" to "test_snapshots/nft_tests/nft_gated_tests/test_non_holder_cannot_create_escrow.1.json".
-test nft_tests::nft_gated_tests::test_non_holder_cannot_create_escrow ... ok
-Writing test snapshot file for test "oracle_fallback_tests::oracle_fallback_tests::test_oracle_both_stale_returns_error" to "test_snapshots/oracle_fallback_tests/oracle_fallback_tests/test_oracle_both_stale_returns_error.1.json".
-test oracle_fallback_tests::oracle_fallback_tests::test_oracle_both_stale_returns_error ... ok
-Writing test snapshot file for test "oracle_fallback_tests::oracle_fallback_tests::test_oracle_fallback_on_stale_primary" to "test_snapshots/oracle_fallback_tests/oracle_fallback_tests/test_oracle_fallback_on_stale_primary.1.json".
+test lock_time_enforcement_tests::lock_time_enforcement_tests::test_lock_time_prevents_early_release ... ok
+test mutual_cancellation_tests::mutual_cancellation_tests::test_propose_on_non_active_escrow ... ok
+test mutual_cancellation_tests::mutual_cancellation_tests::test_full_propose_accept_flow_exact_amounts ... ok
+test mutual_cancellation_tests::mutual_cancellation_tests::test_propose_while_pending_rejected ... ok
 test meta_snapshot_tests::meta_snapshot_tests::test_get_escrow_meta_state_snapshots ... ok
-Writing test snapshot file for test "oracle_fallback_tests::oracle_fallback_tests::test_oracle_uses_primary_when_fresh" to "test_snapshots/oracle_fallback_tests/oracle_fallback_tests/test_oracle_uses_primary_when_fresh.1.json".
+Writing test snapshot file for test "oracle_fallback_tests::oracle_fallback_tests::test_oracle_fallback_on_stale_primary" to "test_snapshots/oracle_fallback_tests/oracle_fallback_tests/test_oracle_fallback_on_stale_primary.1.json".
 test oracle_fallback_tests::oracle_fallback_tests::test_oracle_fallback_on_stale_primary ... ok
-Writing test snapshot file for test "oracle_tests::oracle_triggered_tests::test_milestone_without_price_condition_rejected" to "test_snapshots/oracle_tests/oracle_triggered_tests/test_milestone_without_price_condition_rejected.1.json".
+Writing test snapshot file for test "oracle_fallback_tests::oracle_fallback_tests::test_oracle_uses_primary_when_fresh" to "test_snapshots/oracle_fallback_tests/oracle_fallback_tests/test_oracle_uses_primary_when_fresh.1.json".
 test oracle_fallback_tests::oracle_fallback_tests::test_oracle_uses_primary_when_fresh ... ok
+Writing test snapshot file for test "oracle_fallback_tests::oracle_fallback_tests::test_oracle_both_stale_returns_error" to "test_snapshots/oracle_fallback_tests/oracle_fallback_tests/test_oracle_both_stale_returns_error.1.json".
+Writing test snapshot file for test "nft_tests::nft_gated_tests::test_nft_gated_escrow_returns_valid_id" to "test_snapshots/nft_tests/nft_gated_tests/test_nft_gated_escrow_returns_valid_id.1.json".
+Writing test snapshot file for test "nft_tests::nft_gated_tests::test_nft_holder_can_create_escrow" to "test_snapshots/nft_tests/nft_gated_tests/test_nft_holder_can_create_escrow.1.json".
+Writing test snapshot file for test "nft_tests::nft_gated_tests::test_non_holder_cannot_create_escrow" to "test_snapshots/nft_tests/nft_gated_tests/test_non_holder_cannot_create_escrow.1.json".
+test nft_tests::nft_gated_tests::test_nft_holder_can_create_escrow ... ok
+Writing test snapshot file for test "oracle_overflow_tests::oracle_overflow_tests::test_usd_to_xlm_stroops_normal_conversion_succeeds" to "test_snapshots/oracle_overflow_tests/oracle_overflow_tests/test_usd_to_xlm_stroops_normal_conversion_succeeds.1.json".
+test oracle_overflow_tests::oracle_overflow_tests::test_usd_to_xlm_stroops_normal_conversion_succeeds ... ok
+Writing test snapshot file for test "oracle_overflow_tests::oracle_overflow_tests::test_usd_to_xlm_stroops_overflow_returns_err" to "test_snapshots/oracle_overflow_tests/oracle_overflow_tests/test_usd_to_xlm_stroops_overflow_returns_err.1.json".
+test oracle_overflow_tests::oracle_overflow_tests::test_usd_to_xlm_stroops_overflow_returns_err ... ok
+Writing test snapshot file for test "mutual_cancellation_tests::mutual_cancellation_tests::test_reject_cancellation_by_non_participant_rejected" to "test_snapshots/mutual_cancellation_tests/mutual_cancellation_tests/test_reject_cancellation_by_non_participant_rejected.1.json".
+Writing test snapshot file for test "mutual_cancellation_tests::mutual_cancellation_tests::test_reject_then_accept_panics" to "test_snapshots/mutual_cancellation_tests/mutual_cancellation_tests/test_reject_then_accept_panics.1.json".
+test nft_tests::nft_gated_tests::test_non_holder_cannot_create_escrow ... ok
+test nft_tests::nft_gated_tests::test_nft_gated_escrow_returns_valid_id ... ok
+test oracle_fallback_tests::oracle_fallback_tests::test_oracle_both_stale_returns_error ... ok
+test mutual_cancellation_tests::mutual_cancellation_tests::test_reject_then_accept_panics ... ok
+test mutual_cancellation_tests::mutual_cancellation_tests::test_reject_cancellation_by_non_participant_rejected ... ok
+Writing test snapshot file for test "oracle_tests::oracle_triggered_tests::test_milestone_without_price_condition_rejected" to "test_snapshots/oracle_tests/oracle_triggered_tests/test_milestone_without_price_condition_rejected.1.json".
 Writing test snapshot file for test "oracle_tests::oracle_triggered_tests::test_oracle_release_above_condition_met" to "test_snapshots/oracle_tests/oracle_triggered_tests/test_oracle_release_above_condition_met.1.json".
-test oracle_tests::oracle_triggered_tests::test_milestone_without_price_condition_rejected ... ok
-Writing test snapshot file for test "oracle_tests::oracle_triggered_tests::test_oracle_release_above_condition_not_met" to "test_snapshots/oracle_tests/oracle_triggered_tests/test_oracle_release_above_condition_not_met.1.json".
-test oracle_tests::oracle_triggered_tests::test_oracle_release_above_condition_met ... ok
 Writing test snapshot file for test "oracle_tests::oracle_triggered_tests::test_oracle_release_below_condition_met" to "test_snapshots/oracle_tests/oracle_triggered_tests/test_oracle_release_below_condition_met.1.json".
-test oracle_tests::oracle_triggered_tests::test_oracle_release_above_condition_not_met ... ok
-Writing test snapshot file for test "oracle_tests::oracle_triggered_tests::test_oracle_release_below_condition_not_met" to "test_snapshots/oracle_tests/oracle_triggered_tests/test_oracle_release_below_condition_not_met.1.json".
-test oracle_tests::oracle_triggered_tests::test_oracle_release_below_condition_not_met ... ok
-Writing test snapshot file for test "partial_cancel_tests::partial_cancel_tests::test_partial_cancel_auth_failure" to "test_snapshots/partial_cancel_tests/partial_cancel_tests/test_partial_cancel_auth_failure.1.json".
-test partial_cancel_tests::partial_cancel_tests::test_partial_cancel_auth_failure ... ok
-Writing test snapshot file for test "partial_cancel_tests::partial_cancel_tests::test_partial_cancel_no_milestones" to "test_snapshots/partial_cancel_tests/partial_cancel_tests/test_partial_cancel_no_milestones.1.json".
-test partial_cancel_tests::partial_cancel_tests::test_partial_cancel_no_milestones ... ok
+test oracle_tests::oracle_triggered_tests::test_milestone_without_price_condition_rejected ... ok
+test oracle_tests::oracle_triggered_tests::test_oracle_release_above_condition_met ... ok
 test oracle_tests::oracle_triggered_tests::test_oracle_release_below_condition_met ... ok
-Writing test snapshot file for test "partial_cancel_tests::partial_cancel_tests::test_partial_cancel_no_unallocated_balance" to "test_snapshots/partial_cancel_tests/partial_cancel_tests/test_partial_cancel_no_unallocated_balance.1.json".
+Writing test snapshot file for test "partial_cancel_tests::partial_cancel_tests::test_partial_cancel_auth_failure" to "test_snapshots/partial_cancel_tests/partial_cancel_tests/test_partial_cancel_auth_failure.1.json".
+Writing test snapshot file for test "oracle_tests::oracle_triggered_tests::test_oracle_release_below_condition_not_met" to "test_snapshots/oracle_tests/oracle_triggered_tests/test_oracle_release_below_condition_not_met.1.json".
+Writing test snapshot file for test "oracle_tests::oracle_triggered_tests::test_oracle_release_above_condition_not_met" to "test_snapshots/oracle_tests/oracle_triggered_tests/test_oracle_release_above_condition_not_met.1.json".
+Writing test snapshot file for test "mutual_cancellation_tests::mutual_cancellation_tests::test_proposer_cannot_accept_own_proposal" to "test_snapshots/mutual_cancellation_tests/mutual_cancellation_tests/test_proposer_cannot_accept_own_proposal.1.json".
 Writing test snapshot file for test "partial_cancel_tests::partial_cancel_tests::test_partial_cancel_non_active_escrow" to "test_snapshots/partial_cancel_tests/partial_cancel_tests/test_partial_cancel_non_active_escrow.1.json".
-test partial_cancel_tests::partial_cancel_tests::test_partial_cancel_non_active_escrow ... ok
-test partial_cancel_tests::partial_cancel_tests::test_partial_cancel_no_unallocated_balance ... ok
-Writing test snapshot file for test "pause_tests::pause_tests::test_add_milestone_fails_when_paused" to "test_snapshots/pause_tests/pause_tests/test_add_milestone_fails_when_paused.1.json".
-test pause_tests::pause_tests::test_add_milestone_fails_when_paused ... ok
-Writing test snapshot file for test "pause_tests::pause_tests::test_create_escrow_fails_when_paused" to "test_snapshots/pause_tests/pause_tests/test_create_escrow_fails_when_paused.1.json".
+Writing test snapshot file for test "partial_cancel_tests::partial_cancel_tests::test_partial_cancel_no_milestones" to "test_snapshots/partial_cancel_tests/partial_cancel_tests/test_partial_cancel_no_milestones.1.json".
+Writing test snapshot file for test "partial_cancel_tests::partial_cancel_tests::test_partial_cancel_no_unallocated_balance" to "test_snapshots/partial_cancel_tests/partial_cancel_tests/test_partial_cancel_no_unallocated_balance.1.json".
+test mutual_cancellation_tests::mutual_cancellation_tests::test_proposer_cannot_accept_own_proposal ... ok
 Writing test snapshot file for test "partial_cancel_tests::partial_cancel_tests::test_partial_cancel_successful_refund" to "test_snapshots/partial_cancel_tests/partial_cancel_tests/test_partial_cancel_successful_refund.1.json".
+test partial_cancel_tests::partial_cancel_tests::test_partial_cancel_non_active_escrow ... ok
+Writing test snapshot file for test "pause_tests::pause_tests::test_add_milestone_fails_when_paused" to "test_snapshots/pause_tests/pause_tests/test_add_milestone_fails_when_paused.1.json".
+test oracle_tests::oracle_triggered_tests::test_oracle_release_below_condition_not_met ... ok
+Writing test snapshot file for test "pause_tests::pause_tests::test_create_escrow_fails_when_paused" to "test_snapshots/pause_tests/pause_tests/test_create_escrow_fails_when_paused.1.json".
 test pause_tests::pause_tests::test_create_escrow_fails_when_paused ... ok
+Writing test snapshot file for test "pause_tests::pause_tests::test_emergency_withdraw_fails_for_completed_escrow" to "test_snapshots/pause_tests/pause_tests/test_emergency_withdraw_fails_for_completed_escrow.1.json".
+test oracle_tests::oracle_triggered_tests::test_oracle_release_above_condition_not_met ... ok
+test partial_cancel_tests::partial_cancel_tests::test_partial_cancel_auth_failure ... ok
+test pause_tests::pause_tests::test_add_milestone_fails_when_paused ... ok
+test partial_cancel_tests::partial_cancel_tests::test_partial_cancel_no_unallocated_balance ... ok
+test partial_cancel_tests::partial_cancel_tests::test_partial_cancel_successful_refund ... ok
+Writing test snapshot file for test "pause_tests::pause_tests::test_emergency_withdraw_requires_admin" to "test_snapshots/pause_tests/pause_tests/test_emergency_withdraw_requires_admin.1.json".
+Writing test snapshot file for test "pause_tests::pause_tests::test_emergency_withdraw_reentrancy_blocked" to "test_snapshots/pause_tests/pause_tests/test_emergency_withdraw_reentrancy_blocked.1.json".
+test partial_cancel_tests::partial_cancel_tests::test_partial_cancel_no_milestones ... ok
+Writing test snapshot file for test "pause_tests::pause_tests::test_emergency_withdraw_sends_to_client" to "test_snapshots/pause_tests/pause_tests/test_emergency_withdraw_sends_to_client.1.json".
+Writing test snapshot file for test "pause_tests::pause_tests::test_emergency_withdraw_requires_paused" to "test_snapshots/pause_tests/pause_tests/test_emergency_withdraw_requires_paused.1.json".
 Writing test snapshot file for test "pause_tests::pause_tests::test_mutations_blocked_when_paused" to "test_snapshots/pause_tests/pause_tests/test_mutations_blocked_when_paused.1.json".
-test pause_tests::pause_tests::test_mutations_blocked_when_paused ... ok
 Writing test snapshot file for test "pause_tests::pause_tests::test_pause_unpause_admin_only" to "test_snapshots/pause_tests/pause_tests/test_pause_unpause_admin_only.1.json".
 test pause_tests::pause_tests::test_pause_unpause_admin_only ... ok
-Writing test snapshot file for test "pause_tests::pause_tests::test_pause_unpause_restores_add_milestone" to "test_snapshots/pause_tests/pause_tests/test_pause_unpause_restores_add_milestone.1.json".
-test pause_tests::pause_tests::test_pause_unpause_restores_add_milestone ... ok
+test pause_tests::pause_tests::test_emergency_withdraw_requires_paused ... ok
+test pause_tests::pause_tests::test_emergency_withdraw_requires_admin ... ok
+Writing test snapshot file for test "pause_tests::pause_tests::test_unpause_allowed_after_48h" to "test_snapshots/pause_tests/pause_tests/test_unpause_allowed_after_48h.1.json".
+Writing test snapshot file for test "pause_tests::pause_tests::test_unpause_rejected_before_48htest pause_tests::pause_tests::test_emergency_withdraw_reentrancy_blocked ... ok
+" to "test_snapshots/pause_tests/pause_tests/test_unpause_rejected_before_48h.1.json".
 Writing test snapshot file for test "self_escrow_tests::self_escrow_tests::test_create_escrow_rejects_self_escrow" to "test_snapshots/self_escrow_tests/self_escrow_tests/test_create_escrow_rejects_self_escrow.1.json".
-test self_escrow_tests::self_escrow_tests::test_create_escrow_rejects_self_escrow ... ok
+Writing test snapshot file for test "pause_tests::pause_tests::test_pause_unpause_restores_add_milestone" to "test_snapshots/pause_tests/pause_tests/test_pause_unpause_restores_add_milestone.1.json".
+test pause_tests::pause_tests::test_unpause_allowed_after_48h ... ok
 Writing test snapshot file for test "self_escrow_tests::self_escrow_tests::test_create_escrow_with_buyer_signers_rejects_self_escrow" to "test_snapshots/self_escrow_tests/self_escrow_tests/test_create_escrow_with_buyer_signers_rejects_self_escrow.1.json".
+test self_escrow_tests::self_escrow_tests::test_create_escrow_rejects_self_escrow ... ok
+test pause_tests::pause_tests::test_unpause_rejected_before_48h ... ok
 test self_escrow_tests::self_escrow_tests::test_create_escrow_with_buyer_signers_rejects_self_escrow ... ok
-test storage::tests::test_escrow_state_v1_has_required_fields ... ok
-test storage::tests::test_storage_key_has_version_variant ... ok
-test storage::tests::test_storage_version_constant ... ok
-test partial_cancel_tests::partial_cancel_tests::test_partial_cancel_successful_refund ... ok
+Writing test snapshot file for test "tests::test_approve_deadline_extension_happy_path" to "test_snapshots/tests/test_approve_deadline_extension_happy_path.1.json".
+test pause_tests::pause_tests::test_mutations_blocked_when_paused ... ok
+test pause_tests::pause_tests::test_emergency_withdraw_fails_for_completed_escrow ... ok
+test pause_tests::pause_tests::test_emergency_withdraw_sends_to_client ... ok
 
-thread 'tests::test_add_milestone_blocked_when_paused' (31262) panicked at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:768:9:
-HostError: Error(Contract, #31)
+thread 'tests::test_add_milestone_blocked_when_paused' (1922147) panicked at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:768:9:
+HostError: Error(Contract, #70)
 
 Event log (newest first):
-   0: [Diagnostic Event] topics:[error, Error(Contract, #31)], data:"escalating error to panic"
-   1: [Diagnostic Event] topics:[error, Error(Contract, #31)], data:["contract call failed", add_milestone, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 0, "M1", Bytes(0000000000000000000000000000000000000000000000000000000000000000), 50]]
-   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[error, Error(Contract, #31)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
-   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[fn_return, add_milestone], data:Error(Contract, #31)
+   0: [Diagnostic Event] topics:[error, Error(Contract, #70)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #70)], data:["contract call failed", add_milestone, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 0, "M1", Bytes(0000000000000000000000000000000000000000000000000000000000000000), 50]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[error, Error(Contract, #70)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[fn_return, add_milestone], data:Error(Contract, #70)
    4: [Diagnostic Event] topics:[fn_call, Bytes(0000000000000000000000000000000000000000000000000000000000000002), add_milestone], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 0, "M1", Bytes(0000000000000000000000000000000000000000000000000000000000000000), 50]
    5: [Diagnostic Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[fn_return, pause], data:Void
    6: [Contract Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[paused], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM
@@ -186,38 +217,40 @@ Event log (newest first):
 
 Backtrace (newest first):
    0: <soroban_env_host::host::Host as soroban_env_common::env::EnvBase>::escalate_error_to_panic
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:767:31
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:767:31
    1: soroban_sdk::env::internal::reject_err::{{closure}}
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:27
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:27
    2: core::result::Result<T,E>::map_err
-             at /usr/local/rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs:968:27
+             at /rustc/e408947bfd200af42db322daf0fadfe7e26d3bd1/library/core/src/result.rs:968:27
    3: soroban_sdk::env::internal::reject_err
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:11
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:11
    4: <soroban_sdk::env::Env as soroban_env_common::env::Env>::call
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:1667:13
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:1667:13
    5: soroban_sdk::env::Env::invoke_contract
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:379:18
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:379:18
    6: stellar_trust_escrow_contract::EscrowContractClient::add_milestone
-             at src/lib.rs:972:1
+             at src/lib.rs:1037:1
    7: stellar_trust_escrow_contract::tests::test_add_milestone_blocked_when_paused
-             at src/lib.rs:6576:16
+             at src/lib.rs:7139:16
    8: stellar_trust_escrow_contract::tests::test_add_milestone_blocked_when_paused::{{closure}}
-             at src/lib.rs:6573:48
+             at src/lib.rs:7136:48
    9: core::ops::function::FnOnce::call_once
-             at /usr/local/rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/ops/function.rs:250:5
+             at /rustc/e408947bfd200af42db322daf0fadfe7e26d3bd1/library/core/src/ops/function.rs:250:5
 
 
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 Writing test snapshot file for test "tests::test_add_milestone_blocked_when_paused" to "test_snapshots/tests/test_add_milestone_blocked_when_paused.1.json".
+Writing test snapshot file for test "tests::test_approve_deadline_extension_unauthorized" to "test_snapshots/tests/test_approve_deadline_extension_unauthorized.1.json".
+Writing test snapshot file for test "tests::test_approve_deadline_extension_requester_cannot_approve" to "test_snapshots/tests/test_approve_deadline_extension_requester_cannot_approve.1.json".
 
-thread 'tests::test_approve_milestone_blocked_when_paused' (31263) panicked at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:768:9:
-HostError: Error(Contract, #31)
+thread 'tests::test_approve_milestone_blocked_when_paused' (1922168) panicked at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:768:9:
+HostError: Error(Contract, #70)
 
 Event log (newest first):
-   0: [Diagnostic Event] topics:[error, Error(Contract, #31)], data:"escalating error to panic"
-   1: [Diagnostic Event] topics:[error, Error(Contract, #31)], data:["contract call failed", approve_milestone, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 0, 0]]
-   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[error, Error(Contract, #31)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
-   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[fn_return, approve_milestone], data:Error(Contract, #31)
+   0: [Diagnostic Event] topics:[error, Error(Contract, #70)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #70)], data:["contract call failed", approve_milestone, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 0, 0]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[error, Error(Contract, #70)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[fn_return, approve_milestone], data:Error(Contract, #70)
    4: [Diagnostic Event] topics:[fn_call, Bytes(0000000000000000000000000000000000000000000000000000000000000002), approve_milestone], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 0, 0]
    5: [Diagnostic Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[fn_return, pause], data:Void
    6: [Contract Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[paused], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM
@@ -243,42 +276,47 @@ Event log (newest first):
 
 Backtrace (newest first):
    0: <soroban_env_host::host::Host as soroban_env_common::env::EnvBase>::escalate_error_to_panic
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:767:31
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:767:31
    1: soroban_sdk::env::internal::reject_err::{{closure}}
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:27
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:27
    2: core::result::Result<T,E>::map_err
-             at /usr/local/rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs:968:27
+             at /rustc/e408947bfd200af42db322daf0fadfe7e26d3bd1/library/core/src/result.rs:968:27
    3: soroban_sdk::env::internal::reject_err
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:11
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:11
    4: <soroban_sdk::env::Env as soroban_env_common::env::Env>::call
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:1667:13
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:1667:13
    5: soroban_sdk::env::Env::invoke_contract
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:379:18
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:379:18
    6: stellar_trust_escrow_contract::EscrowContractClient::approve_milestone
-             at src/lib.rs:972:1
+             at src/lib.rs:1037:1
    7: stellar_trust_escrow_contract::tests::test_approve_milestone_blocked_when_paused
-             at src/lib.rs:6614:16
+             at src/lib.rs:7177:16
    8: stellar_trust_escrow_contract::tests::test_approve_milestone_blocked_when_paused::{{closure}}
-             at src/lib.rs:6603:52
+             at src/lib.rs:7166:52
    9: core::ops::function::FnOnce::call_once
-             at /usr/local/rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/ops/function.rs:250:5
+             at /rustc/e408947bfd200af42db322daf0fadfe7e26d3bd1/library/core/src/ops/function.rs:250:5
 
 
-Writing test snapshot file for test "tests::test_approve_milestone_blocked_when_paused" to "test_snapshots/tests/test_approve_milestone_blocked_when_paused.1.json".
-test tests::test_add_milestone_blocked_when_paused - should panic ... ok
 Writing test snapshot file for test "tests::test_approve_milestone_o1_completion_check" to "test_snapshots/tests/test_approve_milestone_o1_completion_check.1.json".
-test tests::test_approve_milestone_blocked_when_paused - should panic ... ok
+Writing test snapshot file for test "tests::test_approve_milestone_blocked_when_paused" to "test_snapshots/tests/test_approve_milestone_blocked_when_paused.1.json".
+test pause_tests::pause_tests::test_pause_unpause_restores_add_milestone ... ok
 Writing test snapshot file for test "tests::test_cancel_escrow" to "test_snapshots/tests/test_cancel_escrow.1.json".
-test tests::test_approve_milestone_o1_completion_check ... ok
+test tests::test_approve_milestone_blocked_when_paused - should panic ... ok
+test tests::test_approve_deadline_extension_happy_path ... ok
+test tests::test_approve_deadline_extension_unauthorized ... ok
+test tests::test_approve_deadline_extension_requester_cannot_approve ... ok
+Writing test snapshot file for test "tests::test_cancel_extension_request_unauthorized" to "test_snapshots/tests/test_cancel_extension_request_unauthorized.1.json".
+Writing test snapshot file for test "tests::test_cancel_escrow_partial_completion_splits_balance" to "test_snapshots/tests/test_cancel_escrow_partial_completion_splits_balance.1.json".
+test tests::test_add_milestone_blocked_when_paused - should panic ... ok
 
-thread 'tests::test_cancel_escrow_blocked_when_paused' (31273) panicked at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:768:9:
-HostError: Error(Contract, #31)
+thread 'tests::test_cancel_escrow_blocked_when_paused' (1922221) panicked at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:768:9:
+HostError: Error(Contract, #70)
 
 Event log (newest first):
-   0: [Diagnostic Event] topics:[error, Error(Contract, #31)], data:"escalating error to panic"
-   1: [Diagnostic Event] topics:[error, Error(Contract, #31)], data:["contract call failed", cancel_escrow, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 0]]
-   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[error, Error(Contract, #31)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
-   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[fn_return, cancel_escrow], data:Error(Contract, #31)
+   0: [Diagnostic Event] topics:[error, Error(Contract, #70)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #70)], data:["contract call failed", cancel_escrow, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 0]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[error, Error(Contract, #70)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[fn_return, cancel_escrow], data:Error(Contract, #70)
    4: [Diagnostic Event] topics:[fn_call, Bytes(0000000000000000000000000000000000000000000000000000000000000002), cancel_escrow], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 0]
    5: [Diagnostic Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[fn_return, pause], data:Void
    6: [Contract Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[paused], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM
@@ -304,48 +342,49 @@ Event log (newest first):
 
 Backtrace (newest first):
    0: <soroban_env_host::host::Host as soroban_env_common::env::EnvBase>::escalate_error_to_panic
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:767:31
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:767:31
    1: soroban_sdk::env::internal::reject_err::{{closure}}
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:27
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:27
    2: core::result::Result<T,E>::map_err
-             at /usr/local/rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs:968:27
+             at /rustc/e408947bfd200af42db322daf0fadfe7e26d3bd1/library/core/src/result.rs:968:27
    3: soroban_sdk::env::internal::reject_err
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:11
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:11
    4: <soroban_sdk::env::Env as soroban_env_common::env::Env>::call
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:1667:13
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:1667:13
    5: soroban_sdk::env::Env::invoke_contract
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:379:18
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:379:18
    6: stellar_trust_escrow_contract::EscrowContractClient::cancel_escrow
-             at src/lib.rs:972:1
+             at src/lib.rs:1037:1
    7: stellar_trust_escrow_contract::tests::test_cancel_escrow_blocked_when_paused
-             at src/lib.rs:6622:16
+             at src/lib.rs:7185:16
    8: stellar_trust_escrow_contract::tests::test_cancel_escrow_blocked_when_paused::{{closure}}
-             at src/lib.rs:6619:48
+             at src/lib.rs:7182:48
    9: core::ops::function::FnOnce::call_once
-             at /usr/local/rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/ops/function.rs:250:5
+             at /rustc/e408947bfd200af42db322daf0fadfe7e26d3bd1/library/core/src/ops/function.rs:250:5
 
 
 Writing test snapshot file for test "tests::test_cancel_escrow_blocked_when_paused" to "test_snapshots/tests/test_cancel_escrow_blocked_when_paused.1.json".
-test tests::test_cancel_escrow ... ok
-test tests::test_cancel_escrow_blocked_when_paused - should panic ... ok
-Writing test snapshot file for test "tests::test_cancel_escrow_partial_completion_splits_balance" to "test_snapshots/tests/test_cancel_escrow_partial_completion_splits_balance.1.json".
+Writing test snapshot file for test "tests::test_cancel_extension_request_happy_path" to "test_snapshots/tests/test_cancel_extension_request_happy_path.1.json".
 Writing test snapshot file for test "tests::test_cancel_recurring_escrow_refunds_unreleased_balance" to "test_snapshots/tests/test_cancel_recurring_escrow_refunds_unreleased_balance.1.json".
-test tests::test_cancel_escrow_partial_completion_splits_balance ... ok
-test tests::test_cancel_recurring_escrow_refunds_unreleased_balance ... ok
+test tests::test_cancel_escrow_blocked_when_paused - should panic ... ok
+test tests::test_cancel_extension_request_happy_path ... ok
 Writing test snapshot file for test "tests::test_cancellation_request_funds_extra_storage_rent" to "test_snapshots/tests/test_cancellation_request_funds_extra_storage_rent.1.json".
 Writing test snapshot file for test "tests::test_cancellation_workflow_end_to_end" to "test_snapshots/tests/test_cancellation_workflow_end_to_end.1.json".
-test tests::test_cancellation_request_funds_extra_storage_rent ... ok
+test tests::test_cancel_escrow_partial_completion_splits_balance ... ok
+test tests::test_cancel_escrow ... ok
+test tests::test_cancel_extension_request_unauthorized ... ok
+Writing test snapshot file for test "tests::test_client_can_approve_freelancer_request" to "test_snapshots/tests/test_client_can_approve_freelancer_request.1.json".
+test tests::test_approve_milestone_o1_completion_check ... ok
 Writing test snapshot file for test "tests::test_collect_rent_transfers_periodic_fees_to_admin" to "test_snapshots/tests/test_collect_rent_transfers_periodic_fees_to_admin.1.json".
-test tests::test_cancellation_workflow_end_to_end ... ok
 
-thread 'tests::test_create_escrow_blocked_when_paused' (31286) panicked at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:768:9:
-HostError: Error(Contract, #31)
+thread 'tests::test_create_escrow_blocked_when_paused' (1922321) panicked at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:768:9:
+HostError: Error(Contract, #70)
 
 Event log (newest first):
-   0: [Diagnostic Event] topics:[error, Error(Contract, #31)], data:"escalating error to panic"
-   1: [Diagnostic Event] topics:[error, Error(Contract, #31)], data:["contract call failed", create_escrow, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 100, Bytes(0101010101010101010101010101010101010101010101010101010101010101), Void, Void, Void, Void, {approvers: [], threshold: 0, weights: []}]]
-   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[error, Error(Contract, #31)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
-   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[fn_return, create_escrow], data:Error(Contract, #31)
+   0: [Diagnostic Event] topics:[error, Error(Contract, #70)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #70)], data:["contract call failed", create_escrow, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 100, Bytes(0101010101010101010101010101010101010101010101010101010101010101), Void, Void, Void, Void, {approvers: [], threshold: 0, weights: []}]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[error, Error(Contract, #70)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[fn_return, create_escrow], data:Error(Contract, #70)
    4: [Diagnostic Event] topics:[fn_call, Bytes(0000000000000000000000000000000000000000000000000000000000000002), create_escrow], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, 100, Bytes(0101010101010101010101010101010101010101010101010101010101010101), Void, Void, Void, Void, {approvers: [], threshold: 0, weights: []}]
    5: [Diagnostic Event] contract:CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, topics:[fn_return, mint], data:Void
    6: [Contract Event] contract:CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG, topics:[mint, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL7NV"], data:200
@@ -371,64 +410,64 @@ Event log (newest first):
 
 Backtrace (newest first):
    0: <soroban_env_host::host::Host as soroban_env_common::env::EnvBase>::escalate_error_to_panic
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:767:31
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:767:31
    1: soroban_sdk::env::internal::reject_err::{{closure}}
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:27
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:27
    2: core::result::Result<T,E>::map_err
-             at /usr/local/rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs:968:27
+             at /rustc/e408947bfd200af42db322daf0fadfe7e26d3bd1/library/core/src/result.rs:968:27
    3: soroban_sdk::env::internal::reject_err
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:11
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:11
    4: <soroban_sdk::env::Env as soroban_env_common::env::Env>::call
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:1667:13
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:1667:13
    5: soroban_sdk::env::Env::invoke_contract
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:379:18
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:379:18
    6: stellar_trust_escrow_contract::EscrowContractClient::create_escrow
-             at src/lib.rs:972:1
+             at src/lib.rs:1037:1
    7: stellar_trust_escrow_contract::tests::test_create_escrow_blocked_when_paused
-             at src/lib.rs:6553:16
+             at src/lib.rs:7116:16
    8: stellar_trust_escrow_contract::tests::test_create_escrow_blocked_when_paused::{{closure}}
-             at src/lib.rs:6548:48
+             at src/lib.rs:7111:48
    9: core::ops::function::FnOnce::call_once
-             at /usr/local/rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/ops/function.rs:250:5
+             at /rustc/e408947bfd200af42db322daf0fadfe7e26d3bd1/library/core/src/ops/function.rs:250:5
 
 
 Writing test snapshot file for test "tests::test_create_escrow_blocked_when_paused" to "test_snapshots/tests/test_create_escrow_blocked_when_paused.1.json".
-test tests::test_collect_rent_transfers_periodic_fees_to_admin ... ok
+test tests::test_cancellation_request_funds_extra_storage_rent ... ok
 Writing test snapshot file for test "tests::test_create_escrow_min_amount_boundary" to "test_snapshots/tests/test_create_escrow_min_amount_boundary.1.json".
-test tests::test_create_escrow_blocked_when_paused - should panic ... ok
 Writing test snapshot file for test "tests::test_create_escrow_packs_metadata_separately" to "test_snapshots/tests/test_create_escrow_packs_metadata_separately.1.json".
-test tests::test_create_escrow_min_amount_boundary ... ok
+test tests::test_cancel_recurring_escrow_refunds_unreleased_balance ... ok
+test tests::test_client_can_approve_freelancer_request ... ok
 Writing test snapshot file for test "tests::test_create_recurring_escrow_rejects_below_min_payment_amount" to "test_snapshots/tests/test_create_recurring_escrow_rejects_below_min_payment_amount.1.json".
-test tests::test_create_recurring_escrow_rejects_below_min_payment_amount ... ok
 Writing test snapshot file for test "tests::test_create_recurring_escrow_stores_schedule" to "test_snapshots/tests/test_create_recurring_escrow_stores_schedule.1.json".
-test tests::test_create_escrow_packs_metadata_separately ... ok
+test tests::test_create_escrow_min_amount_boundary ... ok
 Writing test snapshot file for test "tests::test_dependency_branched_dependencies" to "test_snapshots/tests/test_dependency_branched_dependencies.1.json".
-test tests::test_create_recurring_escrow_stores_schedule ... ok
+test tests::test_create_recurring_escrow_rejects_below_min_payment_amount ... ok
+test tests::test_create_escrow_packs_metadata_separately ... ok
+test tests::test_create_escrow_blocked_when_paused - should panic ... ok
+test tests::test_cancellation_workflow_end_to_end ... ok
 Writing test snapshot file for test "tests::test_dependency_linear_chain_activation_rejected_until_satisfied" to "test_snapshots/tests/test_dependency_linear_chain_activation_rejected_until_satisfied.1.json".
-test tests::test_dependency_branched_dependencies ... ok
-Writing test snapshot file for test "tests::test_dispute_cancellation_blocks_execution" to "test_snapshots/tests/test_dispute_cancellation_blocks_execution.1.json".
-test tests::test_dependency_linear_chain_activation_rejected_until_satisfied ... ok
 Writing test snapshot file for test "tests::test_dispute_resolution" to "test_snapshots/tests/test_dispute_resolution.1.json".
-test tests::test_dispute_cancellation_blocks_execution ... ok
+Writing test snapshot file for test "tests::test_dispute_cancellation_blocks_execution" to "test_snapshots/tests/test_dispute_cancellation_blocks_execution.1.json".
 Writing test snapshot file for test "tests::test_dispute_slash_reversal_restores_funds_and_reputation" to "test_snapshots/tests/test_dispute_slash_reversal_restores_funds_and_reputation.1.json".
-test tests::test_dispute_resolution ... ok
+test tests::test_collect_rent_transfers_periodic_fees_to_admin ... ok
+test tests::test_dependency_branched_dependencies ... ok
+test tests::test_create_recurring_escrow_stores_schedule ... ok
 Writing test snapshot file for test "tests::test_emits_unlocked_event_when_prereq_completes" to "test_snapshots/tests/test_emits_unlocked_event_when_prereq_completes.1.json".
-test tests::test_dispute_slash_reversal_restores_funds_and_reputation ... ok
 Writing test snapshot file for test "tests::test_execute_cancellation_fails_during_dispute_period" to "test_snapshots/tests/test_execute_cancellation_fails_during_dispute_period.1.json".
-test tests::test_emits_unlocked_event_when_prereq_completes ... ok
-test tests::test_execute_cancellation_fails_during_dispute_period ... ok
 Writing test snapshot file for test "tests::test_execute_cancellation_freelancer_requester_slashes_to_client" to "test_snapshots/tests/test_execute_cancellation_freelancer_requester_slashes_to_client.1.json".
-Writing test snapshot file for test "tests::test_execute_cancellation_slashes_requester_and_distributes" to "test_snapshots/tests/test_execute_cancellation_slashes_requester_and_distributes.1.json".
-test tests::test_execute_cancellation_slashes_requester_and_distributes ... ok
-test tests::test_execute_cancellation_freelancer_requester_slashes_to_client ... ok
+test tests::test_dispute_resolution ... ok
+test tests::test_dependency_linear_chain_activation_rejected_until_satisfied ... ok
 Writing test snapshot file for test "tests::test_expire_escrow_rent_depletion_complete_cleanup" to "test_snapshots/tests/test_expire_escrow_rent_depletion_complete_cleanup.1.json".
-Writing test snapshot file for test "tests::test_expired_escrow_is_cleaned_up_by_collect_rent" to "test_snapshots/tests/test_expired_escrow_is_cleaned_up_by_collect_rent.1.json".
+test tests::test_emits_unlocked_event_when_prereq_completes ... ok
+test tests::test_dispute_slash_reversal_restores_funds_and_reputation ... ok
+test tests::test_execute_cancellation_fails_during_dispute_period ... ok
+Writing test snapshot file for test "oracle_overflow_tests::oracle_overflow_tests::test_usd_to_xlm_stroops_fuzz_extreme_values" to "test_snapshots/oracle_overflow_tests/oracle_overflow_tests/test_usd_to_xlm_stroops_fuzz_extreme_values.1.json".
 test tests::test_expire_escrow_rent_depletion_complete_cleanup ... ok
-Writing test snapshot file for test "tests::test_freeze_requires_threshold_and_blocks_operations" to "test_snapshots/tests/test_freeze_requires_threshold_and_blocks_operations.1.json".
-test tests::test_expired_escrow_is_cleaned_up_by_collect_rent ... ok
 test tests::test_full_escrow_lifecycle ... ignored, implement full flow — Issues #2–#11
+Writing test snapshot file for test "tests::test_freelancer_can_request_extension" to "test_snapshots/tests/test_freelancer_can_request_extension.1.json".
+Writing test snapshot file for test "tests::test_execute_cancellation_slashes_requester_and_distributes" to "test_snapshots/tests/test_execute_cancellation_slashes_requester_and_distributes.1.json".
 
-thread 'tests::test_get_admin_not_initialized_panics' (31312) panicked at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:768:9:
+thread 'tests::test_get_admin_not_initialized_panics' (1922562) panicked at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:768:9:
 HostError: Error(Contract, #2)
 
 Event log (newest first):
@@ -440,65 +479,66 @@ Event log (newest first):
 
 Backtrace (newest first):
    0: <soroban_env_host::host::Host as soroban_env_common::env::EnvBase>::escalate_error_to_panic
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:767:31
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:767:31
    1: soroban_sdk::env::internal::reject_err::{{closure}}
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:27
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:27
    2: core::result::Result<T,E>::map_err
-             at /usr/local/rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs:968:27
+             at /rustc/e408947bfd200af42db322daf0fadfe7e26d3bd1/library/core/src/result.rs:968:27
    3: soroban_sdk::env::internal::reject_err
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:11
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:11
    4: <soroban_sdk::env::Env as soroban_env_common::env::Env>::call
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:1667:13
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:1667:13
    5: soroban_sdk::env::Env::invoke_contract
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:379:18
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:379:18
    6: stellar_trust_escrow_contract::EscrowContractClient::get_admin
-             at src/lib.rs:972:1
+             at src/lib.rs:1037:1
    7: stellar_trust_escrow_contract::tests::test_get_admin_not_initialized_panics
-             at src/lib.rs:5521:16
+             at src/lib.rs:6083:16
    8: stellar_trust_escrow_contract::tests::test_get_admin_not_initialized_panics::{{closure}}
-             at src/lib.rs:5518:47
+             at src/lib.rs:6080:47
    9: core::ops::function::FnOnce::call_once
-             at /usr/local/rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/ops/function.rs:250:5
+             at /rustc/e408947bfd200af42db322daf0fadfe7e26d3bd1/library/core/src/ops/function.rs:250:5
 
 
 Writing test snapshot file for test "tests::test_get_admin_not_initialized_panics" to "test_snapshots/tests/test_get_admin_not_initialized_panics.1.json".
 test tests::test_get_admin_not_initialized_panics - should panic ... ok
 Writing test snapshot file for test "tests::test_get_admin_returns_initialized_admin" to "test_snapshots/tests/test_get_admin_returns_initialized_admin.1.json".
 test tests::test_get_admin_returns_initialized_admin ... ok
+Writing test snapshot file for test "tests::test_expired_escrow_is_cleaned_up_by_collect_rent" to "test_snapshots/tests/test_expired_escrow_is_cleaned_up_by_collect_rent.1.json".
+Writing test snapshot file for test "tests::test_freeze_requires_threshold_and_blocks_operations" to "test_snapshots/tests/test_freeze_requires_threshold_and_blocks_operations.1.json".
 Writing test snapshot file for test "tests::test_get_milestone_reads_granular_storage_entry" to "test_snapshots/tests/test_get_milestone_reads_granular_storage_entry.1.json".
-test tests::test_freeze_requires_threshold_and_blocks_operations ... ok
+test tests::test_dispute_cancellation_blocks_execution ... ok
 Writing test snapshot file for test "tests::test_get_reputation_returns_default_record" to "test_snapshots/tests/test_get_reputation_returns_default_record.1.json".
 test tests::test_get_reputation_returns_default_record ... ok
 Writing test snapshot file for test "tests::test_initialize_uses_instance_storage" to "test_snapshots/tests/test_initialize_uses_instance_storage.1.json".
 test tests::test_initialize_uses_instance_storage ... ok
-Writing test snapshot file for test "tests::test_meta_transaction_becomes_expired_after_time_passes" to "test_snapshots/tests/test_meta_transaction_becomes_expired_after_time_passes.1.json".
-test tests::test_meta_transaction_becomes_expired_after_time_passes ... ok
+Writing test snapshot file for test test tests::test_execute_cancellation_freelancer_requester_slashes_to_client ... ok
+"tests::test_meta_transaction_becomes_expired_after_time_passes" to "test_snapshots/tests/test_meta_transaction_becomes_expired_after_time_passes.1.json".
 Writing test snapshot file for test "tests::test_meta_transaction_expired_deadline_rejected" to "test_snapshots/tests/test_meta_transaction_expired_deadline_rejected.1.json".
-test tests::test_get_milestone_reads_granular_storage_entry ... ok
+test tests::test_freelancer_can_request_extension ... ok
 Writing test snapshot file for test "tests::test_meta_transaction_nonce_replay_rejected" to "test_snapshots/tests/test_meta_transaction_nonce_replay_rejected.1.json".
-test tests::test_meta_transaction_expired_deadline_rejected ... ok
+test tests::test_expired_escrow_is_cleaned_up_by_collect_rent ... ok
 Writing test snapshot file for test "tests::test_meta_transaction_valid_deadline_accepted" to "test_snapshots/tests/test_meta_transaction_valid_deadline_accepted.1.json".
-test tests::test_meta_transaction_nonce_replay_rejected ... ok
-test tests::test_meta_transaction_valid_deadline_accepted ... ok
+test tests::test_meta_transaction_expired_deadline_rejected ... ok
 Writing test snapshot file for test "tests::test_meta_transaction_valid_nonce_and_replay_rejected" to "test_snapshots/tests/test_meta_transaction_valid_nonce_and_replay_rejected.1.json".
 test tests::test_meta_transaction_valid_nonce_and_replay_rejected ... ok
+test tests::test_meta_transaction_valid_deadline_accepted ... ok
+test tests::test_meta_transaction_nonce_replay_rejected ... ok
+test tests::test_meta_transaction_becomes_expired_after_time_passes ... ok
 Writing test snapshot file for test "tests::test_multisig_approval_reaching_threshold" to "test_snapshots/tests/test_multisig_approval_reaching_threshold.1.json".
 Writing test snapshot file for test "tests::test_oracle_resolve_dispute_after_grace_period" to "test_snapshots/tests/test_oracle_resolve_dispute_after_grace_period.1.json".
-test tests::test_multisig_approval_reaching_threshold ... ok
-test tests::test_oracle_resolve_dispute_after_grace_period ... ok
 Writing test snapshot file for test "tests::test_oracle_resolve_dispute_rejected_invalid_bps" to "test_snapshots/tests/test_oracle_resolve_dispute_rejected_invalid_bps.1.json".
 Writing test snapshot file for test "tests::test_oracle_resolve_dispute_rejected_before_grace_period" to "test_snapshots/tests/test_oracle_resolve_dispute_rejected_before_grace_period.1.json".
-test tests::test_oracle_resolve_dispute_rejected_invalid_bps ... ok
+test tests::test_freeze_requires_threshold_and_blocks_operations ... ok
 Writing test snapshot file for test "tests::test_oracle_resolve_dispute_rejected_stale_payload" to "test_snapshots/tests/test_oracle_resolve_dispute_rejected_stale_payload.1.json".
-test tests::test_oracle_resolve_dispute_rejected_before_grace_period ... ok
+test tests::test_oracle_resolve_dispute_rejected_invalid_bps ... ok
+test tests::test_oracle_resolve_dispute_after_grace_period ... ok
+test tests::test_multisig_approval_reaching_threshold ... ok
 Writing test snapshot file for test "tests::test_oracle_resolve_dispute_rejected_wrong_key" to "test_snapshots/tests/test_oracle_resolve_dispute_rejected_wrong_key.1.json".
 test tests::test_oracle_resolve_dispute_rejected_stale_payload ... ok
-Writing test snapshot file for test "tests::test_pause_and_resume_recurring_schedule" to "test_snapshots/tests/test_pause_and_resume_recurring_schedule.1.json".
-test tests::test_oracle_resolve_dispute_rejected_wrong_key ... ok
 Writing test snapshot file for test "tests::test_pause_is_idempotent" to "test_snapshots/tests/test_pause_is_idempotent.1.json".
-test tests::test_pause_and_resume_recurring_schedule ... ok
 
-thread 'tests::test_pause_non_admin_rejected' (31337) panicked at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:768:9:
+thread 'tests::test_pause_non_admin_rejected' (1922728) panicked at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:768:9:
 HostError: Error(Contract, #4)
 
 Event log (newest first):
@@ -530,46 +570,47 @@ Event log (newest first):
 
 Backtrace (newest first):
    0: <soroban_env_host::host::Host as soroban_env_common::env::EnvBase>::escalate_error_to_panic
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:767:31
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:767:31
    1: soroban_sdk::env::internal::reject_err::{{closure}}
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:27
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:27
    2: core::result::Result<T,E>::map_err
-             at /usr/local/rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs:968:27
+             at /rustc/e408947bfd200af42db322daf0fadfe7e26d3bd1/library/core/src/result.rs:968:27
    3: soroban_sdk::env::internal::reject_err
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:11
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:11
    4: <soroban_sdk::env::Env as soroban_env_common::env::Env>::call
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:1667:13
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:1667:13
    5: soroban_sdk::env::Env::invoke_contract
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:379:18
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:379:18
    6: stellar_trust_escrow_contract::EscrowContractClient::pause
-             at src/lib.rs:972:1
+             at src/lib.rs:1037:1
    7: stellar_trust_escrow_contract::tests::test_pause_non_admin_rejected
-             at src/lib.rs:6534:16
+             at src/lib.rs:7097:16
    8: stellar_trust_escrow_contract::tests::test_pause_non_admin_rejected::{{closure}}
-             at src/lib.rs:6531:39
+             at src/lib.rs:7094:39
    9: core::ops::function::FnOnce::call_once
-             at /usr/local/rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/ops/function.rs:250:5
+             at /rustc/e408947bfd200af42db322daf0fadfe7e26d3bd1/library/core/src/ops/function.rs:250:5
 
 
 Writing test snapshot file for test "tests::test_pause_non_admin_rejected" to "test_snapshots/tests/test_pause_non_admin_rejected.1.json".
-test tests::test_pause_is_idempotent ... ok
+test tests::test_get_milestone_reads_granular_storage_entry ... ok
+Writing test snapshot file for test "tests::test_pause_and_resume_recurring_schedule" to "test_snapshots/tests/test_pause_and_resume_recurring_schedule.1.json".
 Writing test snapshot file for test "tests::test_pause_sets_state_and_emits_event" to "test_snapshots/tests/test_pause_sets_state_and_emits_event.1.json".
-test tests::test_pause_non_admin_rejected - should panic ... ok
+test tests::test_execute_cancellation_slashes_requester_and_distributes ... ok
+test tests::test_oracle_resolve_dispute_rejected_wrong_key ... ok
 Writing test snapshot file for test "tests::test_pause_unpause_cycle_restores_mutations" to "test_snapshots/tests/test_pause_unpause_cycle_restores_mutations.1.json".
-test tests::test_pause_sets_state_and_emits_event ... ok
+test tests::test_pause_non_admin_rejected - should panic ... ok
+test tests::test_oracle_resolve_dispute_rejected_before_grace_period ... ok
 Writing test snapshot file for test "tests::test_process_recurring_payments_multi_period_catchup" to "test_snapshots/tests/test_process_recurring_payments_multi_period_catchup.1.json".
-test tests::test_pause_unpause_cycle_restores_mutations ... ok
 Writing test snapshot file for test "tests::test_process_recurring_payments_releases_due_amounts" to "test_snapshots/tests/test_process_recurring_payments_releases_due_amounts.1.json".
-test tests::test_process_recurring_payments_multi_period_catchup ... ok
 
-thread 'tests::test_raise_dispute_blocked_when_paused' (31343) panicked at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:768:9:
-HostError: Error(Contract, #31)
+thread 'tests::test_raise_dispute_blocked_when_paused' (1922751) panicked at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:768:9:
+HostError: Error(Contract, #70)
 
 Event log (newest first):
-   0: [Diagnostic Event] topics:[error, Error(Contract, #31)], data:"escalating error to panic"
-   1: [Diagnostic Event] topics:[error, Error(Contract, #31)], data:["contract call failed", raise_dispute, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 0, Void]]
-   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[error, Error(Contract, #31)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
-   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[fn_return, raise_dispute], data:Error(Contract, #31)
+   0: [Diagnostic Event] topics:[error, Error(Contract, #70)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #70)], data:["contract call failed", raise_dispute, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 0, Void]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[error, Error(Contract, #70)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[fn_return, raise_dispute], data:Error(Contract, #70)
    4: [Diagnostic Event] topics:[fn_call, Bytes(0000000000000000000000000000000000000000000000000000000000000002), raise_dispute], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 0, Void]
    5: [Diagnostic Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[fn_return, pause], data:Void
    6: [Contract Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[paused], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM
@@ -595,40 +636,39 @@ Event log (newest first):
 
 Backtrace (newest first):
    0: <soroban_env_host::host::Host as soroban_env_common::env::EnvBase>::escalate_error_to_panic
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:767:31
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:767:31
    1: soroban_sdk::env::internal::reject_err::{{closure}}
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:27
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:27
    2: core::result::Result<T,E>::map_err
-             at /usr/local/rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs:968:27
+             at /rustc/e408947bfd200af42db322daf0fadfe7e26d3bd1/library/core/src/result.rs:968:27
    3: soroban_sdk::env::internal::reject_err
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:11
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:11
    4: <soroban_sdk::env::Env as soroban_env_common::env::Env>::call
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:1667:13
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:1667:13
    5: soroban_sdk::env::Env::invoke_contract
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:379:18
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:379:18
    6: stellar_trust_escrow_contract::EscrowContractClient::raise_dispute
-             at src/lib.rs:972:1
+             at src/lib.rs:1037:1
    7: stellar_trust_escrow_contract::tests::test_raise_dispute_blocked_when_paused
-             at src/lib.rs:6630:16
+             at src/lib.rs:7193:16
    8: stellar_trust_escrow_contract::tests::test_raise_dispute_blocked_when_paused::{{closure}}
-             at src/lib.rs:6627:48
+             at src/lib.rs:7190:48
    9: core::ops::function::FnOnce::call_once
-             at /usr/local/rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/ops/function.rs:250:5
+             at /rustc/e408947bfd200af42db322daf0fadfe7e26d3bd1/library/core/src/ops/function.rs:250:5
 
 
 Writing test snapshot file for test "tests::test_raise_dispute_blocked_when_paused" to "test_snapshots/tests/test_raise_dispute_blocked_when_paused.1.json".
-test tests::test_raise_dispute_blocked_when_paused - should panic ... ok
-Writing test snapshot file for test "tests::test_reputation_created_on_first_completion" to "test_snapshots/tests/test_reputation_created_on_first_completion.1.json".
-test tests::test_process_recurring_payments_releases_due_amounts ... ok
+test tests::test_pause_and_resume_recurring_schedule ... ok
+test tests::test_pause_is_idempotent ... ok
 
-thread 'tests::test_request_cancellation_blocked_when_paused' (31350) panicked at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:768:9:
-HostError: Error(Contract, #31)
+thread 'tests::test_request_cancellation_blocked_when_paused' (1922802) panicked at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:768:9:
+HostError: Error(Contract, #70)
 
 Event log (newest first):
-   0: [Diagnostic Event] topics:[error, Error(Contract, #31)], data:"escalating error to panic"
-   1: [Diagnostic Event] topics:[error, Error(Contract, #31)], data:["contract call failed", request_cancellation, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 0, "reason"]]
-   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[error, Error(Contract, #31)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
-   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[fn_return, request_cancellation], data:Error(Contract, #31)
+   0: [Diagnostic Event] topics:[error, Error(Contract, #70)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #70)], data:["contract call failed", request_cancellation, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 0, "reason"]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[error, Error(Contract, #70)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[fn_return, request_cancellation], data:Error(Contract, #70)
    4: [Diagnostic Event] topics:[fn_call, Bytes(0000000000000000000000000000000000000000000000000000000000000002), request_cancellation], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M, 0, "reason"]
    5: [Diagnostic Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[fn_return, pause], data:Void
    6: [Contract Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[paused], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM
@@ -654,44 +694,57 @@ Event log (newest first):
 
 Backtrace (newest first):
    0: <soroban_env_host::host::Host as soroban_env_common::env::EnvBase>::escalate_error_to_panic
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:767:31
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:767:31
    1: soroban_sdk::env::internal::reject_err::{{closure}}
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:27
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:27
    2: core::result::Result<T,E>::map_err
-             at /usr/local/rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs:968:27
+             at /rustc/e408947bfd200af42db322daf0fadfe7e26d3bd1/library/core/src/result.rs:968:27
    3: soroban_sdk::env::internal::reject_err
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:11
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:11
    4: <soroban_sdk::env::Env as soroban_env_common::env::Env>::call
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:1667:13
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:1667:13
    5: soroban_sdk::env::Env::invoke_contract
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:379:18
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:379:18
    6: stellar_trust_escrow_contract::EscrowContractClient::request_cancellation
-             at src/lib.rs:972:1
+             at src/lib.rs:1037:1
    7: stellar_trust_escrow_contract::tests::test_request_cancellation_blocked_when_paused
-             at src/lib.rs:6638:16
+             at src/lib.rs:7201:16
    8: stellar_trust_escrow_contract::tests::test_request_cancellation_blocked_when_paused::{{closure}}
-             at src/lib.rs:6635:55
+             at src/lib.rs:7198:55
    9: core::ops::function::FnOnce::call_once
-             at /usr/local/rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/ops/function.rs:250:5
+             at /rustc/e408947bfd200af42db322daf0fadfe7e26d3bd1/library/core/src/ops/function.rs:250:5
 
 
 Writing test snapshot file for test "tests::test_request_cancellation_blocked_when_paused" to "test_snapshots/tests/test_request_cancellation_blocked_when_paused.1.json".
-test tests::test_request_cancellation_blocked_when_paused - should panic ... ok
-Writing test snapshot file for test "tests::test_slash_record_created_and_dispute_window_enforced" to "test_snapshots/tests/test_slash_record_created_and_dispute_window_enforced.1.json".
+Writing test snapshot file for test "tests::test_reputation_created_on_first_completion" to "test_snapshots/tests/test_reputation_created_on_first_completion.1.json".
+test tests::test_process_recurring_payments_multi_period_catchup ... ok
+Writing test snapshot file for test "tests::test_request_deadline_extension_duplicate_request" to "test_snapshots/tests/test_request_deadline_extension_duplicate_request.1.json".
+test tests::test_pause_sets_state_and_emits_event ... ok
+test tests::test_pause_unpause_cycle_restores_mutations ... ok
+Writing test snapshot file for test "tests::test_request_deadline_extension_happy_path" to "test_snapshots/tests/test_request_deadline_extension_happy_path.1.json".
+test tests::test_raise_dispute_blocked_when_paused - should panic ... ok
+Writing test snapshot file for test "tests::test_request_deadline_extension_not_active_escrow" to "test_snapshots/tests/test_request_deadline_extension_not_active_escrow.1.json".
+Writing test snapshot file for test "tests::test_request_deadline_extension_new_deadline_not_future" to "test_snapshots/tests/test_request_deadline_extension_new_deadline_not_future.1.json".
 test tests::test_reputation_created_on_first_completion ... ok
+test tests::test_request_deadline_extension_duplicate_request ... ok
+Writing test snapshot file for test "tests::test_request_deadline_extension_not_after_current_deadline" to "test_snapshots/tests/test_request_deadline_extension_not_after_current_deadline.1.json".
+test tests::test_request_cancellation_blocked_when_paused - should panic ... ok
+Writing test snapshot file for test "tests::test_request_deadline_extension_unauthorized" to "test_snapshots/tests/test_request_deadline_extension_unauthorized.1.json".
+test tests::test_process_recurring_payments_releases_due_amounts ... ok
 Writing test snapshot file for test "tests::test_slash_reputation_updated_on_cancellation" to "test_snapshots/tests/test_slash_reputation_updated_on_cancellation.1.json".
-test tests::test_slash_record_created_and_dispute_window_enforced ... ok
-test tests::test_slash_reputation_updated_on_cancellation ... ok
+Writing test snapshot file for test "tests::test_slash_record_created_and_dispute_window_enforced" to "test_snapshots/tests/test_slash_record_created_and_dispute_window_enforced.1.json".
+test tests::test_request_deadline_extension_new_deadline_not_future ... ok
+test tests::test_request_deadline_extension_happy_path ... ok
 Writing test snapshot file for test "tests::test_top_up_rent_extends_escrow_lifetime" to "test_snapshots/tests/test_top_up_rent_extends_escrow_lifetime.1.json".
 
-thread 'tests::test_submit_milestone_blocked_when_paused' (31360) panicked at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:768:9:
-HostError: Error(Contract, #31)
+thread 'tests::test_submit_milestone_blocked_when_paused' (1922923) panicked at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:768:9:
+HostError: Error(Contract, #70)
 
 Event log (newest first):
-   0: [Diagnostic Event] topics:[error, Error(Contract, #31)], data:"escalating error to panic"
-   1: [Diagnostic Event] topics:[error, Error(Contract, #31)], data:["contract call failed", submit_milestone, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 0, 0]]
-   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[error, Error(Contract, #31)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
-   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[fn_return, submit_milestone], data:Error(Contract, #31)
+   0: [Diagnostic Event] topics:[error, Error(Contract, #70)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #70)], data:["contract call failed", submit_milestone, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 0, 0]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[error, Error(Contract, #70)], data:"escalating Ok(ScErrorType::Contract) frame-exit to Err"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[fn_return, submit_milestone], data:Error(Contract, #70)
    4: [Diagnostic Event] topics:[fn_call, Bytes(0000000000000000000000000000000000000000000000000000000000000002), submit_milestone], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4, 0, 0]
    5: [Diagnostic Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[fn_return, pause], data:Void
    6: [Contract Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, topics:[paused], data:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM
@@ -717,35 +770,35 @@ Event log (newest first):
 
 Backtrace (newest first):
    0: <soroban_env_host::host::Host as soroban_env_common::env::EnvBase>::escalate_error_to_panic
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:767:31
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:767:31
    1: soroban_sdk::env::internal::reject_err::{{closure}}
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:27
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:27
    2: core::result::Result<T,E>::map_err
-             at /usr/local/rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs:968:27
+             at /rustc/e408947bfd200af42db322daf0fadfe7e26d3bd1/library/core/src/result.rs:968:27
    3: soroban_sdk::env::internal::reject_err
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:11
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:11
    4: <soroban_sdk::env::Env as soroban_env_common::env::Env>::call
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:1667:13
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:1667:13
    5: soroban_sdk::env::Env::invoke_contract
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:379:18
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:379:18
    6: stellar_trust_escrow_contract::EscrowContractClient::submit_milestone
-             at src/lib.rs:972:1
+             at src/lib.rs:1037:1
    7: stellar_trust_escrow_contract::tests::test_submit_milestone_blocked_when_paused
-             at src/lib.rs:6598:16
+             at src/lib.rs:7161:16
    8: stellar_trust_escrow_contract::tests::test_submit_milestone_blocked_when_paused::{{closure}}
-             at src/lib.rs:6587:51
+             at src/lib.rs:7150:51
    9: core::ops::function::FnOnce::call_once
-             at /usr/local/rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/ops/function.rs:250:5
+             at /rustc/e408947bfd200af42db322daf0fadfe7e26d3bd1/library/core/src/ops/function.rs:250:5
 
 
 Writing test snapshot file for test "tests::test_submit_milestone_blocked_when_paused" to "test_snapshots/tests/test_submit_milestone_blocked_when_paused.1.json".
+test tests::test_request_deadline_extension_not_active_escrow ... ok
+test tests::test_request_deadline_extension_unauthorized ... ok
+Writing test snapshot file for test "tests::test_unpause_is_idempotent" to "test_snapshots/tests/test_unpause_is_idempotent.1.json".
 test tests::test_top_up_rent_extends_escrow_lifetime ... ok
 Writing test snapshot file for test "tests::test_unpause_clears_state_and_emits_event" to "test_snapshots/tests/test_unpause_clears_state_and_emits_event.1.json".
-test tests::test_unpause_clears_state_and_emits_event ... ok
-Writing test snapshot file for test "tests::test_unpause_is_idempotent" to "test_snapshots/tests/test_unpause_is_idempotent.1.json".
-test tests::test_submit_milestone_blocked_when_paused - should panic ... ok
 
-thread 'tests::test_unpause_non_admin_rejected' (31364) panicked at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:768:9:
+thread 'tests::test_unpause_non_admin_rejected' (1922979) panicked at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:768:9:
 HostError: Error(Contract, #4)
 
 Event log (newest first):
@@ -778,51 +831,50 @@ Event log (newest first):
 
 Backtrace (newest first):
    0: <soroban_env_host::host::Host as soroban_env_common::env::EnvBase>::escalate_error_to_panic
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:767:31
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-21.2.1/src/host.rs:767:31
    1: soroban_sdk::env::internal::reject_err::{{closure}}
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:27
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:27
    2: core::result::Result<T,E>::map_err
-             at /usr/local/rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs:968:27
+             at /rustc/e408947bfd200af42db322daf0fadfe7e26d3bd1/library/core/src/result.rs:968:27
    3: soroban_sdk::env::internal::reject_err
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:11
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:52:11
    4: <soroban_sdk::env::Env as soroban_env_common::env::Env>::call
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:1667:13
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:1667:13
    5: soroban_sdk::env::Env::invoke_contract
-             at /usr/local/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:379:18
+             at /home/merlinthewhiz/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-21.7.7/src/env.rs:379:18
    6: stellar_trust_escrow_contract::EscrowContractClient::unpause
-             at src/lib.rs:972:1
+             at src/lib.rs:1037:1
    7: stellar_trust_escrow_contract::tests::test_unpause_non_admin_rejected
-             at src/lib.rs:6543:16
+             at src/lib.rs:7106:16
    8: stellar_trust_escrow_contract::tests::test_unpause_non_admin_rejected::{{closure}}
-             at src/lib.rs:6539:41
+             at src/lib.rs:7102:41
    9: core::ops::function::FnOnce::call_once
-             at /usr/local/rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/ops/function.rs:250:5
+             at /rustc/e408947bfd200af42db322daf0fadfe7e26d3bd1/library/core/src/ops/function.rs:250:5
 
 
+test tests::test_submit_milestone_blocked_when_paused - should panic ... ok
+test tests::test_slash_reputation_updated_on_cancellation ... ok
 Writing test snapshot file for test "tests::test_unpause_non_admin_rejected" to "test_snapshots/tests/test_unpause_non_admin_rejected.1.json".
-test tests::test_unpause_is_idempotent ... ok
-test tests::test_unpause_non_admin_rejected - should panic ... ok
-Writing test snapshot file for test "tests::test_update_milestone_title_pending_succeeds" to "test_snapshots/tests/test_update_milestone_title_pending_succeeds.1.json".
 Writing test snapshot file for test "tests::test_update_milestone_title_non_pending_rejected" to "test_snapshots/tests/test_update_milestone_title_non_pending_rejected.1.json".
-test tests::test_update_milestone_title_pending_succeeds ... ok
+Writing test snapshot file for test "tests::test_update_milestone_title_pending_succeeds" to "test_snapshots/tests/test_update_milestone_title_pending_succeeds.1.json".
+test tests::test_unpause_is_idempotent ... ok
+test tests::test_slash_record_created_and_dispute_window_enforced ... ok
+test tests::test_request_deadline_extension_not_after_current_deadline ... ok
 Writing test snapshot file for test "tests::test_update_milestone_title_too_long_rejected" to "test_snapshots/tests/test_update_milestone_title_too_long_rejected.1.json".
-test tests::test_update_milestone_title_too_long_rejected ... ok
 Writing test snapshot file for test "tests::test_view_functions_work_when_paused" to "test_snapshots/tests/test_view_functions_work_when_paused.1.json".
-test tests::test_view_functions_work_when_paused ... ok
-test tests::test_update_milestone_title_non_pending_rejected ... ok
-Writing test snapshot file for test "timelock_enforcement_tests::timelock_enforcement_tests::test_timelock_already_active_on_second_start" to "test_snapshots/timelock_enforcement_tests/timelock_enforcement_tests/test_timelock_already_active_on_second_start.1.json".
 Writing test snapshot file for test "timelock_enforcement_tests::timelock_enforcement_tests::test_timelock_allows_release_after_duration" to "test_snapshots/timelock_enforcement_tests/timelock_enforcement_tests/test_timelock_allows_release_after_duration.1.json".
-test timelock_enforcement_tests::timelock_enforcement_tests::test_timelock_already_active_on_second_start ... ok
+test tests::test_unpause_non_admin_rejected - should panic ... ok
+test tests::test_update_milestone_title_non_pending_rejected ... ok
+test tests::test_view_functions_work_when_paused ... ok
+test tests::test_unpause_clears_state_and_emits_event ... ok
 Writing test snapshot file for test "timelock_enforcement_tests::timelock_enforcement_tests::test_timelock_prevents_early_release" to "test_snapshots/timelock_enforcement_tests/timelock_enforcement_tests/test_timelock_prevents_early_release.1.json".
-test timelock_enforcement_tests::timelock_enforcement_tests::test_timelock_allows_release_after_duration ... ok
 Writing test snapshot file for test "transfer_client_tests::transfer_client_tests::test_transfer_client_role_rejects_non_active_escrow" to "test_snapshots/transfer_client_tests/transfer_client_tests/test_transfer_client_role_rejects_non_active_escrow.1.json".
-test timelock_enforcement_tests::timelock_enforcement_tests::test_timelock_prevents_early_release ... ok
-Writing test snapshot file for test "transfer_client_tests::transfer_client_tests::test_transfer_client_role_rejects_same_as_arbiter" to "test_snapshots/transfer_client_tests/transfer_client_tests/test_transfer_client_role_rejects_same_as_arbiter.1.json".
-test transfer_client_tests::transfer_client_tests::test_transfer_client_role_rejects_non_active_escrow ... ok
-Writing test snapshot file for test "transfer_client_tests::transfer_client_tests::test_transfer_client_role_rejects_same_as_freelancer" to "test_snapshots/transfer_client_tests/transfer_client_tests/test_transfer_client_role_rejects_same_as_freelancer.1.json".
-test transfer_client_tests::transfer_client_tests::test_transfer_client_role_rejects_same_as_arbiter ... ok
+Writing test snapshot file for test "timelock_enforcement_tests::timelock_enforcement_tests::test_timelock_already_active_on_second_start" to "test_snapshots/timelock_enforcement_tests/timelock_enforcement_tests/test_timelock_already_active_on_second_start.1.json".
+test timelock_enforcement_tests::timelock_enforcement_tests::test_timelock_allows_release_after_duration ... ok
+test tests::test_update_milestone_title_too_long_rejected ... ok
 Writing test snapshot file for test "transfer_client_tests::transfer_client_tests::test_transfer_client_role_success" to "test_snapshots/transfer_client_tests/transfer_client_tests/test_transfer_client_role_success.1.json".
-test transfer_client_tests::transfer_client_tests::test_transfer_client_role_rejects_same_as_freelancer ... ok
+Writing test snapshot file for test "transfer_client_tests::transfer_client_tests::test_transfer_client_role_rejects_same_as_arbiter" to "test_snapshots/transfer_client_tests/transfer_client_tests/test_transfer_client_role_rejects_same_as_arbiter.1.json".
+test tests::test_update_milestone_title_pending_succeeds ... ok
 test upgrade_tests::upgrade_tests::test_multiple_sequential_upgrades_preserve_state ... ignored, requires initialize + create_escrow + upgrade — Issues #1, #2, #17
 test upgrade_tests::upgrade_tests::test_rollback_preserves_state ... ignored, requires initialize + create_escrow + upgrade — Issues #1, #2, #17
 test upgrade_tests::upgrade_tests::test_upgrade_before_initialize_fails ... ignored, requires upgrade — Issue #17
@@ -834,31 +886,39 @@ test upgrade_tests::upgrade_tests::test_upgrade_preserves_escrow_state ... ignor
 test upgrade_tests::upgrade_tests::test_upgrade_preserves_milestones ... ignored, requires initialize + create_escrow + add_milestone + upgrade — Issues #1, #2, #3, #17
 test upgrade_tests::upgrade_tests::test_upgrade_preserves_reputation ... ignored, requires initialize + update_reputation + upgrade — Issues #1, #11, #17
 test upgrade_tests::upgrade_tests::test_upgrade_requires_admin_auth ... ignored, requires initialize + upgrade — Issues #1, #17
+Writing test snapshot file for test "transfer_client_tests::transfer_client_tests::test_transfer_client_role_rejects_same_as_freelancer" to "test_snapshots/transfer_client_tests/transfer_client_tests/test_transfer_client_role_rejects_same_as_freelancer.1.json".
 test transfer_client_tests::transfer_client_tests::test_transfer_client_role_success ... ok
+test transfer_client_tests::transfer_client_tests::test_transfer_client_role_rejects_non_active_escrow ... ok
+test transfer_client_tests::transfer_client_tests::test_transfer_client_role_rejects_same_as_arbiter ... ok
+test transfer_client_tests::transfer_client_tests::test_transfer_client_role_rejects_same_as_freelancer ... ok
+test timelock_enforcement_tests::timelock_enforcement_tests::test_timelock_prevents_early_release ... ok
+test timelock_enforcement_tests::timelock_enforcement_tests::test_timelock_already_active_on_second_start ... ok
+test oracle_overflow_tests::oracle_overflow_tests::test_usd_to_xlm_stroops_fuzz_extreme_values has been running for over 60 seconds
+test oracle_overflow_tests::oracle_overflow_tests::test_usd_to_xlm_stroops_fuzz_extreme_values ... ok
 
-test result: ok. 148 passed; 0 failed; 12 ignored; 0 measured; 0 filtered out; finished in 14.80s
+test result: ok. 176 passed; 0 failed; 12 ignored; 0 measured; 0 filtered out; finished in 209.17s
 
-     Running tests/integration.rs (/workspaces/stellar-trust-escrow/target/debug/deps/integration-e275befffd908dea)
+     Running tests/integration.rs (/home/merlinthewhiz/Documents/stellar-trust-escrow/target/debug/deps/integration-c114d7637f604479)
 
 running 8 tests
-Writing test snapshot file for test "test_cancel_escrow_refunds_client" to "test_snapshots/test_cancel_escrow_refunds_client.1.json".
-Writing test snapshot file for test "test_dispute_and_arbiter_resolution" to "test_snapshots/test_dispute_and_arbiter_resolution.1.json".
-test test_cancel_escrow_refunds_client ... ok
-Writing test snapshot file for test "test_double_dispute_rejected" to "test_snapshots/test_double_dispute_rejected.1.json".
-test test_dispute_and_arbiter_resolution ... ok
-test test_double_dispute_rejected ... ok
-Writing test snapshot file for test "test_full_escrow_lifecycle" to "test_snapshots/test_full_escrow_lifecycle.1.json".
-Writing test snapshot file for test "test_milestone_amount_exceeds_escrow_rejected" to "test_snapshots/test_milestone_amount_exceeds_escrow_rejected.1.json".
-test test_milestone_amount_exceeds_escrow_rejected ... ok
-test test_full_escrow_lifecycle ... ok
 Writing test snapshot file for test "test_reputation_default_for_new_address" to "test_snapshots/test_reputation_default_for_new_address.1.json".
+Writing test snapshot file for test "test_double_dispute_rejected" to "test_snapshots/test_double_dispute_rejected.1.json".
+Writing test snapshot file for test "test_cancel_escrow_refunds_client" to "test_snapshots/test_cancel_escrow_refunds_client.1.json".
 Writing test snapshot file for test "test_reject_and_resubmit_milestone" to "test_snapshots/test_reject_and_resubmit_milestone.1.json".
-test test_reputation_default_for_new_address ... ok
 Writing test snapshot file for test "test_unauthorized_approve_rejected" to "test_snapshots/test_unauthorized_approve_rejected.1.json".
-test test_unauthorized_approve_rejected ... ok
+Writing test snapshot file for test "test_dispute_and_arbiter_resolution" to "test_snapshots/test_dispute_and_arbiter_resolution.1.json".
+Writing test snapshot file for test "test_milestone_amount_exceeds_escrow_rejected" to "test_snapshots/test_milestone_amount_exceeds_escrow_rejected.1.json".
+Writing test snapshot file for test "test_full_escrow_lifecycle" to "test_snapshots/test_full_escrow_lifecycle.1.json".
+test test_reputation_default_for_new_address ... ok
+test test_double_dispute_rejected ... ok
 test test_reject_and_resubmit_milestone ... ok
+test test_cancel_escrow_refunds_client ... ok
+test test_dispute_and_arbiter_resolution ... ok
+test test_milestone_amount_exceeds_escrow_rejected ... ok
+test test_unauthorized_approve_rejected ... ok
+test test_full_escrow_lifecycle ... ok
 
-test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.16s
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.32s
 
    Doc-tests stellar_trust_escrow_contract
 

@@ -64,3 +64,13 @@ if (typeof global.fetch === 'undefined') {
     json: async () => ({ rates: { USD: 1 } }),
   }));
 }
+
+// jsdom does not implement the async Clipboard API; provide a mock so components
+// and tests that call navigator.clipboard.writeText() behave consistently.
+if (typeof navigator !== 'undefined' && !navigator.clipboard) {
+  Object.defineProperty(navigator, 'clipboard', {
+    value: { writeText: jest.fn(async () => {}) },
+    configurable: true,
+    writable: true,
+  });
+}

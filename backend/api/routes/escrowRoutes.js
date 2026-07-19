@@ -4,6 +4,7 @@ import escrowController, {
   validateEscrowId,
   validatePagination,
 } from '../controllers/escrowController.js';
+import ownershipRoutes from './ownershipRoutes.js';
 import { cacheResponse, invalidateOn, TTL } from '../middleware/cache.js';
 import authMiddleware from '../middleware/auth.js';
 
@@ -75,5 +76,13 @@ router.get(
   }),
   escrowController.getEscrow,
 );
+
+/**
+ * @route  GET /api/escrows/:id/audit/export
+ */
+import { exportBundle } from '../controllers/auditController.js';
+router.get('/:id/audit/export', validateEscrowId, exportBundle);
+// Client-rights ownership transfer
+router.use('/:id/ownership', ownershipRoutes);
 
 export default router;
