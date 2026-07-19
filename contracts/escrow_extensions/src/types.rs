@@ -87,24 +87,6 @@ pub struct PendingUpgrade {
 // ── Storage keys ──────────────────────────────────────────────────────────────
 
 #[contracttype]
-pub enum DataKey {
-    Admin,
-    /// Protocol fee in basis points (0–200).
-    FeeBps,
-    /// Fee recipients list.
-    FeeRecipients,
-    /// Accumulated fee balance per token: token Address → i128.
-    FeeBalance(Address),
-    /// Arbitration dispute by escrow ID.
-    Dispute(u64),
-    /// Pending upgrade.
-    PendingUpgrade,
-    /// Storage version for migration.
-    StorageVersion,
-}
-use soroban_sdk::{contracttype, Address};
-
-#[contracttype]
 #[derive(Clone, Debug)]
 pub struct VestingSchedule {
     pub escrow_id: u64,
@@ -148,6 +130,19 @@ pub struct RoleDelegation {
 
 #[contracttype]
 pub enum DataKey {
+    Admin,
+    /// Protocol fee in basis points (0–200).
+    FeeBps,
+    /// Fee recipients list.
+    FeeRecipients,
+    /// Accumulated fee balance per token: token Address → i128.
+    FeeBalance(Address),
+    /// Arbitration dispute by escrow ID.
+    Dispute(u64),
+    /// Pending upgrade.
+    PendingUpgrade,
+    /// Storage version for migration.
+    StorageVersion,
     VestingSchedule(u64),
     RecurringSchedule(u64),
     Delegation(u64, DelegatedRole),
