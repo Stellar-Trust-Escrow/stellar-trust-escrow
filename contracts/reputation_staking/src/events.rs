@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, BytesN, Env, Symbol};
+use soroban_sdk::{Address, Env, Symbol};
 
 pub fn emit_bonded(env: &Env, arbiter: Address, amount: i128) {
     let topics = (Symbol::new(env, "arbiter_bonded"), arbiter);

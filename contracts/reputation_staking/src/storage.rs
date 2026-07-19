@@ -37,6 +37,7 @@ pub fn get_active_disputes(env: &Env, arbiter: &Address) -> u32 {
         .unwrap_or(0)
 }
 
+#[allow(dead_code)]
 pub fn set_active_disputes(env: &Env, arbiter: &Address, count: u32) {
     env.storage()
         .persistent()

@@ -6,12 +6,12 @@ mod storage;
 mod types;
 
 use errors::StakingError;
-use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env};
+use soroban_sdk::{panic_with_error, Address, BytesN, Env};
 use types::*;
 
 pub fn initialize(
     env: Env,
-    admin: Address,
+    _admin: Address,
     min_bond_amount: i128,
     slash_bps: u32,
     cooldown_ledgers: u32,
@@ -56,9 +56,9 @@ pub fn unbond(env: Env, arbiter: Address, amount: i128) {
     if active > 0 {
         panic_with_error!(&env, StakingError::ActiveDisputesPending);
     }
-    let current = storage::get_bond(&env, &arbiter).ok_or_else(|| {
+    let Some(current) = storage::get_bond(&env, &arbiter) else {
         panic_with_error!(&env, StakingError::NotEligibleArbiter);
-    });
+    };
     let ledger = env.ledger().sequence();
     if ledger < current.last_action_ledger + config.cooldown_ledgers {
         panic_with_error!(&env, StakingError::CooldownActive);
@@ -85,9 +85,9 @@ pub fn is_eligible_arbiter(env: Env, arbiter: Address) -> bool {
 pub fn slash(env: Env, admin: Address, arbiter: Address, escrow_id: u64, reason_hash: BytesN<32>) {
     admin.require_auth();
     let config = storage::get_config(&env);
-    let current = storage::get_bond(&env, &arbiter).ok_or_else(|| {
+    let Some(current) = storage::get_bond(&env, &arbiter) else {
         panic_with_error!(&env, StakingError::NotEligibleArbiter);
-    });
+    };
     let slash_amount = (current.amount * config.slash_bps as i128) / 10000;
     let amount_burned = if slash_amount > 0 { slash_amount } else { 1 };
     let new_balance = current.amount - amount_burned;
@@ -105,7 +105,7 @@ pub fn slash(env: Env, admin: Address, arbiter: Address, escrow_id: u64, reason_
         ledger: env.ledger().sequence(),
     };
     storage::add_slash_record(&env, &arbiter, slash_record);
-    events::emit_slashed(&env, arbiter, escrow_id, amount_burned, new_balance);
+    events::emit_slashed(&env, arbiter.clone(), escrow_id, amount_burned, new_balance);
     if suspended {
         events::emit_suspended(&env, arbiter);
     }
@@ -125,11 +125,11 @@ pub fn appeal_ruling(env: Env, appellant: Address, escrow_id: u64, evidence_hash
     events::emit_appeal_opened(&env, appeal_id, record.appellant, escrow_id);
 }
 
-pub fn dismiss_appeal(env: Env, admin: Address, appeal_id: u64, reason_hash: BytesN<32>) {
+pub fn dismiss_appeal(env: Env, admin: Address, appeal_id: u64, _reason_hash: BytesN<32>) {
     admin.require_auth();
-    let mut appeal = storage::get_appeal(&env, appeal_id).ok_or_else(|| {
+    let Some(mut appeal) = storage::get_appeal(&env, appeal_id) else {
         panic_with_error!(&env, StakingError::AppealNotFound);
-    });
+    };
     if appeal.resolved {
         panic_with_error!(&env, StakingError::AppealAlreadyResolved);
     }
