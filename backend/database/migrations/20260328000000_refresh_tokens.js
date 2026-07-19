@@ -80,8 +80,4 @@ export async function down(prisma) {
   await prisma.$executeRawUnsafe(`
     DROP TABLE IF EXISTS refresh_tokens
   `);
-
-  await prisma.$executeRawUnsafe(`
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS refresh_token TEXT
-  `);
 }
