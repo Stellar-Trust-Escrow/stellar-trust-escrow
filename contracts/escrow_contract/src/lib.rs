@@ -158,12 +158,16 @@ impl EscrowContract {
         // 2. Updating escrow state to Released/Completed
         // 3. Emitting events
 
+        Ok(())
+    }
+
     fn require_not_paused(env: &Env) -> Result<(), EscrowError> {
         if Self::is_paused(env) {
             return Err(EscrowError::ContractPaused);
         }
         Ok(())
     }
+}
 
 // ===== Tests =====
 #[cfg(test)]
