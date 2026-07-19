@@ -6,6 +6,11 @@ function renderWithNuqs(ui) {
   return render(ui, { wrapper: NuqsTestingAdapter });
 }
 
+// SearchFilters uses useToast which requires ToastProvider — stub it for tests.
+jest.mock('../../contexts/ToastContext', () => ({
+  useToast: () => ({ showToast: jest.fn() }),
+}));
+
 // EscrowCard uses useI18n which requires I18nProvider — mock it for tests.
 jest.mock(
   '../../components/escrow/EscrowCard',
