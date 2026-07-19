@@ -6,8 +6,8 @@
  *
  * @module services/escrowStateMachine
  */
+import prismaClient from '../config/prismaClient.js';
 
-import prismaClient from '../lib/prisma.js';
 
 export class InvalidTransitionError extends Error {
   constructor(fromState, toState) {
