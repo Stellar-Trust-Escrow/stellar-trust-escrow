@@ -872,4 +872,45 @@ model SystemConfig {
 
   @@index([key])
   @@map("system_config")
+model InsuranceOptIn {
+  id             String   @id @default(cuid())
+  escrowId       String   @unique @map("escrow_id")
+  clientAddress  String   @map("client_address")
+  coverageAmount String   @map("coverage_amount")
+  premiumPaid    String   @map("premium_paid")
+  optedInAt      DateTime @map("opted_in_at")
+  expiresAt      DateTime? @map("expires_at")
+  active         Boolean  @default(true)
+
+  @@index([clientAddress])
+  @@index([active])
+  @@map("insurance_opt_ins")
+}
+
+model InsuranceClaim {
+  id          String   @id @default(cuid())
+  claimId     Int      @unique @map("claim_id")
+  claimant    String
+  description String
+  amount      String
+  status      String   @default("Pending")
+  submittedAt DateTime @map("submitted_at")
+  expiresAt   DateTime? @map("expires_at")
+  paidAt      DateTime? @map("paid_at")
+  txHash      String?  @map("tx_hash")
+  ledger      Int?
+
+  @@index([claimant])
+  @@index([status])
+  @@map("insurance_claims")
+}
+
+model InsuranceStake {
+  id          String   @id @default(cuid())
+  staker      String   @unique
+  amount      String
+  stakedAt    DateTime @map("staked_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("insurance_stakes")
 }
