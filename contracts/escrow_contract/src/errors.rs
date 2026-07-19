@@ -68,6 +68,8 @@ pub enum EcErr {
     E72 = 72, // RbacInvalidRoleAssignment
     FeeTooHigh = 73,
     TreasuryNotConfigured = 74,
+    TimelockNotExpired = 75,
+    InvalidSignature = 76,
 }
 
 /// Backward-compatible alias — existing code imports `EscrowError`; the oracle

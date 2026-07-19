@@ -425,6 +425,11 @@ pub struct EscrowState {
 
     /// Minimum sum of weights required to approve a submitted milestone.
     pub multisig_threshold: u32,
+
+    /// Unix timestamp after which contractor can claim funds unilaterally.
+    /// Set when creating escrow with timelock enabled. Before this time,
+    /// only early_release with both signatures can unlock funds.
+    pub timelock_release_at: Option<u64>,
 }
 
 /// On-chain reputation record for a user address.
