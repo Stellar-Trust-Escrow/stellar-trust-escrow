@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
+import { useRouter } from 'next/navigation';
 import { Search, SlidersHorizontal, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import Spinner from '../../components/ui/Spinner';
 import EscrowCard from '../../components/escrow/EscrowCard';
@@ -30,14 +31,8 @@ function normaliseEscrow(e) {
 
 function ExplorerContent() {
   const router = useRouter();
-  const {
-    filters,
-    setFilter,
-    resetFilters,
-    copyFilterUrl,
-    activeFilterCount,
-    apiQueryString,
-  } = useEscrowFilterParams();
+  const { filters, setFilter, resetFilters, copyFilterUrl, activeFilterCount, apiQueryString } =
+    useEscrowFilterParams();
 
   const [search, setSearch] = useState(filters.q);
   const [showFilters, setShowFilters] = useState(false);
@@ -200,11 +195,7 @@ function ExplorerContent() {
       )}
 
       {disputeEscrowId !== null && (
-        <DisputeModal
-          isOpen
-          onClose={() => setDisputeEscrowId(null)}
-          escrowId={disputeEscrowId}
-        />
+        <DisputeModal isOpen onClose={() => setDisputeEscrowId(null)} escrowId={disputeEscrowId} />
       )}
     </div>
   );

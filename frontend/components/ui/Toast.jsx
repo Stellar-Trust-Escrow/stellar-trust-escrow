@@ -45,8 +45,6 @@ export function ToastContainer({ toasts, onRemove }) {
   );
 }
 
-export default Toast;
-
 export function useToast() {
   const [toasts, setToasts] = useState([]);
   const add = useCallback((message, type = 'info') => {

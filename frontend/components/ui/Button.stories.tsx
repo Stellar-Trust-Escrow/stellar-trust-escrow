@@ -42,11 +42,8 @@ const meta: Meta<typeof Button> = {
       control: 'boolean',
       description: 'Wraps a single child element with button styles',
     },
-    children: { control: 'text', description: 'Button label / content' },
-    onClick: { action: 'clicked', description: 'Click handler' },
   },
   args: {
-    children: 'Button',
     variant: 'primary',
     size: 'md',
     disabled: false,

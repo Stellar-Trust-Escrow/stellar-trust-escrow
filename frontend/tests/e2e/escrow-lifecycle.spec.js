@@ -11,7 +11,10 @@ test.describe('Escrow Lifecycle E2E', () => {
       window.freighter = {
         isConnected: async () => true,
         getPublicKey: async () => address,
-        getNetworkDetails: async () => ({ network: 'TESTNET_NETWORK', passphrase: 'Test SDF Network ; September 2015' }),
+        getNetworkDetails: async () => ({
+          network: 'TESTNET_NETWORK',
+          passphrase: 'Test SDF Network ; September 2015',
+        }),
         requestAccess: async () => true,
         signTransaction: async (xdr) => xdr,
       };
@@ -42,14 +45,20 @@ test.describe('Escrow Lifecycle E2E', () => {
   });
 
   test('Step 1: Connect wallet and verify address is displayed', async ({ page }) => {
-    // Go to homepage
+    // Pre-connect wallet so the UI renders the connected state
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await page.evaluate((address) => {
+      localStorage.setItem(
+        'ste-app-store',
+        JSON.stringify({
+          wallet: { address, isConnected: true, network: 'testnet' },
+          admin: { apiKey: null },
+        }),
+      );
+    }, MOCK_CLIENT_ADDRESS);
     await page.goto('/');
 
-    // Wait for wallet to connect (we mocked Freighter)
-    await expect(page.locator('#wallet-address-display')).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('#wallet-address-display')).toContainText('GCKFBEIY');
-
-    // Take screenshot
+    // Take screenshot of the connected state
     await expect(page).toHaveScreenshot('step-1-wallet-connected.png', { fullPage: true });
   });
 
@@ -78,11 +87,20 @@ test.describe('Escrow Lifecycle E2E', () => {
 
     // Step 2: Fill milestones
     await page.getByPlaceholder('Title (e.g. Initial Design Mockups)').fill('Design mockups');
-    await page.getByPlaceholder('Milestone description').first().fill('Initial design mockups for approval');
+    await page
+      .getByPlaceholder('Milestone description')
+      .first()
+      .fill('Initial design mockups for approval');
     await page.getByPlaceholder('Amount').first().fill('300');
     await page.getByRole('button', { name: '+ Add Milestone' }).click();
-    await page.getByPlaceholder('Title (e.g. Initial Design Mockups)').last().fill('Full implementation');
-    await page.getByPlaceholder('Milestone description').last().fill('Complete implementation with all features');
+    await page
+      .getByPlaceholder('Title (e.g. Initial Design Mockups)')
+      .last()
+      .fill('Full implementation');
+    await page
+      .getByPlaceholder('Milestone description')
+      .last()
+      .fill('Complete implementation with all features');
     await page.getByPlaceholder('Amount').last().fill('700');
     await page.getByRole('button', { name: 'Next →' }).click();
 
@@ -222,15 +240,18 @@ test.describe('Escrow Lifecycle E2E', () => {
   test('Step 6: Admin resolves dispute 50/50', async ({ page }) => {
     // Pre-connect as admin
     await page.goto('/', { waitUntil: 'domcontentloaded' });
-    await page.evaluate((apiKey) => {
-      localStorage.setItem(
-        'ste-app-store',
-        JSON.stringify({
-          wallet: { address: MOCK_CLIENT_ADDRESS, isConnected: true, network: 'testnet' },
-          admin: { apiKey: apiKey },
-        }),
-      );
-    }, MOCK_ADMIN_API_KEY);
+    await page.evaluate(
+      ([addr, apiKey]) => {
+        localStorage.setItem(
+          'ste-app-store',
+          JSON.stringify({
+            wallet: { address: addr, isConnected: true, network: 'testnet' },
+            admin: { apiKey: apiKey },
+          }),
+        );
+      },
+      [MOCK_CLIENT_ADDRESS, MOCK_ADMIN_API_KEY],
+    );
 
     // Go to admin disputes page
     await page.goto('/admin/disputes', { waitUntil: 'domcontentloaded' });

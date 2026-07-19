@@ -1,3 +1,4 @@
+import { jest } from '@jest/globals';
 import { runWithContext, getCorrelationContext, getCorrelationId } from '../../lib/correlationId.js';
 import { attachCorrelationId } from '../../api/middleware/attachCorrelationId.js';
 import { logger } from '../../lib/logger.js';
