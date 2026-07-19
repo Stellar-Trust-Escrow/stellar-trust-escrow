@@ -95,3 +95,12 @@ Reserved discriminants currently in use as placeholders are `7`, `11`, and `24`.
 | 45   | `NoRecurringDue`     | No recurring payment is currently due.       |
 | 46   | `RecurringPaused`    | Recurring schedule is paused.                |
 | 47   | `RecurringCancelled` | Recurring schedule has been cancelled.       |
+
+## High-Value Multisig (70-73)
+
+| Code | Name                               | Meaning                                                                |
+| ---- | ---------------------------------- | ---------------------------------------------------------------------- |
+| 70   | `InvalidMultisigConfig`            | Approvers, weights, or threshold do not form a valid weighted policy.  |
+| 71   | `HighValueMultisigRequired`        | A high-value escrow does not require at least two distinct signatures. |
+| 72   | `DuplicateMultisigApproval`        | The same approver attempted to vote twice on one milestone.            |
+| 73   | `MultisigBatchApprovalUnsupported` | Batch approval was attempted on an escrow requiring weighted quorum.   |

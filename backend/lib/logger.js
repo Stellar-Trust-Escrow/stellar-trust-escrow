@@ -4,6 +4,8 @@ import pino from 'pino';
 import pinoHttp from 'pino-http';
 import { randomUUID } from 'crypto';
 import rfs from 'rotating-file-stream';
+import { getCorrelationContext } from './correlationId.js';
+import { trace, context as otelContext } from '@opentelemetry/api';
 import * as Sentry from './sentry.js';
 
 const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
@@ -46,13 +48,32 @@ export const logger = pino(
       censor: '[REDACTED]',
     },
     base: {
-      service: 'stellar-trust-escrow-backend',
+      service: 'trustchain-api',
       env: process.env.NODE_ENV || 'development',
     },
     timestamp: pino.stdTimeFunctions.isoTime,
+    mixin: () => {
+      const store = getCorrelationContext();
+      const activeSpan = trace.getSpan(otelContext.active());
+      const spanCtx = activeSpan?.spanContext();
+
+      const correlationId = store?.correlationId || '';
+      const traceId = spanCtx?.traceId || store?.traceId || '';
+      const spanId = spanCtx?.spanId || store?.spanId || '';
+
+      return {
+        correlationId,
+        traceId,
+        spanId,
+      };
+    },
   },
-  rotatingStream,
+  process.env.NODE_ENV === 'test' ? pino.destination(1) : rotatingStream,
 );
+
+export function createModuleLogger(moduleName) {
+  return logger.child({ module: moduleName });
+}
 
 const pinoRequestLogger = pinoHttp({
   logger,
@@ -125,3 +146,5 @@ export function requestLogger(req, res, next) {
     next();
   });
 }
+
+export default logger;

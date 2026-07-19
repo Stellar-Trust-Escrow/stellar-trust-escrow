@@ -10,6 +10,7 @@ export default {
     '<rootDir>/tests/pdfGenerator.test.js',
     '<rootDir>/tests/queueTests.test.js',
     '<rootDir>/tests/refreshToken.test.js',
+    '<rootDir>/tests/services/stellarListener.test.js',
   ],
   collectCoverageFrom: [
     'api/controllers/**/*.js',

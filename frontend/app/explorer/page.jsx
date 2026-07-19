@@ -1,25 +1,18 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
 import { Search, SlidersHorizontal, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import Spinner from '../../components/ui/Spinner';
 import EscrowCard from '../../components/escrow/EscrowCard';
+import EscrowListItem from '../../components/escrow/EscrowListItem';
+import DisputeModal from '../../components/escrow/DisputeModal';
 import SearchFilters from '../../components/explorer/SearchFilters';
 import Button from '../../components/ui/Button';
 import EmptyState from '../../components/ui/EmptyState';
 import ErrorBoundary from '../../components/error/ErrorBoundary';
+import { useEscrowFilterParams } from '../../hooks/useEscrowFilterParams';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-
-const DEFAULT_FILTERS = {
-  statuses: [],
-  minAmount: '',
-  maxAmount: '',
-  dateFrom: '',
-  dateTo: '',
-  sort: 'createdAt:desc',
-};
 
 function normaliseEscrow(e) {
   return {
@@ -35,45 +28,18 @@ function normaliseEscrow(e) {
   };
 }
 
-function buildQuery({ search, filters, page, limit }) {
-  const params = new URLSearchParams();
-  params.set('page', String(page));
-  params.set('limit', String(limit));
-  if (search) params.set('search', search);
-  if (filters.statuses.length) params.set('status', filters.statuses.join(','));
-  if (filters.minAmount) params.set('minAmount', filters.minAmount);
-  if (filters.maxAmount) params.set('maxAmount', filters.maxAmount);
-  if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
-  if (filters.dateTo) params.set('dateTo', filters.dateTo);
-  const [sortBy, sortOrder] = filters.sort.split(':');
-  params.set('sortBy', sortBy);
-  params.set('sortOrder', sortOrder);
-  return params.toString();
-}
-
-function filtersFromUrl(sp) {
-  const statusParam = sp.get('status') || '';
-  return {
-    statuses: statusParam ? statusParam.split(',') : [],
-    minAmount: sp.get('minAmount') || '',
-    maxAmount: sp.get('maxAmount') || '',
-    dateFrom: sp.get('dateFrom') || '',
-    dateTo: sp.get('dateTo') || '',
-    sort: sp.get('sortBy')
-      ? `${sp.get('sortBy')}:${sp.get('sortOrder') || 'desc'}`
-      : 'createdAt:desc',
-  };
-}
-
-const PAGE_SIZE = 12;
-
 function ExplorerContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const [search, setSearch] = useState(searchParams.get('search') || '');
-  const [debouncedSearch, setDebouncedSearch] = useState(search);
-  const [filters, setFilters] = useState(() => filtersFromUrl(searchParams));
-  const [page, setPage] = useState(Number(searchParams.get('page') || 1));
+  const {
+    filters,
+    setFilter,
+    resetFilters,
+    copyFilterUrl,
+    activeFilterCount,
+    apiQueryString,
+  } = useEscrowFilterParams();
+
+  const [search, setSearch] = useState(filters.q);
   const [showFilters, setShowFilters] = useState(false);
   const [escrows, setEscrows] = useState([]);
   const [meta, setMeta] = useState({
@@ -84,30 +50,17 @@ function ExplorerContent() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  const debounceTimer = useRef(null);
-  useEffect(() => {
-    clearTimeout(debounceTimer.current);
-    debounceTimer.current = setTimeout(() => {
-      setDebouncedSearch(search);
-      setPage(1);
-    }, 300);
-    return () => clearTimeout(debounceTimer.current);
-  }, [search]);
+  const [disputeEscrowId, setDisputeEscrowId] = useState(null);
 
   useEffect(() => {
-    const params = new URLSearchParams();
-    if (debouncedSearch) params.set('search', debouncedSearch);
-    if (page > 1) params.set('page', String(page));
-    router.replace(`/explorer?${params.toString()}`, { scroll: false });
-  }, [debouncedSearch, page, router]);
+    setSearch(filters.q);
+  }, [filters.q]);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    const qs = buildQuery({ search: debouncedSearch, filters, page, limit: PAGE_SIZE });
-    fetch(`${API_BASE}/api/escrows?${qs}`)
+    fetch(`${API_BASE}/api/escrows?${apiQueryString}`)
       .then((r) => {
         if (!r.ok) throw new Error(`API error ${r.status}`);
         return r.json();
@@ -126,27 +79,7 @@ function ExplorerContent() {
     return () => {
       cancelled = true;
     };
-  }, [debouncedSearch, filters, page]);
-
-  const handleFilterChange = useCallback((key, value) => {
-    setFilters((prev) => ({ ...prev, [key]: value }));
-    setPage(1);
-  }, []);
-
-  const handleReset = useCallback(() => {
-    setFilters(DEFAULT_FILTERS);
-    setSearch('');
-    setDebouncedSearch('');
-    setPage(1);
-  }, []);
-
-  const activeFilterCount =
-    filters.statuses.length +
-    (filters.minAmount ? 1 : 0) +
-    (filters.maxAmount ? 1 : 0) +
-    (filters.dateFrom ? 1 : 0) +
-    (filters.dateTo ? 1 : 0) +
-    (filters.sort !== 'createdAt:desc' ? 1 : 0);
+  }, [apiQueryString]);
 
   return (
     <div className="space-y-6">
@@ -163,11 +96,17 @@ function ExplorerContent() {
             placeholder="Search by escrow ID or address..."
             className="w-full bg-gray-900 border border-gray-800 rounded-lg pl-9 pr-4 py-2.5 text-white"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setFilter('q', e.target.value || null, { history: 'replace', debounce: 300 });
+            }}
           />
           {search && (
             <button
-              onClick={() => setSearch('')}
+              onClick={() => {
+                setSearch('');
+                setFilter('q', null, { history: 'replace' });
+              }}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
             >
               <X size={14} />
@@ -188,7 +127,13 @@ function ExplorerContent() {
       <div className={`flex gap-6 ${showFilters ? 'items-start' : ''}`}>
         {showFilters && (
           <div className="w-56 flex-shrink-0 card">
-            <SearchFilters filters={filters} onChange={handleFilterChange} onReset={handleReset} />
+            <SearchFilters
+              filters={filters}
+              onFilterChange={setFilter}
+              onReset={resetFilters}
+              onCopyLink={copyFilterUrl}
+              activeFilterCount={activeFilterCount}
+            />
           </div>
         )}
 
@@ -208,7 +153,7 @@ function ExplorerContent() {
               title="No escrows found"
               description="No escrows match your current criteria."
               actionLabel={activeFilterCount > 0 ? 'Clear all filters' : 'Create Escrow'}
-              onAction={activeFilterCount > 0 ? handleReset : undefined}
+              onAction={activeFilterCount > 0 ? resetFilters : undefined}
               actionHref={activeFilterCount > 0 ? undefined : '/escrow/create'}
             />
           ) : (
@@ -216,7 +161,12 @@ function ExplorerContent() {
               className={`grid gap-4 ${showFilters ? 'md:grid-cols-2' : 'md:grid-cols-2 lg:grid-cols-3'}`}
             >
               {escrows.map((escrow) => (
-                <EscrowCard key={escrow.id} escrow={escrow} />
+                <EscrowListItem
+                  key={escrow.id}
+                  escrow={escrow}
+                  canReleaseAll={escrow.status === 'Active'}
+                  onDispute={(e) => setDisputeEscrowId(Number(e.id))}
+                />
               ))}
             </div>
           )}
@@ -229,24 +179,32 @@ function ExplorerContent() {
             variant="secondary"
             size="sm"
             disabled={!meta.hasPreviousPage}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            onClick={() => setFilter('page', Math.max(1, filters.page - 1), { history: 'push' })}
           >
             <ChevronLeft size={14} />
             Prev
           </Button>
           <span className="text-sm text-gray-400">
-            Page {page} of {meta.totalPages || 1}
+            Page {filters.page} of {meta.totalPages || 1}
           </span>
           <Button
             variant="secondary"
             size="sm"
             disabled={!meta.hasNextPage}
-            onClick={() => setPage((p) => p + 1)}
+            onClick={() => setFilter('page', filters.page + 1, { history: 'push' })}
           >
             Next
             <ChevronRight size={14} />
           </Button>
         </div>
+      )}
+
+      {disputeEscrowId !== null && (
+        <DisputeModal
+          isOpen
+          onClose={() => setDisputeEscrowId(null)}
+          escrowId={disputeEscrowId}
+        />
       )}
     </div>
   );

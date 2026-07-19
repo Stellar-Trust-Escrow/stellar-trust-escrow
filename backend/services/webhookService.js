@@ -1,14 +1,45 @@
 import crypto from 'crypto';
+import { EventEmitter } from 'events';
 
 import prisma from '../lib/prisma.js';
 import { withTenantScopeBypassed } from '../lib/tenantContext.js';
 import { enqueueWebhookDelivery } from '../queues/webhookQueue.js';
 
-const SIGNATURE_HEADER = 'X-Webhook-Signature';
-const DELIVERY_ID_HEADER = 'X-Webhook-Delivery-Id';
-const EVENT_TYPE_HEADER = 'X-Webhook-Event-Type';
-const DEFAULT_RETRY_ATTEMPTS = 5;
-const DEFAULT_BACKOFF_DELAY_MS = 5000;
+export const webhookEvents = new EventEmitter();
+
+const SIGNATURE_HEADER = 'X-Trustchain-Signature';
+const EVENT_HEADER = 'X-Trustchain-Event';
+const DELIVERY_ID_HEADER = 'X-Delivery-Id';
+export const MAX_DELIVERY_ATTEMPTS = 5;
+export const BACKOFF_BASE_MS = 30_000;
+
+const ENCRYPTION_KEY =
+  process.env.WEBHOOK_ENCRYPTION_KEY ||
+  process.env.MFA_ENCRYPTION_KEY ||
+  crypto.randomBytes(32).toString('hex');
+
+function encryptSecret(text) {
+  const iv = crypto.randomBytes(16);
+  const key = Buffer.from(ENCRYPTION_KEY, 'hex');
+  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+  let encrypted = cipher.update(text, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  return `${iv.toString('hex')}:${encrypted}`;
+}
+
+function decryptSecret(text) {
+  const [ivHex, encryptedHex] = text.split(':');
+  const iv = Buffer.from(ivHex, 'hex');
+  const key = Buffer.from(ENCRYPTION_KEY, 'hex');
+  const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+  let decrypted = decipher.update(encryptedHex, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+  return decrypted;
+}
+
+function generateSecret() {
+  return crypto.randomBytes(32).toString('hex');
+}
 
 function buildWebhookPayload(eventType, payload, deliveryId) {
   return {
@@ -19,63 +50,89 @@ function buildWebhookPayload(eventType, payload, deliveryId) {
   };
 }
 
-function generateSecret() {
-  return crypto.randomBytes(32).toString('hex');
+export function calculateRetryDelayMs(attempts) {
+  const clamped = Math.max(1, Math.min(attempts, MAX_DELIVERY_ATTEMPTS));
+  return BACKOFF_BASE_MS * 2 ** (clamped - 1);
 }
 
-function signPayload(secret, payload) {
-  return crypto.createHmac('sha256', secret).update(JSON.stringify(payload)).digest('hex');
+export function signPayload(secret, payload) {
+  const digest = crypto.createHmac('sha256', secret).update(JSON.stringify(payload)).digest('hex');
+  return `sha256=${digest}`;
 }
 
-async function createSubscription({ url, eventTypes, createdBy }) {
-  const subscriptionSecret = generateSecret();
-  const subscription = await prisma.webhookSubscription.create({
+export function verifySignature(secret, payload, signatureHeader) {
+  const expected = signPayload(secret, payload);
+  const received = signatureHeader?.startsWith('sha256=')
+    ? signatureHeader
+    : `sha256=${signatureHeader ?? ''}`;
+  const expectedBuf = Buffer.from(expected);
+  const receivedBuf = Buffer.from(received);
+  if (expectedBuf.length !== receivedBuf.length) {
+    return false;
+  }
+  return crypto.timingSafeEqual(expectedBuf, receivedBuf);
+}
+
+export function emitWebhookDeadEvent(delivery) {
+  webhookEvents.emit('webhook.dead', {
+    deliveryId: delivery.id,
+    endpointId: delivery.endpointId,
+    eventType: delivery.eventType,
+    attempts: delivery.attempts,
+  });
+}
+
+async function createEndpoint({ url, events, createdBy }) {
+  const plainSecret = generateSecret();
+  const endpoint = await prisma.webhookEndpoint.create({
     data: {
       url: String(url).trim(),
-      eventTypes,
-      secret: subscriptionSecret,
+      events,
+      secret: encryptSecret(plainSecret),
       createdBy: createdBy || null,
-      isActive: true,
+      active: true,
     },
     select: {
       id: true,
       url: true,
-      eventTypes: true,
+      events: true,
+      active: true,
+      tenantId: true,
       createdAt: true,
       updatedAt: true,
     },
   });
 
-  return { ...subscription, secret: subscriptionSecret };
+  return { ...endpoint, secret: plainSecret };
 }
 
-async function listSubscriptions({ createdBy }) {
-  return prisma.webhookSubscription.findMany({
+async function listEndpoints({ createdBy }) {
+  return prisma.webhookEndpoint.findMany({
     where: { createdBy },
     orderBy: { createdAt: 'desc' },
     select: {
       id: true,
       url: true,
-      eventTypes: true,
-      isActive: true,
+      events: true,
+      active: true,
       createdAt: true,
       updatedAt: true,
     },
   });
 }
 
-async function deleteSubscription({ id, createdBy }) {
-  const deleted = await prisma.webhookSubscription.deleteMany({
+async function deleteEndpoint({ id, createdBy }) {
+  const deleted = await prisma.webhookEndpoint.deleteMany({
     where: { id, createdBy },
   });
   return deleted.count > 0;
 }
 
-async function getDeliveryHistory({ subscriptionId, createdBy, page = 1, limit = 30 }) {
+async function getDeliveryHistory({ endpointId, createdBy, page = 1, limit = 30 }) {
   const skip = (page - 1) * limit;
   const [deliveries, total] = await Promise.all([
     prisma.webhookDelivery.findMany({
-      where: { subscription: { id: subscriptionId, createdBy } },
+      where: { endpoint: { id: endpointId, createdBy } },
       orderBy: { createdAt: 'desc' },
       skip,
       take: limit,
@@ -84,42 +141,38 @@ async function getDeliveryHistory({ subscriptionId, createdBy, page = 1, limit =
         eventType: true,
         status: true,
         attempts: true,
+        nextRetryAt: true,
         responseCode: true,
-        errorMessage: true,
-        lastAttemptAt: true,
+        responseBody: true,
         createdAt: true,
       },
     }),
     prisma.webhookDelivery.count({
-      where: { subscription: { id: subscriptionId, createdBy } },
+      where: { endpoint: { id: endpointId, createdBy } },
     }),
   ]);
 
-  return {
-    page,
-    limit,
-    total,
-    deliveries,
-  };
+  return { page, limit, total, deliveries };
 }
 
-async function queueSubscriptionWebhook(subscription, payload, eventType) {
+async function queueEndpointWebhook(endpoint, payload, eventType) {
   const delivery = await prisma.webhookDelivery.create({
     data: {
-      subscription: { connect: { id: subscription.id } },
+      endpointId: endpoint.id,
       eventType,
-      payload: payload,
+      payload,
       status: 'pending',
     },
   });
 
   const signedPayload = buildWebhookPayload(eventType, payload, delivery.id);
-  const signature = signPayload(subscription.secret, signedPayload);
+  const secret = decryptSecret(endpoint.secret);
+  const signature = signPayload(secret, signedPayload);
   const headers = {
     'Content-Type': 'application/json',
     [SIGNATURE_HEADER]: signature,
+    [EVENT_HEADER]: eventType,
     [DELIVERY_ID_HEADER]: delivery.id,
-    [EVENT_TYPE_HEADER]: eventType,
   };
 
   await prisma.webhookDelivery.update({
@@ -127,52 +180,102 @@ async function queueSubscriptionWebhook(subscription, payload, eventType) {
     data: { payload: signedPayload },
   });
 
-  await enqueueWebhookDelivery(delivery.id, subscription.url, signedPayload, headers, {
-    attempts: DEFAULT_RETRY_ATTEMPTS,
-    backoff: { type: 'exponential', delay: DEFAULT_BACKOFF_DELAY_MS },
+  await enqueueWebhookDelivery({
+    deliveryId: delivery.id,
+    endpointId: endpoint.id,
+    url: endpoint.url,
+    payload: signedPayload,
+    headers,
   });
 
   return delivery;
 }
 
 async function queueEventWebhooks(eventType, payload) {
-  const subscriptions = await withTenantScopeBypassed(() =>
-    prisma.webhookSubscription.findMany({
-      where: { eventTypes: { has: eventType }, isActive: true },
+  const endpoints = await withTenantScopeBypassed(() =>
+    prisma.webhookEndpoint.findMany({
+      where: { events: { has: eventType }, active: true },
     }),
   );
 
-  if (subscriptions.length === 0) {
+  if (endpoints.length === 0) {
     return { queued: 0 };
   }
 
   const queued = [];
-  for (const subscription of subscriptions) {
-    const delivery = await queueSubscriptionWebhook(subscription, payload, eventType);
-    queued.push({ subscriptionId: subscription.id, deliveryId: delivery.id });
+  for (const endpoint of endpoints) {
+    const delivery = await queueEndpointWebhook(endpoint, payload, eventType);
+    queued.push({ endpointId: endpoint.id, deliveryId: delivery.id });
   }
 
   return { queued: queued.length, deliveries: queued };
 }
 
+async function redeliverDelivery({ endpointId, deliveryId }) {
+  const delivery = await prisma.webhookDelivery.findFirst({
+    where: { id: deliveryId, endpointId, status: 'dead' },
+    include: { endpoint: true },
+  });
+
+  if (!delivery) {
+    return null;
+  }
+
+  await prisma.webhookDelivery.update({
+    where: { id: deliveryId },
+    data: {
+      status: 'pending',
+      attempts: 0,
+      nextRetryAt: null,
+      responseCode: null,
+      responseBody: null,
+    },
+  });
+
+  const signedPayload = delivery.payload;
+  const secret = decryptSecret(delivery.endpoint.secret);
+  const signature = signPayload(secret, signedPayload);
+  const headers = {
+    'Content-Type': 'application/json',
+    [SIGNATURE_HEADER]: signature,
+    [EVENT_HEADER]: delivery.eventType,
+    [DELIVERY_ID_HEADER]: delivery.id,
+  };
+
+  await enqueueWebhookDelivery({
+    deliveryId: delivery.id,
+    endpointId: delivery.endpointId,
+    url: delivery.endpoint.url,
+    payload: signedPayload,
+    headers,
+  });
+
+  return delivery;
+}
+
 export {
-  createSubscription,
-  listSubscriptions,
-  deleteSubscription,
+  createEndpoint,
+  listEndpoints,
+  deleteEndpoint,
   getDeliveryHistory,
   queueEventWebhooks,
-  signPayload,
+  redeliverDelivery,
   buildWebhookPayload,
   SIGNATURE_HEADER,
+  EVENT_HEADER,
   DELIVERY_ID_HEADER,
-  EVENT_TYPE_HEADER,
+  encryptSecret,
+  decryptSecret,
 };
 
 export default {
-  createSubscription,
-  listSubscriptions,
-  deleteSubscription,
+  createEndpoint,
+  listEndpoints,
+  deleteEndpoint,
   getDeliveryHistory,
   queueEventWebhooks,
+  redeliverDelivery,
   signPayload,
+  verifySignature,
+  calculateRetryDelayMs,
 };

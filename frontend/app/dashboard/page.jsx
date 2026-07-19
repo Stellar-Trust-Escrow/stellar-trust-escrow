@@ -4,6 +4,8 @@ import { useState, useEffect, Suspense } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import EscrowCard from '../../components/escrow/EscrowCard';
+import EscrowListItem from '../../components/escrow/EscrowListItem';
+import DisputeModal from '../../components/escrow/DisputeModal';
 import ReputationBadge from '../../components/ui/ReputationBadge';
 import Button from '../../components/ui/Button';
 import CardSkeleton from '../../components/ui/CardSkeleton';
@@ -48,6 +50,7 @@ export default function DashboardPage() {
   const [escrows, setEscrows] = useState([]);
   const [escrowsLoading, setEscrowsLoading] = useState(true);
   const [reputation, setReputation] = useState(null);
+  const [disputeEscrowId, setDisputeEscrowId] = useState(null);
   const { measureAsync } = usePerformance('DashboardPage');
 
   useEffect(() => {
@@ -144,12 +147,24 @@ export default function DashboardPage() {
               <div className="grid gap-4 md:grid-cols-2" role="list">
                 {escrows.map((escrow) => (
                   <div key={escrow.id} role="listitem">
-                    <EscrowCard escrow={escrow} />
+                    <EscrowListItem
+                      escrow={escrow}
+                      canReleaseAll={escrow.status === 'Active'}
+                      onDispute={(e) => setDisputeEscrowId(Number(e.id))}
+                    />
                   </div>
                 ))}
               </div>
             )}
           </section>
+
+      {disputeEscrowId !== null && (
+        <DisputeModal
+          isOpen
+          onClose={() => setDisputeEscrowId(null)}
+          escrowId={disputeEscrowId}
+        />
+      )}
         </div>
       </ErrorBoundary>
     </PageTransition>

@@ -63,8 +63,24 @@ pub enum EcErr {
     OracleStaleFeed = 67,
     OracleInvalidPrice = 68,
     OraclePriceConversionFailed = 69,
-    ContractPaused = 70,
-    UnpauseTooEarly = 71,
+    E70 = 70, // RbacUnauthorizedRole
+    E71 = 71, // RbacRoleAlreadySet
+    E72 = 72, // RbacInvalidRoleAssignment
+    FeeTooHigh = 73,
+    TreasuryNotConfigured = 74,
+    InvalidMultisigConfig = 75,
+    HighValueMultisigRequired = 76,
+    DuplicateMultisigApproval = 77,
+    MultisigBatchApprovalUnsupported = 78,
+    OracleStalePriceFeed = 130,
+    OracleDriftExceeded = 131,
+    OracleNotConfigured = 132,
+    ContractPaused = 133,
+    UnpauseTooEarly = 134,
+    CannotAcceptOwnProposal = 135,
+    ProposalExpired = 136,
+    InvalidEscrowState = 137,
+    NoCancellationProposal = 138,
 }
 
 /// Backward-compatible alias — existing code imports `EscrowError`; the oracle

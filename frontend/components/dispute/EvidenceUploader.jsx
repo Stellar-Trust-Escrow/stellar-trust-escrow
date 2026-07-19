@@ -13,6 +13,7 @@
  */
 
 import { useCallback, useRef, useState } from 'react';
+import NextImage from 'next/image';
 import { X, Upload, FileText, Image, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const ACCEPTED_TYPES = {
@@ -72,7 +73,16 @@ function Lightbox({ files, index, onClose, onPrev, onNext }) {
         {/* Content */}
         <div className="flex items-center justify-center min-h-64 p-4 bg-gray-950">
           {isImage ? (
-            <img src={url} alt={file.name} className="max-h-[60vh] object-contain rounded-lg" />
+            <div className="relative w-full h-[60vh]">
+              <NextImage
+                src={url}
+                alt={file.name}
+                fill
+                unoptimized
+                sizes="100vw"
+                className="object-contain rounded-lg"
+              />
+            </div>
           ) : (
             <div className="text-center text-gray-400 space-y-2">
               <FileText size={48} className="mx-auto text-gray-600" />

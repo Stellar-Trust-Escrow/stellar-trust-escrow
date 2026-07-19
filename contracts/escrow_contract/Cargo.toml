@@ -1,18 +1,17 @@
 [package]
-name = "stellar-trust-escrow-contract"
+name = "escrow_contract"
 version = "0.1.0"
 edition = "2021"
-publish = false
-description = "Milestone-based escrow contract with on-chain reputation — StellarTrustEscrow"
+
+[dependencies]
+soroban-sdk = { version = "21.0.0" }
+serde = { version = "1.0", features = ["derive"] }
+
+[dev-dependencies]
+soroban-sdk = { version = "21.0.0", features = ["testutils"] }
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
-[dependencies]
-soroban-sdk = { version = "21.0.0", features = [] }
-stellar-trust-shared = { path = "../shared" }
-
-[dev-dependencies]
-criterion = "0.4"
-ed25519-dalek = "2.2.0"
-soroban-sdk = { version = "21.0.0", features = ["testutils"] }
+[features]
+testutils = ["soroban-sdk/testutils"]

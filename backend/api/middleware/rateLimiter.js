@@ -18,6 +18,47 @@ import {
   getBurstLimitForTier,
   DEFAULT_TIER,
 } from '../../config/rateLimits.js';
+import IORedis from 'ioredis';
+
+let redis = null;
+
+function getRedisClient() {
+  if (redis) return redis;
+  const url = process.env.REDIS_URL;
+  redis = new IORedis(url ?? {
+    host: process.env.REDIS_HOST || '127.0.0.1',
+    port: parseInt(process.env.REDIS_PORT || '6379', 10),
+    password: process.env.REDIS_PASSWORD || undefined,
+    maxRetriesPerRequest: null,
+    lazyConnect: true,
+    enableOfflineQueue: false,
+  });
+  redis.on('error', (err) => {
+    console.warn('[rateLimiter] Redis error, falling back to in-memory:', err?.message || err);
+    redis = null;
+  });
+  return redis;
+}
+
+const RATE_LIMITER_LUA = `
+local key = KEYS[1]
+local now = tonumber(ARGV[1])
+local windowMs = tonumber(ARGV[2])
+local limit = tonumber(ARGV[3])
+local expireSeconds = tonumber(ARGV[4])
+local member = ARGV[5]
+local cutoff = now - windowMs
+local cutoffArg = '(' .. cutoff
+redis.call('ZREMRANGEBYSCORE', key, 0, cutoffArg)
+local count = redis.call('ZCARD', key)
+if count >= limit then
+  local oldest = redis.call('ZRANGE', key, 0, 0, 'WITHSCORES')
+  return {0, tonumber(oldest[2]) or 0}
+end
+redis.call('ZADD', key, now, member)
+redis.call('EXPIRE', key, expireSeconds)
+return {limit - count, 0}
+`;
 
 // ── Sliding window store ──────────────────────────────────────────────────────
 
@@ -32,13 +73,32 @@ class SlidingWindowStore {
   constructor() {
     /** @type {Map<string, number[]>} */
     this._store = new Map();
+    /** @type {Map<string, number>} */
+    this._windowMsByKey = new Map();
+    this._cleanupInterval = setInterval(() => this._cleanup(), 60_000);
+    if (typeof this._cleanupInterval.unref === 'function') {
+      this._cleanupInterval.unref();
+    }
   }
 
   /** Remove entries older than cutoff from a timestamp array (mutates in place). */
   _prune(timestamps, cutoff) {
     let lo = 0;
-    while (lo < timestamps.length && timestamps[lo] <= cutoff) lo++;
+    while (lo < timestamps.length && timestamps[lo] < cutoff) lo++;
     if (lo > 0) timestamps.splice(0, lo);
+  }
+
+  _cleanup() {
+    const now = Date.now();
+    for (const [key, timestamps] of this._store.entries()) {
+      const windowMs = this._windowMsByKey.get(key) ?? 0;
+      const cutoff = now - windowMs;
+      this._prune(timestamps, cutoff);
+      if (timestamps.length === 0) {
+        this._store.delete(key);
+        this._windowMsByKey.delete(key);
+      }
+    }
   }
 
   /**
@@ -54,6 +114,7 @@ class SlidingWindowStore {
       ts = [];
       this._store.set(key, ts);
     }
+    this._windowMsByKey.set(key, windowMs);
     this._prune(ts, now - windowMs);
     ts.push(now);
     return ts.length;
@@ -72,6 +133,7 @@ class SlidingWindowStore {
     this._prune(ts, now - windowMs);
     if (ts.length === 0) {
       this._store.delete(key);
+      this._windowMsByKey.delete(key);
       return 0;
     }
     return ts.length;
@@ -103,6 +165,7 @@ class SlidingWindowStore {
 
   clear() {
     this._store.clear();
+    this._windowMsByKey.clear();
   }
 }
 
@@ -153,7 +216,99 @@ export function getUserUsage(userId) {
 export function trackUsage(key, windowMs) {
   return slidingStore.record(key, windowMs);
 }
+let _redisFallbackWarned = false;
 
+function makeRedisMember(now) {
+  return `${now}:${Math.random().toString(36).slice(2, 8)}`;
+}
+
+async function runRedisRateLimit(redisClient, key, windowMs, limit, now) {
+  const expireSeconds = Math.max(1, Math.ceil(windowMs / 1000));
+  const member = makeRedisMember(now);
+  const result = await redisClient.eval(
+    RATE_LIMITER_LUA,
+    1,
+    key,
+    now,
+    windowMs,
+    limit,
+    expireSeconds,
+    member,
+  );
+
+  if (!Array.isArray(result) || result.length < 2) {
+    throw new Error('Unexpected Redis rate limiter response');
+  }
+
+  return {
+    remaining: Number(result[0]),
+    oldest: Number(result[1] || 0),
+  };
+}
+
+function sendRateLimitError(res, message, retryAfterSec) {
+  res.set('Retry-After', String(Math.max(1, retryAfterSec)));
+  return res.status(429).json({
+    error: {
+      code: 'RATE_LIMITED',
+      message,
+      retryAfter: Math.max(1, retryAfterSec),
+    },
+  });
+}
+
+export function rateLimiter({
+  windowMs = 60_000,
+  limit,
+  keyPrefix = 'rate-limit',
+  keyGenerator,
+  redisClient = redis,
+  message = 'Too many requests, please try again later.',
+} = {}) {
+  if (typeof limit !== 'number') {
+    throw new Error('limit is required for rateLimiter');
+  }
+
+  const getKey = keyGenerator || ((req) => req.ip || 'unknown');
+
+  return async (req, res, next) => {
+    const now = Date.now();
+    const key = `${keyPrefix}:${getKey(req)}`;
+
+    try {
+      const client = redisClient || getRedisClient();
+      const { remaining, oldest } = await runRedisRateLimit(client, key, windowMs, limit, now);
+
+      if (remaining === 0) {
+        const retryAfterMs = oldest ? oldest + windowMs - now : windowMs;
+        return sendRateLimitError(res, message, Math.ceil(retryAfterMs / 1000));
+      }
+
+      res.set('X-RateLimit-Limit', String(limit));
+      res.set('X-RateLimit-Remaining', String(Math.max(0, remaining - 1)));
+      res.set('X-RateLimit-Reset', String(Math.ceil((now + windowMs) / 1000)));
+      return next();
+    } catch (err) {
+      if (!_redisFallbackWarned) {
+        console.warn('[rateLimiter] Redis unavailable, using in-memory fallback');
+        _redisFallbackWarned = true;
+      }
+
+      const count = slidingStore.count(key, windowMs, now);
+      if (count >= limit) {
+        const oldestTs = slidingStore.oldest(key);
+        const retryAfterMs = oldestTs ? oldestTs + windowMs - now : windowMs;
+        return sendRateLimitError(res, message, Math.ceil(retryAfterMs / 1000));
+      }
+
+      slidingStore.record(key, windowMs, now);
+      res.set('X-RateLimit-Limit', String(limit));
+      res.set('X-RateLimit-Remaining', String(Math.max(0, limit - count - 1)));
+      res.set('X-RateLimit-Reset', String(Math.ceil((now + windowMs) / 1000)));
+      return next();
+    }
+  };
+}
 // ── Core sliding-window factory ───────────────────────────────────────────────
 
 /**

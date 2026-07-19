@@ -1,37 +1,52 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { getInitialTheme, applyTheme, toggleTheme as toggleThemeUtil, THEMES, THEME_KEY } from '../lib/theme';
 
 const ThemeContext = createContext(null);
 
 export function ThemeProvider({ children }) {
-  const [theme, setTheme] = useState(null);
+  const [theme, setTheme] = useState(getInitialTheme);
 
-  // On mount: read localStorage or fall back to system preference
+  // Initialize theme on mount and listen for system changes
   useEffect(() => {
-    const stored = localStorage.getItem('theme');
-    if (stored === 'dark' || stored === 'light') {
-      setTheme(stored);
-    } else {
-      setTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-    }
+    applyTheme(theme);
+    
+    // Remove no-transitions class after hydration
+    requestAnimationFrame(() => {
+      document.documentElement.classList.remove('no-transitions');
+    });
+
+    // Listen for system preference changes (only if no manual preference stored)
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e) => {
+      const stored = localStorage.getItem(THEME_KEY);
+      if (!stored) {
+        const newTheme = e.matches ? THEMES.DARK : THEMES.LIGHT;
+        setTheme(newTheme);
+      }
+    };
+    mediaQuery.addEventListener('change', handleChange);
+    return () => {
+      mediaQuery.removeEventListener('change', handleChange);
+    };
   }, []);
 
-  // Apply / remove the `dark` class on <html> whenever theme changes
+  // Whenever theme changes, apply it
   useEffect(() => {
-    if (theme === null) return;
-    const root = document.documentElement;
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
-    }
-    localStorage.setItem('theme', theme);
+    applyTheme(theme);
   }, [theme]);
 
-  const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
+  const toggleTheme = useCallback(() => {
+    const newTheme = toggleThemeUtil(theme);
+    setTheme(newTheme);
+  }, [theme]);
 
-  return <ThemeContext.Provider value={{ theme, toggleTheme }}>{children}</ThemeContext.Provider>;
+  return (
+    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
 }
 
 export function useTheme() {

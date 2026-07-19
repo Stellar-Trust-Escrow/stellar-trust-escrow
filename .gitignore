@@ -105,3 +105,6 @@ update_all_drips_issues.sh
 /pr_body.txt
 migration-lint-report.json
 seed-load-report.json
+
+# Storybook static build output
+frontend/storybook-static/

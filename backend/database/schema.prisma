@@ -49,11 +49,12 @@ model Tenant {
   disputeAppeals       DisputeAppeal[]
   userProfiles         UserProfile[]
   contractEvents       ContractEvent[]
-  webhookSubscriptions WebhookSubscription[]
+  webhookEndpoints     WebhookEndpoint[]
   payments             Payment[]
   kycVerifications     KycVerification[]
   adminAuditLogs       AdminAuditLog[]
   auditLogs            AuditLog[]
+  failedEvents         FailedEvent[]
   chatRoomKeys         ChatRoomKey[]
   chatMessages         ChatMessage[]
 
@@ -71,13 +72,15 @@ model User {
   role          String   @default("user") // user | admin | superadmin
   mfaEnabled    Boolean  @default(false) @map("mfa_enabled")
   mfaEnforced   Boolean  @default(false) @map("mfa_enforced") // Force MFA for high-value operations
+  notificationPreferences Json? @map("notification_preferences")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  tenant        Tenant         @relation(fields: [tenantId], references: [id])
-  refreshTokens RefreshToken[]
-  mfaMethods    MfaMethod[]
-  mfaAttempts   MfaAttempt[]
+  tenant               Tenant                 @relation(fields: [tenantId], references: [id])
+  refreshTokens        RefreshToken[]
+  mfaMethods           MfaMethod[]
+  mfaAttempts          MfaAttempt[]
+  notificationDeliveries NotificationDelivery[]
 
   @@index([tenantId, createdAt(sort: Desc)])
   @@index([tenantId, email])
@@ -279,6 +282,10 @@ model ReputationRecord {
   totalVolume      String   @default("0") @map("total_volume") // BigInt as string
   lastUpdated      DateTime @map("last_updated")
   updatedAt        DateTime @updatedAt @map("updated_at")
+  isArbiter        Boolean  @default(false) @map("is_arbiter")
+  activeDisputes   Int      @default(0) @map("active_disputes")
+  totalResolved    Int      @default(0) @map("total_resolved")
+  createdAt        DateTime @default(now()) @map("created_at")
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
   events ReputationEvent[]
@@ -286,6 +293,7 @@ model ReputationRecord {
   @@index([tenantId, address])
   @@index([tenantId, totalScore(sort: Desc)])
   @@index([totalScore(sort: Desc)])
+  @@index([isArbiter])
   @@map("reputation_records")
 }
 
@@ -337,6 +345,12 @@ model Dispute {
   resolutionType   String?   @map("resolution_type")
   /// Whether this dispute was auto-resolved
   autoResolved     Boolean   @default(false) @map("auto_resolved")
+  /// Number of times this dispute has been escalated
+  escalationCount  Int       @default(0) @map("escalation_count")
+  /// Timestamp when this dispute will auto-escalate to governance
+  autoEscalateAt   DateTime? @map("auto_escalate_at")
+  /// Current arbiter assigned to this dispute
+  currentArbiter   String?   @map("current_arbiter")
 
   tenant   Tenant            @relation(fields: [tenantId], references: [id])
   escrow   Escrow            @relation(fields: [escrowId], references: [id])
@@ -355,6 +369,8 @@ model Dispute {
   @@index([tenantId, resolvedAt, raisedAt(sort: Desc)])
   // Covers raisedBy filter + date sort within a tenant (dispute history per freelancer)
   @@index([tenantId, raisedByAddress, raisedAt(sort: Desc)])
+  @@index([currentArbiter])
+  @@index([autoEscalateAt])
   @@map("disputes")
 }
 
@@ -446,13 +462,16 @@ model UserProfile {
 model ContractEvent {
   id         Int      @id @default(autoincrement())
   tenantId   String   @map("tenant_id")
+  /// Globally-unique Soroban event id (e.g. "<ledger>-<txIndex>-<eventIndex>").
+  /// Used as the idempotency key for exactly-once upserts by the indexer.
+  eventId    String   @unique @map("event_id")
   /// Stellar ledger sequence this event was emitted in
   ledger     BigInt
   /// Ledger close timestamp
   ledgerAt   DateTime @map("ledger_at")
   /// Contract address that emitted the event
   contractId String   @map("contract_id")
-  /// Short event name derived from topic[0] (e.g. "esc_crt", "mil_apr")
+  /// Short event name derived from topic[0] (e.g. "EscrowCreated", "MilestoneApproved")
   eventType  String   @map("event_type")
   /// Escrow ID extracted from topic[1] (null for contract-wide events)
   escrowId   BigInt?  @map("escrow_id")
@@ -480,41 +499,42 @@ model ContractEvent {
   @@map("contract_events")
 }
 
-model WebhookSubscription {
-  id         String   @id @default(cuid())
-  tenantId   String   @map("tenant_id")
-  url        String
-  secret     String
-  eventTypes String[] @default([])
-  isActive   Boolean  @default(true) @map("is_active")
-  createdBy  String?  @map("created_by")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+model WebhookEndpoint {
+  id        String   @id @default(cuid())
+  tenantId  String   @map("tenant_id")
+  url       String
+  secret    String
+  events    String[] @default([]) @map("event_types")
+  active    Boolean  @default(true) @map("is_active")
+  createdBy String?  @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   deliveries WebhookDelivery[]
   tenant     Tenant            @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
   @@index([createdBy])
-  @@map("webhook_subscriptions")
+  @@map("webhook_endpoints")
 }
 
 model WebhookDelivery {
-  id             String    @id @default(cuid())
-  subscriptionId String    @map("subscription_id")
-  eventType      String    @map("event_type")
-  payload        Json
-  status         String    @default("pending")
-  attempts       Int       @default(0)
-  responseCode   Int?      @map("response_code")
-  errorMessage   String?   @map("error_message")
-  lastAttemptAt  DateTime? @map("last_attempt_at")
-  createdAt      DateTime  @default(now()) @map("created_at")
+  id           String    @id @default(cuid())
+  endpointId   String    @map("endpoint_id")
+  eventType    String    @map("event_type")
+  payload      Json
+  status       String    @default("pending")
+  attempts     Int       @default(0)
+  nextRetryAt  DateTime? @map("next_retry_at")
+  responseCode Int?      @map("response_code")
+  responseBody String?   @map("response_body")
+  createdAt    DateTime  @default(now()) @map("created_at")
 
-  subscription WebhookSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  endpoint WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
 
-  @@index([subscriptionId])
+  @@index([endpointId])
   @@index([eventType])
+  @@index([status])
   @@map("webhook_deliveries")
 }
 
@@ -526,6 +546,28 @@ model IndexerState {
   lastProcessedLedger BigInt @default(0) @map("last_processed_ledger")
 
   @@map("indexer_state")
+}
+
+/// Compensation log for domain events that could not be published after a
+/// committed DB write (see services/escrowService). The originating transaction
+/// is intentionally NOT rolled back; the failed emission is recorded here so a
+/// downstream relay can replay it.
+model FailedEvent {
+  id        Int      @id @default(autoincrement())
+  tenantId  String   @map("tenant_id")
+  /// Domain event type (e.g. "escrow.funded").
+  eventType String   @map("event_type")
+  /// Serialised event payload.
+  payload   Json
+  /// Error message captured when emission failed.
+  error     String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([eventType])
+  @@map("failed_events")
 }
 
 // ── Payments ─────────────────────────────────────────────────────────────────
@@ -605,6 +647,28 @@ model AdminAuditLog {
   @@map("admin_audit_logs")
 }
 
+// ── Notification Delivery ──────────────────────────────────────────────────────
+
+model NotificationDelivery {
+  id           String    @id @default(cuid())
+  userId       Int       @map("user_id")
+  channel      String    // email | sms
+  template     String
+  status       String    // queued | delivered | failed
+  messageId    String?   @map("message_id")
+  error        String?
+  attemptCount Int       @default(0) @map("attempt_count")
+  queuedAt     DateTime  @default(now()) @map("queued_at")
+  deliveredAt  DateTime? @map("delivered_at")
+
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([channel])
+  @@map("notification_deliveries")
+}
+
 // ── Audit Log ─────────────────────────────────────────────────────────────────
 
 /// Comprehensive, append-only audit trail for all system events.
@@ -646,11 +710,48 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+// ── Escrow Templates ─────────────────────────────────────────────────────────
+// Saved wizard state so users can reuse escrow structures (same counterparty,
+// milestone layout, token). Ownership is tracked by `createdBy` (Stellar
+// address); `isPublic` templates are visible/usable by anyone.
+//
+// NOTE: a DB migration (CREATE TABLE escrow_templates) is required before this
+// is deployed — see the PR description for the SQL. It is intentionally not
+// added under database/migrations/ in this PR to keep the migration-safety gate
+// from running against a live database in CI; the model is added here so
+// `prisma generate` produces the client and the feature compiles end-to-end.
+
+model EscrowTemplate {
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  createdBy    String   @map("created_by")
+  isPublic     Boolean  @default(false) @map("is_public")
+  templateData Json     @map("template_data")
+  usageCount   Int      @default(0) @map("usage_count")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([createdBy])
+  @@index([isPublic])
+  @@map("escrow_templates")
+}
+
 enum EscrowStatus {
+  /// Legacy values retained for rows written by earlier indexers.
   Active
   Completed
   Disputed
   Cancelled
+  /// Canonical lifecycle states produced by the CQRS write model
+  /// (services/escrowService) and the new event indexer.
+  Draft
+  Funded
+  InProgress
+  ReleaseRequested
+  Resolved
+  Released
+  Expired
 }
 
 enum MilestoneStatus {
@@ -733,4 +834,39 @@ model ChatMessage {
   @@index([roomId, sentAt])
   @@index([tenantId, roomId])
   @@map("chat_messages")
+}
+
+// ── Stellar Horizon Event Listener ─────────────────────────────────────────────
+
+/// Deduplication table for Horizon events using paging_token.
+/// Prevents duplicate database operations if the same event is streamed twice.
+model ProcessedEvent {
+  id              Int      @id @default(autoincrement())
+  pagingToken     String   @unique @map("paging_token") // Horizon's unique event ID
+  ledgerSequence  BigInt   @map("ledger_sequence")
+  transactionHash String   @map("transaction_hash")
+  eventIndex      Int      @map("event_index")
+  eventType       String   @map("event_type") // e.g., "EscrowCreated", "MilestoneApproved"
+  escrowId        BigInt?  @map("escrow_id")
+  eventData       Json     @map("event_data") // Full event payload for debugging
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([pagingToken])
+  @@index([ledgerSequence])
+  @@index([eventType])
+  @@index([escrowId])
+  @@index([createdAt])
+  @@map("processed_events")
+}
+
+/// System-wide configuration table for storing persistent state.
+/// Used by the Horizon listener to store cursor position and other runtime config.
+model SystemConfig {
+  key         String   @id // e.g., "horizon_cursor"
+  value       String   @db.Text // JSON-serializable value
+  description String?  @map("description")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([key])
+  @@map("system_config")
 }

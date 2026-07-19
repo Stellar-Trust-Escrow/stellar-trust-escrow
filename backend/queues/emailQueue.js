@@ -1,48 +1,16 @@
-import { emailQueue } from './index.js';
+import { Queue } from 'bullmq';
 
-export { emailQueue };
-
-export async function notifyEscrowStatusChange(payload) {
-  return emailQueue.add('escrow.status_changed', { payload, recipients: payload.recipients });
-}
-
-export async function notifyMilestoneCompleted(payload) {
-  return emailQueue.add('milestone.completed', { payload, recipients: payload.recipients });
-}
-
-export async function notifyDisputeRaised(payload) {
-  return emailQueue.add('dispute.raised', { payload, recipients: payload.recipients });
-}
-
-export async function enqueueEvent(eventType, payload) {
-  const job = await emailQueue.add(eventType, { payload, recipients: payload.recipients });
-  return {
-    queued: 1,
-    accepted: [{ id: job.id, eventType }],
-    skipped: [],
-  };
-}
-
-export async function getQueueSnapshot() {
-  const [waiting, active] = await Promise.all([emailQueue.getWaiting(), emailQueue.getActive()]);
-  return {
-    queue: [...waiting, ...active].map((job) => ({
-      ...job,
-      message: job.data?.payload?.message ?? job.data?.message,
-    })),
-    deliveries: [], // Track separately if needed
-  };
-}
-
-export function __resetForTests() {
-  emailQueue.__resetForTests?.();
-}
-
-export default {
-  notifyEscrowStatusChange,
-  notifyMilestoneCompleted,
-  notifyDisputeRaised,
-  enqueueEvent,
-  getQueueSnapshot,
-  __resetForTests,
-};
+export const notificationsQueue = new Queue('notifications', {
+  connection: {
+    host: process.env.REDIS_HOST || '127.0.0.1',
+    port: parseInt(process.env.REDIS_PORT || '6379', 10),
+  },
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: {
+      type: 'exponential',
+      delay: 5000,
+    },
+    removeOnComplete: true,
+  },
+});

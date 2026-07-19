@@ -4,18 +4,34 @@ import { useTheme } from '../../contexts/ThemeContext';
 
 export default function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
+  const isDark = theme === 'dark';
 
   return (
     <button
       onClick={toggleTheme}
-      aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-      className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 dark:hover:bg-gray-700 transition-colors"
+      aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+      aria-pressed={isDark}
+      className="relative flex items-center justify-center p-2 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+      style={{
+        color: 'var(--color-text-secondary)',
+        backgroundColor: 'transparent',
+        '--tw-ring-color': 'var(--color-brand)',
+        '--tw-ring-offset-color': 'var(--color-bg-base)',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.backgroundColor = 'var(--color-bg-elevated)';
+        e.currentTarget.style.color = 'var(--color-text-primary)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.backgroundColor = 'transparent';
+        e.currentTarget.style.color = 'var(--color-text-secondary)';
+      }}
     >
-      {theme === 'dark' ? (
+      {isDark ? (
         // Sun icon
         <svg
           xmlns="http://www.w3.org/2000/svg"
-          className="w-4 h-4"
+          className="w-5 h-5"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -31,7 +47,7 @@ export default function ThemeToggle() {
         // Moon icon
         <svg
           xmlns="http://www.w3.org/2000/svg"
-          className="w-4 h-4"
+          className="w-5 h-5"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"

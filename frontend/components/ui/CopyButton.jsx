@@ -15,8 +15,11 @@ export function CopyButton({ text, value, label = 'Copy', feedbackDuration = 200
     }
   };
 
+  const accessibleName = copied ? 'Copied!' : `Copy ${displayLabel}`;
+
   return (
     <button
+      type="button"
       onClick={handleCopy}
       title={copied ? 'Copied!' : `Copy ${label}`}
       aria-label={`Copy ${label ?? textToCopy}`}

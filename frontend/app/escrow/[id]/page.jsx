@@ -34,6 +34,7 @@ import ReputationBadge from '../../../components/ui/ReputationBadge';
 import CurrencyAmount from '../../../components/ui/CurrencyAmount';
 import TransactionHash from '../../../components/ui/TransactionHash';
 import Avatar from '../../../components/ui/Avatar';
+import { shareContent } from '../../../lib/share';
 import {
   buildApproveMilestoneTx,
   buildSubmitMilestoneTx,
@@ -200,6 +201,23 @@ export default function EscrowDetailPage({ params }) {
     }
   };
 
+  // Share / copy-link via the Web Share API (Issue #1444). On mobile this opens
+  // the native share sheet when available, otherwise copies the URL to clipboard.
+  const handleShare = async () => {
+    const url =
+      typeof window !== 'undefined' ? window.location.href : '';
+    const result = await shareContent({
+      title: `StellarTrust Escrow — ${escrow.title}`,
+      text: `Check out escrow #${id}: ${escrow.title}`,
+      url,
+    });
+    if (result.method === 'clipboard') {
+      showToast('Link copied to clipboard', 'success');
+    } else if (!result.shared) {
+      // User dismissed the native sheet — no-op.
+    }
+  };
+
   if (isLoading && !fetchedEscrow) {
     return (
       <div className="flex items-center justify-center min-h-[40vh] text-gray-400">
@@ -209,7 +227,7 @@ export default function EscrowDetailPage({ params }) {
   }
 
   return (
-    <div className="space-y-8 max-w-4xl mx-auto">
+    <div className="space-y-8 max-w-4xl mx-auto pb-24 sm:pb-0">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div>
@@ -223,7 +241,7 @@ export default function EscrowDetailPage({ params }) {
             network={process.env.NEXT_PUBLIC_STELLAR_NETWORK}
           />
         </div>
-        <div className="flex gap-2 flex-shrink-0">
+        <div className="hidden sm:flex gap-2 flex-shrink-0">
           {escrow.status === 'Active' && (
             <>
               <Button variant="danger" size="sm" onClick={() => setDisputeOpen(true)}>
@@ -234,6 +252,9 @@ export default function EscrowDetailPage({ params }) {
               </Button>
             </>
           )}
+          <Button variant="ghost" size="sm" onClick={handleShare} aria-label="Share escrow">
+            ↗ Share
+          </Button>
         </div>
       </div>
 
@@ -315,6 +336,38 @@ export default function EscrowDetailPage({ params }) {
         escrowId={id}
         onConfirm={handleCancelEscrow}
       />
+
+      {/* Mobile action bar — fixed to the bottom on small screens */}
+      <div
+        className="sm:hidden fixed bottom-0 inset-x-0 z-40 bg-gray-950/95 backdrop-blur border-t border-gray-800 p-3 flex gap-2 safe-area-bottom"
+      >
+        {escrow.status === 'Active' && (
+          <>
+            <Button
+              variant="danger"
+              className="flex-1 min-h-touch"
+              onClick={() => setDisputeOpen(true)}
+            >
+              ⚠ Dispute
+            </Button>
+            <Button
+              variant="secondary"
+              className="flex-1 min-h-touch"
+              onClick={() => setCancelOpen(true)}
+            >
+              Cancel
+            </Button>
+          </>
+        )}
+        <Button
+          variant="ghost"
+          className="min-h-touch px-4"
+          onClick={handleShare}
+          aria-label="Share escrow"
+        >
+          ↗ Share
+        </Button>
+      </div>
     </div>
   );
 }
