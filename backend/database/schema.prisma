@@ -872,6 +872,8 @@ model SystemConfig {
 
   @@index([key])
   @@map("system_config")
+}
+
 model InsuranceOptIn {
   id             String   @id @default(cuid())
   escrowId       String   @unique @map("escrow_id")
