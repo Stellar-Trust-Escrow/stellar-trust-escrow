@@ -28,12 +28,19 @@ export function getInitialTheme() {
 }
 
 /**
- * Applies a theme to the document
+ * Applies a theme to the document (DOM only — does not persist)
  * @param {'light' | 'dark'} theme
  */
 export function applyTheme(theme) {
   const root = document.documentElement;
   root.setAttribute('data-theme', theme);
+}
+
+/**
+ * Persists a theme as the user's manual preference
+ * @param {'light' | 'dark'} theme
+ */
+export function persistTheme(theme) {
   localStorage.setItem(THEME_KEY, theme);
 }
 

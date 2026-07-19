@@ -55,6 +55,7 @@ export function ThemeProvider({ children }) {
     const newTheme = toggleThemeUtil(theme);
     localStorage.setItem(THEME_KEY, newTheme);
     setTheme(newTheme);
+    // persistTheme(newTheme); // manual user choice — persist as override
   }, [theme]);
 
   return <ThemeContext.Provider value={{ theme, toggleTheme }}>{children}</ThemeContext.Provider>;

@@ -25,6 +25,9 @@ const parsers = {
   page: parseAsInteger.withDefault(1),
 };
 
+type SortKey = (typeof SORT_KEYS)[number];
+type SortOrder = (typeof SORT_ORDERS)[number];
+
 type EscrowFilterValues = {
   q: string;
   status: string[];
@@ -58,8 +61,8 @@ type EscrowFilterParamsMap = {
   amount_max: number;
   date_from: string;
   date_to: string;
-  sort: string;
-  order: string;
+  sort: SortKey;
+  order: SortOrder;
   page: number;
 };
 

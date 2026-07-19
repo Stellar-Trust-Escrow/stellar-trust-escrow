@@ -1,5 +1,18 @@
 import type { Meta, StoryObj } from '@storybook/react';
+import type { ReactNode } from 'react';
 import Button from './Button';
+
+type ButtonStoryProps = {
+  children?: ReactNode;
+  variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
+  size?: 'sm' | 'md' | 'lg';
+  isLoading?: boolean;
+  disabled?: boolean;
+  href?: string;
+  asChild?: boolean;
+  className?: string;
+  onClick?: () => void;
+};
 
 /**
  * The `Button` component supports four visual variants, three sizes, loading
@@ -9,9 +22,9 @@ import Button from './Button';
  * Storybook Controls panel. The component is wrapped by the global
  * Wallet/Theme mock decorators defined in `.storybook/preview.tsx`.
  */
-const meta: Meta<typeof Button> = {
+const meta: Meta<ButtonStoryProps> = {
   title: 'UI/Button',
-  component: Button,
+  component: Button as React.ComponentType<ButtonStoryProps>,
   tags: ['autodocs'],
   argTypes: {
     variant: {
@@ -52,7 +65,7 @@ const meta: Meta<typeof Button> = {
 };
 
 export default meta;
-type Story = StoryObj<typeof Button>;
+type Story = StoryObj<ButtonStoryProps>;
 
 export const Primary: Story = {
   args: { variant: 'primary', children: 'Approve Milestone' },
@@ -73,3 +86,7 @@ export const Disabled: Story = {
 export const Loading: Story = {
   args: { isLoading: true, children: 'Submitting…' },
 };
+
+// NOTE: Explicitly typed rather than Meta<typeof Button> because Button.jsx
+// (upstream, untyped) can't be inferred reliably for TS — see build failures
+// in CI history. Update ButtonStoryProps manually if Button's prop surface changes.

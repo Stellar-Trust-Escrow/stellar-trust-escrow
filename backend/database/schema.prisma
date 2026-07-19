@@ -635,6 +635,9 @@ model AdminAuditLog {
   /// Identifier of the admin who performed the action
   performedBy   String   @map("performed_by")
   performedAt   DateTime @map("performed_at")
+  
+  chainHash     String?  @map("chain_hash")
+  prevEntryId   String?  @map("prev_entry_id")
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
 

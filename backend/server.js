@@ -118,7 +118,7 @@ app.use(cookieParser());
 app.use(sanitizeInputs);
 app.use(csrfProtection);
 app.use('/uploads', express.static('uploads'));
-app.use(auditMiddleware);
+app.use(auditMiddleware());
 
 // ── Sentry tracing handler — after body parsers, before routes ────────────────
 app.use(sentryTracingHandler);
