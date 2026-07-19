@@ -18,6 +18,8 @@ export function EscrowCardSkeleton() {
   );
 }
 
+export default Skeleton;
+
 export function EscrowListSkeleton({ count = 5 }) {
   return (
     <div className="space-y-3">

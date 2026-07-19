@@ -54,3 +54,5 @@ export function useToast() {
   const remove = useCallback((id) => setToasts((prev) => prev.filter((t) => t.id !== id)), []);
   return { toasts, toast: add, removeToast: remove };
 }
+
+export default Toast;
