@@ -812,4 +812,9 @@ pub enum DataKey {
     DeadlineExtensionsByRequester(Address),
     /// Mutual-consent cancellation proposal by escrow ID — key: u64, value: CancellationProposal
     CancellationProposal(u64),
+    /// N-of-M approval threshold for a given escrow — key: u64, value: u32
+    /// Defaults to 1 (single-approval legacy behaviour) when absent.
+    ApprovalThreshold(u64),
+    /// Pending approval votes for (escrow_id, milestone_id) — value: Vec<ApprovalRecord>
+    MilestoneVotes(u64, u32),
 }

@@ -110,3 +110,10 @@ pub const EMERGENCY_WITHDRAWAL: Symbol = symbol_short!("emg_wth");
 
 // ── Platform fees ─────────────────────────────────────────────────────────────
 pub const FEE_COLLECTED: Symbol = symbol_short!("fee_col");
+
+// ── N-of-M threshold approval ─────────────────────────────────────────────────
+
+/// A single approver cast their vote for a milestone.
+pub const APPROVAL_VOTE_CAST: Symbol = symbol_short!("apr_vote");
+/// Approval threshold reached — milestone transitions to MS_APPROVED.
+pub const APPROVAL_THRESHOLD_MET: Symbol = symbol_short!("apr_thr");

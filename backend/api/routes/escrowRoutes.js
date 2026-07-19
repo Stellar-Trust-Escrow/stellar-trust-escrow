@@ -1,4 +1,5 @@
 import express from 'express';
+import thresholdRoutes from './thresholdRoutes.js';
 import escrowController, {
   validateBroadcast,
   validateEscrowId,
@@ -80,10 +81,7 @@ router.get(
  * @route  GET /api/escrows/:id/audit/export
  */
 import { exportBundle } from '../controllers/auditController.js';
-router.get(
-  '/:id/audit/export',
-  validateEscrowId,
-  exportBundle,
-);
+router.get('/:id/audit/export', validateEscrowId, exportBundle);
+router.use('/:id/approvals', thresholdRoutes);
 
 export default router;
