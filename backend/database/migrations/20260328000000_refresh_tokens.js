@@ -14,6 +14,7 @@ export async function up(prisma) {
       id TEXT PRIMARY KEY,
       user_id INTEGER NOT NULL,
       tenant_id TEXT NOT NULL,
+      family_id TEXT NOT NULL,
       token_hash TEXT NOT NULL UNIQUE,
       device_info JSONB,
       ip_address TEXT,
@@ -21,6 +22,8 @@ export async function up(prisma) {
       is_active BOOLEAN NOT NULL DEFAULT TRUE,
       expires_at TIMESTAMPTZ NOT NULL,
       last_used_at TIMESTAMPTZ,
+      used_at TIMESTAMPTZ,
+      revoked_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       CONSTRAINT refresh_tokens_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -29,6 +32,10 @@ export async function up(prisma) {
 
   await prisma.$executeRawUnsafe(`
     CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_tenant ON refresh_tokens(user_id, tenant_id)
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS idx_refresh_tokens_family_id ON refresh_tokens(family_id)
   `);
 
   await prisma.$executeRawUnsafe(`

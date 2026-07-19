@@ -105,11 +105,15 @@ async function refresh({ refreshToken }) {
   }
 
   if (currentToken.revokedAt) {
-    await prisma.refreshToken.updateMany({
-      where: { familyId: currentToken.familyId },
-      data: { revokedAt: new Date() },
-    });
-    return { status: 401, error: 'TOKEN_REUSE_DETECTED' };
+    if (currentToken.usedAt) {
+      await prisma.refreshToken.updateMany({
+        where: { familyId: currentToken.familyId },
+        data: { revokedAt: new Date() },
+      });
+      return { status: 401, error: 'TOKEN_REUSE_DETECTED' };
+    }
+
+    return { status: 401, error: 'TOKEN_REVOKED' };
   }
 
   if (currentToken.expiresAt < new Date()) {
