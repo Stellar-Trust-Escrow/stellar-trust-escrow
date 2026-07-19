@@ -1,6 +1,13 @@
 /** @type {import('next').NextConfig} */
 
-import { withSentryConfig } from '@sentry/nextjs';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+let withSentryConfig;
+try {
+  withSentryConfig = require('@sentry/nextjs').withSentryConfig;
+} catch (e) {
+  withSentryConfig = (config) => config;
+}
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -30,7 +37,13 @@ const nextConfig = {
 
   // ── Image Optimization ──────────────────────────────────────────────────────
   images: {
-    remotePatterns: [],
+    remotePatterns: [
+      { protocol: 'https', hostname: 'ipfs.io', pathname: '/ipfs/**' },
+      { protocol: 'https', hostname: 'dweb.link', pathname: '/ipfs/**' },
+      { protocol: 'https', hostname: 'cloudflare-ipfs.com', pathname: '/ipfs/**' },
+      { protocol: 'https', hostname: 'gateway.pinata.cloud', pathname: '/ipfs/**' },
+      { protocol: 'https', hostname: '*.ipfs.dweb.link' },
+    ],
     formats: ['image/avif', 'image/webp'],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920],
     imageSizes: [16, 32, 48, 64, 96, 128, 256],

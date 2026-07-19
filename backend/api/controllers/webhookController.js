@@ -1,6 +1,6 @@
 import webhookService from '../../services/webhookService.js';
 
-const MAX_EVENT_TYPES = 20;
+const MAX_EVENTS = 20;
 const ALLOWED_SCHEMES = ['https:'];
 
 function isValidWebhookUrl(raw) {
@@ -12,27 +12,36 @@ function isValidWebhookUrl(raw) {
   }
 }
 
-const subscribe = async (req, res) => {
+function normalizeEvents(body) {
+  if (Array.isArray(body.events) && body.events.length > 0) {
+    return body.events;
+  }
+  if (Array.isArray(body.eventTypes) && body.eventTypes.length > 0) {
+    return body.eventTypes;
+  }
+  return null;
+}
+
+const createEndpoint = async (req, res) => {
   try {
-    const { url, eventTypes } = req.body;
+    const { url } = req.body;
+    const events = normalizeEvents(req.body);
 
     if (!url || !isValidWebhookUrl(url)) {
       return res.status(400).json({ error: 'url must be a valid HTTPS URL' });
     }
 
-    if (!Array.isArray(eventTypes) || eventTypes.length === 0) {
-      return res.status(400).json({ error: 'eventTypes must be a non-empty array' });
+    if (!events) {
+      return res.status(400).json({ error: 'events must be a non-empty array' });
     }
 
-    if (eventTypes.length > MAX_EVENT_TYPES) {
-      return res
-        .status(400)
-        .json({ error: `eventTypes may not exceed ${MAX_EVENT_TYPES} entries` });
+    if (events.length > MAX_EVENTS) {
+      return res.status(400).json({ error: `events may not exceed ${MAX_EVENTS} entries` });
     }
 
-    const result = await webhookService.createSubscription({
+    const result = await webhookService.createEndpoint({
       url,
-      eventTypes: eventTypes.slice(0, MAX_EVENT_TYPES),
+      events: events.slice(0, MAX_EVENTS),
       createdBy: req.user?.address || null,
     });
 
@@ -42,26 +51,26 @@ const subscribe = async (req, res) => {
   }
 };
 
-const listSubscriptions = async (req, res) => {
+const listEndpoints = async (req, res) => {
   try {
-    const subscriptions = await webhookService.listSubscriptions({
+    const endpoints = await webhookService.listEndpoints({
       createdBy: req.user?.address || null,
     });
-    res.json({ data: subscriptions });
+    res.json({ data: endpoints });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
 
-const deleteSubscription = async (req, res) => {
+const deleteEndpoint = async (req, res) => {
   try {
-    const deleted = await webhookService.deleteSubscription({
+    const deleted = await webhookService.deleteEndpoint({
       id: req.params.id,
       createdBy: req.user?.address || null,
     });
 
     if (!deleted) {
-      return res.status(404).json({ error: 'Webhook subscription not found' });
+      return res.status(404).json({ error: 'Webhook endpoint not found' });
     }
 
     res.status(204).send();
@@ -76,7 +85,7 @@ const getDeliveries = async (req, res) => {
     const limit = Math.min(Number(req.query.limit || 30), 100);
 
     const result = await webhookService.getDeliveryHistory({
-      subscriptionId: req.params.id,
+      endpointId: req.params.id,
       createdBy: req.user?.address || null,
       page,
       limit,
@@ -88,9 +97,37 @@ const getDeliveries = async (req, res) => {
   }
 };
 
+const redeliver = async (req, res) => {
+  try {
+    const delivery = await webhookService.redeliverDelivery({
+      endpointId: req.params.id,
+      deliveryId: req.params.deliveryId,
+    });
+
+    if (!delivery) {
+      return res.status(404).json({ error: 'Dead delivery not found for this endpoint' });
+    }
+
+    res.status(202).json({
+      data: {
+        deliveryId: delivery.id,
+        endpointId: delivery.endpointId,
+        status: 'pending',
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+/** @deprecated Use createEndpoint — kept for legacy /api/webhooks/subscribe */
+const subscribe = createEndpoint;
+
 export default {
+  createEndpoint,
   subscribe,
-  listSubscriptions,
-  deleteSubscription,
+  listEndpoints,
+  deleteEndpoint,
   getDeliveries,
+  redeliver,
 };

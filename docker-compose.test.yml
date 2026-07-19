@@ -1,11 +1,75 @@
 services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: stellar_escrow
+    ports:
+      - '5432:5432'
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d stellar_escrow"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - '9200:9200'
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -sf http://localhost:9200/_cluster/health || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend
+    environment:
+      DATABASE_URL: postgresql://user:password@postgres:5432/stellar_escrow
+      REDIS_URL: redis://redis:6379
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      PORT: 4000
+      NODE_ENV: test
+    ports:
+      - '4000:4000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4000/health >/dev/null 2>&1 || exit 1"]
+      interval: 5s
+      retries: 12
+      start_period: 20s
+
   app:
     build:
       context: .
       dockerfile: Dockerfile
       target: frontend
       args:
-        NEXT_PUBLIC_API_URL: http://localhost:4000
+        NEXT_PUBLIC_API_URL: http://backend:4000
     environment:
       NODE_ENV: test
     healthcheck:
@@ -13,6 +77,9 @@ services:
       interval: 5s
       retries: 12
       start_period: 20s
+    depends_on:
+      backend:
+        condition: service_healthy
 
   toxiproxy:
     image: ghcr.io/shopify/toxiproxy:2.9.0

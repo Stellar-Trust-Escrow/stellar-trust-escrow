@@ -116,6 +116,7 @@ jobs:
 
       - name: Post sticky PR comment
         if: github.event_name == 'pull_request'
+        continue-on-error: true
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           header: gas-profiler

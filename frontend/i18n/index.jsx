@@ -3,15 +3,28 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { defaultLocale, locales, isRTL } from './config.js';
 
+// Only the default locale is bundled up-front. Other locales are code-split
+// into their own chunks and fetched on demand when the user switches language.
 import en from './locales/en.json';
-import es from './locales/es.json';
-import fr from './locales/fr.json';
-import de from './locales/de.json';
-import ar from './locales/ar.json';
-import zh from './locales/zh.json';
 
-const messages = { en, es, fr, de, ar, zh };
 const STORAGE_KEY = 'ste_locale';
+
+async function loadLocaleMessages(l) {
+  switch (l) {
+    case 'es':
+      return (await import('./locales/es.json')).default;
+    case 'fr':
+      return (await import('./locales/fr.json')).default;
+    case 'de':
+      return (await import('./locales/de.json')).default;
+    case 'ar':
+      return (await import('./locales/ar.json')).default;
+    case 'zh':
+      return (await import('./locales/zh.json')).default;
+    default:
+      return en;
+  }
+}
 
 const I18nContext = createContext(null);
 
@@ -30,12 +43,26 @@ function getInitialLocale(fallback) {
 
 export function I18nProvider({ children, initialLocale = defaultLocale }) {
   const [locale, setLocaleState] = useState(initialLocale);
+  const [messages, setMessages] = useState({ en });
 
   // Hydrate from localStorage after mount
   useEffect(() => {
     const detected = getInitialLocale(initialLocale);
     if (detected !== locale) setLocaleState(detected);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch the active locale's messages if they haven't been loaded yet
+  useEffect(() => {
+    let cancelled = false;
+    if (!messages[locale]) {
+      loadLocaleMessages(locale).then((m) => {
+        if (!cancelled) setMessages((prev) => ({ ...prev, [locale]: m }));
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [locale, messages]);
 
   const setLocale = useCallback((l) => {
     if (!locales.includes(l)) return;
@@ -45,7 +72,7 @@ export function I18nProvider({ children, initialLocale = defaultLocale }) {
 
   const t = useCallback(
     (key) => resolve(messages[locale] ?? messages[defaultLocale], key),
-    [locale],
+    [locale, messages],
   );
 
   const formatDate = useCallback(

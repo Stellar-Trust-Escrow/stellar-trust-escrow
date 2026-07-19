@@ -1,0 +1,104 @@
+name: Load Tests
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * 0' # Weekly on Sunday
+
+jobs:
+  load-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Compose
+        run: |
+          docker compose -f docker-compose.test.yml up -d backend postgres redis elasticsearch
+          docker compose -f docker-compose.test.yml ps
+
+      - name: Wait for backend to be ready
+        run: |
+          echo "Waiting for backend..."
+          timeout 60 bash -c 'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' http://localhost:4000/health)" != "200" ]]; do sleep 2; done' || false
+          echo "Backend is ready!"
+
+      - name: Migrate Database
+        run: |
+          docker compose -f docker-compose.test.yml exec backend npm run db:migrate:deploy
+
+      - name: Seed Test Data
+        run: |
+          docker compose -f docker-compose.test.yml exec backend node database/seed/loadTestSeed.js
+
+      - name: Setup k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run Load Tests
+        run: |
+          # Create current.json incrementally or just let summary.js append to it
+          # Wait, summary.js will overwrite current.json. We should probably run tests sequentially
+          # But we want to generate a single report. We can run them in a loop
+          # But for k6, running sequentially will overwrite current.json each time unless we write a wrapper script
+          # Actually, let's create a combined test or write a small k6 runner that merges current.jsons
+          
+          # We can create a script `tests/load/run-all.sh` or just run them here:
+          mkdir -p tests/load/reports
+          rm -f tests/load/current.json
+          
+          # Run each test sequentially
+          for test in auth_login escrows_list escrow_create escrow_detail milestone_release; do
+            echo "Running $test..."
+            k6 run tests/load/k6/${test}.js --out json=tests/load/reports/${test}.json --summary-export=tests/load/reports/${test}_summary.json
+            
+            # Since summary.js will overwrite current.json, we will copy it
+            if [ -f tests/load/current.json ]; then
+              mv tests/load/current.json tests/load/reports/${test}_current.json
+            fi
+          done
+          
+          # Merge current.jsons into one
+          node -e "
+            const fs = require('fs');
+            const merged = {};
+            for (const test of ['auth_login', 'escrows_list', 'escrow_create', 'escrow_detail', 'milestone_release']) {
+              const file = \`tests/load/reports/\${test}_current.json\`;
+              if (fs.existsSync(file)) {
+                Object.assign(merged, JSON.parse(fs.readFileSync(file)));
+              }
+            }
+            fs.writeFileSync('tests/load/current.json', JSON.stringify(merged, null, 2));
+          "
+
+      - name: Compare Baseline
+        run: |
+          # If baseline.json exists in repo, it's used. If not, this generates it locally.
+          # Note: If generating locally, it won't be pushed back to the repo automatically unless we add a git commit step.
+          # For now, we assume if it's the first run, the dev should commit it.
+          node tests/load/compare.js > regression_output.txt
+          cat regression_output.txt
+
+      - name: Post PR Comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const output = fs.readFileSync('regression_output.txt', 'utf8');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '### Load Test Results\n\n```text\n' + output + '\n```'
+            })
+
+      - name: Stop Docker Compose
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v

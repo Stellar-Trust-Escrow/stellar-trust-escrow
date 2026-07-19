@@ -24,6 +24,9 @@ const PUBLIC_ROUTES = [
   { method: 'GET', path: '/health' },
   { method: 'GET', path: '/metrics' },
   { method: 'GET', path: '/csrf-token' },
+  // Public template read access: public templates are browsable/anonymous and
+  // private templates are still gated to their owner by the controller (403).
+  { method: 'GET', path: '/v1/templates' },
 ];
 
 function isPublicRoute(req) {
