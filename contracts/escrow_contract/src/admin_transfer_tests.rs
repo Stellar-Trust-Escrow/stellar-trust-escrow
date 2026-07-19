@@ -81,7 +81,7 @@ mod admin_transfer_tests {
         let victim = Address::generate(&env);
 
         let result = contract.try_propose_admin(&attacker, &victim);
-        assert_eq!(result, Err(Ok(EscrowError::E70)));
+        assert_eq!(result, Err(Ok(EscrowError::E4)));
     }
 
     /// After a successful transfer, `DataKey::PendingAdmin` is cleared —

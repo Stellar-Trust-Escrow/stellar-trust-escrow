@@ -14,10 +14,10 @@
 //! Run with:
 //!   cargo test -p stellar-trust-escrow-contract --test integration
 
-use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env, String};
-use stellar_trust_escrow_contract::{
+use escrow_contract::{
     EscrowContract, EscrowContractClient, EscrowStatus, MultisigConfig, MS_REJECTED, MS_SUBMITTED,
 };
+use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env, String};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
