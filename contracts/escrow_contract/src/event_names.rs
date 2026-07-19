@@ -8,6 +8,8 @@
 //! Each constant maps 1-to-1 to a `symbol_short!` call that previously
 //! appeared inline in `events.rs`.
 
+#![allow(dead_code)]
+
 use soroban_sdk::{symbol_short, Symbol};
 
 // ── Escrow lifecycle ──────────────────────────────────────────────────────────
