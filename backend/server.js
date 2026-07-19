@@ -37,6 +37,7 @@ import reputationRoutes from './api/routes/reputationRoutes.js';
 import userRoutes from './api/routes/userRoutes.js';
 import auditRoutes from './api/routes/auditRoutes.js';
 import authRoutes from './api/routes/authRoutes.js';
+import authV1Routes from './api/routes/auth.js';
 import complianceRoutes from './api/routes/complianceRoutes.js';
 import incidentRoutes from './api/routes/incidentRoutes.js';
 import batchRoutes from './api/routes/batchRoutes.js';
@@ -195,6 +196,7 @@ app.use('/api/health', healthRoutes);
 app.use('/ws/health', wsHealthRoutes);
 app.use('/api', tenantMiddleware);
 app.use('/api/auth', authRoutes);
+app.use('/api/v1/auth', authV1Routes);
 app.use('/api/tenant', tenantRoutes);
 app.use('/api/escrows', escrowRoutes);
 
