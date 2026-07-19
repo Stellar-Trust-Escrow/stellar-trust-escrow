@@ -82,9 +82,9 @@ pub enum EcErr {
     InvalidEscrowState = 137,
     NoCancellationProposal = 138,
     /// Caller has already cast an approval vote for this milestone.
-    AlreadyVoted = 70,
+    AlreadyVoted = 139,
     /// Approval threshold must be > 0 and <= number of approvers.
-    InvalidThreshold = 71,
+    InvalidThreshold = 140,
 }
 
 /// Backward-compatible alias — existing code imports `EscrowError`; the oracle
