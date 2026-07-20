@@ -1,24 +1,24 @@
-# Rollback: CQRS write model + exactly-once indexer support
+# Rollback: 20260718000000_escrow_write_model_and_indexer
 
-## What this migration adds
+## What this migration does
 
-- `failed_events` table (compensation log for unpublished domain events)
-- `event_id` unique index on `contract_events` (exactly-once event indexing)
-- New `EscrowStatus` enum values: `Draft`, `Funded`, `InProgress`, `ReleaseRequested`, `Resolved`, `Released`, `Expired`
+- Extends `EscrowStatus` enum with full lifecycle values (Draft, Funded, InProgress, etc.)
+- Adds `contract_events.event_id` unique column for exactly-once idempotency
+- Creates `failed_events` table for compensation log of failed domain-event publications
 
-## Rollback procedure (run `down()`)
+## Rollback procedure
 
-```sql
-DROP TABLE IF EXISTS "failed_events";
-DROP INDEX IF EXISTS "contract_events_event_id_key";
-ALTER TABLE "contract_events" DROP COLUMN IF EXISTS "event_id";
-```
+The `down()` function reverses structural changes:
 
-> **Note:** The new EscrowStatus enum values (`Draft`, `Funded`, etc.) cannot be
-> removed without recreating the entire enum type. They are backward-compatible
-> additions and are left in place after rollback.
+1. Drop `failed_events` table
+2. Drop `contract_events_event_id_key` unique index
+3. Drop `contract_events.event_id` column
 
-## Safety check
+Note: Enum values (`EscrowStatus` additions) cannot be removed in PostgreSQL without
+recreating the type. They are left in place as backward-compatible additions.
 
-- No existing rows are deleted or modified during rollback.
-- Verify that no application code references `failed_events` or `event_id` before rolling back.
+## Data impact
+
+All failed domain-event records in `failed_events` are permanently lost on rollback.
+The `event_id` column and its uniqueness constraint are removed — any escrow event
+deduplication relying on this column will no longer function after rollback.

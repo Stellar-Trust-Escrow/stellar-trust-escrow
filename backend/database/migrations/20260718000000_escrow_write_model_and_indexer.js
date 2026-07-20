@@ -47,11 +47,11 @@ export async function up(prisma) {
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "failed_events" (
       "id"         SERIAL PRIMARY KEY,
-      "tenant_id"  VARCHAR(255) NOT NULL,
-      "event_type" VARCHAR(255) NOT NULL,
+      "tenant_id"  TEXT NOT NULL,
+      "event_type" TEXT NOT NULL,
       "payload"    JSONB NOT NULL,
       "error"      TEXT,
-      "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
       CONSTRAINT "failed_events_tenant_fkey"
         FOREIGN KEY ("tenant_id") REFERENCES "tenants" ("id") ON DELETE RESTRICT
     )
