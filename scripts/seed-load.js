@@ -57,21 +57,31 @@ function fakeHash(seed) {
   return h;
 }
 
-function buildInsert(table, columns, rows) {
+function buildInsert(table, columns, rows, casts = {}) {
   const colList = columns.join(', ');
   const placeholders = rows
-    .map((_, r) => '(' + columns.map((_, c) => `$${r * columns.length + c + 1}`).join(', ') + ')')
+    .map(
+      (_, r) =>
+        '(' +
+        columns
+          .map((col, c) => {
+            const cast = casts[col] ? `::${casts[col]}` : '';
+            return `$${r * columns.length + c + 1}${cast}`;
+          })
+          .join(', ') +
+        ')',
+    )
     .join(', ');
   const params = [];
   for (const row of rows) for (const v of row) params.push(v);
   return { sql: `INSERT INTO ${table} (${colList}) VALUES ${placeholders}`, params };
 }
 
-async function chunkedInsert(table, columns, rows, label) {
+async function chunkedInsert(table, columns, rows, label, casts = {}) {
   let inserted = 0;
   for (let i = 0; i < rows.length; i += BATCH) {
     const slice = rows.slice(i, i + BATCH);
-    const { sql, params } = buildInsert(table, columns, slice);
+    const { sql, params } = buildInsert(table, columns, slice, casts);
     await prisma.$executeRawUnsafe(sql, ...params);
     inserted += slice.length;
     if (inserted % (BATCH * 25) === 0 || inserted === rows.length) {
@@ -85,12 +95,14 @@ async function chunkedInsert(table, columns, rows, label) {
 
 async function main() {
   const started = Date.now();
-  console.log(`🌱 Load seed — ${ESCROW_ROWS.toLocaleString()} escrows, ${MILESTONE_ROWS.toLocaleString()} milestones\n`);
+  console.log(
+    `🌱 Load seed — ${ESCROW_ROWS.toLocaleString()} escrows, ${MILESTONE_ROWS.toLocaleString()} milestones\n`,
+  );
 
   // 1. Tenant (required FK for escrows/milestones)
   await prisma.$executeRawUnsafe(
     `INSERT INTO tenants (id, slug, name, status, domains, created_at, updated_at)
-     VALUES ($1, $2, $3, 'active', '[]', NOW(), NOW())
+     VALUES ($1, $2, $3, 'active', '{}', NOW(), NOW())
      ON CONFLICT (id) DO NOTHING`,
     TENANT_ID,
     'load-test',
@@ -100,9 +112,20 @@ async function main() {
 
   // 2. Escrows (batched)
   const escrowCols = [
-    'id', 'tenant_id', 'client_address', 'freelancer_address', 'arbiter_address',
-    'token_address', 'total_amount', 'remaining_balance', 'status', 'brief_hash',
-    'deadline', 'created_at', 'updated_at', 'created_ledger',
+    'id',
+    'tenant_id',
+    'client_address',
+    'freelancer_address',
+    'arbiter_address',
+    'token_address',
+    'total_amount',
+    'remaining_balance',
+    'status',
+    'brief_hash',
+    'deadline',
+    'created_at',
+    'updated_at',
+    'created_ledger',
   ];
   const escrowRows = [];
   for (let i = 1; i <= ESCROW_ROWS; i++) {
@@ -125,13 +148,22 @@ async function main() {
       BigInt(1000 + i),
     ]);
   }
-  const escrowsInserted = await chunkedInsert('escrows', escrowCols, escrowRows, 'Escrows');
+  const escrowsInserted = await chunkedInsert('escrows', escrowCols, escrowRows, 'Escrows', {
+    status: '"EscrowStatus"',
+  });
   console.log(`✅ Escrows:    ${escrowsInserted.toLocaleString()}`);
 
   // 3. Milestones (5 per escrow, batched)
   const msCols = [
-    'tenant_id', 'milestone_index', 'escrow_id', 'title',
-    'description_hash', 'amount', 'status', 'submitted_at', 'resolved_at',
+    'tenant_id',
+    'milestone_index',
+    'escrow_id',
+    'title',
+    'description_hash',
+    'amount',
+    'status',
+    'submitted_at',
+    'resolved_at',
   ];
   const msRows = [];
   let mi = 0;
@@ -147,11 +179,15 @@ async function main() {
         String(100_000 + mi),
         status,
         status === 'Pending' ? null : new Date(Date.UTC(2024, 1, 1) + mi * 1000),
-        status === 'Approved' || status === 'Rejected' ? new Date(Date.UTC(2024, 2, 1) + mi * 1000) : null,
+        status === 'Approved' || status === 'Rejected'
+          ? new Date(Date.UTC(2024, 2, 1) + mi * 1000)
+          : null,
       ]);
     }
   }
-  const msInserted = await chunkedInsert('milestones', msCols, msRows, 'Milestones');
+  const msInserted = await chunkedInsert('milestones', msCols, msRows, 'Milestones', {
+    status: '"MilestoneStatus"',
+  });
   console.log(`✅ Milestones: ${msInserted.toLocaleString()}`);
 
   const elapsed = ((Date.now() - started) / 1000).toFixed(1);

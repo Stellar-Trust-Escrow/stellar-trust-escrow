@@ -35,8 +35,19 @@ export async function up(prisma) {
   }
 
   // 2. Exactly-once idempotency key for contract events.
+  // Use TEXT NOT NULL (matching Prisma's String mapping) with a temporary DEFAULT
+  // so existing rows satisfy the NOT NULL constraint, then drop the default to
+  // match the schema fingerprint produced by prisma db push.
   await prisma.$executeRawUnsafe(`
-    ALTER TABLE "contract_events" ADD COLUMN IF NOT EXISTS "event_id" VARCHAR(255)
+    DO $$ BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'contract_events' AND column_name = 'event_id'
+      ) THEN
+        ALTER TABLE "contract_events" ADD COLUMN "event_id" TEXT NOT NULL DEFAULT '';
+        ALTER TABLE "contract_events" ALTER COLUMN "event_id" DROP DEFAULT;
+      END IF;
+    END $$
   `);
   await prisma.$executeRawUnsafe(`
     CREATE UNIQUE INDEX IF NOT EXISTS "contract_events_event_id_key"
@@ -47,11 +58,11 @@ export async function up(prisma) {
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "failed_events" (
       "id"         SERIAL PRIMARY KEY,
-      "tenant_id"  VARCHAR(255) NOT NULL,
-      "event_type" VARCHAR(255) NOT NULL,
+      "tenant_id"  TEXT NOT NULL,
+      "event_type" TEXT NOT NULL,
       "payload"    JSONB NOT NULL,
       "error"      TEXT,
-      "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
       CONSTRAINT "failed_events_tenant_fkey"
         FOREIGN KEY ("tenant_id") REFERENCES "tenants" ("id") ON DELETE RESTRICT
     )

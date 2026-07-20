@@ -118,3 +118,7 @@ pub const FEE_COLLECTED: Symbol = symbol_short!("fee_col");
 pub const APPROVAL_VOTE_CAST: Symbol = symbol_short!("apr_vote");
 /// Approval threshold reached — milestone transitions to MS_APPROVED.
 pub const APPROVAL_THRESHOLD_MET: Symbol = symbol_short!("apr_thr");
+
+// ── Batch operations ──────────────────────────────────────────────────────────
+
+pub const BATCH_COMPLETED: Symbol = symbol_short!("bat_cmpl");

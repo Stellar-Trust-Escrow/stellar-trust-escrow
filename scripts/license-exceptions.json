@@ -1,0 +1,5 @@
+{
+  "exceptions": [
+    { "name": "some-package", "version": "1.0.0", "license": "CC-BY-3.0", "reason": "docs" }
+  ]
+}

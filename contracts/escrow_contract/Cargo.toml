@@ -15,5 +15,8 @@ ed25519-dalek = "2.1"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[build-dependencies]
+serde_json = "1.0"
+
 [features]
 testutils = ["soroban-sdk/testutils"]

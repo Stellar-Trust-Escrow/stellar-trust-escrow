@@ -67,6 +67,7 @@ import complianceService from './services/complianceService.js';
 import { startIndexer } from './services/eventIndexer.js';
 import { startRpcMonitor } from './monitoring/rpcMonitor.js';
 import { createEventWorker, createDeadLetterWorker } from './services/eventWorker.js';
+import { startExportWorker } from './queues/exportQueue.js';
 import { createKeyRotationWorker, scheduleKeyRotationJobs } from './queues/keyRotationQueue.js';
 import './workers/webhookWorker.js';
 import { setupSwagger } from './api/docs/swagger.js';
@@ -319,7 +320,8 @@ async function startServer() {
           const eventWorker = createEventWorker();
           const deadLetterWorker = createDeadLetterWorker();
           const keyRotationWorker = createKeyRotationWorker();
-          logger.info('[BullMQ] Event processing workers started');
+          const exportWorker = startExportWorker();
+          logger.info('[BullMQ] Event + export processing workers started');
 
           // Schedule Key Rotation Jobs
           await scheduleKeyRotationJobs();
@@ -329,6 +331,7 @@ async function startServer() {
             await eventWorker.close();
             await deadLetterWorker.close();
             await keyRotationWorker.close();
+            await exportWorker.close();
           };
 
           process.once('SIGTERM', closeWorkers);

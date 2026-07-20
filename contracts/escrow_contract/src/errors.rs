@@ -90,6 +90,8 @@ pub enum EcErr {
     InvalidThreshold = 140,
     UnregisteredArbiter = 141,
     Unauthorized = 142,
+// No changes from feat/on-chain-escrow-expiry.
+// Remove the conflict markers and discard the develop additions.
 }
 
 /// Backward-compatible alias — existing code imports `EscrowError`; the oracle

@@ -1,0 +1,17 @@
+[package]
+name = "escrow_linking"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+soroban-sdk = { version = "21.0.0" }
+stellar-trust-shared = { path = "../shared" }
+
+[dev-dependencies]
+soroban-sdk = { version = "21.0.0", features = ["testutils"] }
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+testutils = ["soroban-sdk/testutils"]

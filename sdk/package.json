@@ -1,0 +1,41 @@
+{
+  "name": "@stellar-trust/sdk",
+  "version": "0.1.0",
+  "description": "Typed TypeScript SDK for all StellarTrust escrow contract interactions",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "generate": "node scripts/generate.js",
+    "docs": "typedoc src/index.ts --out docs",
+    "test": "jest --config jest.config.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@stellar/stellar-sdk": "^12.3.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.14.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.3",
+    "tsup": "^8.1.0",
+    "typedoc": "^0.26.3",
+    "typescript": "^5.5.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
