@@ -28,6 +28,7 @@ import { useToast } from '../../../contexts/ToastContext';
 import MilestoneList from '../../../components/escrow/MilestoneList';
 import DisputeModal from '../../../components/escrow/DisputeModal';
 import CancelEscrowModal from '../../../components/escrow/CancelEscrowModal';
+import ExportReceiptButton from '../../../components/escrow/ExportReceiptButton';
 import Badge from '../../../components/ui/Badge';
 import Button from '../../../components/ui/Button';
 import ReputationBadge from '../../../components/ui/ReputationBadge';
@@ -252,6 +253,7 @@ export default function EscrowDetailPage({ params }) {
               </Button>
             </>
           )}
+          <ExportReceiptButton escrow={{ ...escrow, id }} />
           <Button variant="ghost" size="sm" onClick={handleShare} aria-label="Share escrow">
             ↗ Share
           </Button>
@@ -359,6 +361,7 @@ export default function EscrowDetailPage({ params }) {
             </Button>
           </>
         )}
+        <ExportReceiptButton escrow={{ ...escrow, id }} />
         <Button
           variant="ghost"
           className="min-h-touch px-4"
