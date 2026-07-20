@@ -77,7 +77,6 @@ import { createGateway } from './gateway/index.js';
 import queueDashboardRoutes from './api/routes/queueDashboardRoutes.js';
 import chatRoutes from './api/routes/chatRoutes.js';
 import { startAnalyticsWorker } from './workers/analyticsWorker.js';
-import approvalRoutes from './api/routes/approvalRoutes.js';
 
 // Attach Prisma query instrumentation (metrics + traces)
 attachPrismaMetrics(prisma);
@@ -226,7 +225,6 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/v1/templates', templateRoutes);
 app.use('/api/insurance', insuranceRoutes);
 app.use('/api/analytics', analyticsRoutes);
-app.use('/api/v1/approvals', approvalRoutes);
 app.use('/metrics', metricsRoutes);
 app.use('/admin/queues', queueDashboardRoutes);
 app.use('/.well-known', wellKnownRoutes);
