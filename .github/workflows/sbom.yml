@@ -58,9 +58,26 @@ jobs:
           [ -f sbom-frontend.json ] && FILES="$FILES sbom-frontend.json"
           [ -f sbom-contracts.json ] && FILES="$FILES sbom-contracts.json"
           
-          # Use @cyclonedx/cli for merging (correct package for merge operations)
+          # Use Node.js to merge JSON files (no external package needed)
           if [ -n "$FILES" ]; then
-            npx --yes @cyclonedx/cli merge --input-files $FILES --output-file sbom-full.json
+            node -e "
+              const fs = require('fs');
+              const files = '$FILES'.trim().split(/\s+/);
+              const merged = {
+                bomFormat: 'CycloneDX',
+                specVersion: '1.4',
+                version: 1,
+                components: []
+              };
+              files.forEach(file => {
+                const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+                if (data.components) {
+                  merged.components.push(...data.components);
+                }
+              });
+              fs.writeFileSync('sbom-full.json', JSON.stringify(merged, null, 2));
+              console.log('Merged ' + files.length + ' SBOM files into sbom-full.json');
+            "
           else
             echo "No SBOM files to merge"
             exit 1
