@@ -1,6 +1,6 @@
+use crate::types::{DataKey, ParentEscrowRecord};
 use soroban_sdk::{Address, Env};
 use stellar_trust_shared::{bump_instance_ttl, bump_persistent_ttl};
-use crate::types::{DataKey, ParentEscrowRecord};
 
 pub fn get_parent_record(env: &Env, parent_id: u64) -> Option<ParentEscrowRecord> {
     let key = DataKey::ParentRecord(parent_id);
@@ -56,6 +56,8 @@ pub fn get_core_contract(env: &Env) -> Option<Address> {
 }
 
 pub fn set_core_contract(env: &Env, addr: &Address) {
-    env.storage().instance().set(&DataKey::CoreContractAddress, addr);
+    env.storage()
+        .instance()
+        .set(&DataKey::CoreContractAddress, addr);
     bump_instance_ttl(env);
 }
