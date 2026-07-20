@@ -1,92 +1,40 @@
 import express from 'express';
 import disputeController from '../controllers/disputeController.js';
-import { cacheResponse, invalidateOn, TTL } from '../middleware/cache.js';
 import authMiddleware from '../middleware/auth.js';
-import { handleUploadError } from '../middleware/fileUpload.js';
-import {
-  validate,
-  disputeListQueryRules,
-  disputeEscrowIdParamRules,
-} from '../middleware/validation.js';
+import adminAuth from '../middleware/adminAuth.js';
 
 const router = express.Router();
 router.use(authMiddleware);
 
-// ── List / Get ────────────────────────────────────────────────────────────────
+// ── List / History ────────────────────────────────────────────────────────────
 
-router.get(
-  '/',
-  validate(disputeListQueryRules),
-  cacheResponse({ ttl: TTL.LIST, tags: ['disputes'] }),
-  disputeController.listDisputes,
-);
+router.get('/', disputeController.listDisputes);
+router.get('/history', disputeController.getResolutionHistory);
 
-router.get(
-  '/history',
-  cacheResponse({ ttl: TTL.LIST, tags: ['disputes', 'disputes:history'] }),
-  disputeController.getResolutionHistory,
-);
+// ── Open dispute for an escrow ────────────────────────────────────────────────
 
-router.get(
-  '/:escrowId',
-  validate(disputeEscrowIdParamRules),
-  cacheResponse({
-    ttl: TTL.DETAIL,
-    tags: (req) => ['disputes', `dispute:${req.params.escrowId}`],
-  }),
-  disputeController.getDispute,
-);
+router.post('/:escrowId/open', disputeController.openDispute);
+
+// ── Individual dispute ────────────────────────────────────────────────────────
+
+router.get('/:disputeId', disputeController.getDispute);
 
 // ── Evidence ──────────────────────────────────────────────────────────────────
 
-router.post(
-  '/:id/evidence',
-  invalidateOn({ tags: (req) => [`dispute:${req.params.id}`, 'disputes'] }),
-  disputeController.uploadEvidence,
-  disputeController.postEvidence,
-  handleUploadError,
-);
+router.post('/:disputeId/evidence', disputeController.postEvidence);
+router.get('/:disputeId/evidence', disputeController.listEvidence);
 
-router.get(
-  '/:id/evidence',
-  cacheResponse({
-    ttl: TTL.DETAIL,
-    tags: (req) => [`dispute:${req.params.id}`],
-  }),
-  disputeController.listEvidence,
-);
+// ── Arbiter ruling ────────────────────────────────────────────────────────────
 
-// ── Automated Resolution ──────────────────────────────────────────────────────
+router.post('/:disputeId/rule', disputeController.submitRuling);
 
-router.post(
-  '/:id/resolve/auto',
-  invalidateOn({
-    tags: (req) => [`dispute:${req.params.id}`, `escrow:${req.params.id}`, 'disputes', 'escrows'],
-  }),
-  disputeController.autoResolve,
-);
+// ── Appeal ────────────────────────────────────────────────────────────────────
 
-router.get(
-  '/:id/resolve/recommendation',
-  cacheResponse({
-    ttl: TTL.DETAIL,
-    tags: (req) => [`dispute:${req.params.id}`],
-  }),
-  disputeController.getRecommendation,
-);
+router.post('/:disputeId/appeal', disputeController.fileAppeal);
 
-// ── Appeals ───────────────────────────────────────────────────────────────────
+// ── Admin-only actions ────────────────────────────────────────────────────────
 
-router.post(
-  '/:id/appeals',
-  invalidateOn({ tags: (req) => [`dispute:${req.params.id}`, 'disputes'] }),
-  disputeController.postAppeal,
-);
-
-router.patch(
-  '/appeals/:appealId',
-  invalidateOn({ tags: ['disputes'] }),
-  disputeController.patchAppeal,
-);
+router.post('/:disputeId/assign-arbiter', adminAuth, disputeController.assignArbiter);
+router.post('/:disputeId/finalize', adminAuth, disputeController.finalizeDispute);
 
 export default router;
