@@ -47,7 +47,16 @@ export async function up(prisma) {
   `);
 
   await prisma.$executeRawUnsafe(`
-    CREATE INDEX IF NOT EXISTS webhook_deliveries_subscription_id_idx ON webhook_deliveries(subscription_id)
+    DO $$ BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'webhook_deliveries'
+          AND column_name = 'subscription_id'
+      ) THEN
+        CREATE INDEX IF NOT EXISTS webhook_deliveries_subscription_id_idx ON webhook_deliveries(subscription_id);
+      END IF;
+    END $$
   `);
 
   await prisma.$executeRawUnsafe(`
