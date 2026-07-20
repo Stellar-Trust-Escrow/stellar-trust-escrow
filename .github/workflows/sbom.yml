@@ -18,25 +18,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install dependencies
         run: |
-          npm install -g @cyclonedx/cyclonedx-cli
           cargo install cargo-cyclonedx
 
       - name: Generate SBOM (Backend)
         run: |
           cd backend || true
-          # Note: If there's no package-lock.json, cyclonedx-npm works better with dependencies installed
           npm install --package-lock-only || true
           npx @cyclonedx/cyclonedx-npm --output-format JSON --output-file ../sbom-backend.json
 
@@ -48,16 +46,33 @@ jobs:
 
       - name: Generate SBOM (Rust Contracts)
         run: |
-          cargo cyclonedx --format json --output-cdx sbom-contracts.json
+          cargo cyclonedx --format json
 
       - name: Merge SBOMs
         run: |
-          # Only merge files that were successfully created
-          FILES=""
-          [ -f sbom-backend.json ] && FILES="$FILES sbom-backend.json"
-          [ -f sbom-frontend.json ] && FILES="$FILES sbom-frontend.json"
-          [ -f sbom-contracts.json ] && FILES="$FILES sbom-contracts.json"
-          cyclonedx-cli merge --input-files $FILES --output-file sbom-full.json
+          node --input-type=module -e "
+          import fs from 'fs';
+          let files = ['sbom-backend.json', 'sbom-frontend.json'];
+          try {
+            const dirs = fs.readdirSync('contracts');
+            for (const d of dirs) {
+              try {
+                const subFiles = fs.readdirSync('contracts/' + d);
+                for (const f of subFiles) {
+                  if (f.endsWith('.cdx.json')) files.push('contracts/' + d + '/' + f);
+                }
+              } catch (e) {}
+            }
+          } catch(e) {}
+          let components = [];
+          for (const f of files) {
+            if (fs.existsSync(f)) {
+              const d = JSON.parse(fs.readFileSync(f, 'utf8'));
+              if (d.components) components.push(...d.components);
+            }
+          }
+          fs.writeFileSync('sbom-full.json', JSON.stringify({components}, null, 2));
+          "
 
       - name: Upload SBOM Artifact
         uses: actions/upload-artifact@v4
