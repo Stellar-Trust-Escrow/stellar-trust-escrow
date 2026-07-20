@@ -687,6 +687,9 @@ model AuditLog {
   actor      String
   /// Primary resource identifier (escrow id, address, dispute id, etc.)
   resourceId String?  @map("resource_id")
+  escrowId   BigInt?  @map("escrow_id")
+  fromState  String?  @map("from_state")
+  toState    String?  @map("to_state")
   /// Snapshot of relevant state at the time of the event (JSON)
   metadata   Json?
   /// HTTP status code or outcome code
@@ -705,6 +708,7 @@ model AuditLog {
   @@index([action])
   @@index([actor])
   @@index([resourceId])
+  @@index([escrowId])
   @@index([createdAt(sort: Desc)])
   // Composite indexes for common admin filter combinations
   @@index([category, action])
@@ -872,4 +876,117 @@ model SystemConfig {
 
   @@index([key])
   @@map("system_config")
+}
+
+model EscrowApprovers {
+  id          String   @id @default(cuid())
+  escrowId    String   @unique @map("escrow_id")
+  approvers   Json
+  threshold   Int
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  approvalRecords MilestoneApprovalRecord[]
+
+  @@map("escrow_approvers")
+}
+
+model MilestoneApprovalRecord {
+  id          String   @id @default(cuid())
+  escrowId    String   @map("escrow_id")
+  milestoneId Int      @map("milestone_id")
+  approver    String
+  approvedAt  DateTime @map("approved_at")
+  txHash      String?  @map("tx_hash")
+  ledger      Int?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  escrowApprovers EscrowApprovers @relation(fields: [escrowId], references: [escrowId])
+
+  @@unique([escrowId, milestoneId, approver])
+  @@index([escrowId, milestoneId])
+  @@map("milestone_approval_records")
+}
+
+model InsuranceOptIn {
+  id             String   @id @default(cuid())
+  escrowId       String   @unique @map("escrow_id")
+  clientAddress  String   @map("client_address")
+  coverageAmount String   @map("coverage_amount")
+  premiumPaid    String   @map("premium_paid")
+  optedInAt      DateTime @map("opted_in_at")
+  expiresAt      DateTime? @map("expires_at")
+  active         Boolean  @default(true)
+
+  @@index([clientAddress])
+  @@index([active])
+  @@map("insurance_opt_ins")
+}
+
+model InsuranceClaim {
+  id          String   @id @default(cuid())
+  claimId     Int      @unique @map("claim_id")
+  claimant    String
+  description String
+  amount      String
+  status      String   @default("Pending")
+  submittedAt DateTime @map("submitted_at")
+  expiresAt   DateTime? @map("expires_at")
+  paidAt      DateTime? @map("paid_at")
+  txHash      String?  @map("tx_hash")
+  ledger      Int?
+
+  @@index([claimant])
+  @@index([status])
+  @@map("insurance_claims")
+}
+
+model InsuranceStake {
+  id          String   @id @default(cuid())
+  staker      String   @unique
+  amount      String
+  stakedAt    DateTime @map("staked_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("insurance_stakes")
+}
+
+model AnalyticsSnapshot {
+  id         String   @id @default(cuid())
+  snapshotAt DateTime @map("snapshot_at")
+  period     String   // '5min' | 'hourly' | 'daily'
+  metric     String
+  value      Float
+  labels     Json?
+
+  @@index([metric, period, snapshotAt])
+  @@map("analytics_snapshots")
+}
+
+model EscrowOwnership {
+  id            String    @id @default(cuid())
+  escrowId      String    @unique @map("escrow_id")
+  currentOwner  String    @map("current_owner")
+  previousOwner String?   @map("previous_owner")
+  transferredAt DateTime? @map("transferred_at")
+  txHash        String?   @map("tx_hash")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@index([currentOwner])
+  @@map("escrow_ownership")
+}
+
+model OwnershipTransferLog {
+  id        String   @id @default(cuid())
+  escrowId  String   @map("escrow_id")
+  fromOwner String   @map("from_owner")
+  toOwner   String   @map("to_owner")
+  txHash    String   @map("tx_hash")
+  ledger    Int
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([escrowId])
+  @@index([fromOwner])
+  @@index([toOwner])
+  @@map("ownership_transfer_logs")
 }
