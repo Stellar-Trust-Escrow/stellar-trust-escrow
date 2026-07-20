@@ -58,9 +58,9 @@ jobs:
           [ -f sbom-frontend.json ] && FILES="$FILES sbom-frontend.json"
           [ -f sbom-contracts.json ] && FILES="$FILES sbom-contracts.json"
           
-          # Use npx to run cyclonedx CLI without global install
+          # Use @cyclonedx/cli for merging (correct package for merge operations)
           if [ -n "$FILES" ]; then
-            npx --yes @cyclonedx/cyclonedx-npm merge --input-files $FILES --output-file sbom-full.json
+            npx --yes @cyclonedx/cli merge --input-files $FILES --output-file sbom-full.json
           else
             echo "No SBOM files to merge"
             exit 1
