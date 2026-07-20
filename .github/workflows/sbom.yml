@@ -61,7 +61,8 @@ jobs:
           echo "Generating Rust SBOM..."
           export NO_COLOR=1
           export TERM=dumb
-          if cargo cyclonedx --format json -o sbom-contracts.json; then
+          # cargo-cyclonedx outputs JSON by default, just redirect to file
+          if cargo cyclonedx > sbom-contracts.json 2>&1; then
             if [ -f sbom-contracts.json ] && [ -s sbom-contracts.json ]; then
               echo "✓ Rust SBOM generated successfully"
               echo "File size: $(wc -c < sbom-contracts.json) bytes"
