@@ -7,7 +7,7 @@ mod batch_approve_release_e2e_tests {
     };
 
     use crate::{
-        BatchError, CreateEscrowRequest, CrossEscrowRelease, EscrowContract, EscrowContractClient,
+        CreateEscrowRequest, CrossEscrowRelease, EscrowContract, EscrowContractClient, EscrowError,
         EscrowStatus, MilestoneInit, MultisigConfig, MS_SUBMITTED,
     };
 
