@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 
 export default function ProfileForm({ initialData = {}, address }) {
   const router = useRouter();
@@ -100,12 +101,14 @@ export default function ProfileForm({ initialData = {}, address }) {
       <div>
         <label className="block text-sm font-medium text-gray-300 mb-2">Profile Picture</label>
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center overflow-hidden border border-slate-700">
+          <div className="relative w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center overflow-hidden border border-slate-700">
             {initialData.avatarUrl ? (
-              <img
+              <Image
                 src={initialData.avatarUrl}
                 alt="Avatar"
-                className="w-full h-full object-cover"
+                fill
+                sizes="64px"
+                className="object-cover"
               />
             ) : (
               <span className="text-gray-500 text-sm">No img</span>

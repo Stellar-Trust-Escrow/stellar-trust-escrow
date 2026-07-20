@@ -1,0 +1,55 @@
+name: SDK Publish
+
+on:
+  push:
+    tags:
+      - 'sdk-v*'
+
+permissions:
+  contents: read
+  id-token: write  # for npm provenance
+
+jobs:
+  publish:
+    name: Build & Publish SDK
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+          cache: npm
+
+      - name: Install SDK dependencies
+        run: npm ci
+        working-directory: sdk
+
+      - name: Regenerate from spec.json
+        run: node scripts/generate.js
+        working-directory: sdk
+
+      - name: Type-check
+        run: npx tsc --noEmit
+        working-directory: sdk
+
+      - name: Test
+        run: npm test
+        working-directory: sdk
+
+      - name: Build
+        run: npm run build
+        working-directory: sdk
+
+      - name: Generate docs
+        run: npm run docs
+        working-directory: sdk
+        continue-on-error: true
+
+      - name: Publish to npm
+        run: npm publish --provenance --access public
+        working-directory: sdk
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

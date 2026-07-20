@@ -13,6 +13,11 @@ A platform where communities pool funds, contractors deliver work in verifiable 
 
 ---
 
+## Docs
+
+- Contract ABI & entry points: [docs/contract-abi.md](docs/contract-abi.md)
+
+
 ## The Problem This Solves
 
 Traditional freelance platforms hold funds in centralised escrow accounts — meaning you trust a company, not a contract. If the platform shuts down, gets hacked, or makes a unilateral decision, your money can be frozen or lost. Dispute resolution is opaque, outcomes are non-transferable, and there is no persistent track record that travels with you when you move to another platform.

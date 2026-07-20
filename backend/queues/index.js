@@ -44,7 +44,7 @@ const createQueue = (name) =>
   process.env.NODE_ENV === 'test' ? new InMemoryQueue(name) : new Queue(name, { connection });
 
 export const emailQueue = createQueue('email');
-export const webhookQueue = createQueue('webhook');
+export const webhookQueue = createQueue('webhook-delivery');
 export const scheduledQueue = createQueue('scheduled');
 
 // eventQueue is handled separately due to its complex retry/DLQ setup.

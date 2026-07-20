@@ -260,14 +260,14 @@ curl -X POST "https://localhost:4000/api/disputes/42/evidence" \
 
 ## Common contract error codes
 
-| Code | Name                   | Meaning |
-| ---- | ---------------------- | ------- |
-| 3    | `Unauthorized`         | Caller is not the client, freelancer, or arbiter where required |
-| 9    | `EscrowNotActive` / `DisputeAlreadyExists` | `raise_dispute` on a non-active or already disputed escrow |
-| 10   | `EscrowNotDisputed`    | `resolve_dispute` called when escrow is not disputed |
-| 20   | `AmountMismatch`       | `client_amount + freelancer_amount != remaining_balance` |
-| 23   | `DisputeTimeoutNotReached` | `claim_dispute_timeout` called before the timeout elapsed |
-| 19   | `InvalidEscrowAmount` / `Threshold` | `escalate_dispute_to_governance` on a low-value escrow |
+| Code | Name                                       | Meaning                                                         |
+| ---- | ------------------------------------------ | --------------------------------------------------------------- |
+| 3    | `Unauthorized`                             | Caller is not the client, freelancer, or arbiter where required |
+| 9    | `EscrowNotActive` / `DisputeAlreadyExists` | `raise_dispute` on a non-active or already disputed escrow      |
+| 10   | `EscrowNotDisputed`                        | `resolve_dispute` called when escrow is not disputed            |
+| 20   | `AmountMismatch`                           | `client_amount + freelancer_amount != remaining_balance`        |
+| 23   | `DisputeTimeoutNotReached`                 | `claim_dispute_timeout` called before the timeout elapsed       |
+| 19   | `InvalidEscrowAmount` / `Threshold`        | `escalate_dispute_to_governance` on a low-value escrow          |
 
 ## Best practices
 

@@ -1,0 +1,52 @@
+name: Chromatic
+
+# Publishes Storybook to Chromatic and runs visual-regression snapshots.
+# Only runs when shared UI components or the Storybook config change, so a
+# PR that edits e.g. `frontend/components/ui/Button.tsx` automatically gets a
+# Chromatic diff in its checks.
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'frontend/components/**'
+      - 'frontend/.storybook/**'
+      - '.github/workflows/chromatic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  chromatic:
+    name: Publish UI to Chromatic
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+        env:
+          HUSKY: 0
+
+      - name: Publish to Chromatic
+        uses: chromaui/action@v1
+        with:
+          # Configured as a GitHub Actions secret in repo settings.
+          projectToken: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
+          buildScriptName: build-storybook
+          workingDir: frontend
+          onlyChanged: true
+          # Fail the check when there are visual changes so they must be
+          # reviewed and accepted in Chromatic before the PR can merge. This
+          # is what blocks merges on unexpected UI regressions.
+          exitZeroOnChanges: false

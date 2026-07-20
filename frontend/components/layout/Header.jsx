@@ -23,6 +23,7 @@ import MobileDrawer from './MobileDrawer';
 import ThemeToggle from './ThemeToggle';
 import CurrencySelector from '../ui/CurrencySelector';
 import NetworkIndicator from './NetworkIndicator';
+import { cn } from '../../lib/utils';
 
 export default function Header() {
   const wallet = useWallet();
@@ -38,17 +39,31 @@ export default function Header() {
 
   return (
     <header
-      className={`border-b border-gray-200 bg-white/80 dark:border-gray-800 dark:bg-gray-950/80 backdrop-blur-sm sticky top-0 z-50 transition-shadow duration-200 ${scrolled ? 'shadow-lg shadow-black/20' : ''}`}
+      className={cn(
+        'border-b backdrop-blur-sm sticky top-0 z-50 transition-shadow duration-200',
+        scrolled ? 'shadow-lg' : ''
+      )}
+      style={{
+        borderColor: 'var(--color-border)',
+        backgroundColor: 'var(--color-bg-surface)',
+        boxShadow: scrolled ? '0 10px 15px -3px rgba(0, 0, 0, 0.1)' : 'none',
+      }}
     >
       <div className="container mx-auto px-4 max-w-7xl">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-sm">
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm"
+              style={{
+                backgroundColor: 'var(--color-brand)',
+                color: 'white',
+              }}
+            >
               S
             </div>
-            <span className="font-bold text-white hidden sm:inline">
-              StellarTrust<span className="text-indigo-400">Escrow</span>
+            <span className="font-bold hidden sm:inline" style={{ color: 'var(--color-text-primary)' }}>
+              StellarTrust<span style={{ color: 'var(--color-brand)' }}>Escrow</span>
             </span>
           </Link>
 
@@ -56,13 +71,31 @@ export default function Header() {
           <nav className="hidden md:flex items-center gap-6">
             <Link
               href="/dashboard"
-              className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white text-sm transition-colors"
+              className="text-sm transition-colors"
+              style={{
+                color: 'var(--color-text-secondary)',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = 'var(--color-text-primary)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'var(--color-text-secondary)';
+              }}
             >
               {t('nav.dashboard')}
             </Link>
             <Link
               href="/explorer"
-              className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white text-sm transition-colors"
+              className="text-sm transition-colors"
+              style={{
+                color: 'var(--color-text-secondary)',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = 'var(--color-text-primary)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'var(--color-text-secondary)';
+              }}
             >
               {t('nav.explorer')}
             </Link>
@@ -85,10 +118,19 @@ export default function Header() {
 
             {/* Hamburger — mobile only */}
             <button
-              className="md:hidden text-gray-400 hover:text-white p-1 rounded transition-colors"
+              className="md:hidden p-1 rounded transition-colors"
               aria-label="Open navigation menu"
               aria-expanded={isMobileMenuOpen}
               onClick={() => setIsMobileMenuOpen(true)}
+              style={{
+                color: 'var(--color-text-muted)',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = 'var(--color-text-primary)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'var(--color-text-muted)';
+              }}
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -106,17 +148,31 @@ export default function Header() {
 
         {/* Mobile Nav */}
         {isMobileMenuOpen && (
-          <nav className="md:hidden py-4 border-t border-gray-200 dark:border-gray-800 flex flex-col gap-4">
+          <nav className="md:hidden py-4 border-t flex flex-col gap-4" style={{ borderColor: 'var(--color-border)' }}>
             <Link
               href="/dashboard"
-              className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors px-2"
+              className="transition-colors px-2"
+              style={{ color: 'var(--color-text-secondary)' }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = 'var(--color-text-primary)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'var(--color-text-secondary)';
+              }}
               onClick={() => setIsMobileMenuOpen(false)}
             >
               {t('nav.dashboard')}
             </Link>
             <Link
               href="/explorer"
-              className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors px-2"
+              className="transition-colors px-2"
+              style={{ color: 'var(--color-text-secondary)' }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = 'var(--color-text-primary)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'var(--color-text-secondary)';
+              }}
               onClick={() => setIsMobileMenuOpen(false)}
             >
               {t('nav.explorer')}

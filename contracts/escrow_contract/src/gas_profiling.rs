@@ -10,7 +10,7 @@ mod gas_profiling {
     extern crate std;
     use std::println;
     use crate::{EscrowContract, EscrowContractClient};
-    use soroban_sdk::{testutils::Address as _, token, BytesN, Env, String};
+    use soroban_sdk::{testutils::{Address as _, Ledger}, token, BytesN, Env, String};
 
     fn setup() -> (Env, soroban_sdk::Address, soroban_sdk::Address, EscrowContractClient<'static>) {
         let env = Env::default();
@@ -257,6 +257,8 @@ mod gas_profiling {
         env.budget().reset_default();
         client.pause(&admin);
         print("pause", env.budget().cpu_instruction_cost(), env.budget().memory_bytes_cost());
+
+        env.ledger().with_mut(|l| l.timestamp += 172_800);
 
         env.budget().reset_default();
         client.unpause(&admin);

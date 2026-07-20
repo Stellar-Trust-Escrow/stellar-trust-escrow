@@ -29,7 +29,10 @@ for arg in "$@"; do
   esac
 done
 
-CONTRACTS=(escrow_contract insurance_contract)
+# Only test contracts that exist in the workspace. `insurance_contract`/`governance`/
+# `escrow_extensions` were removed from the workspace (their sources are being rebuilt),
+# so they are intentionally excluded here to avoid `cargo` failing on a missing lib.rs.
+CONTRACTS=(escrow_contract)
 ARTIFACTS_DIR="${ARTIFACTS_DIR:-test-artifacts}"
 mkdir -p "$ARTIFACTS_DIR"
 
@@ -41,6 +44,13 @@ echo ""
 for CONTRACT in "${CONTRACTS[@]}"; do
   CONTRACT_DIR="contracts/$CONTRACT"
   echo "── $CONTRACT ──────────────────────────────"
+
+  # Skip contracts that have no compilable source yet (e.g. being rebuilt).
+  if [ ! -f "$CONTRACT_DIR/src/lib.rs" ] && [ ! -f "$CONTRACT_DIR/src/main.rs" ]; then
+    echo "   ⚠️  No src/lib.rs or src/main.rs found — skipping $CONTRACT (source not present yet)"
+    echo ""
+    continue
+  fi
 
   # Format check
   echo "📐 Checking format…"

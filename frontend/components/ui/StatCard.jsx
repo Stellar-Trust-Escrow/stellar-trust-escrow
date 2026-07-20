@@ -15,10 +15,20 @@ export default function StatCard({ label, value, icon, trend: _trend }) {
   return (
     <div className="card flex flex-col gap-2 w-full sm:w-auto">
       <div className="flex items-center justify-between">
-        <p className="text-xs text-gray-500 uppercase tracking-wider">{label}</p>
+        <p
+          className="text-xs uppercase tracking-wider"
+          style={{ color: 'var(--color-text-muted)' }}
+        >
+          {label}
+        </p>
         {icon && <span className="text-lg">{icon}</span>}
       </div>
-      <p className="text-2xl font-bold text-white break-all">{value}</p>
+      <p
+        className="text-2xl font-bold break-all"
+        style={{ color: 'var(--color-text-primary)' }}
+      >
+        {value}
+      </p>
       {/* TODO (contributor — easy): add trend arrow and percentage */}
     </div>
   );

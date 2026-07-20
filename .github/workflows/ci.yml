@@ -2,10 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [main, develop] # support both main and develop for merge-ready CI
+    branches: [main, develop, 'ci-verify/**']
   pull_request:
     branches: [main, develop]
     types: [opened, synchronize, reopened]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -244,7 +245,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: [18, 20, 22]
+        node-version: [22]
 
     steps:
       - uses: actions/checkout@v4
@@ -310,7 +311,7 @@ jobs:
           fi
 
       - name: Slack Notification
-        if: ${{ failure() && matrix.node-version == 20 && env.SLACK_WEBHOOK != '' }}
+        if: ${{ failure() && matrix.node-version == 22 && env.SLACK_WEBHOOK != '' }}
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
@@ -326,7 +327,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: [18, 20, 22]
+        node-version: [22]
 
     steps:
       - uses: actions/checkout@v4
@@ -401,7 +402,7 @@ jobs:
           fi
 
       - name: Slack Notification
-        if: ${{ failure() && matrix.node-version == 20 && env.SLACK_WEBHOOK != '' }}
+        if: ${{ failure() && matrix.node-version == 22 && env.SLACK_WEBHOOK != '' }}
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}

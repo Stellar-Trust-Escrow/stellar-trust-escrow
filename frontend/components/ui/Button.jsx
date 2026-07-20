@@ -5,16 +5,11 @@
  * Renders as a Next.js <Link> when `href` is provided (and not disabled).
  * Supports `asChild` to wrap an arbitrary child element with button styles.
  */
+'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import { cn } from '../../lib/utils';
-
-const variantClasses = {
-  primary: 'bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500',
-  secondary: 'bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700',
-  danger: 'bg-red-900/30 hover:bg-red-900/50 text-red-400 border border-red-800',
-  ghost: 'bg-transparent hover:bg-gray-800 text-gray-400 border border-transparent',
-};
 
 const sizeClasses = {
   sm: 'px-3 py-1.5 text-sm gap-1.5',
@@ -65,20 +60,83 @@ export default function Button({
   ...rest
 }) {
   const isDisabled = disabled || isLoading;
+  const [isHovered, setIsHovered] = useState(false);
 
-  const classes = cn(
-    'inline-flex items-center justify-center rounded-lg font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500',
-    variantClasses[variant] ?? variantClasses.primary,
+  const getVariantStyles = () => {
+    switch (variant) {
+      case 'primary':
+        return {
+          backgroundColor: isHovered ? 'var(--color-brand-hover)' : 'var(--color-brand)',
+          color: 'white',
+          borderColor: 'var(--color-brand)',
+        };
+      case 'secondary':
+        return {
+          backgroundColor: isHovered ? 'var(--color-bg-elevated)' : 'var(--color-bg-surface)',
+          color: 'var(--color-text-primary)',
+          borderColor: 'var(--color-border)',
+        };
+      case 'danger':
+        return {
+          backgroundColor: isHovered ? 'var(--color-danger-soft)' : 'transparent',
+          color: 'var(--color-danger)',
+          borderColor: 'var(--color-danger)',
+        };
+      case 'ghost':
+        return {
+          backgroundColor: isHovered ? 'var(--color-bg-elevated)' : 'transparent',
+          color: 'var(--color-text-secondary)',
+          borderColor: 'transparent',
+        };
+      default:
+        return {
+          backgroundColor: isHovered ? 'var(--color-brand-hover)' : 'var(--color-brand)',
+          color: 'white',
+          borderColor: 'var(--color-brand)',
+        };
+    }
+  };
+
+  const variantStyles = getVariantStyles();
+
+  const baseClasses = cn(
+    'inline-flex items-center justify-center rounded-lg font-medium transition-colors focus-visible:outline-none',
     sizeClasses[size] ?? sizeClasses.md,
     isDisabled && 'opacity-50 cursor-not-allowed pointer-events-none',
     className,
+  );
+
+  const renderElement = (Element, props) => (
+    <Element
+      {...props}
+      className={baseClasses}
+      style={{
+        ...variantStyles,
+        borderWidth: '1px',
+        borderStyle: 'solid',
+        '--tw-ring-color': 'var(--color-brand)',
+        '--tw-ring-offset-color': 'var(--color-bg-base)',
+      }}
+      onMouseEnter={() => !isDisabled && setIsHovered(true)}
+      onMouseLeave={() => !isDisabled && setIsHovered(false)}
+    />
   );
 
   // Render as a styled wrapper around an arbitrary child (e.g. <Link>)
   if (asChild && children) {
     const child = Array.isArray(children) ? children[0] : children;
     return (
-      <span className={classes} aria-disabled={isDisabled}>
+      <span
+        className={baseClasses}
+        aria-disabled={isDisabled}
+        style={{
+          ...variantStyles,
+          borderWidth: '1px',
+          borderStyle: 'solid',
+        }}
+        onMouseEnter={() => !isDisabled && setIsHovered(true)}
+        onMouseLeave={() => !isDisabled && setIsHovered(false)}
+      >
         {child}
       </span>
     );
@@ -86,30 +144,22 @@ export default function Button({
 
   // Render as a Next.js Link when href is provided and not disabled
   if (href && !isDisabled) {
-    return (
-      <Link href={href} className={classes} {...rest}>
-        {children}
-      </Link>
-    );
+    return renderElement(Link, { href, ...rest, children });
   }
 
-  return (
-    <button
-      type="button"
-      className={classes}
-      disabled={isDisabled}
-      onClick={isDisabled ? undefined : onClick}
-      aria-busy={isLoading}
-      {...rest}
-    >
-      {isLoading ? (
-        <>
-          <Spinner />
-          <span>…</span>
-        </>
-      ) : (
-        children
-      )}
-    </button>
-  );
+  return renderElement('button', {
+    type: 'button',
+    disabled: isDisabled,
+    onClick: isDisabled ? undefined : onClick,
+    'aria-busy': isLoading,
+    ...rest,
+    children: isLoading ? (
+      <>
+        <Spinner />
+        <span>…</span>
+      </>
+    ) : (
+      children
+    ),
+  });
 }
