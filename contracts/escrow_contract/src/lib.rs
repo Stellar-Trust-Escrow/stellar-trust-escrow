@@ -4743,7 +4743,9 @@ impl EscrowContract {
             .unwrap_or_else(|| soroban_sdk::Map::new(&env));
 
         registry.set(arbiter.clone(), true);
-        env.storage().persistent().set(&DataKey::ArbiterRegistry, &registry);
+        env.storage()
+            .persistent()
+            .set(&DataKey::ArbiterRegistry, &registry);
         ContractStorage::bump_persistent_ttl(&env, &DataKey::ArbiterRegistry);
 
         events::emit_arbiter_registered(&env, &arbiter);
@@ -4751,11 +4753,7 @@ impl EscrowContract {
     }
 
     /// Removes an arbiter from the registry. Admin only.
-    pub fn remove_arbiter(
-        env: Env,
-        caller: Address,
-        arbiter: Address,
-    ) -> Result<(), EscrowError> {
+    pub fn remove_arbiter(env: Env, caller: Address, arbiter: Address) -> Result<(), EscrowError> {
         caller.require_auth();
         ContractStorage::require_admin(&env, &caller)?;
 
@@ -4766,7 +4764,9 @@ impl EscrowContract {
             .unwrap_or_else(|| soroban_sdk::Map::new(&env));
 
         registry.remove(arbiter.clone());
-        env.storage().persistent().set(&DataKey::ArbiterRegistry, &registry);
+        env.storage()
+            .persistent()
+            .set(&DataKey::ArbiterRegistry, &registry);
         ContractStorage::bump_persistent_ttl(&env, &DataKey::ArbiterRegistry);
 
         events::emit_arbiter_removed(&env, &arbiter);
@@ -4775,10 +4775,8 @@ impl EscrowContract {
 
     /// Read-only check whether an arbiter is registered in the arbiter registry.
     pub fn is_registered_arbiter(env: Env, arbiter: Address) -> bool {
-        let registry: Option<soroban_sdk::Map<Address, bool>> = env
-            .storage()
-            .persistent()
-            .get(&DataKey::ArbiterRegistry);
+        let registry: Option<soroban_sdk::Map<Address, bool>> =
+            env.storage().persistent().get(&DataKey::ArbiterRegistry);
 
         match registry {
             Some(map) => map.get(arbiter).unwrap_or(false),
@@ -9413,9 +9411,9 @@ mod tests {
 
             // Verify AdminTransferred event emission
             let events = env.events().all();
-            let found = events.iter().any(|ev| {
-                ev.1 .0 == Symbol::new(&env, "AdminTransferred").into_val(&env)
-            });
+            let found = events
+                .iter()
+                .any(|ev| ev.1 .0 == Symbol::new(&env, "AdminTransferred").into_val(&env));
             assert!(found, "AdminTransferred event should be emitted");
         }
 
@@ -9466,10 +9464,13 @@ mod tests {
 
             // Verify ArbiterRegistered event emission
             let events = env.events().all();
-            let found_arbiter_event = events.iter().any(|ev| {
-                ev.1 .0 == Symbol::new(&env, "ArbiterRegistered").into_val(&env)
-            });
-            assert!(found_arbiter_event, "ArbiterRegistered event should be emitted");
+            let found_arbiter_event = events
+                .iter()
+                .any(|ev| ev.1 .0 == Symbol::new(&env, "ArbiterRegistered").into_val(&env));
+            assert!(
+                found_arbiter_event,
+                "ArbiterRegistered event should be emitted"
+            );
         }
 
         #[test]
@@ -9485,10 +9486,13 @@ mod tests {
 
             // Verify ArbiterRemoved event emission
             let events = env.events().all();
-            let found_removed_event = events.iter().any(|ev| {
-                ev.1 .0 == Symbol::new(&env, "ArbiterRemoved").into_val(&env)
-            });
-            assert!(found_removed_event, "ArbiterRemoved event should be emitted");
+            let found_removed_event = events
+                .iter()
+                .any(|ev| ev.1 .0 == Symbol::new(&env, "ArbiterRemoved").into_val(&env));
+            assert!(
+                found_removed_event,
+                "ArbiterRemoved event should be emitted"
+            );
         }
     }
 }

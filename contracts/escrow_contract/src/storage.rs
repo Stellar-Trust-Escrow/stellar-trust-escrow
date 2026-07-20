@@ -16,10 +16,8 @@ impl StorageManager {
 
     #[allow(dead_code)]
     pub fn is_arbiter_registry_empty(env: &Env) -> bool {
-        let registry: Option<Map<Address, bool>> = env
-            .storage()
-            .persistent()
-            .get(&DataKey::ArbiterRegistry);
+        let registry: Option<Map<Address, bool>> =
+            env.storage().persistent().get(&DataKey::ArbiterRegistry);
         match registry {
             Some(map) => map.is_empty(),
             None => true,
@@ -27,10 +25,8 @@ impl StorageManager {
     }
 
     pub fn is_arbiter_registered(env: &Env, arbiter: &Address) -> bool {
-        let registry: Option<Map<Address, bool>> = env
-            .storage()
-            .persistent()
-            .get(&DataKey::ArbiterRegistry);
+        let registry: Option<Map<Address, bool>> =
+            env.storage().persistent().get(&DataKey::ArbiterRegistry);
         match registry {
             Some(map) => {
                 if map.is_empty() {

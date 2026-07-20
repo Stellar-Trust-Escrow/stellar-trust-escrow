@@ -170,8 +170,10 @@ pub fn emit_escrow_cancelled(env: &Env, escrow_id: u64, returned_amount: i128) {
 }
 
 pub fn emit_escrow_expired(env: &Env, escrow_id: u64, refunded_to: &Address, amount: i128) {
-    env.events()
-        .publish((ev::ESCROW_EXPIRED, escrow_id), (refunded_to.clone(), amount));
+    env.events().publish(
+        (ev::ESCROW_EXPIRED, escrow_id),
+        (refunded_to.clone(), amount),
+    );
 }
 
 pub fn emit_dispute_raised(env: &Env, escrow_id: u64, raised_by: &Address) {
