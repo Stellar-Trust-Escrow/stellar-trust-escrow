@@ -962,3 +962,31 @@ model AnalyticsSnapshot {
   @@index([metric, period, snapshotAt])
   @@map("analytics_snapshots")
 }
+
+model EscrowOwnership {
+  id            String    @id @default(cuid())
+  escrowId      String    @unique @map("escrow_id")
+  currentOwner  String    @map("current_owner")
+  previousOwner String?   @map("previous_owner")
+  transferredAt DateTime? @map("transferred_at")
+  txHash        String?   @map("tx_hash")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@index([currentOwner])
+  @@map("escrow_ownership")
+}
+
+model OwnershipTransferLog {
+  id        String   @id @default(cuid())
+  escrowId  String   @map("escrow_id")
+  fromOwner String   @map("from_owner")
+  toOwner   String   @map("to_owner")
+  txHash    String   @map("tx_hash")
+  ledger    Int
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([escrowId])
+  @@index([fromOwner])
+  @@index([toOwner])
+  @@map("ownership_transfer_logs")
+}

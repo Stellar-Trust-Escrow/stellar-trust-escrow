@@ -1346,6 +1346,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "stellar-trust-escrow-ownership"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "stellar-trust-governance"
 version = "0.1.0"
 dependencies = [

@@ -28,6 +28,18 @@ export default [
   js.configs.recommended,
   ...tseslint.configs.recommended,
 
+  // SDK (TypeScript source, tests, and Node scripts)
+  {
+    files: ['sdk/**/*.{ts,js}'],
+    languageOptions: {
+      globals: { ...globals.node, ...globals.es2022 },
+    },
+    rules: {
+      'no-unused-vars': noUnusedVars,
+      '@typescript-eslint/no-unused-vars': 'off',
+    },
+  },
+
   // Backend
   {
     files: ['backend/**/*.js', 'scripts/**/*.js', 'load-tests/**/*.js'],
