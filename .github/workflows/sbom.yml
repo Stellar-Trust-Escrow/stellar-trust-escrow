@@ -23,22 +23,18 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install dependencies
         run: |
-          wget -qO cyclonedx-cli https://github.com/CycloneDX/cyclonedx-cli/releases/latest/download/cyclonedx-linux-x64
-          chmod +x cyclonedx-cli
-          sudo mv cyclonedx-cli /usr/local/bin/cyclonedx-cli
           cargo install cargo-cyclonedx
 
       - name: Generate SBOM (Backend)
         run: |
           cd backend || true
-          # Note: If there's no package-lock.json, cyclonedx-npm works better with dependencies installed
           npm install --package-lock-only || true
           npx @cyclonedx/cyclonedx-npm --output-format JSON --output-file ../sbom-backend.json
 
@@ -52,22 +48,15 @@ jobs:
         run: |
           cargo cyclonedx --format json
 
-      - name: Merge SBOMs
-        run: |
-          # Only merge files that were successfully created
-          FILES=""
-          [ -f sbom-backend.json ] && FILES="$FILES sbom-backend.json"
-          [ -f sbom-frontend.json ] && FILES="$FILES sbom-frontend.json"
-          for file in contracts/*/*.cdx.json; do
-            [ -f "$file" ] && FILES="$FILES $file"
-          done
-          cyclonedx-cli merge --input-files $FILES --output-file sbom-full.json
-
       - name: Upload SBOM Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: sbom-full
-          path: sbom-full.json
+          name: sbom-artifacts
+          path: |
+            sbom-backend.json
+            sbom-frontend.json
+            sbom-contracts.json
+          if-no-files-found: warn
 
       - name: Enforce License Compliance
         run: node scripts/check-licenses.js
