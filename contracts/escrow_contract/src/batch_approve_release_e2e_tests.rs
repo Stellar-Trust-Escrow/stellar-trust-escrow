@@ -247,10 +247,14 @@ mod batch_approve_release_e2e_tests {
         assert_eq!(escrow_ids.len(), 3);
 
         // Verify total token balance transfer
+        // Each escrow charges a rent reserve: (1 meta entry + 1 milestone entry) * 30 periods = 60 per escrow
+        let rent_per_escrow: i128 = 2 * 30;
+        let total_rent: i128 = rent_per_escrow * escrow_ids.len() as i128;
         let contract_balance = token::Client::new(&env, &token_addr).balance(&contract_id);
         assert_eq!(
-            contract_balance, total_expected,
-            "Contract balance must equal sum of all batch escrows"
+            contract_balance,
+            total_expected + total_rent,
+            "Contract balance must equal sum of all batch escrows plus rent reserves"
         );
 
         // Check BatchCompleted event emitted

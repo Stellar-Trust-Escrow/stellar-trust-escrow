@@ -353,7 +353,7 @@ mod pause_tests {
         // Non-admin must fail with Unauthorized (E4)
         let result = client.try_emergency_withdraw(&non_admin, &escrow_id);
         assert!(
-            matches!(result, Err(Ok(EscrowError::E4))),
+            matches!(result, Err(Ok(EscrowError::Unauthorized))),
             "Non-admin calling emergency_withdraw should fail with Unauthorized"
         );
     }
