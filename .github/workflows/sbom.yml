@@ -35,31 +35,46 @@ jobs:
 
       - name: Generate SBOM (Backend)
         run: |
-          cd backend || true
-          # Note: If there's no package-lock.json, cyclonedx-npm works better with dependencies installed
-          npm install --package-lock-only || true
-          npx @cyclonedx/cyclonedx-npm --output-format JSON --output-file ../sbom-backend.json
+          if [ -d backend ]; then
+            cd backend
+            npm install --package-lock-only
+            npx @cyclonedx/cyclonedx-npm --output-format JSON --output-file ../sbom-backend.json
+            echo "✓ Backend SBOM generated"
+          else
+            echo "⚠ Backend directory not found, skipping"
+          fi
 
       - name: Generate SBOM (Frontend)
         run: |
-          cd frontend || true
-          npm install --package-lock-only || true
-          npx @cyclonedx/cyclonedx-npm --output-format JSON --output-file ../sbom-frontend.json
+          if [ -d frontend ]; then
+            cd frontend
+            npm install --package-lock-only
+            npx @cyclonedx/cyclonedx-npm --output-format JSON --output-file ../sbom-frontend.json
+            echo "✓ Frontend SBOM generated"
+          else
+            echo "⚠ Frontend directory not found, skipping"
+          fi
 
       - name: Generate SBOM (Rust Contracts)
         run: |
           cargo cyclonedx --format json > sbom-contracts.json
+          if [ -f sbom-contracts.json ]; then
+            echo "✓ Rust SBOM generated"
+          else
+            echo "⚠ Rust SBOM generation failed"
+          fi
 
       - name: Merge SBOMs
         run: |
-          # Only merge files that were successfully created
+          # Check which files were generated
           FILES=""
-          [ -f sbom-backend.json ] && FILES="$FILES sbom-backend.json"
-          [ -f sbom-frontend.json ] && FILES="$FILES sbom-frontend.json"
-          [ -f sbom-contracts.json ] && FILES="$FILES sbom-contracts.json"
+          [ -f sbom-backend.json ] && FILES="$FILES sbom-backend.json" && echo "✓ Backend SBOM found" || echo "⚠ Backend SBOM missing"
+          [ -f sbom-frontend.json ] && FILES="$FILES sbom-frontend.json" && echo "✓ Frontend SBOM found" || echo "⚠ Frontend SBOM missing"
+          [ -f sbom-contracts.json ] && FILES="$FILES sbom-contracts.json" && echo "✓ Rust SBOM found" || echo "⚠ Rust SBOM missing"
           
           # Use Node.js to merge JSON files (no external package needed)
           if [ -n "$FILES" ]; then
+            echo "Merging SBOM files:$FILES"
             node -e "
               const fs = require('fs');
               const files = '$FILES'.trim().split(/\s+/);
@@ -76,10 +91,11 @@ jobs:
                 }
               });
               fs.writeFileSync('sbom-full.json', JSON.stringify(merged, null, 2));
-              console.log('Merged ' + files.length + ' SBOM files into sbom-full.json');
+              console.log('✓ Merged ' + files.length + ' SBOM files into sbom-full.json');
             "
           else
-            echo "No SBOM files to merge"
+            echo "ERROR: No SBOM files were generated!"
+            echo "This likely means the SBOM generation steps failed."
             exit 1
           fi
 
