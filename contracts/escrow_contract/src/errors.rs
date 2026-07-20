@@ -90,6 +90,20 @@ pub enum EcErr {
     InvalidThreshold = 140,
     UnregisteredArbiter = 141,
     Unauthorized = 142,
+    BatchTooLarge = 143,
+    BatchInvalidMilestone = 144,
+    BatchUnauthorized = 145,
+    BatchInvalid = 146,
+}
+
+#[contracterror(export = false)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum BatchError {
+    TooLarge = 143,
+    InvalidMilestone = 144,
+    Unauthorized = 145,
+    InvalidBatch = 146,
 }
 
 /// Backward-compatible alias — existing code imports `EscrowError`; the oracle
@@ -97,3 +111,4 @@ pub enum EcErr {
 pub type EscrowError = EcErr;
 #[allow(dead_code)]
 pub type ContractError = EcErr;
+

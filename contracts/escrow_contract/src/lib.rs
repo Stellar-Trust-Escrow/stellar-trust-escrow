@@ -82,14 +82,15 @@ mod transfer_client_tests;
 mod types;
 mod upgrade_tests;
 
-pub use errors::{ContractError, EscrowError};
+pub use errors::{BatchError, ContractError, EscrowError};
 use storage::StorageManager;
 pub use types::{
-    ApprovalRecord, CancellationProposal, DataKey, EscrowFeeSnapshot, EscrowState, EscrowStatus,
-    EscrowTemplate, FeeTier, Milestone, MilestoneStatus, MilestoneTemplate, MultisigConfig,
-    OptionalBytesN32, OptionalPriceCondition, OptionalTimelock, OracleResolutionPayload,
-    PriceCondition, PriceDirection, RecurringInterval, RecurringScheduleStatus, ReputationRecord,
-    Timelock, MS_APPROVED, MS_DISPUTED, MS_PENDING, MS_REJECTED, MS_RELEASED, MS_SUBMITTED,
+    ApprovalRecord, CancellationProposal, CreateEscrowRequest, CrossEscrowRelease, DataKey,
+    EscrowFeeSnapshot, EscrowState, EscrowStatus, EscrowTemplate, FeeTier, Milestone,
+    MilestoneInit, MilestoneStatus, MilestoneTemplate, MultisigConfig, OptionalBytesN32,
+    OptionalPriceCondition, OptionalTimelock, OracleResolutionPayload, PriceCondition,
+    PriceDirection, RecurringInterval, RecurringScheduleStatus, ReputationRecord, Timelock,
+    MS_APPROVED, MS_DISPUTED, MS_PENDING, MS_REJECTED, MS_RELEASED, MS_SUBMITTED,
 };
 use types::{CancellationRequest, DeadlineExtensionRequest, RecurringPaymentConfig, SlashRecord};
 use types::{FundPayload, ProposalPayload, ProposalType};
@@ -129,8 +130,10 @@ const RENT_PERIOD_SECONDS: u64 = 86_400;
 const RENT_RESERVE_PERIODS: u64 = 30;
 const RENT_PER_ENTRY_PER_PERIOD: i128 = 1;
 pub const MAX_MILESTONES: u32 = 20;
+pub const MAX_BATCH_SIZE: u32 = 10;
 pub const MAX_STRING_LEN: u32 = 256;
 pub const MAX_BUYER_SIGNERS: u32 = 10;
+
 
 /// Automatic deadline extension when milestone submitted near deadline (7 days).
 pub const AUTO_DEADLINE_EXTENSION_SECONDS: u64 = 604_800;
@@ -2556,16 +2559,26 @@ impl EscrowContract {
     ///
     /// All milestone IDs must be in `Submitted` state; the call fails atomically
     /// if any ID is invalid or in the wrong state.
+    /// Approves multiple submitted milestones in a single transaction.
+    ///
+    /// Loads `EscrowMeta` once, processes each milestone, accumulates the
+    /// total release amount, then executes a single token transfer and a
+    /// single meta write — reducing gas from O(2N transfers + 2N writes) to
+    /// O(N writes + 1 transfer + 1 meta write).
+    ///
+    /// All milestone IDs must be in `Submitted` state; the call fails atomically
+    /// if any ID is invalid or in the wrong state.
     pub fn batch_approve_milestones(
         env: Env,
         caller: Address,
         escrow_id: u64,
-        milestone_ids: soroban_sdk::Vec<u32>,
+        milestone_indices: soroban_sdk::Vec<u32>,
     ) -> Result<i128, EscrowError> {
         caller.require_auth();
         ContractStorage::require_not_paused(&env)?;
+        ContractStorage::require_not_frozen(&env, escrow_id)?;
 
-        if milestone_ids.is_empty() {
+        if milestone_indices.is_empty() {
             return Err(EscrowError::E17);
         }
 
@@ -2590,8 +2603,8 @@ impl EscrowContract {
         let mut total_amount: i128 = 0;
 
         // Pass 1: validate all milestones and accumulate total — no writes yet.
-        for i in 0..milestone_ids.len() {
-            let mid = milestone_ids.get(i).ok_or(EscrowError::E13)?;
+        for i in 0..milestone_indices.len() {
+            let mid = milestone_indices.get(i).ok_or(EscrowError::E13)?;
             let m = ContractStorage::load_milestone(&env, escrow_id, mid)?;
             if m.status != MS_SUBMITTED {
                 return Err(EscrowError::E14);
@@ -2601,8 +2614,8 @@ impl EscrowContract {
         }
 
         // Pass 2: write updated milestones and update counters.
-        for i in 0..milestone_ids.len() {
-            let mid = milestone_ids.get(i).ok_or(EscrowError::E13)?;
+        for i in 0..milestone_indices.len() {
+            let mid = milestone_indices.get(i).ok_or(EscrowError::E13)?;
             let mut m = ContractStorage::load_milestone(&env, escrow_id, mid)?;
             m.resolved_at = Some(now);
             m.status = if timelock_expired {
@@ -2641,11 +2654,288 @@ impl EscrowContract {
             events::emit_escrow_completed(&env, escrow_id);
         }
 
+        events::emit_batch_completed(&env, milestone_indices.len(), total_amount);
+
         // Single meta write for the entire batch.
         ContractStorage::save_escrow_meta(&env, &meta);
 
         Ok(total_amount)
     }
+
+    /// Create multiple escrows atomically. Returns Vec of new escrow IDs.
+    /// If any creation fails or exceeds MAX_BATCH_SIZE (10), the entire call reverts with BatchError::TooLarge.
+    pub fn batch_create_escrows(
+        env: Env,
+        caller: Address,
+        requests: soroban_sdk::Vec<CreateEscrowRequest>,
+    ) -> Result<soroban_sdk::Vec<u64>, EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_initialized(&env)?;
+        ContractStorage::require_not_paused(&env)?;
+
+        let n = requests.len();
+        if n == 0 || n > MAX_BATCH_SIZE {
+            panic_with_error!(&env, BatchError::TooLarge);
+        }
+
+        // Pass 1: Validation and total accumulation
+        let mut total_batch_amount: i128 = 0;
+        let mut first_token: Option<Address> = None;
+
+        for i in 0..n {
+            let req = requests.get(i).ok_or(EscrowError::E17)?;
+            if caller == req.freelancer {
+                return Err(EscrowError::E3);
+            }
+            if req.amount < MIN_ESCROW_AMOUNT || req.amount > MAX_ESCROW_AMOUNT {
+                return Err(EscrowError::E19);
+            }
+            Self::validate_escrow_inputs(&env, req.amount, req.deadline, None)?;
+            bridge::validate_escrow_token(&env, &req.token)?;
+            if ContractStorage::is_token_whitelist_enabled(&env)
+                && !ContractStorage::is_token_approved(&env, &req.token)
+            {
+                return Err(EscrowError::E3);
+            }
+
+            if let Some(ref t) = first_token {
+                if *t != req.token {
+                    return Err(EscrowError::E17);
+                }
+            } else {
+                first_token = Some(req.token.clone());
+            }
+
+            let m_len = req.milestones.len();
+            if m_len > MAX_MILESTONES {
+                return Err(EscrowError::E16);
+            }
+            if m_len > 0 {
+                let mut m_total: i128 = 0;
+                for j in 0..m_len {
+                    let m_init = req.milestones.get(j).ok_or(EscrowError::E17)?;
+                    if m_init.amount <= 0 {
+                        return Err(EscrowError::E17);
+                    }
+                    if m_init.title.len() > MAX_STRING_LEN {
+                        return Err(EscrowError::E19);
+                    }
+                    m_total = m_total.checked_add(m_init.amount).ok_or(EscrowError::E15)?;
+                }
+                if m_total > req.amount {
+                    return Err(EscrowError::E15);
+                }
+            }
+
+            total_batch_amount = total_batch_amount
+                .checked_add(req.amount)
+                .ok_or(EscrowError::E15)?;
+        }
+
+        let token_addr = first_token.ok_or(EscrowError::E17)?;
+
+        // Single transfer for the total sum of all escrows in the batch
+        token::Client::new(&env, &token_addr).transfer(
+            &caller,
+            &env.current_contract_address(),
+            &total_batch_amount,
+        );
+
+        let mut escrow_ids = soroban_sdk::Vec::new(&env);
+        let now = env.ledger().timestamp();
+
+        // Pass 2: Creation of escrows and milestones
+        for i in 0..n {
+            let req = requests.get(i).ok_or(EscrowError::E17)?;
+            let escrow_id = ContractStorage::next_escrow_id(&env)?;
+
+            let m_len = req.milestones.len();
+            let rent_reserve = ContractStorage::reserve_for_entries(i128::from(1 + m_len as u32));
+            ContractStorage::charge_rent_reserve(&env, &req.token, &caller, rent_reserve)?;
+
+            let mut buyer_signers = soroban_sdk::Vec::new(&env);
+            buyer_signers.push_back(caller.clone());
+
+            let mut meta = EscrowMeta {
+                escrow_id,
+                client: caller.clone(),
+                freelancer: req.freelancer.clone(),
+                token: req.token.clone(),
+                total_amount: req.amount,
+                allocated_amount: 0,
+                remaining_balance: req.amount,
+                status: EscrowStatus::Active,
+                milestone_count: 0,
+                approved_count: 0,
+                released_count: 0,
+                submitted_count: 0,
+                arbiter: None,
+                buyer_signers,
+                created_at: now,
+                deadline: req.deadline,
+                lock_time: None,
+                lock_time_extension: None,
+                timelock: OptionalTimelock::None,
+                dispute_timeout_ledger: None,
+                dispute_started_ledger: None,
+                brief_hash: req.brief_hash.clone(),
+                rent_balance: rent_reserve,
+                last_rent_collection_at: now,
+                dispute_start_ledger: None,
+                expires_at: req.deadline.unwrap_or(u64::MAX),
+            };
+
+            if m_len > 0 {
+                let mut allocated: i128 = 0;
+                for j in 0..m_len {
+                    let m_init = req.milestones.get(j).ok_or(EscrowError::E17)?;
+                    let mid = j as u32;
+                    ContractStorage::save_milestone(
+                        &env,
+                        escrow_id,
+                        &Milestone {
+                            id: mid,
+                            title: m_init.title.clone(),
+                            description_hash: req.brief_hash.clone(),
+                            amount: m_init.amount,
+                            status: MS_PENDING,
+                            submitted_at: None,
+                            resolved_at: None,
+                            approvals: soroban_sdk::Vec::new(&env),
+                            rejection_reason: OptionalBytesN32::None,
+                            price_condition: OptionalPriceCondition::None,
+                            depends_on: None,
+                        },
+                    );
+                    allocated = allocated.checked_add(m_init.amount).ok_or(EscrowError::E15)?;
+                    events::emit_milestone_added(&env, escrow_id, mid, m_init.amount);
+                }
+                meta.milestone_count = m_len as u32;
+                meta.allocated_amount = allocated;
+            }
+
+            ContractStorage::save_escrow_meta(&env, &meta);
+            Self::append_to_vec_index(
+                &env,
+                &DataKey::EscrowsByParticipant(caller.clone()),
+                escrow_id,
+            );
+            Self::append_to_vec_index(
+                &env,
+                &DataKey::EscrowsByParticipant(req.freelancer.clone()),
+                escrow_id,
+            );
+            Self::append_to_vec_index(
+                &env,
+                &DataKey::EscrowsByStatus(EscrowStatus::Active),
+                escrow_id,
+            );
+
+            events::emit_escrow_created(
+                &env,
+                escrow_id,
+                &caller,
+                &req.freelancer,
+                req.amount,
+            );
+
+            escrow_ids.push_back(escrow_id);
+        }
+
+        events::emit_batch_completed(&env, n as u32, total_batch_amount);
+
+        Ok(escrow_ids)
+    }
+
+    /// Release one milestone each from a list of different escrows.
+    /// caller must be the client for all listed escrows.
+    pub fn batch_cross_escrow_release(
+        env: Env,
+        caller: Address,
+        releases: soroban_sdk::Vec<CrossEscrowRelease>,
+    ) -> Result<soroban_sdk::Vec<i128>, EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_not_paused(&env)?;
+
+        let n = releases.len();
+        if n == 0 || n > MAX_BATCH_SIZE {
+            return Err(EscrowError::E17);
+        }
+
+        // Pass 1: Validation upfront across all escrows and milestones
+        for i in 0..n {
+            let rel = releases.get(i).ok_or(EscrowError::E17)?;
+            let meta = ContractStorage::load_escrow_meta_with_rent(&env, rel.escrow_id)?;
+            if caller != meta.client {
+                return Err(EscrowError::E3);
+            }
+            if meta.status != EscrowStatus::Active {
+                return Err(EscrowError::E9);
+            }
+            ContractStorage::check_lock_time_expired(&env, rel.escrow_id, meta.lock_time)?;
+
+            let m = ContractStorage::load_milestone(&env, rel.escrow_id, rel.milestone_index)?;
+            if m.status != MS_SUBMITTED && m.status != MS_APPROVED {
+                return Err(EscrowError::E14);
+            }
+            if m.status == MS_SUBMITTED {
+                Self::require_dependency_satisfied(&env, rel.escrow_id, &m)?;
+            }
+        }
+
+        let mut released_amounts = soroban_sdk::Vec::new(&env);
+        let mut total_batch_released: i128 = 0;
+        let now = env.ledger().timestamp();
+
+        // Pass 2: Process releases per escrow
+        for i in 0..n {
+            let rel = releases.get(i).ok_or(EscrowError::E17)?;
+            let mut meta = ContractStorage::load_escrow_meta_with_rent(&env, rel.escrow_id)?;
+            let mut m = ContractStorage::load_milestone(&env, rel.escrow_id, rel.milestone_index)?;
+
+            if m.status == MS_SUBMITTED {
+                meta.approved_count = meta.approved_count.checked_add(1).ok_or(EscrowError::E20)?;
+                meta.submitted_count = meta.submitted_count.saturating_sub(1);
+                events::emit_milestone_approved(&env, rel.escrow_id, rel.milestone_index, m.amount);
+            }
+
+            m.resolved_at = Some(now);
+            m.status = MS_RELEASED;
+            ContractStorage::save_milestone(&env, rel.escrow_id, &m);
+            Self::emit_dependents_unlocked(&env, rel.escrow_id, rel.milestone_index);
+
+            meta.released_count = meta.released_count.checked_add(1).ok_or(EscrowError::E20)?;
+            meta.remaining_balance = meta
+                .remaining_balance
+                .checked_sub(m.amount)
+                .ok_or(EscrowError::E20)?;
+
+            // Transfer funds to freelancer
+            token::Client::new(&env, &meta.token).transfer(
+                &env.current_contract_address(),
+                &meta.freelancer,
+                &m.amount,
+            );
+            events::emit_funds_released(&env, rel.escrow_id, &meta.freelancer, m.amount);
+
+            if meta.released_count == meta.milestone_count && meta.milestone_count > 0 {
+                meta.status = EscrowStatus::Completed;
+                events::emit_escrow_completed(&env, rel.escrow_id);
+            }
+
+            ContractStorage::save_escrow_meta(&env, &meta);
+
+            released_amounts.push_back(m.amount);
+            total_batch_released = total_batch_released
+                .checked_add(m.amount)
+                .ok_or(EscrowError::E20)?;
+        }
+
+        events::emit_batch_completed(&env, n as u32, total_batch_released);
+
+        Ok(released_amounts)
+    }
+
 
     /// Releases funds for multiple approved milestones in a single transaction.
     ///
@@ -9245,7 +9535,7 @@ mod tests {
         advance(&env, 1001);
 
         // Permissionless caller
-        let caller = Address::generate(&env);
+        let _caller = Address::generate(&env);
         let result = client.try_claim_expiry_refund(&escrow_id);
         assert!(result.is_ok());
 
@@ -9329,7 +9619,10 @@ mod tests {
     #[cfg(test)]
     mod rbac_tests {
         use crate::{ContractError, EscrowContract, EscrowContractClient, MultisigConfig};
-        use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Symbol};
+        use soroban_sdk::{
+            testutils::{Address as _, Events},
+            Address, BytesN, Env, IntoVal, Symbol,
+        };
 
         fn no_multisig(env: &Env) -> MultisigConfig {
             MultisigConfig {
@@ -9385,7 +9678,7 @@ mod tests {
                 &500,
             );
 
-            client.raise_dispute(&escrow_client, &escrow_id);
+            client.raise_dispute(&escrow_client, &escrow_id, &None);
 
             (escrow_client, freelancer, token, escrow_id)
         }

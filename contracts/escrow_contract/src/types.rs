@@ -2,7 +2,7 @@
 //!
 //! All shared structs, enums, and storage keys for the escrow contract.
 
-use soroban_sdk::{contracttype, Address, BytesN, String};
+use soroban_sdk::{contracttype, Address, BytesN, String, Vec};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ENUMS
@@ -825,3 +825,36 @@ pub enum DataKey {
     /// Approved arbiter registry — value: Map<Address, bool>
     ArbiterRegistry,
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BATCH OPERATION TYPES
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Initial milestone payload for batch escrow creation.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MilestoneInit {
+    pub title: String,
+    pub amount: i128,
+}
+
+/// Request payload for creating an escrow in a batch.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CreateEscrowRequest {
+    pub freelancer: Address,
+    pub token: Address,
+    pub amount: i128,
+    pub deadline: Option<u64>,
+    pub brief_hash: BytesN<32>,
+    pub milestones: Vec<MilestoneInit>,
+}
+
+/// Cross-escrow milestone release request.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CrossEscrowRelease {
+    pub escrow_id: u64,
+    pub milestone_index: u32,
+}
+
