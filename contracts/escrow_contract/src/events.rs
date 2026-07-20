@@ -355,6 +355,27 @@ pub fn emit_admin_changed(env: &Env, old_admin: &Address, new_admin: &Address) {
         .publish((ev::ADMIN_CHANGED,), (old_admin.clone(), new_admin.clone()));
 }
 
+pub fn emit_admin_transferred(env: &Env, old_admin: &Address, new_admin: &Address) {
+    env.events().publish(
+        (soroban_sdk::Symbol::new(env, "AdminTransferred"),),
+        (old_admin.clone(), new_admin.clone()),
+    );
+}
+
+pub fn emit_arbiter_registered(env: &Env, arbiter: &Address) {
+    env.events().publish(
+        (soroban_sdk::Symbol::new(env, "ArbiterRegistered"),),
+        arbiter.clone(),
+    );
+}
+
+pub fn emit_arbiter_removed(env: &Env, arbiter: &Address) {
+    env.events().publish(
+        (soroban_sdk::Symbol::new(env, "ArbiterRemoved"),),
+        arbiter.clone(),
+    );
+}
+
 pub fn emit_max_milestones_set(env: &Env, new_max: u32) {
     env.events().publish((ev::MAX_MILESTONES_SET,), new_max);
 }

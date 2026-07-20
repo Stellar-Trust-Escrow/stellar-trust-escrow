@@ -82,7 +82,7 @@ mod transfer_client_tests;
 mod types;
 mod upgrade_tests;
 
-pub use errors::EscrowError;
+pub use errors::{ContractError, EscrowError};
 use storage::StorageManager;
 pub use types::{
     ApprovalRecord, CancellationProposal, DataKey, EscrowFeeSnapshot, EscrowState, EscrowStatus,
@@ -285,7 +285,7 @@ impl ContractStorage {
             .get(&DataKey::Admin)
             .ok_or(EscrowError::E2)?;
         if *caller != admin {
-            return Err(EscrowError::E4);
+            return Err(EscrowError::Unauthorized);
         }
         Ok(())
     }
@@ -1992,6 +1992,7 @@ impl EscrowContract {
             if a == &client || a == &freelancer {
                 return Err(EscrowError::E3);
             }
+            StorageManager::assert_registered_arbiter(&env, a)?;
         }
 
         if total_amount < MIN_ESCROW_AMOUNT {
@@ -4251,6 +4252,9 @@ impl EscrowContract {
             if !is_arbiter {
                 ContractStorage::require_admin(&env, &caller)?;
             }
+            if let Some(ref arbiter_addr) = meta.arbiter {
+                StorageManager::assert_registered_arbiter(&env, arbiter_addr)?;
+            }
 
             if meta.status != EscrowStatus::Disputed {
                 return Err(EscrowError::E10);
@@ -4699,6 +4703,87 @@ impl EscrowContract {
 
         events::emit_admin_changed(&env, &old_admin, &caller);
         Ok(())
+    }
+
+    /// Direct transfer of admin authority to a new address. Requires current admin authorization.
+    pub fn transfer_admin(
+        env: Env,
+        caller: Address,
+        new_admin: Address,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_admin(&env, &caller)?;
+
+        let old_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(EscrowError::E2)?;
+
+        env.storage().instance().set(&DataKey::Admin, &new_admin);
+        ContractStorage::bump_instance_ttl(&env);
+
+        events::emit_admin_transferred(&env, &old_admin, &new_admin);
+        Ok(())
+    }
+
+    /// Registers an approved arbiter in the registry. Admin only.
+    pub fn register_arbiter(
+        env: Env,
+        caller: Address,
+        arbiter: Address,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_admin(&env, &caller)?;
+
+        let mut registry: soroban_sdk::Map<Address, bool> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ArbiterRegistry)
+            .unwrap_or_else(|| soroban_sdk::Map::new(&env));
+
+        registry.set(arbiter.clone(), true);
+        env.storage().persistent().set(&DataKey::ArbiterRegistry, &registry);
+        ContractStorage::bump_persistent_ttl(&env, &DataKey::ArbiterRegistry);
+
+        events::emit_arbiter_registered(&env, &arbiter);
+        Ok(())
+    }
+
+    /// Removes an arbiter from the registry. Admin only.
+    pub fn remove_arbiter(
+        env: Env,
+        caller: Address,
+        arbiter: Address,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_admin(&env, &caller)?;
+
+        let mut registry: soroban_sdk::Map<Address, bool> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ArbiterRegistry)
+            .unwrap_or_else(|| soroban_sdk::Map::new(&env));
+
+        registry.remove(arbiter.clone());
+        env.storage().persistent().set(&DataKey::ArbiterRegistry, &registry);
+        ContractStorage::bump_persistent_ttl(&env, &DataKey::ArbiterRegistry);
+
+        events::emit_arbiter_removed(&env, &arbiter);
+        Ok(())
+    }
+
+    /// Read-only check whether an arbiter is registered in the arbiter registry.
+    pub fn is_registered_arbiter(env: Env, arbiter: Address) -> bool {
+        let registry: Option<soroban_sdk::Map<Address, bool>> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ArbiterRegistry);
+
+        match registry {
+            Some(map) => map.get(arbiter).unwrap_or(false),
+            None => false,
+        }
     }
 
     // ── Token Whitelist Management ────────────────────────────────────────────
@@ -9241,5 +9326,169 @@ mod tests {
         // Second attempt fails
         let result = client.try_claim_expiry_refund(&escrow_id);
         assert_eq!(result, Err(Ok(EscrowError::EscrowAlreadyExpired)));
+    }
+
+    #[cfg(test)]
+    mod rbac_tests {
+        use crate::{ContractError, EscrowContract, EscrowContractClient, MultisigConfig};
+        use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Symbol};
+
+        fn no_multisig(env: &Env) -> MultisigConfig {
+            MultisigConfig {
+                approvers: soroban_sdk::Vec::new(env),
+                weights: soroban_sdk::Vec::new(env),
+                threshold: 0,
+            }
+        }
+
+        fn setup() -> (Env, Address, EscrowContractClient<'static>) {
+            let env = Env::default();
+            env.mock_all_auths();
+
+            let admin = Address::generate(&env);
+            let contract_id = env.register_contract(None, EscrowContract);
+            let client = EscrowContractClient::new(&env, &contract_id);
+            client.initialize(&admin);
+
+            (env, admin, client)
+        }
+
+        fn setup_disputed_escrow(
+            env: &Env,
+            client: &EscrowContractClient<'static>,
+            arbiter: Option<Address>,
+        ) -> (Address, Address, Address, u64) {
+            let escrow_client = Address::generate(env);
+            let freelancer = Address::generate(env);
+            let token_admin = Address::generate(env);
+
+            let token_id = env.register_stellar_asset_contract_v2(token_admin.clone());
+            let token = token_id.address();
+            soroban_sdk::token::StellarAssetClient::new(env, &token).mint(&escrow_client, &1000);
+
+            let escrow_id = client.create_escrow(
+                &escrow_client,
+                &freelancer,
+                &token,
+                &500,
+                &BytesN::from_array(env, &[1; 32]),
+                &arbiter,
+                &None,
+                &None,
+                &None,
+                &no_multisig(env),
+            );
+
+            client.add_milestone(
+                &escrow_client,
+                &escrow_id,
+                &soroban_sdk::String::from_str(env, "M1"),
+                &BytesN::from_array(env, &[2; 32]),
+                &500,
+            );
+
+            client.raise_dispute(&escrow_client, &escrow_id);
+
+            (escrow_client, freelancer, token, escrow_id)
+        }
+
+        #[test]
+        fn test_non_admin_calling_transfer_admin_panics_unauthorized() {
+            let (env, admin, client) = setup();
+            let non_admin = Address::generate(&env);
+            let new_admin = Address::generate(&env);
+
+            let result = client.try_transfer_admin(&non_admin, &new_admin);
+            assert_eq!(result, Err(Ok(ContractError::Unauthorized)));
+            assert_eq!(client.get_admin(), admin);
+        }
+
+        #[test]
+        fn test_admin_transfer_success_and_events() {
+            let (env, old_admin, client) = setup();
+            let new_admin = Address::generate(&env);
+
+            client.transfer_admin(&old_admin, &new_admin);
+            assert_eq!(client.get_admin(), new_admin);
+
+            // Verify AdminTransferred event emission
+            let events = env.events().all();
+            let found = events.iter().any(|ev| {
+                ev.1 .0 == Symbol::new(&env, "AdminTransferred").into_val(&env)
+            });
+            assert!(found, "AdminTransferred event should be emitted");
+        }
+
+        #[test]
+        fn test_empty_registry_allows_any_arbiter_bootstrap_mode() {
+            let (env, _admin, client) = setup();
+            let arbiter = Address::generate(&env);
+
+            let (_, _, _, escrow_id) = setup_disputed_escrow(&env, &client, Some(arbiter.clone()));
+
+            // Dispute resolution in bootstrap mode (empty registry) allows arbiter
+            let res = client.try_resolve_dispute(&arbiter, &escrow_id, &250, &250);
+            assert!(res.is_ok());
+        }
+
+        #[test]
+        fn test_unregistered_arbiter_resolving_dispute_panics() {
+            let (env, admin, client) = setup();
+            let registered_arbiter = Address::generate(&env);
+            let unregistered_arbiter = Address::generate(&env);
+
+            // Register one arbiter so registry is non-empty
+            client.register_arbiter(&admin, &registered_arbiter);
+            assert!(client.is_registered_arbiter(&registered_arbiter));
+
+            let (_, _, _, escrow_id) =
+                setup_disputed_escrow(&env, &client, Some(unregistered_arbiter.clone()));
+
+            // Unregistered arbiter trying to resolve dispute must fail with UnregisteredArbiter
+            let result = client.try_resolve_dispute(&unregistered_arbiter, &escrow_id, &250, &250);
+            assert_eq!(result, Err(Ok(ContractError::UnregisteredArbiter)));
+        }
+
+        #[test]
+        fn test_registered_arbiter_can_resolve_dispute_and_events() {
+            let (env, admin, client) = setup();
+            let arbiter = Address::generate(&env);
+
+            // Register arbiter
+            client.register_arbiter(&admin, &arbiter);
+            assert!(client.is_registered_arbiter(&arbiter));
+
+            let (_, _, _, escrow_id) = setup_disputed_escrow(&env, &client, Some(arbiter.clone()));
+
+            // Registered arbiter can resolve dispute
+            let res = client.try_resolve_dispute(&arbiter, &escrow_id, &250, &250);
+            assert!(res.is_ok());
+
+            // Verify ArbiterRegistered event emission
+            let events = env.events().all();
+            let found_arbiter_event = events.iter().any(|ev| {
+                ev.1 .0 == Symbol::new(&env, "ArbiterRegistered").into_val(&env)
+            });
+            assert!(found_arbiter_event, "ArbiterRegistered event should be emitted");
+        }
+
+        #[test]
+        fn test_remove_arbiter() {
+            let (env, admin, client) = setup();
+            let arbiter = Address::generate(&env);
+
+            client.register_arbiter(&admin, &arbiter);
+            assert!(client.is_registered_arbiter(&arbiter));
+
+            client.remove_arbiter(&admin, &arbiter);
+            assert!(!client.is_registered_arbiter(&arbiter));
+
+            // Verify ArbiterRemoved event emission
+            let events = env.events().all();
+            let found_removed_event = events.iter().any(|ev| {
+                ev.1 .0 == Symbol::new(&env, "ArbiterRemoved").into_val(&env)
+            });
+            assert!(found_removed_event, "ArbiterRemoved event should be emitted");
+        }
     }
 }

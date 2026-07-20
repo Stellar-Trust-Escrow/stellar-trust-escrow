@@ -822,4 +822,6 @@ pub enum DataKey {
     ApprovalThreshold(u64),
     /// Pending approval votes for (escrow_id, milestone_id) — value: Vec<ApprovalRecord>
     MilestoneVotes(u64, u32),
+    /// Approved arbiter registry — value: Map<Address, bool>
+    ArbiterRegistry,
 }
