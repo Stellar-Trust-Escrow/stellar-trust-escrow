@@ -122,4 +122,3 @@ pub const APPROVAL_THRESHOLD_MET: Symbol = symbol_short!("apr_thr");
 // ── Batch operations ──────────────────────────────────────────────────────────
 
 pub const BATCH_COMPLETED: Symbol = symbol_short!("bat_cmpl");
-

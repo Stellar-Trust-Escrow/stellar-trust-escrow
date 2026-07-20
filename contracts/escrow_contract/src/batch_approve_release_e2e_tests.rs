@@ -168,7 +168,10 @@ mod batch_approve_release_e2e_tests {
         indices.push_back(2);
 
         let res = client.try_batch_approve_milestones(&client_addr, &escrow_id, &indices);
-        assert!(res.is_err(), "Batch approve must revert when an index is invalid");
+        assert!(
+            res.is_err(),
+            "Batch approve must revert when an index is invalid"
+        );
 
         // Verify M0 status remains Submitted (no partial state change)
         let state = client.get_escrow(&escrow_id);

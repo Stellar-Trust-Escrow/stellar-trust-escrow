@@ -134,7 +134,6 @@ pub const MAX_BATCH_SIZE: u32 = 10;
 pub const MAX_STRING_LEN: u32 = 256;
 pub const MAX_BUYER_SIGNERS: u32 = 10;
 
-
 /// Automatic deadline extension when milestone submitted near deadline (7 days).
 pub const AUTO_DEADLINE_EXTENSION_SECONDS: u64 = 604_800;
 
@@ -2807,7 +2806,9 @@ impl EscrowContract {
                             depends_on: None,
                         },
                     );
-                    allocated = allocated.checked_add(m_init.amount).ok_or(EscrowError::E15)?;
+                    allocated = allocated
+                        .checked_add(m_init.amount)
+                        .ok_or(EscrowError::E15)?;
                     events::emit_milestone_added(&env, escrow_id, mid, m_init.amount);
                 }
                 meta.milestone_count = m_len as u32;
@@ -2831,13 +2832,7 @@ impl EscrowContract {
                 escrow_id,
             );
 
-            events::emit_escrow_created(
-                &env,
-                escrow_id,
-                &caller,
-                &req.freelancer,
-                req.amount,
-            );
+            events::emit_escrow_created(&env, escrow_id, &caller, &req.freelancer, req.amount);
 
             escrow_ids.push_back(escrow_id);
         }
@@ -2935,7 +2930,6 @@ impl EscrowContract {
 
         Ok(released_amounts)
     }
-
 
     /// Releases funds for multiple approved milestones in a single transaction.
     ///

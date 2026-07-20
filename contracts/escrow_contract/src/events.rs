@@ -586,4 +586,3 @@ pub fn emit_batch_completed(env: &Env, count: u32, total_amount: i128) {
     env.events()
         .publish((ev::BATCH_COMPLETED, count), total_amount);
 }
-
