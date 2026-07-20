@@ -30,7 +30,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm install -g @cyclonedx/cyclonedx-cli
+          npm install -g @cyclonedx/cyclonedx-npm
           cargo install cargo-cyclonedx
 
       - name: Generate SBOM (Backend)
@@ -57,7 +57,14 @@ jobs:
           [ -f sbom-backend.json ] && FILES="$FILES sbom-backend.json"
           [ -f sbom-frontend.json ] && FILES="$FILES sbom-frontend.json"
           [ -f sbom-contracts.json ] && FILES="$FILES sbom-contracts.json"
-          cyclonedx-cli merge --input-files $FILES --output-file sbom-full.json
+          
+          # Use npx to run cyclonedx CLI without global install
+          if [ -n "$FILES" ]; then
+            npx --yes @cyclonedx/cyclonedx-npm merge --input-files $FILES --output-file sbom-full.json
+          else
+            echo "No SBOM files to merge"
+            exit 1
+          fi
 
       - name: Upload SBOM Artifact
         uses: actions/upload-artifact@v4
