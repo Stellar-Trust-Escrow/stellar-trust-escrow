@@ -9385,7 +9385,7 @@ mod tests {
                 &500,
             );
 
-            client.raise_dispute(&escrow_client, &escrow_id);
+            client.raise_dispute(&escrow_client, &escrow_id, &None);
 
             (escrow_client, freelancer, token, escrow_id)
         }
