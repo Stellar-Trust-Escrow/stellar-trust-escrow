@@ -30,7 +30,9 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm install -g @cyclonedx/cyclonedx-cli
+          wget -qO cyclonedx-cli https://github.com/CycloneDX/cyclonedx-cli/releases/latest/download/cyclonedx-linux-x64
+          chmod +x cyclonedx-cli
+          sudo mv cyclonedx-cli /usr/local/bin/cyclonedx-cli
           cargo install cargo-cyclonedx
 
       - name: Generate SBOM (Backend)

@@ -34,7 +34,7 @@ fn test_register_parent_escrow() {
     let status = client.get_parent_status(&100);
     assert_eq!(status.total, 2);
     assert_eq!(status.completed, 0);
-    assert_eq!(status.all_done, false);
+    assert!(!status.all_done);
 }
 
 #[test]
@@ -141,10 +141,10 @@ fn test_notify_all_children_complete() {
 
     client.notify_child_completed(&1);
     let status1 = client.get_parent_status(&100);
-    assert_eq!(status1.all_done, false);
+    assert!(!status1.all_done);
 
     client.notify_child_completed(&2);
     let status2 = client.get_parent_status(&100);
     assert_eq!(status2.completed, 2);
-    assert_eq!(status2.all_done, true);
+    assert!(status2.all_done);
 }
