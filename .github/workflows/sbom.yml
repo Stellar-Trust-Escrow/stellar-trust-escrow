@@ -48,7 +48,7 @@ jobs:
 
       - name: Generate SBOM (Rust Contracts)
         run: |
-          cargo cyclonedx --format json --output sbom-contracts.json
+          cargo cyclonedx --format json > sbom-contracts.json
 
       - name: Merge SBOMs
         run: |
