@@ -60,177 +60,11 @@ pub use errors::{EcErr, EscrowError};
 pub use events::*;
 pub use types::*;
 
-use soroban_sdk::{contract, contractimpl, BytesN, Env};
-
-#[contract]
-pub struct EscrowContract;
-
-#[contractimpl]
-impl EscrowContract {
-    /// Claim funds after timelock expiry.
-    /// Can only be called by the contractor (freelancer) after timelock_release_at.
-    pub fn claim_after_timelock(env: Env, escrow_id: u64) -> Result<(), EscrowError> {
-        // Get escrow state
-        let escrow = storage::get_escrow(&env, escrow_id).ok_or(EscrowError::E16)?; // EscrowNotFound
-
-        // Require contract authorization
-        escrow.freelancer.require_auth();
-
-        // Check if timelock is set
-        let release_at = escrow.timelock_release_at.ok_or(EscrowError::E11)?; // TimelockNotExpired (no timelock set)
-
-        // Check if timelock has expired
-        let current_time = env.ledger().timestamp();
-        if current_time < release_at {
-            return Err(EscrowError::TimelockNotExpired);
-        }
-    }
-
-    // TODO: Implement actual fund release logic
-    // This would involve:
-    // 1. Transferring funds from contract to freelancer
-    // 2. Updating escrow state to Released/Completed
-    // 3. Emitting events
-
-    /// Validates and updates the nonce for a meta-transaction signer.
-    ///
-    /// Enforces strictly monotonically increasing nonces to prevent replay attacks.
-    /// Returns Unauthorized if nonce <= last_nonce.
-    fn _validate_and_update_nonce(
-        env: &Env,
-        signer: &Address,
-        nonce: u64,
-    ) -> Result<(), EscrowError> {
-        let key = DataKey::MetaTxNonce(signer.clone());
-        let last_nonce: u64 = env.storage().persistent().get(&key).unwrap_or(0);
-
-        if nonce <= last_nonce {
-            return Err(EscrowError::E3);
-        }
-
-        env.storage().persistent().set(&key, &nonce);
-        Self::bump_persistent_ttl(env, &key);
-        Ok(())
-    }
-
-    /// Early release with multi-sig override.
-    /// Requires valid Ed25519 signatures from both contractor and client.
-    pub fn early_release(
-        env: Env,
-        escrow_id: u64,
-        contractor_sig: BytesN<64>,
-        client_sig: BytesN<64>,
-    ) -> Result<(), EscrowError> {
-        // Get escrow state
-        let _escrow = storage::get_escrow(&env, escrow_id).ok_or(EscrowError::E16)?; // EscrowNotFound
-
-        // Construct message to verify: [escrow_id || "early_release"]
-        let mut message = soroban_sdk::Bytes::new(&env);
-        message.append(&soroban_sdk::Bytes::from_array(
-            &env,
-            &escrow_id.to_be_bytes(),
-        ));
-        message.append(&soroban_sdk::Bytes::from_slice(&env, b"early_release"));
-
-        // Verify contractor signature
-        // Note: In a real implementation, we would need the public keys
-        // This is a simplified version - actual implementation would require
-        // storing public keys in the escrow state or deriving from addresses
-
-        // For now, we'll use a placeholder verification
-        // In production, you'd do: env.crypto().ed25519_verify(&contractor_pubkey, &message, &contractor_sig);
-
-        // Verify both signatures are valid (simplified check)
-        if contractor_sig.len() != 64 || client_sig.len() != 64 {
-            return Err(EscrowError::InvalidSignature);
-        }
-
-        // TODO: Implement actual signature verification with stored public keys
-        // let contractor_pubkey = ...; // Get from escrow or storage
-        // let client_pubkey = ...; // Get from escrow or storage
-        // env.crypto().ed25519_verify(&contractor_pubkey, &message, &contractor_sig);
-        // env.crypto().ed25519_verify(&client_pubkey, &message, &client_sig);
-
-        // TODO: Implement actual fund release logic
-        // This would involve:
-        // 1. Transferring funds from contract to freelancer
-        // 2. Updating escrow state to Released/Completed
-        // 3. Emitting events
-
-        Ok(())
-    }
-
-    fn require_not_paused(env: &Env) -> Result<(), EscrowError> {
-        if Self::is_paused(env) {
-            return Err(EscrowError::ContractPaused);
-        }
-        Ok(())
-    }
-}
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env};
 
 // ===== Tests =====
 #[cfg(test)]
 mod test;
-
-    // ── Token whitelist helpers ───────────────────────────────────────────────
-
-    fn is_token_whitelist_enabled(env: &Env) -> bool {
-        env.storage()
-            .instance()
-            .get(&DataKey::TokenWhitelistEnabled)
-            .unwrap_or(false)
-    }
-
-    fn set_token_whitelist_enabled(env: &Env, enabled: bool) {
-        env.storage()
-            .instance()
-            .set(&DataKey::TokenWhitelistEnabled, &enabled);
-        Self::bump_instance_ttl(env);
-    }
-
-    fn is_token_approved(env: &Env, token: &Address) -> bool {
-        env.storage()
-            .instance()
-            .has(&DataKey::ApprovedToken(token.clone()))
-    }
-
-    fn add_approved_token(env: &Env, token: &Address) {
-        env.storage()
-            .instance()
-            .set(&DataKey::ApprovedToken(token.clone()), &true);
-        Self::bump_instance_ttl(env);
-    }
-
-    fn remove_approved_token(env: &Env, token: &Address) {
-        env.storage()
-            .instance()
-            .remove(&DataKey::ApprovedToken(token.clone()));
-        Self::bump_instance_ttl(env);
-    }
-
-    // ── Escrow template helpers ──────────────────────────────────────────────
-
-    fn next_template_id(env: &Env) -> Result<u64, EscrowError> {
-        let instance = env.storage().instance();
-        let id: u64 = instance.get(&DataKey::TemplateCounter).unwrap_or(0_u64);
-        instance.set(&DataKey::TemplateCounter, &(id + 1));
-        Self::bump_instance_ttl(env);
-        Ok(id)
-    }
-
-    fn save_template(env: &Env, template: &EscrowTemplate) {
-        env.storage()
-            .persistent()
-            .set(&DataKey::Template(template.id), template);
-    }
-
-    fn load_template(env: &Env, id: u64) -> Result<EscrowTemplate, EscrowError> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::Template(id))
-            .ok_or(EscrowError::E8)
-    }
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONTRACT
@@ -4936,6 +4770,97 @@ impl EscrowContract {
         }
 
         // Stub: skip nonce and signature checks for now
+        Ok(())
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // Timelock Functions
+    // ────────────────────────────────────────────────────────────────────────
+
+    /// Claim funds after timelock expiry.
+    /// Can only be called by the contractor (freelancer) after timelock_release_at.
+    pub fn claim_after_timelock(env: Env, escrow_id: u64) -> Result<(), EscrowError> {
+        ContractStorage::require_initialized(&env)?;
+        ContractStorage::require_not_paused(&env)?;
+
+        // Load escrow metadata
+        let meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
+
+        // Require freelancer authorization
+        meta.freelancer.require_auth();
+
+        // Check if timelock is set
+        let release_at = meta
+            .timelock
+            .as_ref()
+            .and_then(|tl| {
+                if tl.duration_ledgers > 0 {
+                    Some(tl.start_ledger.saturating_add(tl.duration_ledgers))
+                } else {
+                    None
+                }
+            })
+            .ok_or(EscrowError::TimelockNotExpired)?; // No timelock set
+
+        // Check if timelock has expired
+        let current_ledger = env.ledger().sequence();
+        if current_ledger < release_at {
+            return Err(EscrowError::TimelockNotExpired);
+        }
+
+        // TODO: Implement actual fund release logic
+        // This would involve:
+        // 1. Transferring funds from contract to freelancer
+        // 2. Updating escrow state to Released/Completed
+        // 3. Emitting events
+
+        Ok(())
+    }
+
+    /// Early release with multi-sig override.
+    /// Requires valid Ed25519 signatures from both contractor and client.
+    pub fn early_release(
+        env: Env,
+        escrow_id: u64,
+        contractor_sig: BytesN<64>,
+        client_sig: BytesN<64>,
+    ) -> Result<(), EscrowError> {
+        ContractStorage::require_initialized(&env)?;
+        ContractStorage::require_not_paused(&env)?;
+
+        // Load escrow metadata
+        let _meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
+
+        // Construct message to verify: [escrow_id || "early_release"]
+        let mut message = soroban_sdk::Bytes::new(&env);
+        message.append(&soroban_sdk::Bytes::from_array(
+            &env,
+            &escrow_id.to_be_bytes(),
+        ));
+        message.append(&soroban_sdk::Bytes::from_slice(&env, b"early_release"));
+
+        // Verify both signatures are valid (simplified check for length)
+        if contractor_sig.len() != 64 || client_sig.len() != 64 {
+            return Err(EscrowError::InvalidSignature);
+        }
+
+        // TODO: Implement actual signature verification with stored public keys
+        // Note: In a real implementation, we would need the public keys
+        // This is a simplified version - actual implementation would require
+        // storing public keys in the escrow state or deriving from addresses
+        //
+        // In production, you'd do:
+        // let contractor_pubkey = ...; // Get from escrow or storage
+        // let client_pubkey = ...; // Get from escrow or storage
+        // env.crypto().ed25519_verify(&contractor_pubkey, &message, &contractor_sig);
+        // env.crypto().ed25519_verify(&client_pubkey, &message, &client_sig);
+
+        // TODO: Implement actual fund release logic
+        // This would involve:
+        // 1. Transferring funds from contract to freelancer
+        // 2. Updating escrow state to Released/Completed
+        // 3. Emitting events
+
         Ok(())
     }
 }
