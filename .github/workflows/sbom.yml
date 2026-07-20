@@ -60,7 +60,7 @@ jobs:
           cyclonedx-cli merge --input-files $FILES --output-file sbom-full.json
 
       - name: Upload SBOM Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: sbom-full
           path: sbom-full.json

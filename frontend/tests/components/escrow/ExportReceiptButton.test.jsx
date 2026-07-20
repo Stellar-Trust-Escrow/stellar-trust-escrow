@@ -22,32 +22,46 @@ describe('ExportReceiptButton', () => {
   });
 
   it('renders for a Completed escrow', () => {
-    renderWithAppProviders(<ExportReceiptButton escrow={{ ...BASE_ESCROW, status: 'Completed' }} />);
-    expect(screen.getByRole('button', { name: 'Export escrow receipt as PDF' })).toBeInTheDocument();
+    renderWithAppProviders(
+      <ExportReceiptButton escrow={{ ...BASE_ESCROW, status: 'Completed' }} />,
+    );
+    expect(
+      screen.getByRole('button', { name: 'Export escrow receipt as PDF' }),
+    ).toBeInTheDocument();
   });
 
   it('renders for a Resolved escrow', () => {
     renderWithAppProviders(<ExportReceiptButton escrow={{ ...BASE_ESCROW, status: 'Resolved' }} />);
-    expect(screen.getByRole('button', { name: 'Export escrow receipt as PDF' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Export escrow receipt as PDF' }),
+    ).toBeInTheDocument();
   });
 
   it('is absent for an Active escrow', () => {
     renderWithAppProviders(<ExportReceiptButton escrow={{ ...BASE_ESCROW, status: 'Active' }} />);
-    expect(screen.queryByRole('button', { name: 'Export escrow receipt as PDF' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Export escrow receipt as PDF' }),
+    ).not.toBeInTheDocument();
   });
 
   it('is absent for a Disputed escrow', () => {
     renderWithAppProviders(<ExportReceiptButton escrow={{ ...BASE_ESCROW, status: 'Disputed' }} />);
-    expect(screen.queryByRole('button', { name: 'Export escrow receipt as PDF' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Export escrow receipt as PDF' }),
+    ).not.toBeInTheDocument();
   });
 
   it('has the required aria-label', () => {
-    renderWithAppProviders(<ExportReceiptButton escrow={{ ...BASE_ESCROW, status: 'Completed' }} />);
+    renderWithAppProviders(
+      <ExportReceiptButton escrow={{ ...BASE_ESCROW, status: 'Completed' }} />,
+    );
     expect(screen.getByLabelText('Export escrow receipt as PDF')).toBeInTheDocument();
   });
 
   it('generates and downloads the PDF when clicked', async () => {
-    renderWithAppProviders(<ExportReceiptButton escrow={{ ...BASE_ESCROW, status: 'Completed' }} />);
+    renderWithAppProviders(
+      <ExportReceiptButton escrow={{ ...BASE_ESCROW, status: 'Completed' }} />,
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Export escrow receipt as PDF' }));
 
     await waitFor(() => {
@@ -64,7 +78,9 @@ describe('ExportReceiptButton', () => {
       }),
     );
 
-    renderWithAppProviders(<ExportReceiptButton escrow={{ ...BASE_ESCROW, status: 'Completed' }} />);
+    renderWithAppProviders(
+      <ExportReceiptButton escrow={{ ...BASE_ESCROW, status: 'Completed' }} />,
+    );
     const button = screen.getByRole('button', { name: 'Export escrow receipt as PDF' });
     fireEvent.click(button);
 
@@ -76,12 +92,14 @@ describe('ExportReceiptButton', () => {
     expect(button).toHaveAttribute('aria-busy', 'true');
 
     resolveGenerate(new Uint8Array([1, 2, 3]));
-    await waitFor(() => expect(screen.getByText('Receipt downloaded')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Receipt downloaded'));
   });
 
   it('announces a failure message when PDF generation throws', async () => {
     generateEscrowReceiptPdf.mockRejectedValue(new Error('boom'));
-    renderWithAppProviders(<ExportReceiptButton escrow={{ ...BASE_ESCROW, status: 'Completed' }} />);
+    renderWithAppProviders(
+      <ExportReceiptButton escrow={{ ...BASE_ESCROW, status: 'Completed' }} />,
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Export escrow receipt as PDF' }));
 
     await waitFor(() => {
