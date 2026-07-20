@@ -445,6 +445,15 @@ version = "0.1.0"
 dependencies = [
  "ed25519-dalek",
  "serde",
+ "serde_json",
+ "soroban-sdk",
+ "stellar-trust-shared",
+]
+
+[[package]]
+name = "escrow_linking"
+version = "0.1.0"
+dependencies = [
  "soroban-sdk",
  "stellar-trust-shared",
 ]
