@@ -49,22 +49,1118 @@
 //!     multi-milestone workflows.
 
 #![no_std]
+#![deny(warnings)]
+#![allow(clippy::too_many_arguments)]
 
+mod admin_transfer_tests;
+mod arbiter_reputation_tests;
+mod batch_add_milestones_cap_tests;
+mod batch_approve_release_e2e_tests;
+mod bridge;
+mod bridge_tests;
 mod errors;
 mod event_names;
+mod event_tests;
 mod events;
-mod storage;
+mod governance_escalation_tests;
+mod high_value_multisig_tests;
+mod lock_time_enforcement_tests;
+mod max_escrow_amount_tests;
+mod meta_snapshot_tests;
+mod mutual_cancellation_tests;
+mod nft;
+mod nft_tests;
+mod oracle;
+mod oracle_fallback_tests;
+mod oracle_overflow_tests;
+mod oracle_tests;
+mod partial_cancel_tests;
+mod pause_tests;
+mod self_escrow_tests;
+mod timelock_enforcement_tests;
+mod transfer_client_tests;
 mod types;
+mod upgrade_tests;
 
-pub use errors::{EcErr, EscrowError};
-pub use events::*;
-pub use types::*;
+pub use errors::EscrowError;
+use storage::StorageManager;
+pub use types::{
+    ApprovalRecord, CancellationProposal, DataKey, EscrowFeeSnapshot, EscrowState, EscrowStatus,
+    EscrowTemplate, FeeTier, Milestone, MilestoneStatus, MilestoneTemplate, MultisigConfig,
+    OptionalBytesN32, OptionalPriceCondition, OptionalTimelock, OracleResolutionPayload,
+    PriceCondition, PriceDirection, RecurringInterval, RecurringScheduleStatus, ReputationRecord,
+    Timelock, MS_APPROVED, MS_DISPUTED, MS_PENDING, MS_REJECTED, MS_RELEASED, MS_SUBMITTED,
+};
+use types::{CancellationRequest, DeadlineExtensionRequest, RecurringPaymentConfig, SlashRecord};
+use types::{FundPayload, ProposalPayload, ProposalType};
 
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env};
+use soroban_sdk::{
+    contract, contractimpl, contracttype, panic_with_error, symbol_short, token, Address, BytesN,
+    Env, IntoVal, String, Vec,
+};
+use stellar_trust_shared::auth as shared_auth;
+use stellar_trust_shared::{
+    bump_instance_ttl as shared_bump_instance_ttl,
+    bump_persistent_ttl as shared_bump_persistent_ttl,
+};
 
-// ===== Tests =====
-#[cfg(test)]
-mod test;
+mod storage;
+
+/// Maximum allowed `total_amount` for a single escrow, in stroops.
+///
+/// Equivalent to 10 billion XLM (10_000_000_000 XLM × 10_000_000 stroops/XLM).
+///
+/// # Rationale
+/// While Rust's `overflow-checks = true` catches wrapping arithmetic at runtime,
+/// an uncapped `total_amount` near `i128::MAX` creates downstream risk in
+/// expressions such as `allocated_amount + milestone.amount` and
+/// `remaining_balance - release_amount` where intermediate values can still
+/// produce unexpected results before the overflow trap fires.  A domain-meaningful
+/// cap of 10 billion XLM allows all legitimate large escrows while bounding the
+/// protocol's arithmetic attack surface.  Exported as `pub` so integrators can
+/// validate amounts client-side before submitting a transaction.
+pub const MAX_ESCROW_AMOUNT: i128 = 100_000_000_000_000_000i128;
+
+const CANCELLATION_DISPUTE_PERIOD: u64 = 120_960;
+const CANCELLATION_PROPOSAL_TTL: u64 = 86_400;
+const SLASH_DISPUTE_PERIOD: u64 = 51_840;
+const SLASH_PERCENTAGE: u64 = 10;
+const RENT_PERIOD_SECONDS: u64 = 86_400;
+const RENT_RESERVE_PERIODS: u64 = 30;
+const RENT_PER_ENTRY_PER_PERIOD: i128 = 1;
+pub const MAX_MILESTONES: u32 = 20;
+pub const MAX_STRING_LEN: u32 = 256;
+pub const MAX_BUYER_SIGNERS: u32 = 10;
+
+/// Automatic deadline extension when milestone submitted near deadline (7 days).
+pub const AUTO_DEADLINE_EXTENSION_SECONDS: u64 = 604_800;
+
+/// Minimum escrow amount in base token units.
+pub const MIN_ESCROW_AMOUNT: i128 = 1_i128;
+
+/// Minimum reputation score required for an address to serve as an arbiter.
+/// This prevents sybil attacks where fresh addresses with zero reputation
+/// could be used to gain control over dispute resolution.
+pub const MIN_ARBITER_REPUTATION_SCORE: u64 = 100;
+
+/// Threshold for high-value escrows that can be escalated to governance (1000 XLM in stroops).
+pub const HIGH_VALUE_THRESHOLD: i128 = 10_000_000_000i128;
+
+// ── Granular storage keys ─────────────────────────────────────────────────────
+// Separate keys for meta vs each milestone avoids deserialising the full
+// milestone list on every escrow-level operation.
+#[contracttype]
+#[derive(Clone)]
+pub enum PackedDataKey {
+    EscrowMeta(u64),
+    Milestone(u64, u32),
+    RecurringConfig(u64),
+    MultisigConfig(u64),
+}
+
+// ── Meta-transaction argument structs ────────────────────────────────────────
+#[allow(dead_code)]
+#[derive(Clone)]
+struct CreateEscrowArgs {
+    client: Address,
+    freelancer: Address,
+    token: Address,
+    total_amount: i128,
+    brief_hash: BytesN<32>,
+    arbiter: Option<Address>,
+    deadline: Option<u64>,
+    lock_time: Option<u64>,
+}
+
+#[allow(dead_code)]
+#[derive(Clone)]
+struct AddMilestoneArgs {
+    caller: Address,
+    escrow_id: u64,
+    title: String,
+    description_hash: BytesN<32>,
+    amount: i128,
+}
+
+#[allow(dead_code)]
+#[derive(Clone)]
+struct SubmitMilestoneArgs {
+    caller: Address,
+    escrow_id: u64,
+    milestone_id: u32,
+}
+
+#[allow(dead_code)]
+#[derive(Clone)]
+struct ApproveMilestoneArgs {
+    caller: Address,
+    escrow_id: u64,
+    milestone_id: u32,
+}
+
+// ── EscrowMeta ────────────────────────────────────────────────────────────────
+// Lightweight header stored separately from milestones.
+// `approved_count` replaces the O(n) "all approved?" loop in approve_milestone.
+// `submitted_count` replaces the O(n) loop in cancel_escrow.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct EscrowMeta {
+    pub escrow_id: u64,
+    pub client: Address,
+    pub freelancer: Address,
+    pub token: Address,
+    pub total_amount: i128,
+    /// Running sum of milestone amounts added so far (allocation guard).
+    pub allocated_amount: i128,
+    pub remaining_balance: i128,
+    pub status: EscrowStatus,
+    pub milestone_count: u32,
+    /// Number of milestones in Approved state — avoids full scan on completion check.
+    pub approved_count: u32,
+    pub released_count: u32,
+    /// Number of milestones in Submitted state — avoids O(n) scan in cancel_escrow.
+    pub submitted_count: u32,
+    pub arbiter: Option<Address>,
+    pub buyer_signers: soroban_sdk::Vec<Address>,
+    pub created_at: u64,
+    pub deadline: Option<u64>,
+    /// Optional lock time (ledger timestamp) - funds locked until this time.
+    pub lock_time: Option<u64>,
+    /// Optional extension deadline for the lock time.
+    pub lock_time_extension: Option<u64>,
+    /// Optional timelock controls release window after approval.
+    pub timelock: OptionalTimelock,
+    /// Optional dispute timeout measured in ledger sequence increments.
+    pub dispute_timeout_ledger: Option<u32>,
+    /// Ledger sequence at which the current dispute was raised.
+    pub dispute_started_ledger: Option<u32>,
+    pub brief_hash: BytesN<32>,
+    /// Prepaid storage rent reserve held by the contract in the escrow token.
+    pub rent_balance: i128,
+    /// Timestamp of the last successful rent collection checkpoint.
+    pub last_rent_collection_at: u64,
+    /// Ledger timestamp when the dispute was raised. None if not disputed.
+    pub dispute_start_ledger: Option<u64>,
+}
+
+// ── Storage helpers ───────────────────────────────────────────────────────────
+struct ContractStorage;
+
+impl ContractStorage {
+    fn initialize(env: &Env, admin: &Address) -> Result<(), EscrowError> {
+        let instance = env.storage().instance();
+        if instance.has(&DataKey::Admin) {
+            return Err(EscrowError::E1);
+        }
+        instance.set(&DataKey::Admin, admin);
+        // Default admin multisig: 1-of-1 (initializer).
+        let mut signers: soroban_sdk::Vec<Address> = soroban_sdk::Vec::new(env);
+        signers.push_back(admin.clone());
+        instance.set(&DataKey::AdminSigners, &signers);
+        instance.set(&DataKey::AdminThreshold, &1_u32);
+        instance.set(&DataKey::EscrowCounter, &0_u64);
+        instance.set(&DataKey::PlatformTreasury, admin);
+        // Initialize storage version for upgradeable storage
+        StorageManager::init_version(env);
+        Self::bump_instance_ttl(env);
+        events::emit_admin_initialized(env, admin);
+        Ok(())
+    }
+
+    fn require_initialized(env: &Env) -> Result<(), EscrowError> {
+        if !env.storage().instance().has(&DataKey::Admin) {
+            return Err(EscrowError::E2);
+        }
+        Self::bump_instance_ttl(env);
+        Ok(())
+    }
+
+    fn require_admin(env: &Env, caller: &Address) -> Result<(), EscrowError> {
+        Self::require_initialized(env)?;
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(EscrowError::E2)?;
+        if *caller != admin {
+            return Err(EscrowError::E4);
+        }
+        Ok(())
+    }
+
+    fn is_esc_frz(env: &Env, escrow_id: u64) -> bool {
+        env.storage()
+            .persistent()
+            .get(&DataKey::EscrowFrozen(escrow_id))
+            .unwrap_or(false)
+    }
+
+    fn require_not_frozen(env: &Env, escrow_id: u64) -> Result<(), EscrowError> {
+        if Self::is_esc_frz(env, escrow_id) {
+            return Err(EscrowError::E61);
+        }
+        Ok(())
+    }
+
+    fn next_escrow_id(env: &Env) -> Result<u64, EscrowError> {
+        let instance = env.storage().instance();
+        let id: u64 = instance.get(&DataKey::EscrowCounter).unwrap_or(0_u64);
+        instance.set(&DataKey::EscrowCounter, &(id + 1));
+        // Instance TTL already bumped by require_initialized caller
+        Ok(id)
+    }
+
+    fn escrow_count(env: &Env) -> u64 {
+        let count = env
+            .storage()
+            .instance()
+            .get(&DataKey::EscrowCounter)
+            .unwrap_or(0_u64);
+        if env.storage().instance().has(&DataKey::Admin) {
+            Self::bump_instance_ttl(env);
+        }
+        count
+    }
+
+    // ── Escrow meta ───────────────────────────────────────────────────────────
+
+    fn load_escrow_meta(env: &Env, escrow_id: u64) -> Result<EscrowMeta, EscrowError> {
+        let key = PackedDataKey::EscrowMeta(escrow_id);
+        let meta = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(EscrowError::E8)?;
+        Self::bump_persistent_ttl(env, &key);
+        Ok(meta)
+    }
+
+    fn load_escrow_meta_with_rent(env: &Env, escrow_id: u64) -> Result<EscrowMeta, EscrowError> {
+        let mut meta = Self::load_escrow_meta(env, escrow_id)?;
+        Self::settle_rent_for_access(env, &mut meta)?;
+        Ok(meta)
+    }
+
+    fn ensure_live_escrow(env: &Env, escrow_id: u64) -> Result<(), EscrowError> {
+        let _ = Self::load_escrow_meta_with_rent(env, escrow_id)?;
+        Ok(())
+    }
+
+    fn save_escrow_meta(env: &Env, meta: &EscrowMeta) {
+        let key = PackedDataKey::EscrowMeta(meta.escrow_id);
+        env.storage().persistent().set(&key, meta);
+        Self::bump_persistent_ttl(env, &key);
+    }
+
+    fn remove_escrow_meta(env: &Env, escrow_id: u64) {
+        env.storage()
+            .persistent()
+            .remove(&PackedDataKey::EscrowMeta(escrow_id));
+    }
+
+    fn no_multisig(env: &Env) -> MultisigConfig {
+        MultisigConfig {
+            approvers: Vec::new(env),
+            weights: Vec::new(env),
+            threshold: 0,
+        }
+    }
+
+    fn load_multisig_config(env: &Env, escrow_id: u64) -> MultisigConfig {
+        let key = PackedDataKey::MultisigConfig(escrow_id);
+        match env.storage().persistent().get(&key) {
+            Some(config) => {
+                Self::bump_persistent_ttl(env, &key);
+                config
+            }
+            None => Self::no_multisig(env),
+        }
+    }
+
+    fn save_multisig_config(env: &Env, escrow_id: u64, config: &MultisigConfig) {
+        let key = PackedDataKey::MultisigConfig(escrow_id);
+        env.storage().persistent().set(&key, config);
+        Self::bump_persistent_ttl(env, &key);
+    }
+
+    fn remove_multisig_config(env: &Env, escrow_id: u64) {
+        env.storage()
+            .persistent()
+            .remove(&PackedDataKey::MultisigConfig(escrow_id));
+    }
+
+    fn multisig_enabled(config: &MultisigConfig) -> bool {
+        !config.approvers.is_empty()
+    }
+
+    fn validate_multisig_config(
+        total_amount: i128,
+        config: &MultisigConfig,
+    ) -> Result<(), EscrowError> {
+        let approver_count = config.approvers.len();
+        let disabled = approver_count == 0 && config.weights.is_empty() && config.threshold == 0;
+
+        if disabled {
+            return if total_amount >= HIGH_VALUE_THRESHOLD {
+                Err(EscrowError::HighValueMultisigRequired)
+            } else {
+                Ok(())
+            };
+        }
+
+        if approver_count == 0
+            || approver_count > MAX_BUYER_SIGNERS
+            || config.weights.len() != approver_count
+            || config.threshold == 0
+        {
+            return Err(EscrowError::InvalidMultisigConfig);
+        }
+
+        let mut total_weight = 0_u32;
+        let mut max_weight = 0_u32;
+        for i in 0..approver_count {
+            let approver = config
+                .approvers
+                .get(i)
+                .ok_or(EscrowError::InvalidMultisigConfig)?;
+            let weight = config
+                .weights
+                .get(i)
+                .ok_or(EscrowError::InvalidMultisigConfig)?;
+            if weight == 0 {
+                return Err(EscrowError::InvalidMultisigConfig);
+            }
+            for previous in 0..i {
+                if config.approvers.get(previous) == Some(approver.clone()) {
+                    return Err(EscrowError::InvalidMultisigConfig);
+                }
+            }
+            total_weight = total_weight
+                .checked_add(weight)
+                .ok_or(EscrowError::InvalidMultisigConfig)?;
+            max_weight = core::cmp::max(max_weight, weight);
+        }
+
+        if config.threshold > total_weight {
+            return Err(EscrowError::InvalidMultisigConfig);
+        }
+
+        if total_amount >= HIGH_VALUE_THRESHOLD
+            && (approver_count < 2 || config.threshold <= max_weight)
+        {
+            return Err(EscrowError::HighValueMultisigRequired);
+        }
+
+        Ok(())
+    }
+
+    fn multisig_weight(config: &MultisigConfig, signer: &Address) -> Option<u32> {
+        for i in 0..config.approvers.len() {
+            if config.approvers.get(i) == Some(signer.clone()) {
+                return config.weights.get(i);
+            }
+        }
+        None
+    }
+
+    fn accrued_multisig_weight(
+        config: &MultisigConfig,
+        approvals: &Vec<ApprovalRecord>,
+    ) -> Result<u32, EscrowError> {
+        let mut accrued = 0_u32;
+        for approval in approvals.iter() {
+            let weight = Self::multisig_weight(config, &approval.signer)
+                .ok_or(EscrowError::InvalidMultisigConfig)?;
+            accrued = accrued
+                .checked_add(weight)
+                .ok_or(EscrowError::InvalidMultisigConfig)?;
+        }
+        Ok(accrued)
+    }
+
+    fn load_fee_snapshot(env: &Env, escrow_id: u64) -> EscrowFeeSnapshot {
+        env.storage()
+            .persistent()
+            .get(&DataKey::PlatformFeeSnapshot(escrow_id))
+            .unwrap_or(EscrowFeeSnapshot {
+                fee_bps: 0,
+                fee_amount: 0,
+                collected: true,
+            })
+    }
+
+    fn save_fee_snapshot(env: &Env, escrow_id: u64, snapshot: &EscrowFeeSnapshot) {
+        let key = DataKey::PlatformFeeSnapshot(escrow_id);
+        env.storage().persistent().set(&key, snapshot);
+        Self::bump_persistent_ttl(env, &key);
+    }
+
+    fn remove_fee_snapshot(env: &Env, escrow_id: u64) {
+        env.storage()
+            .persistent()
+            .remove(&DataKey::PlatformFeeSnapshot(escrow_id));
+    }
+
+    fn with_reentrancy_guard<T, F>(env: &Env, f: F) -> Result<T, EscrowError>
+    where
+        F: FnOnce() -> Result<T, EscrowError>,
+    {
+        if env
+            .storage()
+            .instance()
+            .get(&DataKey::ReentrancyLock)
+            .unwrap_or(false)
+        {
+            panic_with_error!(env, EscrowError::E22);
+        }
+
+        env.storage()
+            .instance()
+            .set(&DataKey::ReentrancyLock, &true);
+        Self::bump_instance_ttl(env);
+        let result = f();
+        env.storage().instance().remove(&DataKey::ReentrancyLock);
+        result
+    }
+
+    // ── Milestones ────────────────────────────────────────────────────────────
+
+    fn load_milestone(
+        env: &Env,
+        escrow_id: u64,
+        milestone_id: u32,
+    ) -> Result<Milestone, EscrowError> {
+        let key = PackedDataKey::Milestone(escrow_id, milestone_id);
+        let m = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(EscrowError::E13)?;
+        Self::bump_persistent_ttl(env, &key);
+        Ok(m)
+    }
+
+    fn save_milestone(env: &Env, escrow_id: u64, milestone: &Milestone) {
+        let key = PackedDataKey::Milestone(escrow_id, milestone.id);
+        env.storage().persistent().set(&key, milestone);
+        Self::bump_persistent_ttl(env, &key);
+    }
+
+    fn remove_milestone(env: &Env, escrow_id: u64, milestone_id: u32) {
+        env.storage()
+            .persistent()
+            .remove(&PackedDataKey::Milestone(escrow_id, milestone_id));
+    }
+
+    // ── Recurring configuration ─────────────────────────────────────────────
+
+    fn load_recurring_config(
+        env: &Env,
+        escrow_id: u64,
+    ) -> Result<RecurringPaymentConfig, EscrowError> {
+        let key = PackedDataKey::RecurringConfig(escrow_id);
+        let config = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(EscrowError::E43)?;
+        Self::bump_persistent_ttl(env, &key);
+        Ok(config)
+    }
+
+    fn save_recurring_config(env: &Env, escrow_id: u64, config: &RecurringPaymentConfig) {
+        let key = PackedDataKey::RecurringConfig(escrow_id);
+        env.storage().persistent().set(&key, config);
+        Self::bump_persistent_ttl(env, &key);
+    }
+
+    fn remove_recurring_config(env: &Env, escrow_id: u64) {
+        env.storage()
+            .persistent()
+            .remove(&PackedDataKey::RecurringConfig(escrow_id));
+    }
+
+    // ── Full escrow view (read-only, assembles EscrowState for callers) ───────
+    fn load_escrow(env: &Env, escrow_id: u64) -> Result<EscrowState, EscrowError> {
+        let meta = Self::load_escrow_meta_with_rent(env, escrow_id)?;
+        let multisig_config = Self::load_multisig_config(env, escrow_id);
+        let multisig_approvers = if Self::multisig_enabled(&multisig_config) {
+            multisig_config.approvers.clone()
+        } else {
+            meta.buyer_signers.clone()
+        };
+        let milestones = (0..meta.milestone_count)
+            .map(|mid| Self::load_milestone(env, escrow_id, mid))
+            .try_fold(Vec::new(env), |mut result, item| {
+                result.push_back(item?);
+                Ok(result)
+            })?;
+        Ok(EscrowState {
+            escrow_id: meta.escrow_id,
+            client: meta.client,
+            freelancer: meta.freelancer,
+            token: meta.token,
+            total_amount: meta.total_amount,
+            remaining_balance: meta.remaining_balance,
+            status: meta.status,
+            milestones,
+            arbiter: meta.arbiter,
+            buyer_signers: meta.buyer_signers.clone(),
+            created_at: meta.created_at,
+            deadline: meta.deadline,
+            lock_time: meta.lock_time,
+            lock_time_extension: meta.lock_time_extension,
+            timelock: meta.timelock,
+            dispute_timeout_ledger: meta.dispute_timeout_ledger,
+            dispute_started_ledger: meta.dispute_started_ledger,
+            brief_hash: meta.brief_hash,
+            multisig_approvers,
+            multisig_weights: multisig_config.weights,
+            multisig_threshold: multisig_config.threshold,
+        })
+    }
+
+    // ── Reputation ────────────────────────────────────────────────────────────
+
+    fn load_reputation(env: &Env, address: &Address) -> ReputationRecord {
+        let key = DataKey::Reputation(address.clone());
+        match env.storage().persistent().get(&key) {
+            Some(record) => {
+                Self::bump_persistent_ttl(env, &key);
+                record
+            }
+            None => ReputationRecord {
+                address: address.clone(),
+                total_score: 0,
+                completed_escrows: 0,
+                disputed_escrows: 0,
+                disputes_won: 0,
+                total_volume: 0,
+                slash_count: 0,
+                total_slashed: 0,
+                last_updated: env.ledger().timestamp(),
+            },
+        }
+    }
+
+    fn save_reputation(env: &Env, record: &ReputationRecord) {
+        let key = DataKey::Reputation(record.address.clone());
+        env.storage().persistent().set(&key, record);
+        Self::bump_persistent_ttl(env, &key);
+    }
+
+    fn load_cancellation_request(
+        env: &Env,
+        escrow_id: u64,
+    ) -> Result<CancellationRequest, EscrowError> {
+        let key = DataKey::CancellationRequest(escrow_id);
+        let req = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(EscrowError::E32)?;
+        Self::bump_persistent_ttl(env, &key);
+        Ok(req)
+    }
+
+    fn save_cancellation_request(env: &Env, request: &CancellationRequest) {
+        let key = DataKey::CancellationRequest(request.escrow_id);
+        env.storage().persistent().set(&key, request);
+        Self::bump_persistent_ttl(env, &key);
+    }
+
+    fn remove_cancellation_request(env: &Env, escrow_id: u64) {
+        env.storage()
+            .persistent()
+            .remove(&DataKey::CancellationRequest(escrow_id));
+    }
+
+    // ── Mutual-consent cancellation proposal ──────────────────────────────────
+
+    fn load_cancellation_proposal(
+        env: &Env,
+        escrow_id: u64,
+    ) -> Result<CancellationProposal, EscrowError> {
+        let key = DataKey::CancellationProposal(escrow_id);
+        let proposal = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(EscrowError::NoCancellationProposal)?;
+        Self::bump_persistent_ttl(env, &key);
+        Ok(proposal)
+    }
+
+    fn save_cancellation_proposal(env: &Env, proposal: &CancellationProposal) {
+        let key = DataKey::CancellationProposal(proposal.escrow_id);
+        env.storage().persistent().set(&key, proposal);
+        Self::bump_persistent_ttl(env, &key);
+    }
+
+    fn remove_cancellation_proposal(env: &Env, escrow_id: u64) {
+        env.storage()
+            .persistent()
+            .remove(&DataKey::CancellationProposal(escrow_id));
+    }
+
+    fn load_slash_record(env: &Env, escrow_id: u64) -> Result<SlashRecord, EscrowError> {
+        let key = DataKey::SlashRecord(escrow_id);
+        let record = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(EscrowError::E38)?;
+        Self::bump_persistent_ttl(env, &key);
+        Ok(record)
+    }
+
+    fn save_slash_record(env: &Env, record: &SlashRecord) {
+        let key = DataKey::SlashRecord(record.escrow_id);
+        env.storage().persistent().set(&key, record);
+        Self::bump_persistent_ttl(env, &key);
+    }
+
+    fn remove_slash_record(env: &Env, escrow_id: u64) {
+        env.storage()
+            .persistent()
+            .remove(&DataKey::SlashRecord(escrow_id));
+    }
+
+    fn load_deadline_extension_request(
+        env: &Env,
+        escrow_id: u64,
+    ) -> Result<DeadlineExtensionRequest, EscrowError> {
+        let key = DataKey::DeadlineExtensionRequest(escrow_id);
+        let req = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(EscrowError::E32)?;
+        Self::bump_persistent_ttl(env, &key);
+        Ok(req)
+    }
+
+    fn save_deadline_extension_request(env: &Env, request: &DeadlineExtensionRequest) {
+        let key = DataKey::DeadlineExtensionRequest(request.escrow_id);
+        env.storage().persistent().set(&key, request);
+        Self::bump_persistent_ttl(env, &key);
+    }
+
+    // ── Meta-transaction nonce tracking ────────────────────────────────────────
+
+    /// Validates and updates the nonce for a meta-transaction signer.
+    ///
+    /// Enforces strictly monotonically increasing nonces to prevent replay attacks.
+    /// Returns Unauthorized if nonce <= last_nonce.
+    fn _validate_and_update_nonce(
+        env: &Env,
+        signer: &Address,
+        nonce: u64,
+    ) -> Result<(), EscrowError> {
+        let key = DataKey::MetaTxNonce(signer.clone());
+        let last_nonce: u64 = env.storage().persistent().get(&key).unwrap_or(0);
+
+        if nonce <= last_nonce {
+            return Err(EscrowError::E3);
+        }
+
+        env.storage().persistent().set(&key, &nonce);
+        Self::bump_persistent_ttl(env, &key);
+        Ok(())
+    }
+
+    // ── TTL helpers ───────────────────────────────────────────────────────────
+
+    /// Bump instance TTL using shared config constants from `stellar_trust_shared`.
+    #[inline]
+    fn bump_instance_ttl(env: &Env) {
+        shared_bump_instance_ttl(env);
+    }
+
+    /// Bump persistent TTL using shared config constants from `stellar_trust_shared`.
+    #[inline]
+    fn bump_persistent_ttl<K>(env: &Env, key: &K)
+    where
+        K: soroban_sdk::IntoVal<Env, soroban_sdk::Val>,
+    {
+        shared_bump_persistent_ttl(env, key);
+    }
+
+    // ── Storage rent helpers ─────────────────────────────────────────────────
+
+    #[inline]
+    fn active_storage_entries(env: &Env, meta: &EscrowMeta) -> i128 {
+        let mut entries = 1 + i128::from(meta.milestone_count);
+        if env
+            .storage()
+            .persistent()
+            .has(&PackedDataKey::MultisigConfig(meta.escrow_id))
+        {
+            entries += 1;
+        }
+        if env
+            .storage()
+            .persistent()
+            .has(&PackedDataKey::RecurringConfig(meta.escrow_id))
+        {
+            entries += 1;
+        }
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::CancellationRequest(meta.escrow_id))
+        {
+            entries += 1;
+        }
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::SlashRecord(meta.escrow_id))
+        {
+            entries += 1;
+        }
+        entries
+    }
+
+    #[inline]
+    fn rent_due_per_period(env: &Env, meta: &EscrowMeta) -> i128 {
+        Self::active_storage_entries(env, meta) * RENT_PER_ENTRY_PER_PERIOD
+    }
+
+    #[inline]
+    fn reserve_for_entries(entries: i128) -> i128 {
+        entries * RENT_PER_ENTRY_PER_PERIOD * i128::from(RENT_RESERVE_PERIODS)
+    }
+
+    fn rent_has_expired(env: &Env, meta: &EscrowMeta) -> bool {
+        let now = env.ledger().timestamp();
+        if now <= meta.last_rent_collection_at {
+            return false;
+        }
+
+        let elapsed_periods = (now - meta.last_rent_collection_at) / RENT_PERIOD_SECONDS;
+        if elapsed_periods == 0 {
+            return false;
+        }
+
+        let covered_periods = meta.rent_balance / Self::rent_due_per_period(env, meta);
+        i128::from(elapsed_periods) > covered_periods
+    }
+
+    fn rent_expires_at(env: &Env, meta: &EscrowMeta) -> u64 {
+        let covered_periods = (meta.rent_balance / Self::rent_due_per_period(env, meta)) as u64;
+        meta.last_rent_collection_at + ((covered_periods + 1) * RENT_PERIOD_SECONDS)
+    }
+
+    /// Validates that a token is approved for use as an escrow token.
+    ///
+    /// For wrapped/bridged tokens, checks that they are registered and approved.
+    /// Native Stellar tokens bypass this check and are always accepted.
+    fn _validate_escrow_token(_env: &Env, _token: &Address) -> Result<(), EscrowError> {
+        // Native tokens are always valid; only validate if it's a contract
+        // In a real implementation, this would check a wrapped token registry.
+        // For now, we accept all tokens (native and wrapped).
+        // TODO: Implement wrapped token registry check with is_approved flag
+        Ok(())
+    }
+
+    fn charge_rent_reserve(
+        env: &Env,
+        token: &Address,
+        payer: &Address,
+        amount: i128,
+    ) -> Result<(), EscrowError> {
+        if amount <= 0 {
+            return Ok(());
+        }
+
+        token::Client::new(env, token).transfer(payer, &env.current_contract_address(), &amount);
+        Ok(())
+    }
+
+    fn charge_entry_rent(
+        env: &Env,
+        meta: &mut EscrowMeta,
+        payer: &Address,
+        entries: i128,
+    ) -> Result<i128, EscrowError> {
+        let amount = Self::reserve_for_entries(entries);
+        Self::charge_rent_reserve(env, &meta.token, payer, amount)?;
+        meta.rent_balance = meta
+            .rent_balance
+            .checked_add(amount)
+            .ok_or(EscrowError::E20)?;
+        Ok(amount)
+    }
+
+    fn collect_rent_due(env: &Env, meta: &mut EscrowMeta) -> Result<i128, EscrowError> {
+        let now = env.ledger().timestamp();
+        // Use saturating_sub to prevent underflow if ledger timestamp is inconsistent
+        let time_since_last = now.saturating_sub(meta.last_rent_collection_at);
+        if time_since_last == 0 {
+            return Ok(0);
+        }
+
+        let elapsed_periods = time_since_last / RENT_PERIOD_SECONDS;
+        if elapsed_periods == 0 {
+            return Ok(0);
+        }
+
+        let rent_per_period = Self::rent_due_per_period(env, meta);
+        // Use checked_mul to prevent overflow in rent calculation
+        let due = rent_per_period
+            .checked_mul(i128::from(elapsed_periods))
+            .ok_or(EscrowError::E20)?;
+        let collectable = due.min(meta.rent_balance);
+
+        if collectable > 0 {
+            let admin: Address = env
+                .storage()
+                .instance()
+                .get(&DataKey::Admin)
+                .ok_or(EscrowError::E2)?;
+            token::Client::new(env, &meta.token).transfer(
+                &env.current_contract_address(),
+                &admin,
+                &collectable,
+            );
+            meta.rent_balance = meta.rent_balance.saturating_sub(collectable);
+        }
+
+        let covered_periods = (collectable / rent_per_period) as u64;
+        if covered_periods > 0 {
+            meta.last_rent_collection_at = meta
+                .last_rent_collection_at
+                .saturating_add(covered_periods * RENT_PERIOD_SECONDS);
+        }
+
+        env.events().publish(
+            (event_names::RENT_COLLECTED, meta.escrow_id),
+            (
+                collectable,
+                meta.rent_balance,
+                Self::rent_expires_at(env, meta),
+            ),
+        );
+        Ok(collectable)
+    }
+
+    fn settle_rent_for_access(env: &Env, meta: &mut EscrowMeta) -> Result<i128, EscrowError> {
+        // SECURITY AUDIT: settle_rent_for_access is called by read functions like
+        // load_escrow_meta_with_rent to lazily collect rent on every access.
+        //
+        // ANALYSIS: The function is safe from rent manipulation via repeated view calls
+        // because:
+        // 1. collect_rent_due checks `time_since_last > 0` and only charges rent if
+        //    enough time has passed (elapsed_periods > 0).
+        // 2. last_rent_collection_at is updated after each collection, preventing
+        //    double-charging within the same period.
+        // 3. Even if called 1000x in the same block, only the first call will collect
+        //    rent (subsequent calls return 0 because elapsed_periods == 0).
+        // 4. The period boundary is correctly enforced: rent is only charged for
+        //    complete periods that have elapsed since last_rent_collection_at.
+        //
+        // CONCLUSION: No manipulation vector exists. Repeated view calls cannot
+        // accelerate rent depletion beyond the normal collect_rent_due schedule.
+        if Self::rent_has_expired(env, meta) {
+            return Err(EscrowError::E8);
+        }
+
+        let collectable = Self::collect_rent_due(env, meta)?;
+        Self::save_escrow_meta(env, meta);
+        Ok(collectable)
+    }
+
+    fn collect_rent(env: &Env, meta: &mut EscrowMeta) -> Result<i128, EscrowError> {
+        let collectable = Self::collect_rent_due(env, meta)?;
+
+        if Self::rent_has_expired(env, meta) {
+            Self::expire_escrow(env, meta)?;
+            return Ok(collectable);
+        }
+
+        Self::save_escrow_meta(env, meta);
+        Ok(collectable)
+    }
+
+    fn expire_escrow(env: &Env, meta: &EscrowMeta) -> Result<(), EscrowError> {
+        let refund_amount = meta
+            .remaining_balance
+            .checked_add(meta.rent_balance)
+            .ok_or(EscrowError::E20)?;
+
+        if refund_amount > 0 {
+            token::Client::new(env, &meta.token).transfer(
+                &env.current_contract_address(),
+                &meta.client,
+                &refund_amount,
+            );
+        }
+
+        for milestone_id in 0..meta.milestone_count {
+            Self::remove_milestone(env, meta.escrow_id, milestone_id);
+        }
+
+        Self::remove_recurring_config(env, meta.escrow_id);
+        Self::remove_multisig_config(env, meta.escrow_id);
+        Self::remove_cancellation_request(env, meta.escrow_id);
+        Self::remove_slash_record(env, meta.escrow_id);
+        Self::remove_escrow_meta(env, meta.escrow_id);
+
+        env.events().publish(
+            (event_names::RENT_EXPIRED, meta.escrow_id),
+            (refund_amount, meta.remaining_balance),
+        );
+        Ok(())
+    }
+
+    // ── Time lock helpers ─────────────────────────────────────────────────────────
+
+    /// Checks if the lock time has expired for an escrow.
+    /// Returns Ok(()) if funds can be released, Err if still locked.
+    fn check_lock_time_expired(
+        env: &Env,
+        escrow_id: u64,
+        lock_time: Option<u64>,
+    ) -> Result<(), EscrowError> {
+        if let Some(lt) = lock_time {
+            let now = env.ledger().timestamp();
+            if now < lt {
+                return Err(EscrowError::E28);
+            }
+            // Lock has expired - emit event
+            events::emit_lock_time_expired(env, escrow_id, lt);
+        }
+        Ok(())
+    }
+
+    fn check_timelock_expired(
+        env: &Env,
+        escrow_id: u64,
+        timelock: OptionalTimelock,
+    ) -> Result<(), EscrowError> {
+        if let OptionalTimelock::Some(tl) = timelock {
+            let now = env.ledger().timestamp();
+            let expiry = tl
+                .start_ledger
+                .checked_add(tl.duration_ledger)
+                .ok_or(EscrowError::E51)?;
+            if now < expiry {
+                return Err(EscrowError::E53);
+            }
+            events::emit_timelock_released(env, escrow_id, now);
+        }
+        Ok(())
+    }
+
+    // ── Pause helpers ──────────────────────────────────────────────────────────
+
+    fn is_paused(env: &Env) -> bool {
+        env.storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false)
+    }
+
+    fn set_paused(env: &Env, paused: bool) {
+        env.storage().instance().set(&DataKey::Paused, &paused);
+        Self::bump_instance_ttl(env);
+    }
+
+    fn require_not_paused(env: &Env) -> Result<(), EscrowError> {
+        if Self::is_paused(env) {
+            return Err(EscrowError::ContractPaused);
+        }
+        Ok(())
+    }
+
+    fn get_pause_initiated_at(env: &Env) -> u64 {
+        env.storage()
+            .instance()
+            .get(&DataKey::PauseInitiatedAt)
+            .unwrap_or(0_u64)
+    }
+
+    fn set_pause_initiated_at(env: &Env, timestamp: u64) {
+        env.storage()
+            .instance()
+            .set(&DataKey::PauseInitiatedAt, &timestamp);
+        Self::bump_instance_ttl(env);
+    }
+
+    fn _get_migration_cursor(env: &Env) -> u64 {
+        env.storage()
+            .instance()
+            .get(&DataKey::MigrationCursor)
+            .unwrap_or(0_u64)
+    }
+
+    fn _set_migration_cursor(env: &Env, cursor: u64) {
+        env.storage()
+            .instance()
+            .set(&DataKey::MigrationCursor, &cursor);
+        Self::bump_instance_ttl(env);
+    }
+
+    // ── Token whitelist helpers ───────────────────────────────────────────────
+
+    fn is_token_whitelist_enabled(env: &Env) -> bool {
+        env.storage()
+            .instance()
+            .get(&DataKey::TokenWhitelistEnabled)
+            .unwrap_or(false)
+    }
+
+    fn set_token_whitelist_enabled(env: &Env, enabled: bool) {
+        env.storage()
+            .instance()
+            .set(&DataKey::TokenWhitelistEnabled, &enabled);
+        Self::bump_instance_ttl(env);
+    }
+
+    fn is_token_approved(env: &Env, token: &Address) -> bool {
+        env.storage()
+            .instance()
+            .has(&DataKey::ApprovedToken(token.clone()))
+    }
+
+    fn add_approved_token(env: &Env, token: &Address) {
+        env.storage()
+            .instance()
+            .set(&DataKey::ApprovedToken(token.clone()), &true);
+        Self::bump_instance_ttl(env);
+    }
+
+    fn remove_approved_token(env: &Env, token: &Address) {
+        env.storage()
+            .instance()
+            .remove(&DataKey::ApprovedToken(token.clone()));
+        Self::bump_instance_ttl(env);
+    }
+
+    // ── Escrow template helpers ──────────────────────────────────────────────
+
+    fn next_template_id(env: &Env) -> Result<u64, EscrowError> {
+        let instance = env.storage().instance();
+        let id: u64 = instance.get(&DataKey::TemplateCounter).unwrap_or(0_u64);
+        instance.set(&DataKey::TemplateCounter, &(id + 1));
+        Self::bump_instance_ttl(env);
+        Ok(id)
+    }
+
+    fn save_template(env: &Env, template: &EscrowTemplate) {
+        env.storage()
+            .persistent()
+            .set(&DataKey::Template(template.id), template);
+    }
+
+    fn load_template(env: &Env, id: u64) -> Result<EscrowTemplate, EscrowError> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Template(id))
+            .ok_or(EscrowError::E8)
+    }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONTRACT
@@ -4770,97 +5866,6 @@ impl EscrowContract {
         }
 
         // Stub: skip nonce and signature checks for now
-        Ok(())
-    }
-
-    // ────────────────────────────────────────────────────────────────────────
-    // Timelock Functions
-    // ────────────────────────────────────────────────────────────────────────
-
-    /// Claim funds after timelock expiry.
-    /// Can only be called by the contractor (freelancer) after timelock_release_at.
-    pub fn claim_after_timelock(env: Env, escrow_id: u64) -> Result<(), EscrowError> {
-        ContractStorage::require_initialized(&env)?;
-        ContractStorage::require_not_paused(&env)?;
-
-        // Load escrow metadata
-        let meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
-
-        // Require freelancer authorization
-        meta.freelancer.require_auth();
-
-        // Check if timelock is set
-        let release_at = meta
-            .timelock
-            .as_ref()
-            .and_then(|tl| {
-                if tl.duration_ledgers > 0 {
-                    Some(tl.start_ledger.saturating_add(tl.duration_ledgers))
-                } else {
-                    None
-                }
-            })
-            .ok_or(EscrowError::TimelockNotExpired)?; // No timelock set
-
-        // Check if timelock has expired
-        let current_ledger = env.ledger().sequence();
-        if current_ledger < release_at {
-            return Err(EscrowError::TimelockNotExpired);
-        }
-
-        // TODO: Implement actual fund release logic
-        // This would involve:
-        // 1. Transferring funds from contract to freelancer
-        // 2. Updating escrow state to Released/Completed
-        // 3. Emitting events
-
-        Ok(())
-    }
-
-    /// Early release with multi-sig override.
-    /// Requires valid Ed25519 signatures from both contractor and client.
-    pub fn early_release(
-        env: Env,
-        escrow_id: u64,
-        contractor_sig: BytesN<64>,
-        client_sig: BytesN<64>,
-    ) -> Result<(), EscrowError> {
-        ContractStorage::require_initialized(&env)?;
-        ContractStorage::require_not_paused(&env)?;
-
-        // Load escrow metadata
-        let _meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
-
-        // Construct message to verify: [escrow_id || "early_release"]
-        let mut message = soroban_sdk::Bytes::new(&env);
-        message.append(&soroban_sdk::Bytes::from_array(
-            &env,
-            &escrow_id.to_be_bytes(),
-        ));
-        message.append(&soroban_sdk::Bytes::from_slice(&env, b"early_release"));
-
-        // Verify both signatures are valid (simplified check for length)
-        if contractor_sig.len() != 64 || client_sig.len() != 64 {
-            return Err(EscrowError::InvalidSignature);
-        }
-
-        // TODO: Implement actual signature verification with stored public keys
-        // Note: In a real implementation, we would need the public keys
-        // This is a simplified version - actual implementation would require
-        // storing public keys in the escrow state or deriving from addresses
-        //
-        // In production, you'd do:
-        // let contractor_pubkey = ...; // Get from escrow or storage
-        // let client_pubkey = ...; // Get from escrow or storage
-        // env.crypto().ed25519_verify(&contractor_pubkey, &message, &contractor_sig);
-        // env.crypto().ed25519_verify(&client_pubkey, &message, &client_sig);
-
-        // TODO: Implement actual fund release logic
-        // This would involve:
-        // 1. Transferring funds from contract to freelancer
-        // 2. Updating escrow state to Released/Completed
-        // 3. Emitting events
-
         Ok(())
     }
 }

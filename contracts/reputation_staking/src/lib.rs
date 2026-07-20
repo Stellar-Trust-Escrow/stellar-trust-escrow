@@ -5,6 +5,11 @@
 //! This is a minimal placeholder implementation to satisfy workspace dependencies.
 //! Full implementation is tracked in a separate issue.
 
+mod errors;
+mod events;
+mod storage;
+mod types;
+
 use errors::StakingError;
 use soroban_sdk::{panic_with_error, Address, BytesN, Env};
 use types::*;
