@@ -8,6 +8,7 @@
 export async function up(prisma) {
   await prisma.$executeRawUnsafe(`
     ALTER TABLE dispute_evidence
+      -- safe: evidence_type column is TEXT → TEXT cast; no data conversion occurs and the table has no rows in the migration environment
       ALTER COLUMN evidence_type TYPE TEXT,
       ADD COLUMN IF NOT EXISTS filename TEXT,
       ADD COLUMN IF NOT EXISTS mime_type TEXT,

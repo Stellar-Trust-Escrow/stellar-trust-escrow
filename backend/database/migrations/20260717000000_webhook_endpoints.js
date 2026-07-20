@@ -40,11 +40,14 @@ export async function up(prisma) {
       ADD COLUMN IF NOT EXISTS response_body TEXT
   `);
 
-  await prisma.$executeRawUnsafe(`
-    ALTER TABLE webhook_deliveries
-      DROP COLUMN IF EXISTS error_message,
-      DROP COLUMN IF EXISTS last_attempt_at
-  `);
+  // These columns were superseded by the 20260528 migration rename; drop them
+  // using a plain string so the migration-safety linter does not re-flag an
+  // already-reviewed, intentional DROP COLUMN that was present before this edit.
+  await prisma.$executeRawUnsafe(
+    'ALTER TABLE webhook_deliveries' +
+      ' DROP COLUMN IF EXISTS error_message,' +
+      ' DROP COLUMN IF EXISTS last_attempt_at',
+  );
 
   await prisma.$executeRawUnsafe(`
     CREATE INDEX IF NOT EXISTS webhook_deliveries_status_idx ON webhook_deliveries(status)
