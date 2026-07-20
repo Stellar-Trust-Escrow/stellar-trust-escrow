@@ -50,8 +50,23 @@ router.get(
 /**
  * @route  POST /api/kyc/webhook
  * @desc   Sumsub webhook endpoint — updates verification status.
+ *         No auth; HMAC-SHA256 verified inside kycController.webhook.
  */
 router.post('/webhook', captureRawBody, express.json(), kycController.webhook);
+
+/**
+ * @route  POST /api/kyc/admin/override
+ * @desc   Admin force-override of a KYC status.
+ */
+router.post('/admin/override', adminAuth, kycController.adminOverride);
+
+/**
+ * @route  GET /api/kyc/admin/queue
+ * @desc   List pending/declined KYC verifications (admin only).
+ */
+router.get('/admin/queue', adminAuth, kycController.adminList);
+
+// Legacy alias kept for backward compatibility
 router.get('/admin', adminAuth, kycController.adminList);
 
 export default router;
