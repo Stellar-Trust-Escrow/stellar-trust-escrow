@@ -111,4 +111,3 @@ pub enum BatchError {
 pub type EscrowError = EcErr;
 #[allow(dead_code)]
 pub type ContractError = EcErr;
-

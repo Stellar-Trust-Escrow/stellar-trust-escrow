@@ -134,7 +134,6 @@ pub const MAX_BATCH_SIZE: u32 = 10;
 pub const MAX_STRING_LEN: u32 = 256;
 pub const MAX_BUYER_SIGNERS: u32 = 10;
 
-
 /// Automatic deadline extension when milestone submitted near deadline (7 days).
 pub const AUTO_DEADLINE_EXTENSION_SECONDS: u64 = 604_800;
 
@@ -2750,7 +2749,7 @@ impl EscrowContract {
             let escrow_id = ContractStorage::next_escrow_id(&env)?;
 
             let m_len = req.milestones.len();
-            let rent_reserve = ContractStorage::reserve_for_entries(i128::from(1 + m_len as u32));
+            let rent_reserve = ContractStorage::reserve_for_entries(i128::from(1 + m_len));
             ContractStorage::charge_rent_reserve(&env, &req.token, &caller, rent_reserve)?;
 
             let mut buyer_signers = soroban_sdk::Vec::new(&env);
@@ -2789,7 +2788,7 @@ impl EscrowContract {
                 let mut allocated: i128 = 0;
                 for j in 0..m_len {
                     let m_init = req.milestones.get(j).ok_or(EscrowError::E17)?;
-                    let mid = j as u32;
+                    let mid = j;
                     ContractStorage::save_milestone(
                         &env,
                         escrow_id,
@@ -2807,10 +2806,12 @@ impl EscrowContract {
                             depends_on: None,
                         },
                     );
-                    allocated = allocated.checked_add(m_init.amount).ok_or(EscrowError::E15)?;
+                    allocated = allocated
+                        .checked_add(m_init.amount)
+                        .ok_or(EscrowError::E15)?;
                     events::emit_milestone_added(&env, escrow_id, mid, m_init.amount);
                 }
-                meta.milestone_count = m_len as u32;
+                meta.milestone_count = m_len;
                 meta.allocated_amount = allocated;
             }
 
@@ -2831,18 +2832,12 @@ impl EscrowContract {
                 escrow_id,
             );
 
-            events::emit_escrow_created(
-                &env,
-                escrow_id,
-                &caller,
-                &req.freelancer,
-                req.amount,
-            );
+            events::emit_escrow_created(&env, escrow_id, &caller, &req.freelancer, req.amount);
 
             escrow_ids.push_back(escrow_id);
         }
 
-        events::emit_batch_completed(&env, n as u32, total_batch_amount);
+        events::emit_batch_completed(&env, n, total_batch_amount);
 
         Ok(escrow_ids)
     }
@@ -2931,11 +2926,10 @@ impl EscrowContract {
                 .ok_or(EscrowError::E20)?;
         }
 
-        events::emit_batch_completed(&env, n as u32, total_batch_released);
+        events::emit_batch_completed(&env, n, total_batch_released);
 
         Ok(released_amounts)
     }
-
 
     /// Releases funds for multiple approved milestones in a single transaction.
     ///
@@ -9620,8 +9614,8 @@ mod tests {
     mod rbac_tests {
         use crate::{ContractError, EscrowContract, EscrowContractClient, MultisigConfig};
         use soroban_sdk::{
-            testutils::{Address as _, Events},
-            Address, BytesN, Env, IntoVal, Symbol,
+            testutils::{Address as _, Events as _},
+            Address, BytesN, Env, Symbol, TryFromVal,
         };
 
         fn no_multisig(env: &Env) -> MultisigConfig {
@@ -9704,9 +9698,13 @@ mod tests {
 
             // Verify AdminTransferred event emission
             let events = env.events().all();
-            let found = events
-                .iter()
-                .any(|ev| ev.1 .0 == Symbol::new(&env, "AdminTransferred").into_val(&env));
+            let found = events.iter().any(|(_, topics, _)| {
+                topics
+                    .get(0)
+                    .and_then(|v| Symbol::try_from_val(&env, &v).ok())
+                    .map(|s| s == Symbol::new(&env, "AdminTransferred"))
+                    .unwrap_or(false)
+            });
             assert!(found, "AdminTransferred event should be emitted");
         }
 
@@ -9757,9 +9755,13 @@ mod tests {
 
             // Verify ArbiterRegistered event emission
             let events = env.events().all();
-            let found_arbiter_event = events
-                .iter()
-                .any(|ev| ev.1 .0 == Symbol::new(&env, "ArbiterRegistered").into_val(&env));
+            let found_arbiter_event = events.iter().any(|(_, topics, _)| {
+                topics
+                    .get(0)
+                    .and_then(|v| Symbol::try_from_val(&env, &v).ok())
+                    .map(|s| s == Symbol::new(&env, "ArbiterRegistered"))
+                    .unwrap_or(false)
+            });
             assert!(
                 found_arbiter_event,
                 "ArbiterRegistered event should be emitted"
@@ -9779,9 +9781,13 @@ mod tests {
 
             // Verify ArbiterRemoved event emission
             let events = env.events().all();
-            let found_removed_event = events
-                .iter()
-                .any(|ev| ev.1 .0 == Symbol::new(&env, "ArbiterRemoved").into_val(&env));
+            let found_removed_event = events.iter().any(|(_, topics, _)| {
+                topics
+                    .get(0)
+                    .and_then(|v| Symbol::try_from_val(&env, &v).ok())
+                    .map(|s| s == Symbol::new(&env, "ArbiterRemoved"))
+                    .unwrap_or(false)
+            });
             assert!(
                 found_removed_event,
                 "ArbiterRemoved event should be emitted"

@@ -857,4 +857,3 @@ pub struct CrossEscrowRelease {
     pub escrow_id: u64,
     pub milestone_index: u32,
 }
-
