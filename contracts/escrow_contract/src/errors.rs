@@ -85,6 +85,10 @@ pub enum EcErr {
     AlreadyVoted = 139,
     /// Approval threshold must be > 0 and <= number of approvers.
     InvalidThreshold = 140,
+    /// Timelock has not expired yet, cannot claim funds.
+    TimelockNotExpired = 141,
+    /// Invalid Ed25519 signature provided.
+    InvalidSignature = 142,
 }
 
 /// Backward-compatible alias — existing code imports `EscrowError`; the oracle
