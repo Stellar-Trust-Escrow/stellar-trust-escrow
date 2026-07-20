@@ -28,7 +28,7 @@ jobs:
           cache-dependency-path: 'backend/package-lock.json'
 
       - name: Install backend dependencies
-        run: cd backend &amp;&amp; npm ci
+        run: cd backend &amp;&amp; npm install
 
       - name: Validate Express routes vs OpenAPI spec
         run: cd backend &amp;&amp; node scripts/validate-openapi.js
@@ -61,7 +61,7 @@ jobs:
           swagger-typescript-api -p backend/openapi.yaml -o frontend/lib/api-client -n api.ts --modular
 
       - name: Check SDK compilation
-        run: cd frontend &amp;&amp; npm ci &amp;&amp; npx tsc --noEmit
+        run: cd frontend &amp;&amp; npm install &amp;&amp; npx tsc --noEmit
 
       - name: Commit generated SDK (only on main branch)
         if: github.ref == 'refs/heads/main'
