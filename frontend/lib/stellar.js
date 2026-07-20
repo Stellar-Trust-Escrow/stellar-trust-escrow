@@ -19,17 +19,223 @@ import {
   nativeToScVal,
   Address,
   StrKey,
+  scValToNative,
+  Account,
+  Keypair,
+  hash,
 } from '@stellar/stellar-sdk';
+import { signMessage } from '@stellar/freighter-api';
 
 const _NETWORK = process.env.NEXT_PUBLIC_STELLAR_NETWORK || 'testnet';
 const _CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || '';
 const _SOROBAN_RPC_URL =
   process.env.NEXT_PUBLIC_SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org';
+const _SIGNED_MESSAGE_PREFIX = 'Stellar Signed Message:\n';
 
 const _NETWORK_PASSPHRASE =
   _NETWORK === 'mainnet'
     ? 'Public Global Stellar Network ; September 2015'
     : 'Test SDF Network ; September 2015';
+
+/**
+ * Fetches an address's on-chain reputation record by simulating the
+ * `get_reputation` contract call.
+ *
+ * A disposable source account keeps simulation independent from whether the
+ * profile address is funded. This read-only transaction is never submitted.
+ *
+ * @param {string} address - Stellar public key
+ * @returns {Promise<{
+ *   address: string,
+ *   totalScore: number,
+ *   completedEscrows: number,
+ *   disputedEscrows: number,
+ *   disputesWon: number,
+ *   totalVolume: string,
+ *   slashCount: number,
+ *   totalSlashed: string,
+ *   lastUpdated: number
+ * }>}
+ */
+export async function getReputation(address) {
+  if (!_CONTRACT_ADDRESS) {
+    throw new Error('Contract address not configured. Set NEXT_PUBLIC_CONTRACT_ADDRESS.');
+  }
+
+  if (!isValidStellarAddress(address)) {
+    throw new Error(`Invalid Stellar address: ${address}`);
+  }
+
+  const server = new SorobanRpc.Server(_SOROBAN_RPC_URL);
+  const account = new Account(Keypair.random().publicKey(), '0');
+  const contract = new Contract(_CONTRACT_ADDRESS);
+
+  const transaction = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: _NETWORK_PASSPHRASE,
+  })
+    .addOperation(contract.call('get_reputation', new Address(address).toScVal()))
+    .setTimeout(30)
+    .build();
+
+  const simulation = await server.simulateTransaction(transaction);
+  if (SorobanRpc.isSimulationError(simulation)) {
+    throw new Error(`Reputation fetch failed: ${simulation.error}`);
+  }
+
+  if (!simulation.result?.retval) {
+    throw new Error('Reputation fetch failed: contract returned no value');
+  }
+
+  const record = scValToNative(simulation.result.retval);
+
+  return {
+    address: record.address?.toString?.() || address,
+    totalScore: Number(record.total_score ?? 0),
+    completedEscrows: Number(record.completed_escrows ?? 0),
+    disputedEscrows: Number(record.disputed_escrows ?? 0),
+    disputesWon: Number(record.disputes_won ?? 0),
+    totalVolume: String(record.total_volume ?? 0),
+    slashCount: Number(record.slash_count ?? 0),
+    totalSlashed: String(record.total_slashed ?? 0),
+    lastUpdated: Number(record.last_updated ?? 0),
+  };
+}
+
+/**
+ * Calculates the issue-defined trust score.
+ *
+ * `disputes_won` is not updated by `_update_reputation_internal` in the
+ * escrow contract yet, so on-chain records currently treat every dispute as lost.
+ *
+ * @param {number} completedEscrows
+ * @param {number} disputedEscrows
+ * @param {number} disputesWon
+ * @returns {number}
+ */
+export function calculateTrustScore(completedEscrows, disputedEscrows, disputesWon) {
+  const completed = Math.max(0, Number(completedEscrows) || 0);
+  const disputed = Math.max(0, Number(disputedEscrows) || 0);
+  const won = Math.max(0, Number(disputesWon) || 0);
+  const disputedLost = Math.max(0, disputed - won);
+
+  return completed - disputedLost * 2;
+}
+
+/**
+ * Calculates the percentage of disputes won.
+ *
+ * `disputes_won` is not updated by `_update_reputation_internal` in the
+ * escrow contract yet, so this currently evaluates to 0% for on-chain records.
+ *
+ * @param {number} disputedEscrows
+ * @param {number} disputesWon
+ * @returns {number}
+ */
+export function calculateWinRate(disputedEscrows, disputesWon) {
+  const disputed = Math.max(0, Number(disputedEscrows) || 0);
+  const won = Math.max(0, Number(disputesWon) || 0);
+
+  if (disputed === 0) return 0;
+  return (Math.min(won, disputed) / disputed) * 100;
+}
+
+/**
+ * Generates deterministic SVG-ready identicon data from a Stellar address.
+ * The resulting 5x5 grid is mirrored vertically for a recognizable pattern.
+ *
+ * @param {string} address
+ * @returns {{ color: string, background: string, cells: Array<{ x: number, y: number }> }}
+ */
+export function generateIdenticon(address) {
+  const normalizedAddress = String(address || '');
+  const seed = _hashString(normalizedAddress);
+  const hue = seed % 360;
+  const cells = [];
+
+  for (let y = 0; y < 5; y += 1) {
+    for (let x = 0; x < 3; x += 1) {
+      const cellHash = _hashString(`${normalizedAddress}:${x}:${y}`);
+      if ((cellHash & 1) === 0) continue;
+
+      cells.push({ x, y });
+      if (x !== 2) cells.push({ x: 4 - x, y });
+    }
+  }
+
+  return {
+    color: `hsl(${hue} 70% 55%)`,
+    background: `hsl(${hue} 35% 12%)`,
+    cells,
+  };
+}
+
+/**
+ * Stable FNV-1a hash for deterministic visual generation.
+ *
+ * @param {string} value
+ * @returns {number}
+ */
+function _hashString(value) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+/**
+ * Builds and signs the profile ownership message with Freighter.
+ *
+ * @param {string} address - Connected wallet public key
+ * @param {number} [timestamp=Date.now()]
+ * @returns {Promise<{ message: string, signature: string, publicKey: string, timestamp: number }>}
+ */
+export async function signIdentityMessage(address, timestamp = Date.now()) {
+  if (!isValidStellarAddress(address)) {
+    throw new Error(`Invalid Stellar address: ${address}`);
+  }
+
+  const message = `Trustchain identity: ${address} at ${timestamp}`;
+  const result = await signMessage(message, { address, accountToSign: address });
+  const signature = result?.signedMessage ?? result?.signature ?? result;
+  const publicKey = result?.signerAddress ?? result?.publicKey ?? address;
+
+  if (typeof signature !== 'string' || !signature) {
+    throw new Error('Freighter returned an invalid identity signature');
+  }
+
+  return { message, signature, publicKey, timestamp };
+}
+
+/**
+ * Verifies an identity message signature locally with the Stellar SDK.
+ *
+ * @param {string} message
+ * @param {string} signature - Base64-encoded Ed25519 signature
+ * @param {string} publicKey - Stellar public key
+ * @returns {boolean}
+ */
+export function verifyIdentitySignature(message, signature, publicKey) {
+  try {
+    const messageBytes = new TextEncoder().encode(`${_SIGNED_MESSAGE_PREFIX}${message}`);
+    const messageHash = hash(messageBytes);
+    const signatureBytes = _decodeBase64(signature);
+    return Keypair.fromPublicKey(publicKey).verify(messageHash, signatureBytes);
+  } catch {
+    return false;
+  }
+}
+
+function _decodeBase64(value) {
+  if (typeof Buffer !== 'undefined') {
+    return Uint8Array.from(Buffer.from(value, 'base64'));
+  }
+
+  const binary = atob(value);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
 
 /**
  * Builds an unsigned `create_escrow` Soroban transaction XDR.

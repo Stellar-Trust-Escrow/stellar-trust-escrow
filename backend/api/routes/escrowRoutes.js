@@ -1,4 +1,5 @@
 import express from 'express';
+import thresholdRoutes from './thresholdRoutes.js';
 import escrowController, {
   validateBroadcast,
   validateEscrowId,
@@ -82,6 +83,7 @@ router.get(
  */
 import { exportBundle } from '../controllers/auditController.js';
 router.get('/:id/audit/export', validateEscrowId, exportBundle);
+router.use('/:id/approvals', thresholdRoutes);
 // Client-rights ownership transfer
 router.use('/:id/ownership', ownershipRoutes);
 

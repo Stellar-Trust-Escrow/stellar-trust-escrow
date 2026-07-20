@@ -3042,6 +3042,206 @@ impl EscrowContract {
         Ok(())
     }
 
+    // ── N-of-M Threshold Approval ─────────────────────────────────────────────
+
+    /// Set the N-of-M approval threshold for an existing escrow.
+    ///
+    /// Only the escrow client may call this, and only while the escrow is Active.
+    /// `threshold` must be > 0 and ≤ `buyer_signers.len()` (or 1 for client-only
+    /// legacy mode when `buyer_signers` is empty).
+    pub fn set_approval_threshold(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+        threshold: u32,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_not_paused(&env)?;
+
+        let meta = ContractStorage::load_escrow_meta(&env, escrow_id)?;
+        if caller != meta.client {
+            return Err(EscrowError::E5);
+        }
+        if meta.status != EscrowStatus::Active {
+            return Err(EscrowError::E9);
+        }
+
+        let max_approvers = if meta.buyer_signers.is_empty() {
+            1_u32
+        } else {
+            meta.buyer_signers.len()
+        };
+
+        if threshold == 0 || threshold > max_approvers {
+            return Err(EscrowError::InvalidThreshold);
+        }
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::ApprovalThreshold(escrow_id), &threshold);
+
+        Ok(())
+    }
+
+    /// Get the current N-of-M approval threshold for an escrow.
+    /// Returns 1 (single-approval legacy mode) when no threshold has been set.
+    pub fn get_approval_threshold(env: Env, escrow_id: u64) -> u32 {
+        env.storage()
+            .persistent()
+            .get::<DataKey, u32>(&DataKey::ApprovalThreshold(escrow_id))
+            .unwrap_or(1_u32)
+    }
+
+    /// Cast an N-of-M approval vote for a submitted milestone.
+    ///
+    /// Records the caller's vote; if the accumulated vote count meets the
+    /// configured threshold the milestone is transitioned to `MS_APPROVED`
+    /// and funds released (same as the single-approval path in `approve_milestone`).
+    ///
+    /// Deduplication: a caller can only vote once per (escrow, milestone) pair.
+    pub fn cast_approval_vote(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+        milestone_id: u32,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_not_paused(&env)?;
+        ContractStorage::require_not_frozen(&env, escrow_id)?;
+
+        let mut meta = ContractStorage::load_escrow_meta_with_rent(&env, escrow_id)?;
+        if meta.status != EscrowStatus::Active {
+            return Err(EscrowError::E9);
+        }
+
+        // Caller must be client or a registered buyer signer
+        let is_authorized = caller == meta.client
+            || (!meta.buyer_signers.is_empty() && meta.buyer_signers.contains(&caller));
+        if !is_authorized {
+            return Err(EscrowError::E3);
+        }
+
+        let mut milestone = ContractStorage::load_milestone(&env, escrow_id, milestone_id)?;
+        if milestone.status != MS_SUBMITTED {
+            return Err(EscrowError::E14);
+        }
+        Self::require_dependency_satisfied(&env, escrow_id, &milestone)?;
+
+        // Load existing votes for deduplication
+        let vote_key = DataKey::MilestoneVotes(escrow_id, milestone_id);
+        let mut votes: soroban_sdk::Vec<ApprovalRecord> = env
+            .storage()
+            .persistent()
+            .get::<DataKey, soroban_sdk::Vec<ApprovalRecord>>(&vote_key)
+            .unwrap_or_else(|| soroban_sdk::Vec::new(&env));
+
+        // Reject duplicate vote
+        for v in votes.iter() {
+            if v.signer == caller {
+                return Err(EscrowError::AlreadyVoted);
+            }
+        }
+
+        let now = env.ledger().timestamp();
+        votes.push_back(ApprovalRecord {
+            signer: caller.clone(),
+            approved_at: now,
+        });
+        env.storage().persistent().set(&vote_key, &votes);
+
+        env.events().publish(
+            (event_names::APPROVAL_VOTE_CAST, escrow_id, milestone_id),
+            (caller.clone(), votes.len()),
+        );
+
+        // Read configured threshold (default: 1 = legacy single-approval)
+        let threshold: u32 = env
+            .storage()
+            .persistent()
+            .get::<DataKey, u32>(&DataKey::ApprovalThreshold(escrow_id))
+            .unwrap_or(1_u32);
+
+        if votes.len() < threshold {
+            // Threshold not yet reached — save milestone with updated approvals list
+            milestone.approvals = votes;
+            ContractStorage::save_milestone(&env, escrow_id, &milestone);
+            return Ok(());
+        }
+
+        // ── Threshold reached: approve and release ────────────────────────────
+        env.storage().persistent().remove(&vote_key);
+
+        let amount = milestone.amount;
+        milestone.approvals = votes;
+        milestone.status = MS_APPROVED;
+        milestone.resolved_at = Some(now);
+        meta.approved_count = meta.approved_count.checked_add(1).ok_or(EscrowError::E20)?;
+
+        let timelock_expired =
+            ContractStorage::check_timelock_expired(&env, escrow_id, meta.timelock.clone()).is_ok();
+
+        if timelock_expired {
+            token::Client::new(&env, &meta.token).transfer(
+                &env.current_contract_address(),
+                &meta.freelancer,
+                &amount,
+            );
+            meta.remaining_balance = meta
+                .remaining_balance
+                .checked_sub(amount)
+                .ok_or(EscrowError::E20)?;
+            meta.released_count = meta.released_count.checked_add(1).ok_or(EscrowError::E20)?;
+            milestone.status = MS_RELEASED;
+            events::emit_funds_released(&env, escrow_id, &meta.freelancer, amount);
+        }
+
+        ContractStorage::save_milestone(&env, escrow_id, &milestone);
+        Self::emit_dependents_unlocked(&env, escrow_id, milestone_id);
+
+        if meta.approved_count == meta.milestone_count
+            && meta.milestone_count > 0
+            && meta.released_count == meta.milestone_count
+        {
+            meta.status = EscrowStatus::Completed;
+            Self::remove_from_vec_index(
+                &env,
+                &DataKey::EscrowsByStatus(EscrowStatus::Active),
+                escrow_id,
+            );
+            Self::append_to_vec_index(
+                &env,
+                &DataKey::EscrowsByStatus(EscrowStatus::Completed),
+                escrow_id,
+            );
+            events::emit_escrow_completed(&env, escrow_id);
+        }
+
+        ContractStorage::save_escrow_meta(&env, &meta);
+        events::emit_milestone_approved(&env, escrow_id, milestone_id, amount);
+
+        env.events().publish(
+            (event_names::APPROVAL_THRESHOLD_MET, escrow_id, milestone_id),
+            (threshold, amount),
+        );
+
+        Ok(())
+    }
+
+    /// Return pending approval votes for a given milestone.
+    pub fn get_milestone_votes(
+        env: Env,
+        escrow_id: u64,
+        milestone_id: u32,
+    ) -> soroban_sdk::Vec<ApprovalRecord> {
+        env.storage()
+            .persistent()
+            .get::<DataKey, soroban_sdk::Vec<ApprovalRecord>>(&DataKey::MilestoneVotes(
+                escrow_id,
+                milestone_id,
+            ))
+            .unwrap_or_else(|| soroban_sdk::Vec::new(&env))
+    }
+
     /// Client rejects a submitted milestone.
     ///
     /// # Gas notes

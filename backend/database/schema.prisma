@@ -878,6 +878,36 @@ model SystemConfig {
   @@map("system_config")
 }
 
+model EscrowApprovers {
+  id          String   @id @default(cuid())
+  escrowId    String   @unique @map("escrow_id")
+  approvers   Json
+  threshold   Int
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  approvalRecords MilestoneApprovalRecord[]
+
+  @@map("escrow_approvers")
+}
+
+model MilestoneApprovalRecord {
+  id          String   @id @default(cuid())
+  escrowId    String   @map("escrow_id")
+  milestoneId Int      @map("milestone_id")
+  approver    String
+  approvedAt  DateTime @map("approved_at")
+  txHash      String?  @map("tx_hash")
+  ledger      Int?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  escrowApprovers EscrowApprovers @relation(fields: [escrowId], references: [escrowId])
+
+  @@unique([escrowId, milestoneId, approver])
+  @@index([escrowId, milestoneId])
+  @@map("milestone_approval_records")
+}
+
 model InsuranceOptIn {
   id             String   @id @default(cuid())
   escrowId       String   @unique @map("escrow_id")

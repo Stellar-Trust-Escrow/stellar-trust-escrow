@@ -1,5 +1,18 @@
 require('@testing-library/jest-dom');
+const { TextEncoder } = require('util');
 const { configureAxe } = require('jest-axe');
+
+global.TextEncoder = TextEncoder;
+
+if (typeof Uint8Array.prototype.toJSON === 'undefined') {
+  Object.defineProperty(Uint8Array.prototype, 'toJSON', {
+    configurable: true,
+    writable: true,
+    value() {
+      return { type: 'Buffer', data: Array.from(this) };
+    },
+  });
+}
 
 // Mock window.matchMedia (not implemented in jsdom)
 Object.defineProperty(window, 'matchMedia', {
