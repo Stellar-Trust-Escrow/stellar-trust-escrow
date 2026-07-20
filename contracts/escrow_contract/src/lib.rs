@@ -9730,8 +9730,12 @@ mod tests {
             client.register_arbiter(&admin, &registered_arbiter);
             assert!(client.is_registered_arbiter(&registered_arbiter));
 
+            // Temporarily register the arbiter so create_escrow passes validation,
+            // then remove them so they are unregistered at dispute resolution time
+            client.register_arbiter(&admin, &unregistered_arbiter);
             let (_, _, _, escrow_id) =
                 setup_disputed_escrow(&env, &client, Some(unregistered_arbiter.clone()));
+            client.remove_arbiter(&admin, &unregistered_arbiter);
 
             // Unregistered arbiter trying to resolve dispute must fail with UnregisteredArbiter
             let result = client.try_resolve_dispute(&unregistered_arbiter, &escrow_id, &250, &250);
