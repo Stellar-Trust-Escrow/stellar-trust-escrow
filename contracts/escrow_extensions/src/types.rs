@@ -87,33 +87,6 @@ pub struct PendingUpgrade {
 // ── Storage keys ──────────────────────────────────────────────────────────────
 
 #[contracttype]
-pub enum DataKey {
-    Admin,
-    /// Protocol fee in basis points (0–200).
-    FeeBps,
-    /// Fee recipients list.
-    FeeRecipients,
-    /// Accumulated fee balance per token: token Address → i128.
-    FeeBalance(Address),
-    /// Arbitration dispute by escrow ID.
-    Dispute(u64),
-    /// Pending upgrade.
-    PendingUpgrade,
-    /// Storage version for migration.
-    StorageVersion,
-    /// Vesting schedule by escrow ID.
-    VestingSchedule(u64),
-    /// Recurring schedule by escrow ID.
-    RecurringSchedule(u64),
-    /// Role delegation by escrow ID and role.
-    Delegation(u64, DelegatedRole),
-    /// Core contract address.
-    CoreContract,
-}
-
-// ── Vesting & Recurring ───────────────────────────────────────────────────────
-
-#[contracttype]
 #[derive(Clone, Debug)]
 pub struct VestingSchedule {
     pub escrow_id: u64,
@@ -137,8 +110,6 @@ pub struct RecurringSchedule {
     pub last_payment_ledger: u64,
 }
 
-// ── Role Delegation ───────────────────────────────────────────────────────────
-
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub enum DelegatedRole {
@@ -155,4 +126,25 @@ pub struct RoleDelegation {
     pub role: DelegatedRole,
     pub escrow_id: u64,
     pub expires_at_ledger: u64,
+}
+
+#[contracttype]
+pub enum DataKey {
+    Admin,
+    /// Protocol fee in basis points (0–200).
+    FeeBps,
+    /// Fee recipients list.
+    FeeRecipients,
+    /// Accumulated fee balance per token: token Address → i128.
+    FeeBalance(Address),
+    /// Arbitration dispute by escrow ID.
+    Dispute(u64),
+    /// Pending upgrade.
+    PendingUpgrade,
+    /// Storage version for migration.
+    StorageVersion,
+    VestingSchedule(u64),
+    RecurringSchedule(u64),
+    Delegation(u64, DelegatedRole),
+    CoreContract,
 }

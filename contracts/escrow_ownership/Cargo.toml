@@ -1,0 +1,18 @@
+[package]
+name = "stellar-trust-escrow-ownership"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "EscrowOwnership contract - tracks and transfers client-rights for each escrow"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+soroban-sdk = { version = "21.0.0", features = [] }
+
+[dev-dependencies]
+soroban-sdk = { version = "21.0.0", features = ["testutils"] }
+
+[features]
+testutils = ["soroban-sdk/testutils"]

@@ -68,8 +68,25 @@ pub enum EcErr {
     E72 = 72, // RbacInvalidRoleAssignment
     FeeTooHigh = 73,
     TreasuryNotConfigured = 74,
-    TimelockNotExpired = 75,
-    InvalidSignature = 76,
+    InvalidMultisigConfig = 75,
+    HighValueMultisigRequired = 76,
+    DuplicateMultisigApproval = 77,
+    MultisigBatchApprovalUnsupported = 78,
+    OracleStalePriceFeed = 130,
+    OracleDriftExceeded = 131,
+    OracleNotConfigured = 132,
+    ContractPaused = 133,
+    UnpauseTooEarly = 134,
+    CannotAcceptOwnProposal = 135,
+    ProposalExpired = 136,
+    InvalidEscrowState = 137,
+    NoCancellationProposal = 138,
+    /// Caller has already cast an approval vote for this milestone.
+    AlreadyVoted = 139,
+    /// Approval threshold must be > 0 and <= number of approvers.
+    InvalidThreshold = 140,
+    TimelockNotExpired = 141,
+    InvalidSignature = 142,
 }
 
 /// Backward-compatible alias — existing code imports `EscrowError`; the oracle

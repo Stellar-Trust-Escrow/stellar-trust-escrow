@@ -1,140 +1,151 @@
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod timelock_multisig_tests {
     use soroban_sdk::{
         testutils::{Address as _, Ledger},
-        Address, BytesN, Env,
+        token, Address, BytesN, Env,
     };
 
-    use crate::{storage, types::EscrowState, EscrowContract, EscrowContractClient, EscrowError};
+    use crate::{EscrowContract, EscrowContractClient, EscrowError, MultisigConfig};
 
-    fn setup_env() -> Env {
-        let env = Env::default();
-        env.mock_all_auths();
-        env
+    fn no_multisig(env: &Env) -> MultisigConfig {
+        MultisigConfig {
+            approvers: soroban_sdk::Vec::new(env),
+            weights: soroban_sdk::Vec::new(env),
+            threshold: 0,
+        }
     }
 
-    fn create_test_escrow(env: &Env, timelock_release_at: Option<u64>) -> (u64, Address, Address) {
-        let client = Address::generate(env);
+    fn setup() -> (Env, Address, EscrowContractClient<'static>) {
+        let env = Env::default();
+        env.mock_all_auths();
+        let admin = Address::generate(&env);
+        let contract_id = env.register_contract(None, EscrowContract);
+        let client = EscrowContractClient::new(&env, &contract_id);
+        client.initialize(&admin);
+        (env, admin, client)
+    }
+
+    fn register_token(env: &Env, admin: &Address, recipient: &Address, amount: i128) -> Address {
+        let sac = env.register_stellar_asset_contract_v2(admin.clone());
+        token::StellarAssetClient::new(env, &sac.address()).mint(recipient, &amount);
+        sac.address()
+    }
+
+    fn create_escrow_with_timelock(
+        env: &Env,
+        admin: &Address,
+        client: &EscrowContractClient,
+        duration: u64,
+    ) -> (u64, Address, Address) {
+        let client_addr = Address::generate(env);
         let freelancer = Address::generate(env);
-        let escrow_id = 1u64;
+        let amount = 500_i128;
+        let token = register_token(env, admin, &client_addr, amount + 60);
 
-        // Create a minimal escrow state
-        let escrow = crate::types::EscrowState {
-            escrow_id,
-            client: client.clone(),
-            freelancer: freelancer.clone(),
-            token: Address::generate(env),
-            total_amount: 1000_i128,
-            remaining_balance: 1000_i128,
-            status: crate::types::EscrowStatus::Active,
-            milestones: soroban_sdk::Vec::new(env),
-            arbiter: None,
-            buyer_signers: soroban_sdk::Vec::new(env),
-            created_at: env.ledger().timestamp(),
-            deadline: None,
-            lock_time: None,
-            lock_time_extension: None,
-            timelock: crate::types::OptionalTimelock::None,
-            dispute_timeout_ledger: None,
-            dispute_started_ledger: None,
-            brief_hash: BytesN::from_array(env, &[0u8; 32]),
-            multisig_approvers: soroban_sdk::Vec::new(env),
-            multisig_weights: soroban_sdk::Vec::new(env),
-            multisig_threshold: 0,
-            timelock_release_at,
-        };
+        let escrow_id = client.create_escrow(
+            &client_addr,
+            &freelancer,
+            &token,
+            &amount,
+            &BytesN::from_array(env, &[1u8; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(env),
+        );
 
-        storage::set_escrow(env, escrow_id, &escrow);
-        (escrow_id, client, freelancer)
+        client.start_timelock(&client_addr, &escrow_id, &duration);
+
+        (escrow_id, client_addr, freelancer)
     }
 
     #[test]
     fn test_claim_before_expiry_fails() {
-        let env = setup_env();
-        let contract_id = env.register_contract(None, EscrowContract);
-        let client = EscrowContractClient::new(&env, &contract_id);
-
-        // Set current time to 1000
+        let (env, admin, client) = setup();
         env.ledger().with_mut(|l| l.timestamp = 1000);
 
-        // Create escrow with timelock expiring at 5000
-        let (escrow_id, _client_addr, _freelancer) = create_test_escrow(&env, Some(5000));
+        let duration = 4000_u64;
+        let (escrow_id, _client_addr, _freelancer) =
+            create_escrow_with_timelock(&env, &admin, &client, duration);
 
-        // Try to claim at 4999 (1 second before expiry)
+        // Try to claim 1 second before the timelock expires
         env.ledger().with_mut(|l| l.timestamp = 4999);
-
         let result = client.try_claim_after_timelock(&escrow_id);
 
-        // Should fail with TimelockNotExpired
         assert!(result.is_err(), "Claim before expiry should fail");
         assert_eq!(
             result.unwrap_err(),
-            Ok(EscrowError::E75),
+            Ok(EscrowError::TimelockNotExpired),
             "Should return TimelockNotExpired error"
         );
     }
 
     #[test]
     fn test_claim_exactly_at_expiry_succeeds() {
-        let env = setup_env();
-        let contract_id = env.register_contract(None, EscrowContract);
-        let client = EscrowContractClient::new(&env, &contract_id);
-
-        // Set current time to 1000
+        let (env, admin, client) = setup();
         env.ledger().with_mut(|l| l.timestamp = 1000);
 
-        // Create escrow with timelock expiring at 5000
-        let (escrow_id, _client_addr, _freelancer) = create_test_escrow(&env, Some(5000));
+        let duration = 4000_u64;
+        let (escrow_id, _client_addr, _freelancer) =
+            create_escrow_with_timelock(&env, &admin, &client, duration);
 
-        // Try to claim exactly at expiry
+        // Claim exactly at expiry (start=1000, duration=4000 → release_at=5000)
         env.ledger().with_mut(|l| l.timestamp = 5000);
-
         let result = client.try_claim_after_timelock(&escrow_id);
 
-        // Should succeed (or fail with a different error if fund transfer logic isn't implemented)
-        // Since we haven't implemented the full transfer logic, we expect Ok(()) for now
         assert!(
-            result.is_ok() || !matches!(result.unwrap_err(), Ok(EscrowError::E75)),
-            "Claim exactly at expiry should not return TimelockNotExpired"
+            result.is_ok(),
+            "Claim exactly at expiry should succeed: {:?}",
+            result
         );
     }
 
     #[test]
     fn test_claim_after_expiry_succeeds() {
-        let env = setup_env();
-        let contract_id = env.register_contract(None, EscrowContract);
-        let client = EscrowContractClient::new(&env, &contract_id);
-
-        // Set current time to 1000
+        let (env, admin, client) = setup();
         env.ledger().with_mut(|l| l.timestamp = 1000);
 
-        // Create escrow with timelock expiring at 5000
-        let (escrow_id, _client_addr, _freelancer) = create_test_escrow(&env, Some(5000));
+        let duration = 4000_u64;
+        let (escrow_id, _client_addr, _freelancer) =
+            create_escrow_with_timelock(&env, &admin, &client, duration);
 
-        // Try to claim after expiry (at 6000)
         env.ledger().with_mut(|l| l.timestamp = 6000);
-
         let result = client.try_claim_after_timelock(&escrow_id);
 
-        // Should succeed (or fail with a different error if fund transfer logic isn't implemented)
         assert!(
-            result.is_ok() || !matches!(result.unwrap_err(), Ok(EscrowError::E75)),
-            "Claim after expiry should not return TimelockNotExpired"
+            result.is_ok(),
+            "Claim after expiry should succeed: {:?}",
+            result
         );
     }
 
     #[test]
     fn test_claim_without_timelock_fails() {
-        let env = setup_env();
-        let contract_id = env.register_contract(None, EscrowContract);
-        let client = EscrowContractClient::new(&env, &contract_id);
+        let (env, admin, client) = setup();
 
-        // Create escrow without timelock (None)
-        let (escrow_id, _client_addr, _freelancer) = create_test_escrow(&env, None);
+        let client_addr = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let amount = 500_i128;
+        let token = register_token(&env, &admin, &client_addr, amount + 60);
 
+        let escrow_id = client.create_escrow(
+            &client_addr,
+            &freelancer,
+            &token,
+            &amount,
+            &BytesN::from_array(&env, &[1u8; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
+
+        // No start_timelock call — timelock_release_at will be None
         let result = client.try_claim_after_timelock(&escrow_id);
 
-        // Should fail because no timelock is set
         assert!(result.is_err(), "Claim without timelock should fail");
         assert_eq!(
             result.unwrap_err(),
@@ -145,60 +156,32 @@ mod timelock_multisig_tests {
 
     #[test]
     fn test_early_release_with_valid_signatures() {
-        let env = setup_env();
-        let contract_id = env.register_contract(None, EscrowContract);
-        let client = EscrowContractClient::new(&env, &contract_id);
+        let (env, admin, client) = setup();
+        env.ledger().with_mut(|l| l.timestamp = 1000);
 
-        // Create escrow with timelock
-        let (escrow_id, _client_addr, _freelancer) = create_test_escrow(&env, Some(5000));
+        let duration = 4000_u64;
+        let (escrow_id, _client_addr, _freelancer) =
+            create_escrow_with_timelock(&env, &admin, &client, duration);
 
-        // Create valid-looking signatures (64 bytes each)
         let contractor_sig = BytesN::from_array(&env, &[1u8; 64]);
         let client_sig = BytesN::from_array(&env, &[2u8; 64]);
 
         let result = client.try_early_release(&escrow_id, &contractor_sig, &client_sig);
 
-        // Since we haven't implemented actual signature verification,
-        // this should succeed (pending full implementation)
         assert!(
             result.is_ok(),
-            "Early release with valid signature format should succeed (pending crypto implementation)"
+            "Early release should succeed (pending crypto implementation): {:?}",
+            result
         );
     }
 
     #[test]
-    fn test_early_release_with_invalid_signature_length() {
-        let env = setup_env();
-        let contract_id = env.register_contract(None, EscrowContract);
-        let client = EscrowContractClient::new(&env, &contract_id);
-
-        // Create escrow with timelock
-        let (escrow_id, _client_addr, _freelancer) = create_test_escrow(&env, Some(5000));
-
-        // Create invalid signatures (wrong length)
-        // Note: BytesN<64> enforces 64-byte length at compile time,
-        // so this test demonstrates the type safety
-
-        let contractor_sig = BytesN::from_array(&env, &[1u8; 64]);
-        let client_sig = BytesN::from_array(&env, &[2u8; 64]);
-
-        // Both signatures are valid length, so this should pass basic validation
-        let result = client.try_early_release(&escrow_id, &contractor_sig, &client_sig);
-
-        // Should succeed with valid signature lengths
-        assert!(result.is_ok(), "Valid signature lengths should pass");
-    }
-
-    #[test]
     fn test_early_release_nonexistent_escrow() {
-        let env = setup_env();
-        let contract_id = env.register_contract(None, EscrowContract);
-        let client = EscrowContractClient::new(&env, &contract_id);
+        let (env, _admin, client) = setup();
 
         let contractor_sig = BytesN::from_array(&env, &[1u8; 64]);
         let client_sig = BytesN::from_array(&env, &[2u8; 64]);
 
-        // Try to release for non-existent escrow
         let result = client.try_early_release(&999u64, &contractor_sig, &client_sig);
 
         assert!(
@@ -207,24 +190,21 @@ mod timelock_multisig_tests {
         );
         assert_eq!(
             result.unwrap_err(),
-            Ok(EscrowError::E16),
+            Ok(EscrowError::E8),
             "Should return EscrowNotFound error"
         );
     }
 
     #[test]
     fn test_claim_nonexistent_escrow() {
-        let env = setup_env();
-        let contract_id = env.register_contract(None, EscrowContract);
-        let client = EscrowContractClient::new(&env, &contract_id);
+        let (_env, _admin, client) = setup();
 
-        // Try to claim for non-existent escrow
         let result = client.try_claim_after_timelock(&999u64);
 
         assert!(result.is_err(), "Claim for non-existent escrow should fail");
         assert_eq!(
             result.unwrap_err(),
-            Ok(EscrowError::E16),
+            Ok(EscrowError::E8),
             "Should return EscrowNotFound error"
         );
     }

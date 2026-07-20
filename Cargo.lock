@@ -443,8 +443,11 @@ checksum = "2bfcf67fea2815c2fc3b90873fae90957be12ff417335dfadc7f52927feb03b2"
 name = "escrow_contract"
 version = "0.1.0"
 dependencies = [
+ "ed25519-dalek",
  "serde",
+ "serde_json",
  "soroban-sdk",
+ "stellar-trust-shared",
 ]
 
 [[package]]
@@ -1348,6 +1351,13 @@ version = "0.1.0"
 dependencies = [
  "soroban-sdk",
  "stellar-trust-shared",
+]
+
+[[package]]
+name = "stellar-trust-escrow-ownership"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
 ]
 
 [[package]]

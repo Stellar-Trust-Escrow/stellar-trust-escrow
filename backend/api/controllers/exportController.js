@@ -1,6 +1,12 @@
+import fs from 'fs';
+
+import { validationResult } from 'express-validator';
+
 import exportService from '../../services/exportService.js';
 
 const LARGE_EXPORT_LIMIT_BYTES = 10 * 1024 * 1024;
+const VALID_EXPORT_FORMATS = ['csv', 'xlsx'];
+const VALID_ESCROW_STATUSES = ['Active', 'Completed', 'Disputed', 'Cancelled'];
 
 /**
  * Export Controller
@@ -193,9 +199,110 @@ const deleteUserData = async (req, res) => {
   }
 };
 
+/**
+ * Create an async escrow-history export job.
+ * @route POST /api/v1/escrows/export
+ */
+const createEscrowExport = async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ error: 'Invalid export request', details: errors.array() });
+  }
+
+  try {
+    const { format, dateFrom, dateTo, status } = req.body;
+
+    const { jobId, estimatedSeconds } = await exportService.createExportJob({
+      format,
+      dateFrom,
+      dateTo,
+      status,
+      tenantId: req.tenant?.id,
+      requestedBy: req.user?.address,
+    });
+
+    return res.status(202).json({ jobId, estimatedSeconds });
+  } catch (error) {
+    console.error('Create escrow export error:', error);
+    return res.status(500).json({ error: 'Failed to queue export job' });
+  }
+};
+
+/**
+ * Poll an escrow export job's status.
+ * @route GET /api/v1/escrows/export/:jobId/status
+ */
+const getEscrowExportStatus = async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const job = await exportService.getJobStatus(jobId);
+
+    if (!job) {
+      return res.status(404).json({ error: 'Export job not found or expired' });
+    }
+
+    return res.json({
+      status: job.status,
+      progress: job.progress ?? 0,
+      ...(job.downloadUrl ? { downloadUrl: job.downloadUrl } : {}),
+      ...(job.error ? { error: job.error } : {}),
+    });
+  } catch (error) {
+    console.error('Get escrow export status error:', error);
+    return res.status(500).json({ error: 'Failed to fetch export status' });
+  }
+};
+
+/**
+ * Download a completed export via a locally-signed, short-lived URL.
+ * Auth is provided by the HMAC signature + expiry, so this route is public.
+ * @route GET /api/v1/escrows/export/:jobId/download
+ */
+const downloadEscrowExport = async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const { expires, signature } = req.query;
+
+    const check = exportService.verifyDownloadSignature(jobId, expires, signature);
+    if (!check.valid) {
+      const code = check.reason === 'expired' ? 410 : 403;
+      return res.status(code).json({ error: `Download link ${check.reason}` });
+    }
+
+    const job = await exportService.getJobStatus(jobId);
+    if (!job || job.status !== 'done' || !job.filePath) {
+      return res.status(404).json({ error: 'Export not available' });
+    }
+
+    if (!fs.existsSync(job.filePath)) {
+      return res.status(404).json({ error: 'Export file no longer available' });
+    }
+
+    res.setHeader('Content-Type', exportService.contentTypeFor(job.format));
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${job.filename || `escrow-export-${jobId}.${job.format}`}"`,
+    );
+
+    const stream = fs.createReadStream(job.filePath);
+    stream.on('error', () => {
+      if (!res.headersSent) res.status(500).json({ error: 'Failed to stream export file' });
+    });
+    stream.pipe(res);
+  } catch (error) {
+    console.error('Download escrow export error:', error);
+    return res.status(500).json({ error: 'Failed to download export' });
+  }
+};
+
+export { VALID_EXPORT_FORMATS, VALID_ESCROW_STATUSES };
+
 export default {
   exportUserData,
   importUserData,
   downloadExportFile,
   deleteUserData,
+  createEscrowExport,
+  getEscrowExportStatus,
+  downloadEscrowExport,
 };

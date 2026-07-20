@@ -43,6 +43,8 @@ import batchRoutes from './api/routes/batchRoutes.js';
 import webhookRoutes from './api/routes/webhookRoutes.js';
 import wellKnownRoutes from './api/routes/wellKnownRoutes.js';
 import webhooksV1Routes from './api/routes/webhooks.js';
+import insuranceRoutes from './api/routes/insuranceRoutes.js';
+import metricsRoutes from './api/routes/metricsRoutes.js';
 import tenantMiddleware from './api/middleware/tenant.js';
 import templateRoutes from './api/routes/templateRoutes.js';
 import auditMiddleware from './api/middleware/audit.js';
@@ -65,6 +67,7 @@ import complianceService from './services/complianceService.js';
 import { startIndexer } from './services/eventIndexer.js';
 import { startRpcMonitor } from './monitoring/rpcMonitor.js';
 import { createEventWorker, createDeadLetterWorker } from './services/eventWorker.js';
+import { startExportWorker } from './queues/exportQueue.js';
 import { createKeyRotationWorker, scheduleKeyRotationJobs } from './queues/keyRotationQueue.js';
 import './workers/webhookWorker.js';
 import { setupSwagger } from './api/docs/swagger.js';
@@ -73,6 +76,7 @@ import { syncFromPrisma, ensureIndex } from './services/reputationSearchService.
 import { createGateway } from './gateway/index.js';
 import queueDashboardRoutes from './api/routes/queueDashboardRoutes.js';
 import chatRoutes from './api/routes/chatRoutes.js';
+import { startAnalyticsWorker } from './workers/analyticsWorker.js';
 
 // Attach Prisma query instrumentation (metrics + traces)
 attachPrismaMetrics(prisma);
@@ -219,6 +223,9 @@ app.use('/api/batch', batchRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/v1/templates', templateRoutes);
+app.use('/api/insurance', insuranceRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/metrics', metricsRoutes);
 app.use('/admin/queues', queueDashboardRoutes);
 app.use('/.well-known', wellKnownRoutes);
 app.use('/docs', docsRouter);
@@ -313,7 +320,8 @@ async function startServer() {
           const eventWorker = createEventWorker();
           const deadLetterWorker = createDeadLetterWorker();
           const keyRotationWorker = createKeyRotationWorker();
-          logger.info('[BullMQ] Event processing workers started');
+          const exportWorker = startExportWorker();
+          logger.info('[BullMQ] Event + export processing workers started');
 
           // Schedule Key Rotation Jobs
           await scheduleKeyRotationJobs();
@@ -323,6 +331,7 @@ async function startServer() {
             await eventWorker.close();
             await deadLetterWorker.close();
             await keyRotationWorker.close();
+            await exportWorker.close();
           };
 
           process.once('SIGTERM', closeWorkers);
@@ -337,6 +346,9 @@ async function startServer() {
           Sentry.captureException(err, { tags: { component: 'indexer' } });
         });
         startRpcMonitor();
+
+        startAnalyticsWorker();
+        logger.info('[Analytics] Worker + cron started');
 
         // Reputation ES sync — ensure index + initial sync on startup
         ensureIndex().then(() =>
