@@ -201,7 +201,10 @@ mod timelock_multisig_tests {
         // Try to release for non-existent escrow
         let result = client.try_early_release(&999u64, &contractor_sig, &client_sig);
 
-        assert!(result.is_err(), "Early release for non-existent escrow should fail");
+        assert!(
+            result.is_err(),
+            "Early release for non-existent escrow should fail"
+        );
         assert_eq!(
             result.unwrap_err(),
             Ok(EscrowError::E16),
