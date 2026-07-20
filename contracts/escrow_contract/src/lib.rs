@@ -9245,7 +9245,7 @@ mod tests {
         advance(&env, 1001);
 
         // Permissionless caller
-        let caller = Address::generate(&env);
+        let _caller = Address::generate(&env);
         let result = client.try_claim_expiry_refund(&escrow_id);
         assert!(result.is_ok());
 
@@ -9329,7 +9329,10 @@ mod tests {
     #[cfg(test)]
     mod rbac_tests {
         use crate::{ContractError, EscrowContract, EscrowContractClient, MultisigConfig};
-        use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Symbol};
+        use soroban_sdk::{
+            testutils::{Address as _, Events as _},
+            Address, BytesN, Env, Symbol, TryFromVal,
+        };
 
         fn no_multisig(env: &Env) -> MultisigConfig {
             MultisigConfig {
@@ -9411,9 +9414,14 @@ mod tests {
 
             // Verify AdminTransferred event emission
             let events = env.events().all();
-            let found = events
-                .iter()
-                .any(|ev| ev.1 .0 == Symbol::new(&env, "AdminTransferred").into_val(&env));
+            let target = Symbol::new(&env, "AdminTransferred");
+            let found = events.iter().any(|(_, topics, _)| {
+                topics
+                    .get(0)
+                    .and_then(|v| Symbol::try_from_val(&env, &v).ok())
+                    .map(|s| s == target)
+                    .unwrap_or(false)
+            });
             assert!(found, "AdminTransferred event should be emitted");
         }
 
@@ -9464,9 +9472,14 @@ mod tests {
 
             // Verify ArbiterRegistered event emission
             let events = env.events().all();
-            let found_arbiter_event = events
-                .iter()
-                .any(|ev| ev.1 .0 == Symbol::new(&env, "ArbiterRegistered").into_val(&env));
+            let target_reg = Symbol::new(&env, "ArbiterRegistered");
+            let found_arbiter_event = events.iter().any(|(_, topics, _)| {
+                topics
+                    .get(0)
+                    .and_then(|v| Symbol::try_from_val(&env, &v).ok())
+                    .map(|s| s == target_reg)
+                    .unwrap_or(false)
+            });
             assert!(
                 found_arbiter_event,
                 "ArbiterRegistered event should be emitted"
@@ -9486,9 +9499,14 @@ mod tests {
 
             // Verify ArbiterRemoved event emission
             let events = env.events().all();
-            let found_removed_event = events
-                .iter()
-                .any(|ev| ev.1 .0 == Symbol::new(&env, "ArbiterRemoved").into_val(&env));
+            let target_rem = Symbol::new(&env, "ArbiterRemoved");
+            let found_removed_event = events.iter().any(|(_, topics, _)| {
+                topics
+                    .get(0)
+                    .and_then(|v| Symbol::try_from_val(&env, &v).ok())
+                    .map(|s| s == target_rem)
+                    .unwrap_or(false)
+            });
             assert!(
                 found_removed_event,
                 "ArbiterRemoved event should be emitted"
