@@ -51,7 +51,6 @@ jobs:
       - name: Generate SBOM (Rust Contracts)
         run: |
           cargo cyclonedx --format json
-          mv bom.json sbom-contracts.json
 
       - name: Merge SBOMs
         run: |
@@ -59,7 +58,9 @@ jobs:
           FILES=""
           [ -f sbom-backend.json ] && FILES="$FILES sbom-backend.json"
           [ -f sbom-frontend.json ] && FILES="$FILES sbom-frontend.json"
-          [ -f sbom-contracts.json ] && FILES="$FILES sbom-contracts.json"
+          for file in contracts/*/*.cdx.json; do
+            [ -f "$file" ] && FILES="$FILES $file"
+          done
           cyclonedx-cli merge --input-files $FILES --output-file sbom-full.json
 
       - name: Upload SBOM Artifact
