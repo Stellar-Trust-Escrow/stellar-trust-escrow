@@ -1,80 +1,57 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { cn } from '../../lib/utils';
+import EscrowCard from './EscrowCard';
+import { useSwipeGesture } from '../../hooks/useSwipeGesture';
 
 export type EscrowStatus = 'active' | 'disputed' | 'completed' | 'cancelled';
 
 export interface EscrowListItemProps {
-  /** Unique escrow identifier (used for labels/keys). */
-  id: string;
-  /** Human readable escrow title. */
-  title: string;
-  /** Counterparty display name (the other party in the escrow). */
-  counterparty: string;
-  /** Amount released / held, already formatted (e.g. "1,250 XLM"). */
-  amount: string;
-  /** Current lifecycle status; drives the badge colour and available actions. */
-  status: EscrowStatus;
-  /** ISO date string for when the escrow was created. */
+  escrow?: {
+    id: string | number;
+    title: string;
+    status: string;
+    totalAmount: string;
+    milestoneProgress?: string;
+    counterparty: string;
+    role?: 'client' | 'freelancer';
+    transactionHash?: string;
+  };
+  onReleaseAll?: (escrow: any) => void;
+  canReleaseAll?: boolean;
+
+  // Multi-select props
+  isSelectMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (id: string) => void;
+
+  // Fallback props for compatibility (e.g. Storybook)
+  id?: string;
+  title?: string;
+  counterparty?: string;
+  amount?: string;
+  status?: EscrowStatus;
   createdAt?: string;
-  /** Number of milestones that have been approved. */
   milestonesApproved?: number;
-  /** Total number of milestones in the escrow. */
   milestonesTotal?: number;
-  /** Invoked when the user chooses to open the escrow detail view. */
   onView?: () => void;
-  /** Invoked when the user raises a dispute from this row. */
-  onDispute?: () => void;
+  onDispute?: (escrow?: any) => void;
   className?: string;
 }
 
-const STATUS_STYLES: Record<EscrowStatus, { badge: string; dot: string; label: string }> = {
-  active: {
-    badge: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30',
-    dot: 'bg-indigo-400',
-    label: 'Active',
-  },
-  disputed: {
-    badge: 'bg-red-500/15 text-red-300 border-red-500/30',
-    dot: 'bg-red-400',
-    label: 'Disputed',
-  },
-  completed: {
-    badge: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
-    dot: 'bg-emerald-400',
-    label: 'Completed',
-  },
-  cancelled: {
-    badge: 'bg-gray-500/15 text-gray-300 border-gray-500/30',
-    dot: 'bg-gray-400',
-    label: 'Cancelled',
-  },
-};
+const REVEAL_WIDTH = 96; // px of the action button revealed on each side
 
-function StatusBadge({ status }: { status: EscrowStatus }) {
-  const s = STATUS_STYLES[status];
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium',
-        s.badge,
-      )}
-    >
-      <span className={cn('h-1.5 w-1.5 rounded-full', s.dot)} aria-hidden="true" />
-      {s.label}
-    </span>
-  );
-}
-
-/**
- * EscrowListItem — a single row in an escrow list.
- *
- * Renders the escrow title, counterparty, locked amount, a status badge and a
- * milestone progress indicator, plus contextual action buttons ("View" always,
- * "Raise dispute" only while `active`). Fully keyboard accessible.
- */
 export default function EscrowListItem({
+  escrow,
+  onDispute,
+  onReleaseAll,
+  canReleaseAll = false,
+  className = '',
+  isSelectMode = false,
+  isSelected = false,
+  onToggleSelect,
+  // Destructured fallback props
   id,
   title,
   counterparty,
@@ -84,99 +61,130 @@ export default function EscrowListItem({
   milestonesApproved = 0,
   milestonesTotal = 0,
   onView,
-  onDispute,
-  className,
 }: EscrowListItemProps) {
-  const canDispute = status === 'active';
-  const pct = milestonesTotal > 0 ? Math.round((milestonesApproved / milestonesTotal) * 100) : 0;
+  const [revealed, setRevealed] = useState<'dispute' | 'release' | null>(null);
+
+  // Unify incoming props into a single structured escrow object
+  const resolvedEscrow = escrow || {
+    id: id || '',
+    title: title || '',
+    status: status || 'active',
+    totalAmount: amount || '0 XLM',
+    milestoneProgress: `${milestonesApproved} / ${milestonesTotal}`,
+    counterparty: counterparty || '',
+    role: 'client',
+  };
+
+  const { offset, bind } = useSwipeGesture({
+    axis: 'x',
+    threshold: 0.4,
+    onSwipeLeft: () => {
+      if (typeof onDispute === 'function') setRevealed('dispute');
+    },
+    onSwipeRight: () => {
+      if (canReleaseAll && typeof onReleaseAll === 'function') setRevealed('release');
+    },
+  });
+
+  const translateX =
+    revealed === 'dispute'
+      ? -REVEAL_WIDTH
+      : revealed === 'release'
+        ? REVEAL_WIDTH
+        : offset;
+
+  const hasDispute = typeof onDispute === 'function';
+  const hasRelease = canReleaseAll && typeof onReleaseAll === 'function';
+
+  const handleAction = (action: 'dispute' | 'release') => {
+    setRevealed(null);
+    if (action === 'dispute') {
+      onDispute?.(resolvedEscrow);
+    } else {
+      onReleaseAll?.(resolvedEscrow);
+    }
+  };
+
+  // Keyboard Space toggles selection without navigating when in select mode
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === ' ') {
+      if (isSelectMode) {
+        e.preventDefault();
+        onToggleSelect?.(String(resolvedEscrow.id));
+      }
+    }
+  };
 
   return (
-    <article
-      aria-labelledby={`escrow-${id}-title`}
-      className={cn(
-        'rounded-xl border border-gray-800 bg-gray-900/60 p-4 transition-colors hover:border-gray-700 focus-within:border-indigo-500',
-        className,
-      )}
+    <div
+      className={cn('relative group transition-all duration-200', className)}
+      onKeyDown={handleKeyDown}
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 id={`escrow-${id}-title`} className="truncate text-sm font-semibold text-gray-100">
-            {title}
-          </h3>
-          <p className="mt-0.5 text-xs text-gray-400">
-            with <span className="text-gray-300">{counterparty}</span>
-          </p>
-        </div>
-        <StatusBadge status={status} />
-      </div>
-
-      <div className="mt-3 flex items-end justify-between gap-4">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-gray-500">Amount</p>
-          <p className="mt-0.5 font-mono text-base font-semibold text-gray-100">{amount}</p>
-        </div>
-        {createdAt && (
-          <p className="text-xs text-gray-500">
-            {new Date(createdAt).toLocaleDateString(undefined, {
-              year: 'numeric',
-              month: 'short',
-              day: 'numeric',
-            })}
-          </p>
+      {/* Checkbox Overlay */}
+      <div
+        className={cn(
+          'absolute left-4 top-1/2 -translate-y-1/2 z-20 flex items-center justify-center transition-all duration-200',
+          isSelectMode
+            ? 'opacity-100 translate-x-0'
+            : 'opacity-0 group-hover:opacity-100 -translate-x-2 pointer-events-none group-hover:pointer-events-auto',
         )}
+      >
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={() => onToggleSelect?.(String(resolvedEscrow.id))}
+          className="h-5 w-5 rounded border-gray-700 bg-gray-900 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-gray-950 focus:ring-offset-2 cursor-pointer"
+          aria-label={`Select escrow ${resolvedEscrow.title}`}
+          tabIndex={isSelectMode ? 0 : -1}
+        />
       </div>
 
-      {milestonesTotal > 0 && (
-        <div className="mt-4">
-          <div className="flex items-center justify-between text-xs text-gray-400">
-            <span>
-              Milestones {milestonesApproved}/{milestonesTotal}
-            </span>
-            <span>{pct}%</span>
-          </div>
-          <div
-            className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-gray-800"
-            role="progressbar"
-            aria-valuenow={pct}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label={`Milestone progress ${pct} percent`}
-          >
-            <div
-              className={cn(
-                'h-full rounded-full transition-all',
-                status === 'cancelled'
-                  ? 'bg-gray-500'
-                  : status === 'disputed'
-                    ? 'bg-red-400'
-                    : status === 'completed'
-                      ? 'bg-emerald-400'
-                      : 'bg-indigo-400',
-              )}
-              style={{ width: `${pct}%` }}
-            />
-          </div>
+      {/* Swipeable item shifted right to leave room for checkbox */}
+      <div
+        className={cn(
+          'relative overflow-hidden rounded-2xl transition-all duration-200',
+          isSelectMode || isSelected ? 'pl-12' : 'pl-0 group-hover:pl-12',
+        )}
+      >
+        {/* Action buttons revealed behind the card */}
+        <div className="absolute inset-0 flex items-stretch justify-between" aria-hidden={!revealed}>
+          {hasRelease && (
+            <div className="flex flex-1 items-center bg-emerald-600/90 pl-4">
+              <button
+                type="button"
+                onClick={() => handleAction('release')}
+                aria-label={`Release all funds for escrow ${resolvedEscrow.title}`}
+                className="min-h-touch min-w-touch flex items-center gap-2 px-3 text-sm font-semibold text-white"
+              >
+                ✓ Release all
+              </button>
+            </div>
+          )}
+          {hasDispute && (
+            <div className="flex flex-1 items-center justify-end bg-red-600/90 pr-4">
+              <button
+                type="button"
+                onClick={() => handleAction('dispute')}
+                aria-label={`Raise a dispute for escrow ${resolvedEscrow.title}`}
+                className="min-h-touch min-w-touch flex items-center gap-2 px-3 text-sm font-semibold text-white"
+              >
+                ⚠ Dispute
+              </button>
+            </div>
+          )}
         </div>
-      )}
 
-      <div className="mt-4 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={onView}
-          className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+        {/* Card on top (translated by the swipe) */}
+        <div
+          {...bind}
+          data-testid="escrow-swipe-row"
+          onClick={() => revealed && setRevealed(null)}
+          className="relative touch-pan-y bg-gray-950"
+          style={{ transform: translateX ? `translateX(${translateX}px)` : undefined }}
         >
-          View details
-        </button>
-        {canDispute && (
-          <button
-            type="button"
-            onClick={onDispute}
-            className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-300 transition-colors hover:bg-red-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
-          >
-            Raise dispute
-          </button>
-        )}
+          <EscrowCard escrow={resolvedEscrow} />
+        </div>
       </div>
-    </article>
+    </div>
   );
 }

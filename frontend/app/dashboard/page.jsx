@@ -15,6 +15,11 @@ import DashboardTour from '../../components/onboarding/DashboardTour';
 import { usePerformance } from '../../hooks/usePerformance';
 import { useI18n } from '../../i18n/index.jsx';
 import { useWalletStore } from '../../store/app-store';
+import { useWallet } from '../../hooks/useWallet';
+import { useEscrowSelection } from '../../hooks/useEscrowSelection';
+import { useBulkAction } from '../../hooks/useBulkAction';
+import BulkActionBar from '../../components/escrow/BulkActionBar';
+import BulkConfirmDialog from '../../components/escrow/BulkConfirmDialog';
 
 const StatWidgets = dynamic(() => import('../../components/dashboard/StatWidgets'), {
   ssr: false,
@@ -45,13 +50,50 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 export default function DashboardPage() {
   const { t } = useI18n();
-  const { address } = useWalletStore();
+  const { address, signTx } = useWallet();
   const router = useRouter();
   const [escrows, setEscrows] = useState([]);
   const [escrowsLoading, setEscrowsLoading] = useState(true);
   const [reputation, setReputation] = useState(null);
   const [disputeEscrowId, setDisputeEscrowId] = useState(null);
   const { measureAsync } = usePerformance('DashboardPage');
+
+  const {
+    selectedIds,
+    isSelectMode,
+    toggleSelectMode,
+    toggleSelect,
+    selectAll,
+    clearSelection,
+  } = useEscrowSelection();
+
+  const {
+    isOpen: isBulkOpen,
+    step: bulkStep,
+    actionType: bulkActionType,
+    selectedEscrows: bulkSelectedEscrows,
+    eligibilityMap: bulkEligibilityMap,
+    isCheckingEligibility: bulkIsCheckingEligibility,
+    executionProgress: bulkExecutionProgress,
+    isExecuting: bulkIsExecuting,
+    undoToast,
+    openDialog: openBulkDialog,
+    closeDialog: closeBulkDialog,
+    nextStep: nextBulkStep,
+    prevStep: prevBulkStep,
+    executeAction: executeBulkAction,
+    retryFailed: retryBulkFailed,
+    triggerExport: triggerBulkExport,
+    triggerUndo: triggerBulkUndo,
+    closeUndoToast,
+  } = useBulkAction({
+    escrows,
+    setEscrows,
+    selectedIds,
+    clearSelection,
+    address,
+    signTx,
+  });
 
   useEffect(() => {
     if (!address) router.replace('/');
@@ -132,7 +174,37 @@ export default function DashboardPage() {
           </section>
 
           <section aria-label="Active escrow agreements" data-tour="disputes">
-            <h2 className="text-lg font-semibold text-white mb-4">Your Active Escrows</h2>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+              <h2 className="text-lg font-semibold text-white">Your Active Escrows</h2>
+              {escrows.length > 0 && (
+                <div className="flex items-center gap-3">
+                  {isSelectMode && (
+                    <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.length === escrows.length}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            selectAll(escrows.map((escrow) => String(escrow.id)));
+                          } else {
+                            clearSelection();
+                          }
+                        }}
+                        className="rounded border-gray-700 bg-gray-900 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-gray-950"
+                      />
+                      Select all on page
+                    </label>
+                  )}
+                  <button
+                    type="button"
+                    onClick={toggleSelectMode}
+                    className="rounded-lg border border-gray-700 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-medium px-3 py-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-600"
+                  >
+                    {isSelectMode ? 'Exit Select' : 'Select'}
+                  </button>
+                </div>
+              )}
+            </div>
             {escrowsLoading ? (
               <div className="grid gap-4 md:grid-cols-2">
                 <CardSkeleton />
@@ -151,6 +223,9 @@ export default function DashboardPage() {
                       escrow={escrow}
                       canReleaseAll={escrow.status === 'Active'}
                       onDispute={(e) => setDisputeEscrowId(Number(e.id))}
+                      isSelectMode={isSelectMode}
+                      isSelected={selectedIds.includes(String(escrow.id))}
+                      onToggleSelect={toggleSelect}
                     />
                   </div>
                 ))}
@@ -165,6 +240,38 @@ export default function DashboardPage() {
           escrowId={disputeEscrowId}
         />
       )}
+
+      <BulkActionBar
+        selectedCount={selectedIds.length}
+        isSelectMode={isSelectMode}
+        onExitSelectMode={toggleSelectMode}
+        onTriggerAction={(type) => {
+          if (type === 'export') {
+            triggerBulkExport();
+          } else {
+            openBulkDialog(type);
+          }
+        }}
+        undoToast={undoToast}
+        onUndo={triggerBulkUndo}
+        onCloseUndo={closeUndoToast}
+      />
+
+      <BulkConfirmDialog
+        isOpen={isBulkOpen}
+        onClose={closeBulkDialog}
+        step={bulkStep}
+        actionType={bulkActionType}
+        selectedEscrows={bulkSelectedEscrows}
+        eligibilityMap={bulkEligibilityMap}
+        isCheckingEligibility={bulkIsCheckingEligibility}
+        executionProgress={bulkExecutionProgress}
+        isExecuting={bulkIsExecuting}
+        onNext={nextBulkStep}
+        onPrev={prevBulkStep}
+        onExecute={executeBulkAction}
+        onRetryFailed={retryBulkFailed}
+      />
         </div>
       </ErrorBoundary>
     </PageTransition>

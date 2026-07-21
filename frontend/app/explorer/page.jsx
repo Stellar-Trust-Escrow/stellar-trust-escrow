@@ -12,6 +12,11 @@ import Button from '../../components/ui/Button';
 import EmptyState from '../../components/ui/EmptyState';
 import ErrorBoundary from '../../components/error/ErrorBoundary';
 import { useEscrowFilterParams } from '../../hooks/useEscrowFilterParams';
+import { useWallet } from '../../hooks/useWallet';
+import { useEscrowSelection } from '../../hooks/useEscrowSelection';
+import { useBulkAction } from '../../hooks/useBulkAction';
+import BulkActionBar from '../../components/escrow/BulkActionBar';
+import BulkConfirmDialog from '../../components/escrow/BulkConfirmDialog';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -31,6 +36,7 @@ function normaliseEscrow(e) {
 
 function ExplorerContent() {
   const router = useRouter();
+  const { address, signTx } = useWallet();
   const { filters, setFilter, resetFilters, copyFilterUrl, activeFilterCount, apiQueryString } =
     useEscrowFilterParams();
 
@@ -46,6 +52,43 @@ function ExplorerContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [disputeEscrowId, setDisputeEscrowId] = useState(null);
+
+  const {
+    selectedIds,
+    isSelectMode,
+    toggleSelectMode,
+    toggleSelect,
+    selectAll,
+    clearSelection,
+  } = useEscrowSelection();
+
+  const {
+    isOpen: isBulkOpen,
+    step: bulkStep,
+    actionType: bulkActionType,
+    selectedEscrows: bulkSelectedEscrows,
+    eligibilityMap: bulkEligibilityMap,
+    isCheckingEligibility: bulkIsCheckingEligibility,
+    executionProgress: bulkExecutionProgress,
+    isExecuting: bulkIsExecuting,
+    undoToast,
+    openDialog: openBulkDialog,
+    closeDialog: closeBulkDialog,
+    nextStep: nextBulkStep,
+    prevStep: prevBulkStep,
+    executeAction: executeBulkAction,
+    retryFailed: retryBulkFailed,
+    triggerExport: triggerBulkExport,
+    triggerUndo: triggerBulkUndo,
+    closeUndoToast,
+  } = useBulkAction({
+    escrows,
+    setEscrows,
+    selectedIds,
+    clearSelection,
+    address,
+    signTx,
+  });
 
   useEffect(() => {
     setSearch(filters.q);
@@ -152,18 +195,57 @@ function ExplorerContent() {
               actionHref={activeFilterCount > 0 ? undefined : '/escrow/create'}
             />
           ) : (
-            <div
-              className={`grid gap-4 ${showFilters ? 'md:grid-cols-2' : 'md:grid-cols-2 lg:grid-cols-3'}`}
-            >
-              {escrows.map((escrow) => (
-                <EscrowListItem
-                  key={escrow.id}
-                  escrow={escrow}
-                  canReleaseAll={escrow.status === 'Active'}
-                  onDispute={(e) => setDisputeEscrowId(Number(e.id))}
-                />
-              ))}
-            </div>
+            <>
+              {escrows.length > 0 && (
+                <div className="flex items-center justify-between gap-4 mb-4 bg-gray-900/40 p-3 rounded-xl border border-gray-800">
+                  <span className="text-xs text-gray-400">
+                    Showing {escrows.length} escrows
+                  </span>
+                  <div className="flex items-center gap-3">
+                    {isSelectMode && (
+                      <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.length === escrows.length}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              selectAll(escrows.map((escrow) => String(escrow.id)));
+                            } else {
+                              clearSelection();
+                            }
+                          }}
+                          className="rounded border-gray-700 bg-gray-900 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-gray-950"
+                        />
+                        Select all on page
+                      </label>
+                    )}
+                    <button
+                      type="button"
+                      onClick={toggleSelectMode}
+                      className="rounded-lg border border-gray-700 bg-gray-850 hover:bg-gray-800 text-gray-200 text-xs font-medium px-3 py-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-600"
+                    >
+                      {isSelectMode ? 'Exit Select' : 'Select'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div
+                className={`grid gap-4 ${showFilters ? 'md:grid-cols-2' : 'md:grid-cols-2 lg:grid-cols-3'}`}
+              >
+                {escrows.map((escrow) => (
+                  <EscrowListItem
+                    key={escrow.id}
+                    escrow={escrow}
+                    canReleaseAll={escrow.status === 'Active'}
+                    onDispute={(e) => setDisputeEscrowId(Number(e.id))}
+                    isSelectMode={isSelectMode}
+                    isSelected={selectedIds.includes(String(escrow.id))}
+                    onToggleSelect={toggleSelect}
+                  />
+                ))}
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -197,6 +279,38 @@ function ExplorerContent() {
       {disputeEscrowId !== null && (
         <DisputeModal isOpen onClose={() => setDisputeEscrowId(null)} escrowId={disputeEscrowId} />
       )}
+
+      <BulkActionBar
+        selectedCount={selectedIds.length}
+        isSelectMode={isSelectMode}
+        onExitSelectMode={toggleSelectMode}
+        onTriggerAction={(type) => {
+          if (type === 'export') {
+            triggerBulkExport();
+          } else {
+            openBulkDialog(type);
+          }
+        }}
+        undoToast={undoToast}
+        onUndo={triggerBulkUndo}
+        onCloseUndo={closeUndoToast}
+      />
+
+      <BulkConfirmDialog
+        isOpen={isBulkOpen}
+        onClose={closeBulkDialog}
+        step={bulkStep}
+        actionType={bulkActionType}
+        selectedEscrows={bulkSelectedEscrows}
+        eligibilityMap={bulkEligibilityMap}
+        isCheckingEligibility={bulkIsCheckingEligibility}
+        executionProgress={bulkExecutionProgress}
+        isExecuting={bulkIsExecuting}
+        onNext={nextBulkStep}
+        onPrev={prevBulkStep}
+        onExecute={executeBulkAction}
+        onRetryFailed={retryBulkFailed}
+      />
     </div>
   );
 }

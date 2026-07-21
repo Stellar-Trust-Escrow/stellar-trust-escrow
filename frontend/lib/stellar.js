@@ -509,6 +509,94 @@ export async function buildRaiseDisputeTx({ sourceAddress, escrowId, milestoneId
 }
 
 /**
+ * Builds an unsigned `cancel_escrow` transaction XDR.
+ *
+ * @param {object} params
+ * @param {string} params.sourceAddress - user address initiating cancel
+ * @param {string|number} params.escrowId
+ * @returns {Promise<string>} unsigned transaction XDR
+ */
+export async function buildCancelEscrowTx({ sourceAddress, escrowId }) {
+  _validateInputs({ sourceAddress, escrowId });
+
+  const server = new SorobanRpc.Server(_SOROBAN_RPC_URL);
+  const account = await server.getAccount(sourceAddress);
+
+  const contract = new Contract(_CONTRACT_ADDRESS);
+
+  const txBuilder = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: _NETWORK_PASSPHRASE,
+  });
+
+  txBuilder.addOperation(
+    contract.call(
+      'cancel_escrow',
+      new Address(sourceAddress).toScVal(),
+      nativeToScVal(BigInt(escrowId), { type: 'u64' }),
+    ),
+  );
+
+  txBuilder.setTimeout(300);
+  const tx = txBuilder.build();
+
+  const prepared = await server.simulateTransaction(tx);
+  if (SorobanRpc.isSimulationError(prepared)) {
+    throw new Error(`Simulation failed: ${prepared.error}`);
+  }
+
+  const assembled = SorobanRpc.assembleTransaction(tx, prepared).build();
+  return assembled.toXDR('base64');
+}
+
+/**
+ * Builds an unsigned `batch_approve_milestones` transaction XDR.
+ *
+ * @param {object} params
+ * @param {string} params.sourceAddress - user address (client)
+ * @param {string|number} params.escrowId
+ * @param {number[]} params.milestoneIds - milestone indices/IDs to approve
+ * @returns {Promise<string>} unsigned transaction XDR
+ */
+export async function buildBatchApproveMilestonesTx({ sourceAddress, escrowId, milestoneIds }) {
+  _validateInputs({ sourceAddress, escrowId });
+  if (!Array.isArray(milestoneIds) || milestoneIds.length === 0) {
+    throw new Error('milestoneIds must be a non-empty array');
+  }
+
+  const server = new SorobanRpc.Server(_SOROBAN_RPC_URL);
+  const account = await server.getAccount(sourceAddress);
+
+  const contract = new Contract(_CONTRACT_ADDRESS);
+
+  const txBuilder = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: _NETWORK_PASSPHRASE,
+  });
+
+  txBuilder.addOperation(
+    contract.call(
+      'batch_approve_milestones',
+      new Address(sourceAddress).toScVal(),
+      nativeToScVal(BigInt(escrowId), { type: 'u64' }),
+      xdr.ScVal.scvVec(milestoneIds.map(id => nativeToScVal(id, { type: 'u32' }))),
+    ),
+  );
+
+  txBuilder.setTimeout(300);
+  const tx = txBuilder.build();
+
+  const prepared = await server.simulateTransaction(tx);
+  if (SorobanRpc.isSimulationError(prepared)) {
+    throw new Error(`Simulation failed: ${prepared.error}`);
+  }
+
+  const assembled = SorobanRpc.assembleTransaction(tx, prepared).build();
+  return assembled.toXDR('base64');
+}
+
+
+/**
  * Broadcasts a signed transaction XDR to the Stellar network.
  *
  * @param {string} signedXdr — base64-encoded signed XDR
