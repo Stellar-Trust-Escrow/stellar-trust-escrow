@@ -23,12 +23,6 @@ export async function up(prisma) {
   `);
 
   await prisma.$executeRawUnsafe(`
-    ALTER TABLE webhook_deliveries
-      DROP COLUMN IF EXISTS error_message,
-      DROP COLUMN IF EXISTS last_attempt_at
-  `);
-
-  await prisma.$executeRawUnsafe(`
     CREATE INDEX IF NOT EXISTS webhook_deliveries_status_idx ON webhook_deliveries(status)
   `);
 }
@@ -39,12 +33,6 @@ export async function up(prisma) {
 export async function down(prisma) {
   await prisma.$executeRawUnsafe(`
     DROP INDEX IF EXISTS webhook_deliveries_status_idx
-  `);
-
-  await prisma.$executeRawUnsafe(`
-    ALTER TABLE webhook_deliveries
-      ADD COLUMN IF NOT EXISTS error_message TEXT,
-      ADD COLUMN IF NOT EXISTS last_attempt_at TIMESTAMPTZ
   `);
 
   await prisma.$executeRawUnsafe(`

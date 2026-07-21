@@ -10,10 +10,6 @@ Reverses the webhook table rename and `webhook_deliveries` schema changes. Renam
 DROP INDEX IF EXISTS webhook_deliveries_status_idx;
 
 ALTER TABLE webhook_deliveries
-  ADD COLUMN IF NOT EXISTS error_message TEXT,
-  ADD COLUMN IF NOT EXISTS last_attempt_at TIMESTAMPTZ;
-
-ALTER TABLE webhook_deliveries
   DROP COLUMN IF EXISTS next_retry_at,
   DROP COLUMN IF EXISTS response_body;
 
