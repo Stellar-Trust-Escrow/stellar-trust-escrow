@@ -229,6 +229,9 @@ describe('useBulkAction hook', () => {
 
     await act(async () => {
       await result.current.openDialog('release');
+    });
+
+    await act(async () => {
       await result.current.executeAction();
     });
 
