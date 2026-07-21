@@ -3,15 +3,18 @@
 mod batch_approve_release_e2e_tests {
     use soroban_sdk::{
         testutils::{Address as _, Events},
-        token, Address, BytesN, Env, String, Symbol, TryFromVal,
+        token, Address, BytesN, Env, String, Symbol, TryFromVal, Vec,
     };
 
-    use crate::{EscrowContract, EscrowContractClient, EscrowStatus, MultisigConfig};
+    use crate::{
+        CreateEscrowRequest, CrossEscrowRelease, EscrowContract, EscrowContractClient, EscrowError,
+        EscrowStatus, MilestoneInit, MultisigConfig, MS_SUBMITTED,
+    };
 
     fn no_multisig(env: &Env) -> MultisigConfig {
         MultisigConfig {
-            approvers: soroban_sdk::Vec::new(env),
-            weights: soroban_sdk::Vec::new(env),
+            approvers: Vec::new(env),
+            weights: Vec::new(env),
             threshold: 0,
         }
     }
@@ -47,21 +50,14 @@ mod batch_approve_release_e2e_tests {
     /// End-to-end: create 3-milestone escrow with an active timelock → submit all
     /// → batch_approve_milestones (sets MS_APPROVED, no immediate transfer because
     /// timelock is still active) → batch_release_funds (admin override releases all).
-    ///
-    /// Verifies:
-    ///   - remaining_balance == 0
-    ///   - status == EscrowStatus::Completed
-    ///   - esc_done emitted exactly once
-    ///   - freelancer token balance == total_amount
     #[test]
     fn test_batch_approve_and_release_e2e() {
         let (env, admin, contract_id, client) = setup();
         let client_addr = Address::generate(&env);
         let freelancer = Address::generate(&env);
 
-        // Mint: total_amount + rent for create_escrow (30) + 3 milestones (3*30)
         let amounts = [100_i128, 200_i128, 300_i128];
-        let total_amount: i128 = amounts.iter().sum(); // 600
+        let total_amount: i128 = amounts.iter().sum();
         let sac = env.register_stellar_asset_contract_v2(admin.clone());
         let token_addr = sac.address();
         token::StellarAssetClient::new(&env, &token_addr)
@@ -80,13 +76,9 @@ mod batch_approve_release_e2e_tests {
             &no_multisig(&env),
         );
 
-        // Start a timelock with a long duration so it is NOT expired during
-        // batch_approve_milestones — this keeps milestones in MS_APPROVED state
-        // (no immediate transfer) and lets batch_release_funds run the release path.
         client.start_timelock(&client_addr, &escrow_id, &100_000_u64);
 
-        // Add 3 milestones individually and collect their IDs.
-        let mut milestone_ids: soroban_sdk::Vec<u32> = soroban_sdk::Vec::new(&env);
+        let mut milestone_ids: Vec<u32> = Vec::new(&env);
         for (i, &amt) in amounts.iter().enumerate() {
             let mid = client.add_milestone(
                 &client_addr,
@@ -98,41 +90,306 @@ mod batch_approve_release_e2e_tests {
             milestone_ids.push_back(mid);
         }
 
-        // Freelancer submits all milestones.
         for i in 0..milestone_ids.len() {
             client.submit_milestone(&freelancer, &escrow_id, &milestone_ids.get(i).unwrap());
         }
 
-        // Client batch-approves — milestones become MS_APPROVED (timelock not expired).
         client.batch_approve_milestones(&client_addr, &escrow_id, &milestone_ids);
-
-        // Admin batch-releases all approved milestones (admin bypasses timelock).
         client.batch_release_funds(&admin, &escrow_id, &milestone_ids);
 
-        // ── assertions ────────────────────────────────────────────────────────
-
         let state = client.get_escrow(&escrow_id);
+        assert_eq!(state.remaining_balance, 0);
+        assert_eq!(state.status, EscrowStatus::Completed);
 
-        assert_eq!(
-            state.remaining_balance, 0,
-            "remaining_balance must be 0 after full release"
-        );
-        assert_eq!(
-            state.status,
-            EscrowStatus::Completed,
-            "escrow must be Completed"
-        );
-
-        // esc_done emitted exactly once.
         let done_count =
             count_events_with_symbol(&env, &contract_id, soroban_sdk::symbol_short!("esc_done"));
-        assert_eq!(done_count, 1, "esc_done must be emitted exactly once");
+        assert_eq!(done_count, 1);
 
-        // Freelancer received the full total_amount.
         let freelancer_balance = token::Client::new(&env, &token_addr).balance(&freelancer);
+        assert_eq!(freelancer_balance, total_amount);
+    }
+
+    /// Acceptance Criterion 1:
+    /// `batch_approve_milestones` with one invalid milestone index in the middle
+    /// → entire call reverts, no milestones change state.
+    #[test]
+    fn test_batch_approve_milestones_atomic_revert() {
+        let (env, admin, _contract_id, client) = setup();
+        let client_addr = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+
+        let sac = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_addr = sac.address();
+        token::StellarAssetClient::new(&env, &token_addr).mint(&client_addr, &10_000_i128);
+
+        let escrow_id = client.create_escrow(
+            &client_addr,
+            &freelancer,
+            &token_addr,
+            &1000_i128,
+            &BytesN::from_array(&env, &[1; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
+
+        let m0 = client.add_milestone(
+            &client_addr,
+            &escrow_id,
+            &String::from_str(&env, "M0"),
+            &BytesN::from_array(&env, &[1; 32]),
+            &300_i128,
+        );
+        let _m1 = client.add_milestone(
+            &client_addr,
+            &escrow_id,
+            &String::from_str(&env, "M1"),
+            &BytesN::from_array(&env, &[2; 32]),
+            &300_i128,
+        );
+        let m2 = client.add_milestone(
+            &client_addr,
+            &escrow_id,
+            &String::from_str(&env, "M2"),
+            &BytesN::from_array(&env, &[3; 32]),
+            &400_i128,
+        );
+
+        // Submit M0 and M2, but leave M1 in Pending state
+        client.submit_milestone(&freelancer, &escrow_id, &m0);
+        client.submit_milestone(&freelancer, &escrow_id, &m2);
+
+        // Try batch approving [0, 1, 2] — index 1 is not in Submitted state
+        let mut indices = Vec::new(&env);
+        indices.push_back(0);
+        indices.push_back(1);
+        indices.push_back(2);
+
+        let res = client.try_batch_approve_milestones(&client_addr, &escrow_id, &indices);
+        assert!(
+            res.is_err(),
+            "Batch approve must revert when an index is invalid"
+        );
+
+        // Verify M0 status remains Submitted (no partial state change)
+        let state = client.get_escrow(&escrow_id);
+        let milestone_0 = state.milestones.get(0).unwrap();
         assert_eq!(
-            freelancer_balance, total_amount,
-            "freelancer balance must equal total_amount"
+            milestone_0.status, MS_SUBMITTED,
+            "M0 status must remain MS_SUBMITTED after atomic revert"
+        );
+    }
+
+    /// Acceptance Criterion 2:
+    /// `batch_create_escrows` with 11 requests → BatchError::TooLarge.
+    #[test]
+    fn test_batch_create_escrows_too_large() {
+        let (env, admin, _contract_id, client) = setup();
+        let client_addr = Address::generate(&env);
+
+        let sac = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_addr = sac.address();
+        token::StellarAssetClient::new(&env, &token_addr).mint(&client_addr, &100_000_i128);
+
+        let mut requests = Vec::new(&env);
+        for _ in 0..11 {
+            requests.push_back(CreateEscrowRequest {
+                freelancer: Address::generate(&env),
+                token: token_addr.clone(),
+                amount: 100_i128,
+                deadline: None,
+                brief_hash: BytesN::from_array(&env, &[1; 32]),
+                milestones: Vec::new(&env),
+            });
+        }
+
+        let res = client.try_batch_create_escrows(&client_addr, &requests);
+        assert!(res.is_err());
+        let err = res.err().unwrap().unwrap();
+        assert_eq!(err, EscrowError::BatchTooLarge);
+    }
+
+    /// Acceptance Criterion 3:
+    /// Single transfer covers total of all escrows in `batch_create_escrows`.
+    #[test]
+    fn test_batch_create_escrows_single_transfer() {
+        let (env, admin, contract_id, client) = setup();
+        let client_addr = Address::generate(&env);
+
+        let sac = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_addr = sac.address();
+        let initial_mint = 50_000_i128;
+        token::StellarAssetClient::new(&env, &token_addr).mint(&client_addr, &initial_mint);
+
+        let mut requests = Vec::new(&env);
+        let amounts = [1000_i128, 2000_i128, 3000_i128];
+        let total_expected: i128 = amounts.iter().sum();
+
+        for &amt in amounts.iter() {
+            let mut ms = Vec::new(&env);
+            ms.push_back(MilestoneInit {
+                title: String::from_str(&env, "Part 1"),
+                amount: amt,
+            });
+            requests.push_back(CreateEscrowRequest {
+                freelancer: Address::generate(&env),
+                token: token_addr.clone(),
+                amount: amt,
+                deadline: None,
+                brief_hash: BytesN::from_array(&env, &[1; 32]),
+                milestones: ms,
+            });
+        }
+
+        let escrow_ids = client.batch_create_escrows(&client_addr, &requests);
+        assert_eq!(escrow_ids.len(), 3);
+
+        // Verify total token balance transfer
+        // Each escrow charges a rent reserve: (1 meta entry + 1 milestone entry) * 30 periods = 60 per escrow
+        let rent_per_escrow: i128 = 2 * 30;
+        let total_rent: i128 = rent_per_escrow * escrow_ids.len() as i128;
+        let contract_balance = token::Client::new(&env, &token_addr).balance(&contract_id);
+        assert_eq!(
+            contract_balance,
+            total_expected + total_rent,
+            "Contract balance must equal sum of all batch escrows plus rent reserves"
+        );
+
+        // Check BatchCompleted event emitted
+        let batch_events =
+            count_events_with_symbol(&env, &contract_id, soroban_sdk::symbol_short!("bat_cmpl"));
+        assert_eq!(batch_events, 1, "BatchCompleted event must be emitted");
+    }
+
+    /// Acceptance Criterion 4:
+    /// `batch_cross_escrow_release` where caller is not client of one escrow → reverts.
+    #[test]
+    fn test_batch_cross_escrow_release_unauthorized() {
+        let (env, admin, _contract_id, client) = setup();
+        let client_a = Address::generate(&env);
+        let client_b = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+
+        let sac = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_addr = sac.address();
+        token::StellarAssetClient::new(&env, &token_addr).mint(&client_a, &10_000_i128);
+        token::StellarAssetClient::new(&env, &token_addr).mint(&client_b, &10_000_i128);
+
+        // Escrow 1 owned by client_a
+        let esc_1 = client.create_escrow(
+            &client_a,
+            &freelancer,
+            &token_addr,
+            &500_i128,
+            &BytesN::from_array(&env, &[1; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
+        let m1 = client.add_milestone(
+            &client_a,
+            &esc_1,
+            &String::from_str(&env, "M1"),
+            &BytesN::from_array(&env, &[1; 32]),
+            &500_i128,
+        );
+        client.submit_milestone(&freelancer, &esc_1, &m1);
+
+        // Escrow 2 owned by client_b
+        let esc_2 = client.create_escrow(
+            &client_b,
+            &freelancer,
+            &token_addr,
+            &500_i128,
+            &BytesN::from_array(&env, &[2; 32]),
+            &None,
+            &None,
+            &None,
+            &None,
+            &no_multisig(&env),
+        );
+        let m2 = client.add_milestone(
+            &client_b,
+            &esc_2,
+            &String::from_str(&env, "M2"),
+            &BytesN::from_array(&env, &[2; 32]),
+            &500_i128,
+        );
+        client.submit_milestone(&freelancer, &esc_2, &m2);
+
+        // client_a attempts to batch cross-release esc_1 and esc_2 (not client of esc_2)
+        let mut releases = Vec::new(&env);
+        releases.push_back(CrossEscrowRelease {
+            escrow_id: esc_1,
+            milestone_index: m1,
+        });
+        releases.push_back(CrossEscrowRelease {
+            escrow_id: esc_2,
+            milestone_index: m2,
+        });
+
+        let res = client.try_batch_cross_escrow_release(&client_a, &releases);
+        assert!(
+            res.is_err(),
+            "batch_cross_escrow_release must revert if caller is not client of all escrows"
+        );
+    }
+
+    /// Acceptance Criterion 5:
+    /// Gas profile test: batch of 5 must use fewer total instructions than 5 sequential single calls.
+    #[test]
+    fn test_batch_gas_profiling() {
+        let (env, admin, _contract_id, client) = setup();
+        let client_addr = Address::generate(&env);
+
+        let sac = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_addr = sac.address();
+        token::StellarAssetClient::new(&env, &token_addr).mint(&client_addr, &1_000_000_i128);
+
+        // 1. Measure 5 sequential single create_escrow calls
+        env.budget().reset_default();
+        for _ in 0..5 {
+            client.create_escrow(
+                &client_addr,
+                &Address::generate(&env),
+                &token_addr,
+                &1000_i128,
+                &BytesN::from_array(&env, &[1; 32]),
+                &None,
+                &None,
+                &None,
+                &None,
+                &no_multisig(&env),
+            );
+        }
+        let sequential_cpu = env.budget().cpu_instruction_cost();
+
+        // 2. Measure 1 batch_create_escrows call with 5 requests
+        let mut requests = Vec::new(&env);
+        for _ in 0..5 {
+            requests.push_back(CreateEscrowRequest {
+                freelancer: Address::generate(&env),
+                token: token_addr.clone(),
+                amount: 1000_i128,
+                deadline: None,
+                brief_hash: BytesN::from_array(&env, &[1; 32]),
+                milestones: Vec::new(&env),
+            });
+        }
+
+        env.budget().reset_default();
+        client.batch_create_escrows(&client_addr, &requests);
+        let batch_cpu = env.budget().cpu_instruction_cost();
+
+        assert!(
+            batch_cpu < sequential_cpu,
+            "Batch creation ({}) must use fewer CPU instructions than 5 sequential calls ({})",
+            batch_cpu,
+            sequential_cpu
         );
     }
 }

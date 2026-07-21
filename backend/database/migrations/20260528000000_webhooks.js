@@ -7,27 +7,30 @@
  * @param {import('@prisma/client').PrismaClient} prisma
  */
 export async function up(prisma) {
+  // Guard: if prisma db push already applied the final schema (webhook_endpoints),
+  // skip creating webhook_subscriptions to avoid the rename conflict in the next migration.
   await prisma.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS webhook_subscriptions (
-      id TEXT PRIMARY KEY,
-      tenant_id TEXT NOT NULL,
-      url TEXT NOT NULL,
-      secret TEXT NOT NULL,
-      event_types TEXT[] NOT NULL DEFAULT '{}',
-      is_active BOOLEAN NOT NULL DEFAULT TRUE,
-      created_by TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      CONSTRAINT fk_webhook_subscription_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
-    )
-  `);
-
-  await prisma.$executeRawUnsafe(`
-    CREATE INDEX IF NOT EXISTS webhook_subscriptions_tenant_id_idx ON webhook_subscriptions(tenant_id)
-  `);
-
-  await prisma.$executeRawUnsafe(`
-    CREATE INDEX IF NOT EXISTS webhook_subscriptions_created_by_idx ON webhook_subscriptions(created_by)
+    DO $$ BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name = 'webhook_endpoints'
+      ) THEN
+        CREATE TABLE IF NOT EXISTS webhook_subscriptions (
+          id TEXT PRIMARY KEY,
+          tenant_id TEXT NOT NULL,
+          url TEXT NOT NULL,
+          secret TEXT NOT NULL,
+          event_types TEXT[] NOT NULL DEFAULT '{}',
+          is_active BOOLEAN NOT NULL DEFAULT TRUE,
+          created_by TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          CONSTRAINT fk_webhook_subscription_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS webhook_subscriptions_tenant_id_idx ON webhook_subscriptions(tenant_id);
+        CREATE INDEX IF NOT EXISTS webhook_subscriptions_created_by_idx ON webhook_subscriptions(created_by);
+      END IF;
+    END $$
   `);
 
   await prisma.$executeRawUnsafe(`
@@ -47,7 +50,15 @@ export async function up(prisma) {
   `);
 
   await prisma.$executeRawUnsafe(`
-    CREATE INDEX IF NOT EXISTS webhook_deliveries_subscription_id_idx ON webhook_deliveries(subscription_id)
+    DO $$ BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'webhook_deliveries' AND column_name = 'subscription_id'
+      ) THEN
+        CREATE INDEX IF NOT EXISTS webhook_deliveries_subscription_id_idx
+          ON webhook_deliveries(subscription_id);
+      END IF;
+    END $$
   `);
 
   await prisma.$executeRawUnsafe(`

@@ -69,8 +69,8 @@ export async function up(prisma) {
 
   // Insert default row for Horizon cursor if not exists
   await prisma.$executeRawUnsafe(`
-    INSERT INTO system_config (key, value, description) 
-    VALUES ('horizon_cursor', 'now', 'Cursor for Stellar Horizon event stream; "now" means start from latest')
+    INSERT INTO system_config (key, value, description, updated_at)
+    VALUES ('horizon_cursor', 'now', 'Cursor for Stellar Horizon event stream; "now" means start from latest', NOW())
     ON CONFLICT (key) DO NOTHING
   `);
 }

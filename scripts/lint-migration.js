@@ -61,10 +61,12 @@ const baseIndex = argv.indexOf('--base');
 const headIndex = argv.indexOf('--head');
 const jsonIndex = argv.indexOf('--json');
 
-const explicitFiles = filesIndex !== -1 ? argv.slice(filesIndex + 1, nextFlag(argv, filesIndex)) : [];
+const explicitFiles =
+  filesIndex !== -1 ? argv.slice(filesIndex + 1, nextFlag(argv, filesIndex)) : [];
 const baseRef = baseIndex !== -1 ? argv[baseIndex + 1] : process.env.BASE_SHA || 'origin/main';
 const headRef = headIndex !== -1 ? argv[headIndex + 1] : process.env.HEAD_SHA || 'HEAD';
-const jsonPath = jsonIndex !== -1 ? argv[jsonIndex + 1] : join(process.cwd(), 'migration-lint-report.json');
+const jsonPath =
+  jsonIndex !== -1 ? argv[jsonIndex + 1] : join(process.cwd(), 'migration-lint-report.json');
 
 function nextFlag(args, idx) {
   for (let i = idx + 1; i < args.length; i++) {
@@ -74,17 +76,16 @@ function nextFlag(args, idx) {
 }
 
 if (flags.help) {
-  console.log('Usage: node scripts/lint-migration.js [--all] [--files a.js ...] [--check-rollback] [--base REF] [--head REF] [--json path]');
+  console.log(
+    'Usage: node scripts/lint-migration.js [--all] [--files a.js ...] [--check-rollback] [--base REF] [--head REF] [--json path]',
+  );
   process.exit(0);
 }
 
 // ── Migration discovery ───────────────────────────────────────────────────────
 
 // Paths that are considered "migration" locations in this repository.
-const MIGRATION_GLOBS = [
-  'backend/database/migrations',
-  'prisma/migrations',
-];
+const MIGRATION_GLOBS = ['backend/database/migrations', 'prisma/migrations'];
 
 function isMigrationPath(p) {
   const norm = p.replace(/\\/g, '/');
@@ -130,14 +131,20 @@ function readDirSafe(d) {
 function getChangedMigrationFiles() {
   try {
     const range = `${baseRef}...${headRef}`;
-    const out = execSync(`git diff --name-only ${range}`, { cwd: REPO_ROOT, stdio: ['ignore', 'pipe', 'ignore'] })
+    const out = execSync(`git diff --name-only ${range}`, {
+      cwd: REPO_ROOT,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
       .toString()
       .split('\n')
       .map((s) => s.trim())
       .filter(Boolean);
     const changed = out.filter((f) => isMigrationPath(f) && isMigrationFile(f));
     // Also include files staged/modified in the working tree that are not yet committed.
-    const status = execSync('git status --porcelain', { cwd: REPO_ROOT, stdio: ['ignore', 'pipe', 'ignore'] })
+    const status = execSync('git status --porcelain', {
+      cwd: REPO_ROOT,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
       .toString()
       .split('\n')
       .map((s) => s.trim())
@@ -146,7 +153,9 @@ function getChangedMigrationFiles() {
     for (const f of status) if (isMigrationPath(f) && !changed.includes(f)) changed.push(f);
     return [...new Set(changed)];
   } catch (err) {
-    console.warn(`⚠️  Could not compute changed files via git (${err.message}). Use --files or --all.`);
+    console.warn(
+      `⚠️  Could not compute changed files via git (${err.message}). Use --files or --all.`,
+    );
     return [];
   }
 }
@@ -161,8 +170,10 @@ function splitMigration(source, ext) {
   if (ext === '.sql') {
     return { up: source, down: '', raw: source };
   }
-  const upOpen = /export\s+(?:(?:async\s+)?function\s+up\s*\([^)]*\)|const\s+up\s*=\s*(?:async\s*)?\([^)]*\)\s*=>)\s*\{/;
-  const downOpen = /export\s+(?:(?:async\s+)?function\s+down\s*\([^)]*\)|const\s+down\s*=\s*(?:async\s*)?\([^)]*\)\s*=>)\s*\{/;
+  const upOpen =
+    /export\s+(?:(?:async\s+)?function\s+up\s*\([^)]*\)|const\s+up\s*=\s*(?:async\s*)?\([^)]*\)\s*=>)\s*\{/;
+  const downOpen =
+    /export\s+(?:(?:async\s+)?function\s+down\s*\([^)]*\)|const\s+down\s*=\s*(?:async\s*)?\([^)]*\)\s*=>)\s*\{/;
   const upMatch = matchBalanced(source, upOpen);
   const downMatch = matchBalanced(source, downOpen);
   return {
@@ -229,8 +240,10 @@ function extractSqlStatements(body) {
 
 // ── Pattern checks ────────────────────────────────────────────────────────────
 
-const RE_DROP_COLUMN = /\bDROP\s+COLUMN\b/i;
-const RE_DROP_TABLE = /\bDROP\s+TABLE\b/i;
+// DROP COLUMN IF EXISTS is conditional — it won't fail or lose data if the
+// column is absent, so it is allowed. Bare DROP COLUMN is still blocked.
+const RE_DROP_COLUMN = /\bDROP\s+COLUMN\b(?!\s+IF\s+EXISTS)/i;
+const RE_DROP_TABLE = /\bDROP\s+TABLE\b(?!\s+IF\s+EXISTS)/i;
 const RE_TRUNCATE = /\bTRUNCATE\b/i;
 const RE_ALTER_TYPE = /\bALTER\s+COLUMN\b[^\n;]*\bTYPE\b/i;
 const RE_SAFE_COMMENT = /(?:--|\/\/|#)\s*safe\s*:/i;
@@ -295,7 +308,11 @@ function allCreatedColumns(sql) {
   while ((m = re.exec(sql))) {
     for (const line of m[1].split(',')) {
       const col = line.trim().split(/\s+/)[0].replace(/[`"]/g, '');
-      if (col && /^\w+$/.test(col) && !/^(PRIMARY|FOREIGN|UNIQUE|CONSTRAINT|KEY|INDEX|CHECK)/i.test(col)) {
+      if (
+        col &&
+        /^\w+$/.test(col) &&
+        !/^(PRIMARY|FOREIGN|UNIQUE|CONSTRAINT|KEY|INDEX|CHECK)/i.test(col)
+      ) {
         cols.push(col);
       }
     }
@@ -386,7 +403,9 @@ function lintMigration(content, ext) {
   // 6. Missing index on FK columns
   const fkCols = findFkColumns(sql);
   const indexed = findIndexedColumns(sql).map((c) => c.toLowerCase());
-  const missingIdx = fkCols.filter((c) => !indexed.some((i) => i === c || i.startsWith(c + '_') || i.endsWith('_' + c)));
+  const missingIdx = fkCols.filter(
+    (c) => !indexed.some((i) => i === c || i.startsWith(c + '_') || i.endsWith('_' + c)),
+  );
   if (missingIdx.length > 0) {
     warnings.push({
       rule: 'missing-fk-index',
@@ -494,7 +513,11 @@ function main() {
   let anyBlocking = false;
   for (const m of report.migrations) {
     const rel = m.file;
-    if (m.errors.length === 0 && m.warnings.length === 0 && (!flags.checkRollback || m.rollback?.present)) {
+    if (
+      m.errors.length === 0 &&
+      m.warnings.length === 0 &&
+      (!flags.checkRollback || m.rollback?.present)
+    ) {
       console.log(`✅ ${rel}`);
       continue;
     }
@@ -508,7 +531,9 @@ function main() {
       console.log(`     [WARN ] (${w.rule}) ${w.message}`);
     }
     if (flags.checkRollback && m.rollback) {
-      console.log(`     [ROLLBACK] ${m.rollback.present ? 'present ✓' : 'MISSING ✗ → ' + m.rollback.path}`);
+      console.log(
+        `     [ROLLBACK] ${m.rollback.present ? 'present ✓' : 'MISSING ✗ → ' + m.rollback.path}`,
+      );
     }
   }
   console.log('');

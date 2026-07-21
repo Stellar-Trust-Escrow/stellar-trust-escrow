@@ -169,6 +169,13 @@ pub fn emit_escrow_cancelled(env: &Env, escrow_id: u64, returned_amount: i128) {
         .publish((ev::ESCROW_CANCELLED, escrow_id), returned_amount);
 }
 
+pub fn emit_escrow_expired(env: &Env, escrow_id: u64, refunded_to: &Address, amount: i128) {
+    env.events().publish(
+        (ev::ESCROW_EXPIRED, escrow_id),
+        (refunded_to.clone(), amount),
+    );
+}
+
 pub fn emit_dispute_raised(env: &Env, escrow_id: u64, raised_by: &Address) {
     env.events()
         .publish((ev::DISPUTE_RAISED, escrow_id), raised_by.clone());
@@ -348,6 +355,27 @@ pub fn emit_admin_proposed(env: &Env, current_admin: &Address, pending_admin: &A
 pub fn emit_admin_changed(env: &Env, old_admin: &Address, new_admin: &Address) {
     env.events()
         .publish((ev::ADMIN_CHANGED,), (old_admin.clone(), new_admin.clone()));
+}
+
+pub fn emit_admin_transferred(env: &Env, old_admin: &Address, new_admin: &Address) {
+    env.events().publish(
+        (soroban_sdk::Symbol::new(env, "AdminTransferred"),),
+        (old_admin.clone(), new_admin.clone()),
+    );
+}
+
+pub fn emit_arbiter_registered(env: &Env, arbiter: &Address) {
+    env.events().publish(
+        (soroban_sdk::Symbol::new(env, "ArbiterRegistered"),),
+        arbiter.clone(),
+    );
+}
+
+pub fn emit_arbiter_removed(env: &Env, arbiter: &Address) {
+    env.events().publish(
+        (soroban_sdk::Symbol::new(env, "ArbiterRemoved"),),
+        arbiter.clone(),
+    );
 }
 
 pub fn emit_max_milestones_set(env: &Env, new_max: u32) {
@@ -552,4 +580,9 @@ pub fn emit_mutual_cancellation_completed(
         (ev::MUTUAL_CANCEL_DONE, escrow_id),
         (client_received, contractor_received, terms_hash.clone()),
     );
+}
+
+pub fn emit_batch_completed(env: &Env, count: u32, total_amount: i128) {
+    env.events()
+        .publish((ev::BATCH_COMPLETED, count), total_amount);
 }

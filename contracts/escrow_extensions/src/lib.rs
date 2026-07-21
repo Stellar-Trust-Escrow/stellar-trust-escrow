@@ -122,8 +122,3 @@ impl EscrowExtensions {
         panic!("stub")
     }
 }
-
-// Tests disabled — all methods are stubs (panic!("stub")).
-// Re-enable once implementations land.
-// #[cfg(test)]
-// mod tests;

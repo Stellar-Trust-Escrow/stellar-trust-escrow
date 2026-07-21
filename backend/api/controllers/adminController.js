@@ -11,19 +11,11 @@ import prisma from '../../lib/prisma.js';
 import { TIER_LIMITS } from '../../config/rateLimits.js';
 import { logControllerError, getLogger } from '../../config/logger.js';
 import { getUserUsage } from '../middleware/rateLimiter.js';
+import cache from '../../lib/cache.js';
+import { buildPaginatedResponse, parsePagination } from '../../lib/pagination.js';
+import keyRotationService from '../../services/keyRotationService.js';
 
 const adminLog = getLogger();
-
-// JSON.stringify does not guarantee key order, so two objects with the same
-// contents but different insertion order produce different cache keys.
-// This sorted replacer ensures deterministic serialisation for cache keys.
-function stableStringify(obj) {
-  return JSON.stringify(obj, (_, v) =>
-    v && typeof v === 'object' && !Array.isArray(v)
-      ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b)))
-      : v,
-  );
-}
 
 // Mutable runtime overrides (resets on server restart)
 const runtimeTierLimits = { ...TIER_LIMITS };
@@ -63,10 +55,6 @@ const getUserRateLimitUsage = (req, res) => {
   const usage = getUserUsage(userId);
   res.json({ userId, ...usage });
 };
-
-import cache from '../../lib/cache.js';
-import { buildPaginatedResponse, parsePagination } from '../../lib/pagination.js';
-import keyRotationService from '../../services/keyRotationService.js';
 
 /** Deterministic JSON serialiser — sorts object keys recursively. */
 function stableStringify(val) {
@@ -497,12 +485,16 @@ const updateSettings = async (req, res) => {
     });
   } catch (err) {
     logControllerError('admin.updateSettings', err, req);
+    res.status(500).json({ error: err.message });
+  }
+};
+
 // ── Key Management ─────────────────────────────────────────────────────────────
 
 const rotateKeys = async (req, res) => {
   try {
     const newKey = await keyRotationService.rotateKey();
-    
+
     // Log action
     await prisma.adminAuditLog.create({
       data: {
@@ -524,12 +516,12 @@ const rotateKeys = async (req, res) => {
 const listKeys = async (req, res) => {
   try {
     const validKeys = await keyRotationService.getValidPublicKeys();
-    
+
     // Omit any private keys if accidentally passed by service (though service shouldn't return them here)
-    const sanitizedKeys = validKeys.map(k => ({
+    const sanitizedKeys = validKeys.map((k) => ({
       kid: k.kid,
       algorithm: k.algorithm,
-      publicKey: k.publicKey
+      publicKey: k.publicKey,
     }));
 
     res.json({ keys: sanitizedKeys });
@@ -598,7 +590,9 @@ const getMetrics = async (req, res) => {
       const totalResolutionMs = resolvedDisputesThisWeek.reduce((sum, d) => {
         return sum + (new Date(d.resolvedAt) - new Date(d.raisedAt));
       }, 0);
-      avgResolutionTime = Math.round(totalResolutionMs / resolvedDisputesThisWeek.length / (1000 * 60 * 60)); // in hours
+      avgResolutionTime = Math.round(
+        totalResolutionMs / resolvedDisputesThisWeek.length / (1000 * 60 * 60),
+      ); // in hours
     }
 
     // Calculate deltas
@@ -607,10 +601,18 @@ const getMetrics = async (req, res) => {
       return Math.round(((current - previous) / previous) * 100);
     };
 
-    const currentLocked = currentTotalLockedXLM._sum.totalAmount ? parseFloat(currentTotalLockedXLM._sum.totalAmount) : 0;
-    const prevLocked = prevTotalLockedXLM._sum.totalAmount ? parseFloat(prevTotalLockedXLM._sum.totalAmount) : 0;
-    const currentFees = currentPlatformFeesThisMonth._sum.amount ? parseFloat(currentPlatformFeesThisMonth._sum.amount) : 0;
-    const prevFees = prevPlatformFeesThisMonth._sum.amount ? parseFloat(prevPlatformFeesThisMonth._sum.amount) : 0;
+    const currentLocked = currentTotalLockedXLM._sum.totalAmount
+      ? parseFloat(currentTotalLockedXLM._sum.totalAmount)
+      : 0;
+    const prevLocked = prevTotalLockedXLM._sum.totalAmount
+      ? parseFloat(prevTotalLockedXLM._sum.totalAmount)
+      : 0;
+    const currentFees = currentPlatformFeesThisMonth._sum.amount
+      ? parseFloat(currentPlatformFeesThisMonth._sum.amount)
+      : 0;
+    const prevFees = prevPlatformFeesThisMonth._sum.amount
+      ? parseFloat(prevPlatformFeesThisMonth._sum.amount)
+      : 0;
 
     const result = {
       activeEscrows: currentActiveEscrows,

@@ -15,6 +15,7 @@ use soroban_sdk::{symbol_short, Symbol};
 pub const ESCROW_CREATED: Symbol = symbol_short!("esc_crt");
 pub const ESCROW_COMPLETED: Symbol = symbol_short!("esc_done");
 pub const ESCROW_CANCELLED: Symbol = symbol_short!("esc_can");
+pub const ESCROW_EXPIRED: Symbol = symbol_short!("esc_exp");
 pub const ESCROW_SPLIT: Symbol = symbol_short!("esc_spl");
 
 // ── Milestones ────────────────────────────────────────────────────────────────
@@ -117,3 +118,7 @@ pub const FEE_COLLECTED: Symbol = symbol_short!("fee_col");
 pub const APPROVAL_VOTE_CAST: Symbol = symbol_short!("apr_vote");
 /// Approval threshold reached — milestone transitions to MS_APPROVED.
 pub const APPROVAL_THRESHOLD_MET: Symbol = symbol_short!("apr_thr");
+
+// ── Batch operations ──────────────────────────────────────────────────────────
+
+pub const BATCH_COMPLETED: Symbol = symbol_short!("bat_cmpl");

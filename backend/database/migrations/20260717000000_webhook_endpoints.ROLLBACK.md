@@ -1,37 +1,29 @@
 # Rollback: 20260717000000_webhook_endpoints
 
-## Summary
+## What this migration does
 
-Reverses the webhook table rename and `webhook_deliveries` schema changes. Renames `webhook_endpoints` back to `webhook_subscriptions`, restores the old column names, and removes the new columns.
+- Renames `webhook_subscriptions` → `webhook_endpoints`
+- Renames `webhook_deliveries.subscription_id` → `endpoint_id`
+- Adds `next_retry_at`, `response_body` columns; drops `error_message`, `last_attempt_at`
+- Adds `webhook_deliveries_status_idx`
 
-## Steps
+## Rollback procedure
 
-```sql
-DROP INDEX IF EXISTS webhook_deliveries_status_idx;
+The `down()` function reverses each step:
 
-ALTER TABLE webhook_deliveries
-  ADD COLUMN IF NOT EXISTS error_message TEXT,
-  ADD COLUMN IF NOT EXISTS last_attempt_at TIMESTAMPTZ;
+1. Drop `webhook_deliveries_status_idx`
+2. Re-add `error_message TEXT`, `last_attempt_at TIMESTAMPTZ`
+3. Drop `next_retry_at`, `response_body`
+4. Rename column `endpoint_id` → `subscription_id`
+5. Rename table `webhook_endpoints` → `webhook_subscriptions`
 
-ALTER TABLE webhook_deliveries
-  DROP COLUMN IF EXISTS next_retry_at,
-  DROP COLUMN IF EXISTS response_body;
+## Data impact
 
-ALTER TABLE webhook_deliveries
-  RENAME COLUMN endpoint_id TO subscription_id;
+Columns `next_retry_at` and `response_body` are dropped — retry schedule and
+response body data is permanently lost on rollback.
 
-ALTER TABLE IF EXISTS webhook_endpoints RENAME TO webhook_subscriptions;
-```
+## Notes
 
-## Verification
-
-```sql
-SELECT table_name FROM information_schema.tables
-WHERE table_name = 'webhook_subscriptions';
--- Should return 1 row
-
-SELECT column_name FROM information_schema.columns
-WHERE table_name = 'webhook_deliveries'
-  AND column_name IN ('subscription_id', 'error_message', 'last_attempt_at');
--- Should return 3 rows
-```
+All rename operations are guarded with existence checks so this migration is
+idempotent when run against a schema already in its final state (e.g. after
+`prisma db push`).

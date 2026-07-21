@@ -2,7 +2,7 @@
 //!
 //! All shared structs, enums, and storage keys for the escrow contract.
 
-use soroban_sdk::{contracttype, Address, BytesN, String};
+use soroban_sdk::{contracttype, Address, BytesN, String, Vec};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ENUMS
@@ -22,6 +22,8 @@ pub enum EscrowStatus {
     Cancelled,
     /// Cancellation requested - pending dispute resolution or deadline.
     CancellationPending,
+    /// Escrow passed its deadline with no completion and was refunded to client.
+    Expired,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -425,6 +427,9 @@ pub struct EscrowState {
 
     /// Minimum sum of weights required to approve a submitted milestone.
     pub multisig_threshold: u32,
+
+    /// Expiration timestamp (Unix timestamp) after which escrow can be refunded to client.
+    pub expires_at: u64,
 }
 
 /// On-chain reputation record for a user address.
@@ -817,4 +822,38 @@ pub enum DataKey {
     ApprovalThreshold(u64),
     /// Pending approval votes for (escrow_id, milestone_id) — value: Vec<ApprovalRecord>
     MilestoneVotes(u64, u32),
+    /// Approved arbiter registry — value: Map<Address, bool>
+    ArbiterRegistry,
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BATCH OPERATION TYPES
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Initial milestone payload for batch escrow creation.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MilestoneInit {
+    pub title: String,
+    pub amount: i128,
+}
+
+/// Request payload for creating an escrow in a batch.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CreateEscrowRequest {
+    pub freelancer: Address,
+    pub token: Address,
+    pub amount: i128,
+    pub deadline: Option<u64>,
+    pub brief_hash: BytesN<32>,
+    pub milestones: Vec<MilestoneInit>,
+}
+
+/// Cross-escrow milestone release request.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CrossEscrowRelease {
+    pub escrow_id: u64,
+    pub milestone_index: u32,
 }
