@@ -46,6 +46,7 @@ const createQueue = (name) =>
 export const emailQueue = createQueue('email');
 export const webhookQueue = createQueue('webhook-delivery');
 export const scheduledQueue = createQueue('scheduled');
+export { gasPollerQueue, scheduleGasPolling } from './gasPollerQueue.js';
 
 // eventQueue is handled separately due to its complex retry/DLQ setup.
 // Import it directly from './eventQueue.js' to avoid starting BullMQ workers

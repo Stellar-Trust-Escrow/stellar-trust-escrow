@@ -219,6 +219,7 @@ app.use('/api/compliance', complianceRoutes);
 app.use('/api/incidents', incidentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/v1/admin/analytics', analyticsRoutes);
+app.use('/api/v1', v1Routes);
 app.use('/api/batch', batchRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/chat', chatRoutes);
