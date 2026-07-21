@@ -12,8 +12,15 @@ export async function up(prisma) {
   `);
 
   await prisma.$executeRawUnsafe(`
-    ALTER TABLE webhook_deliveries
-      RENAME COLUMN subscription_id TO endpoint_id
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'webhook_deliveries' AND column_name = 'subscription_id'
+      ) THEN
+        ALTER TABLE webhook_deliveries RENAME COLUMN subscription_id TO endpoint_id;
+      END IF;
+    END $$;
   `);
 
   await prisma.$executeRawUnsafe(`
@@ -42,8 +49,15 @@ export async function down(prisma) {
   `);
 
   await prisma.$executeRawUnsafe(`
-    ALTER TABLE webhook_deliveries
-      RENAME COLUMN endpoint_id TO subscription_id
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'webhook_deliveries' AND column_name = 'endpoint_id'
+      ) THEN
+        ALTER TABLE webhook_deliveries RENAME COLUMN endpoint_id TO subscription_id;
+      END IF;
+    END $$;
   `);
 
   await prisma.$executeRawUnsafe(`

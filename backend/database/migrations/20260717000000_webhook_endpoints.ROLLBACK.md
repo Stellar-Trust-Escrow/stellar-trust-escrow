@@ -13,8 +13,15 @@ ALTER TABLE webhook_deliveries
   DROP COLUMN IF EXISTS next_retry_at,
   DROP COLUMN IF EXISTS response_body;
 
-ALTER TABLE webhook_deliveries
-  RENAME COLUMN endpoint_id TO subscription_id;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'webhook_deliveries' AND column_name = 'endpoint_id'
+  ) THEN
+    ALTER TABLE webhook_deliveries RENAME COLUMN endpoint_id TO subscription_id;
+  END IF;
+END $$;
 
 ALTER TABLE IF EXISTS webhook_endpoints RENAME TO webhook_subscriptions;
 ```
