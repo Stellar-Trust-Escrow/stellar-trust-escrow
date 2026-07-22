@@ -57,21 +57,32 @@ function fakeHash(seed) {
   return h;
 }
 
-function buildInsert(table, columns, rows) {
+function buildInsert(table, columns, rows, castMap = {}) {
   const colList = columns.join(', ');
   const placeholders = rows
-    .map((_, r) => '(' + columns.map((_, c) => `$${r * columns.length + c + 1}`).join(', ') + ')')
+    .map(
+      (_, r) =>
+        '(' +
+        columns
+          .map((c, idx) => {
+            const paramIdx = r * columns.length + idx + 1;
+            const cast = castMap[c] ? `::"${castMap[c]}"` : '';
+            return `$${paramIdx}${cast}`;
+          })
+          .join(', ') +
+        ')',
+    )
     .join(', ');
   const params = [];
   for (const row of rows) for (const v of row) params.push(v);
   return { sql: `INSERT INTO ${table} (${colList}) VALUES ${placeholders}`, params };
 }
 
-async function chunkedInsert(table, columns, rows, label) {
+async function chunkedInsert(table, columns, rows, label, castMap = {}) {
   let inserted = 0;
   for (let i = 0; i < rows.length; i += BATCH) {
     const slice = rows.slice(i, i + BATCH);
-    const { sql, params } = buildInsert(table, columns, slice);
+    const { sql, params } = buildInsert(table, columns, slice, castMap);
     await prisma.$executeRawUnsafe(sql, ...params);
     inserted += slice.length;
     if (inserted % (BATCH * 25) === 0 || inserted === rows.length) {
@@ -138,7 +149,9 @@ async function main() {
       BigInt(1000 + i),
     ]);
   }
-  const escrowsInserted = await chunkedInsert('escrows', escrowCols, escrowRows, 'Escrows');
+  const escrowsInserted = await chunkedInsert('escrows', escrowCols, escrowRows, 'Escrows', {
+    status: 'EscrowStatus',
+  });
   console.log(`✅ Escrows:    ${escrowsInserted.toLocaleString()}`);
 
   // 3. Milestones (5 per escrow, batched)
@@ -173,7 +186,9 @@ async function main() {
       ]);
     }
   }
-  const msInserted = await chunkedInsert('milestones', msCols, msRows, 'Milestones');
+  const msInserted = await chunkedInsert('milestones', msCols, msRows, 'Milestones', {
+    status: 'MilestoneStatus',
+  });
   console.log(`✅ Milestones: ${msInserted.toLocaleString()}`);
 
   const elapsed = ((Date.now() - started) / 1000).toFixed(1);
