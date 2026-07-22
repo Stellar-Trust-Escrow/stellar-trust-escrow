@@ -872,7 +872,7 @@ model SystemConfig {
   key         String   @id // e.g., "horizon_cursor"
   value       String   @db.Text // JSON-serializable value
   description String?  @map("description")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
 
   @@index([key])
   @@map("system_config")
