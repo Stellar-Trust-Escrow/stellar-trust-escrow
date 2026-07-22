@@ -23,7 +23,18 @@ BEGIN
   END IF;
 END $$;
 
-ALTER TABLE IF EXISTS webhook_endpoints RENAME TO webhook_subscriptions;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'webhook_endpoints'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'webhook_subscriptions'
+  ) THEN
+    ALTER TABLE webhook_endpoints RENAME TO webhook_subscriptions;
+  END IF;
+END $$;
 ```
 
 ## Verification
