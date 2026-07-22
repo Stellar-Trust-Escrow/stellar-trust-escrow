@@ -36,7 +36,7 @@ export async function up(prisma) {
 
   // 2. Exactly-once idempotency key for contract events.
   await prisma.$executeRawUnsafe(`
-    ALTER TABLE "contract_events" ADD COLUMN IF NOT EXISTS "event_id" VARCHAR(255)
+    ALTER TABLE "contract_events" ADD COLUMN IF NOT EXISTS "event_id" TEXT
   `);
   await prisma.$executeRawUnsafe(`
     CREATE UNIQUE INDEX IF NOT EXISTS "contract_events_event_id_key"
@@ -47,8 +47,8 @@ export async function up(prisma) {
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "failed_events" (
       "id"         SERIAL PRIMARY KEY,
-      "tenant_id"  VARCHAR(255) NOT NULL,
-      "event_type" VARCHAR(255) NOT NULL,
+      "tenant_id"  TEXT NOT NULL,
+      "event_type" TEXT NOT NULL,
       "payload"    JSONB NOT NULL,
       "error"      TEXT,
       "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
