@@ -57,16 +57,17 @@ function fakeHash(seed) {
   return h;
 }
 
-function buildInsert(table, columns, rows, casts = {}) {
+function buildInsert(table, columns, rows, castMap = {}) {
   const colList = columns.join(', ');
   const placeholders = rows
     .map(
       (_, r) =>
         '(' +
         columns
-          .map((col, c) => {
-            const cast = casts[col] ? `::${casts[col]}` : '';
-            return `$${r * columns.length + c + 1}${cast}`;
+          .map((c, idx) => {
+            const paramIdx = r * columns.length + idx + 1;
+            const cast = castMap[c] ? `::"${castMap[c]}"` : '';
+            return `$${paramIdx}${cast}`;
           })
           .join(', ') +
         ')',
@@ -77,11 +78,11 @@ function buildInsert(table, columns, rows, casts = {}) {
   return { sql: `INSERT INTO ${table} (${colList}) VALUES ${placeholders}`, params };
 }
 
-async function chunkedInsert(table, columns, rows, label, casts = {}) {
+async function chunkedInsert(table, columns, rows, label, castMap = {}) {
   let inserted = 0;
   for (let i = 0; i < rows.length; i += BATCH) {
     const slice = rows.slice(i, i + BATCH);
-    const { sql, params } = buildInsert(table, columns, slice, casts);
+    const { sql, params } = buildInsert(table, columns, slice, castMap);
     await prisma.$executeRawUnsafe(sql, ...params);
     inserted += slice.length;
     if (inserted % (BATCH * 25) === 0 || inserted === rows.length) {
@@ -149,7 +150,7 @@ async function main() {
     ]);
   }
   const escrowsInserted = await chunkedInsert('escrows', escrowCols, escrowRows, 'Escrows', {
-    status: '"EscrowStatus"',
+    status: 'EscrowStatus',
   });
   console.log(`✅ Escrows:    ${escrowsInserted.toLocaleString()}`);
 
@@ -186,7 +187,7 @@ async function main() {
     }
   }
   const msInserted = await chunkedInsert('milestones', msCols, msRows, 'Milestones', {
-    status: '"MilestoneStatus"',
+    status: 'MilestoneStatus',
   });
   console.log(`✅ Milestones: ${msInserted.toLocaleString()}`);
 

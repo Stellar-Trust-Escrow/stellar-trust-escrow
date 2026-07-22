@@ -63,13 +63,19 @@ export async function up(prisma) {
 
   // Create index for system_config
   await prisma.$executeRawUnsafe(`
-    CREATE INDEX IF NOT EXISTS idx_system_config_key 
-    ON system_config(key)
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_indexes WHERE tablename = 'system_config' AND indexname IN ('idx_system_config_key', 'system_config_key_idx')
+      ) THEN
+        CREATE INDEX idx_system_config_key ON system_config(key);
+      END IF;
+    END $$;
   `);
 
   // Insert default row for Horizon cursor if not exists
   await prisma.$executeRawUnsafe(`
-    INSERT INTO system_config (key, value, description, updated_at)
+    INSERT INTO system_config (key, value, description, updated_at) 
     VALUES ('horizon_cursor', 'now', 'Cursor for Stellar Horizon event stream; "now" means start from latest', NOW())
     ON CONFLICT (key) DO NOTHING
   `);
