@@ -13,11 +13,18 @@ export async function up(prisma) {
       IF EXISTS (
         SELECT 1 FROM information_schema.tables
         WHERE table_schema = 'public' AND table_name = 'webhook_subscriptions'
-      ) AND NOT EXISTS (
-        SELECT 1 FROM information_schema.tables
-        WHERE table_schema = 'public' AND table_name = 'webhook_endpoints'
       ) THEN
-        ALTER TABLE webhook_subscriptions RENAME TO webhook_endpoints;
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.tables
+          WHERE table_schema = 'public' AND table_name = 'webhook_endpoints'
+        ) THEN
+          ALTER TABLE webhook_subscriptions RENAME TO webhook_endpoints;
+        ELSIF NOT EXISTS (
+          SELECT 1 FROM information_schema.tables
+          WHERE table_schema = 'public' AND table_name = '_obsolete_webhook_subscriptions'
+        ) THEN
+          ALTER TABLE webhook_subscriptions RENAME TO _obsolete_webhook_subscriptions;
+        END IF;
       END IF;
     END $$;
   `);

@@ -52,13 +52,10 @@ export async function up(prisma) {
       IF EXISTS (
         SELECT 1 FROM information_schema.columns
         WHERE table_name = 'webhook_deliveries' AND column_name = 'subscription_id'
+      ) AND NOT EXISTS (
+        SELECT 1 FROM pg_indexes WHERE tablename = 'webhook_deliveries' AND indexname = 'webhook_deliveries_subscription_id_idx'
       ) THEN
-        CREATE INDEX IF NOT EXISTS webhook_deliveries_subscription_id_idx ON webhook_deliveries(subscription_id);
-      ELSIF EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'webhook_deliveries' AND column_name = 'endpoint_id'
-      ) THEN
-        CREATE INDEX IF NOT EXISTS webhook_deliveries_endpoint_id_idx ON webhook_deliveries(endpoint_id);
+        CREATE INDEX webhook_deliveries_subscription_id_idx ON webhook_deliveries(subscription_id);
       END IF;
     END $$;
   `);
