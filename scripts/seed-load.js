@@ -85,12 +85,14 @@ async function chunkedInsert(table, columns, rows, label) {
 
 async function main() {
   const started = Date.now();
-  console.log(`🌱 Load seed — ${ESCROW_ROWS.toLocaleString()} escrows, ${MILESTONE_ROWS.toLocaleString()} milestones\n`);
+  console.log(
+    `🌱 Load seed — ${ESCROW_ROWS.toLocaleString()} escrows, ${MILESTONE_ROWS.toLocaleString()} milestones\n`,
+  );
 
   // 1. Tenant (required FK for escrows/milestones)
   await prisma.$executeRawUnsafe(
     `INSERT INTO tenants (id, slug, name, status, domains, created_at, updated_at)
-     VALUES ($1, $2, $3, 'active', '[]', NOW(), NOW())
+     VALUES ($1, $2, $3, 'active', '{}', NOW(), NOW())
      ON CONFLICT (id) DO NOTHING`,
     TENANT_ID,
     'load-test',
@@ -100,9 +102,20 @@ async function main() {
 
   // 2. Escrows (batched)
   const escrowCols = [
-    'id', 'tenant_id', 'client_address', 'freelancer_address', 'arbiter_address',
-    'token_address', 'total_amount', 'remaining_balance', 'status', 'brief_hash',
-    'deadline', 'created_at', 'updated_at', 'created_ledger',
+    'id',
+    'tenant_id',
+    'client_address',
+    'freelancer_address',
+    'arbiter_address',
+    'token_address',
+    'total_amount',
+    'remaining_balance',
+    'status',
+    'brief_hash',
+    'deadline',
+    'created_at',
+    'updated_at',
+    'created_ledger',
   ];
   const escrowRows = [];
   for (let i = 1; i <= ESCROW_ROWS; i++) {
@@ -130,8 +143,15 @@ async function main() {
 
   // 3. Milestones (5 per escrow, batched)
   const msCols = [
-    'tenant_id', 'milestone_index', 'escrow_id', 'title',
-    'description_hash', 'amount', 'status', 'submitted_at', 'resolved_at',
+    'tenant_id',
+    'milestone_index',
+    'escrow_id',
+    'title',
+    'description_hash',
+    'amount',
+    'status',
+    'submitted_at',
+    'resolved_at',
   ];
   const msRows = [];
   let mi = 0;
@@ -147,7 +167,9 @@ async function main() {
         String(100_000 + mi),
         status,
         status === 'Pending' ? null : new Date(Date.UTC(2024, 1, 1) + mi * 1000),
-        status === 'Approved' || status === 'Rejected' ? new Date(Date.UTC(2024, 2, 1) + mi * 1000) : null,
+        status === 'Approved' || status === 'Rejected'
+          ? new Date(Date.UTC(2024, 2, 1) + mi * 1000)
+          : null,
       ]);
     }
   }
