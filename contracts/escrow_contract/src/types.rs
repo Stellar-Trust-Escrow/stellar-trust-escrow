@@ -754,4 +754,6 @@ pub enum DataKey {
     TrustedOracleKey,
     /// Currently active (registered) arbiter addresses — value: Vec<Address>
     ActiveArbiters,
+    /// Ledger sequence + timestamp recorded at escrow creation — key: u64, value: (u32, u64)
+    EscrowCreationInfo(u64),
 }

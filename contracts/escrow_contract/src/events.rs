@@ -25,6 +25,13 @@ pub fn emit_milestone_created(env: &Env, escrow_id: u64, milestone_id: u32, titl
     );
 }
 
+/// Emitted alongside `escrow_created` to record the immutable creation
+/// ledger sequence + timestamp for indexers.
+pub fn emit_escrow_creation_time(env: &Env, escrow_id: u64, ledger: u32, timestamp: u64) {
+    env.events()
+        .publish((ev::ESCROW_CREATION_TIME, escrow_id), (ledger, timestamp));
+}
+
 pub fn emit_escrow_created(
     env: &Env,
     escrow_id: u64,
