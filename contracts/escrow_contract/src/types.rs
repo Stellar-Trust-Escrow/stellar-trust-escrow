@@ -752,4 +752,6 @@ pub enum DataKey {
     OracleResolution(u64),
     /// Trusted oracle Ed25519 public key for fallback dispute resolution — value: BytesN<32>
     TrustedOracleKey,
+    /// Currently active (registered) arbiter addresses — value: Vec<Address>
+    ActiveArbiters,
 }

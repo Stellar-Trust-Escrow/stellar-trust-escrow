@@ -53,6 +53,7 @@
 #![allow(clippy::too_many_arguments)]
 
 mod admin_transfer_tests;
+mod arbiter_registry_tests;
 mod arbiter_reputation_tests;
 mod batch_add_milestones_cap_tests;
 mod batch_approve_release_e2e_tests;
@@ -4967,6 +4968,58 @@ impl EscrowContract {
         ContractStorage::ensure_live_escrow(&env, escrow_id)?;
         let milestone = ContractStorage::load_milestone(&env, escrow_id, milestone_id)?;
         Ok(milestone.title)
+    }
+
+    /// Registers an arbiter as active. Admin-only. No-op if already present.
+    pub fn register_arbiter(env: Env, caller: Address, address: Address) -> Result<(), EscrowError> {
+        caller.require_auth();
+        Self::require_admin(&env, &caller)?;
+
+        let mut active: Vec<Address> = env
+            .storage()
+            .instance()
+            .get(&DataKey::ActiveArbiters)
+            .unwrap_or(Vec::new(&env));
+
+        if !active.contains(&address) {
+            active.push_back(address);
+            env.storage()
+                .instance()
+                .set(&DataKey::ActiveArbiters, &active);
+        }
+        Ok(())
+    }
+
+    /// Deregisters an arbiter, removing it from the active list. Admin-only.
+    pub fn deregister_arbiter(
+        env: Env,
+        caller: Address,
+        address: Address,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+        Self::require_admin(&env, &caller)?;
+
+        let mut active: Vec<Address> = env
+            .storage()
+            .instance()
+            .get(&DataKey::ActiveArbiters)
+            .unwrap_or(Vec::new(&env));
+
+        if let Some(idx) = active.iter().position(|a| a == address) {
+            active.remove(idx as u32);
+            env.storage()
+                .instance()
+                .set(&DataKey::ActiveArbiters, &active);
+        }
+        Ok(())
+    }
+
+    /// Returns the current list of active (registered) arbiters.
+    pub fn get_active_arbiters(env: Env) -> Vec<Address> {
+        env.storage()
+            .instance()
+            .get(&DataKey::ActiveArbiters)
+            .unwrap_or(Vec::new(&env))
     }
 }
 
