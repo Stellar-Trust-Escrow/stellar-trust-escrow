@@ -17,7 +17,7 @@ export default defineConfig({
     : 'html',
   expect: {
     toHaveScreenshot: {
-      maxDiffPixelRatio: 0.02,
+      maxDiffPixelRatio: 0.001, // 0.1% as requested
     },
   },
   use: {
@@ -26,7 +26,10 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+  ],
   webServer: process.env.PLAYWRIGHT_DISABLE_WEBSERVER
     ? undefined
     : {

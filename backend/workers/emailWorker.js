@@ -1,114 +1,110 @@
-import { Worker } from 'bullmq';
-import crypto from 'crypto';
-import { connection } from '../queues/index.js';
+import { Worker, Queue } from 'bullmq';
+import { PrismaClient } from '@prisma/client';
+import { renderTemplate } from '../services/notificationService.js';
+import { deliverEmail } from '../services/emailProviders.js';
+import { deliverSms } from '../services/smsProviders.js';
+import { logger } from '../config/logger.js';
 
-import disputeRaisedTemplate from '../templates/emails/disputeRaised.js';
-import escrowStatusChangedTemplate from '../templates/emails/escrowStatusChanged.js';
-import milestoneCompletedTemplate from '../templates/emails/milestoneCompleted.js';
+const prisma = new PrismaClient();
 
-const config = {
-  provider: process.env.EMAIL_PROVIDER || 'console',
-  fromEmail: process.env.EMAIL_FROM || 'no-reply@stellartrustescrow.local',
-  fromName: process.env.EMAIL_FROM_NAME || 'Stellar Trust Escrow',
-  sendgridApiKey: process.env.SENDGRID_API_KEY || '',
-};
+const dlq = new Queue('notifications-dlq', {
+  connection: {
+    host: process.env.REDIS_HOST || '127.0.0.1',
+    port: parseInt(process.env.REDIS_PORT || '6379', 10),
+  },
+});
 
-function createTemplate(eventType, payload) {
-  switch (eventType) {
-    case 'escrow.status_changed':
-      return escrowStatusChangedTemplate(payload);
-    case 'milestone.completed':
-      return milestoneCompletedTemplate(payload);
-    case 'dispute.raised':
-      return disputeRaisedTemplate(payload);
-    default:
-      throw new Error(`Unsupported notification event type: ${eventType}`);
-  }
-}
-
-async function sendWithProvider(message, eventType) {
-  if (config.provider === 'console' || !config.sendgridApiKey) {
-    console.log('[EmailWorker] Console delivery', {
-      to: message.to.email,
-      subject: message.subject,
-      eventType,
+export const emailWorker = new Worker('notifications', async (job) => {
+  const { deliveryId, userId, channel, template, data, locale } = job.data;
+  
+  try {
+    // Update attempt count
+    await prisma.notificationDelivery.update({
+      where: { id: deliveryId },
+      data: { attemptCount: { increment: 1 } }
     });
-    return {
-      provider: 'console',
-      messageId: `console-${crypto.randomUUID()}`,
-    };
-  }
 
-  const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${config.sendgridApiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      personalizations: [
-        {
-          to: [{ email: message.to.email, name: message.to.name }],
-          subject: message.subject,
-        },
-      ],
-      from: {
-        email: config.fromEmail,
-        name: config.fromName,
-      },
-      content: [
-        { type: 'text/plain', value: message.text },
-        { type: 'text/html', value: message.html },
-      ],
-      custom_args: {
-        eventType,
-      },
-    }),
-  });
+    // Render template
+    const { subject, body } = await renderTemplate(template, channel, data, locale);
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`SendGrid failed: ${response.status} ${errorText}`);
-  }
+    // Fetch user for contact info
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
 
-  return {
-    provider: 'sendgrid',
-    messageId: response.headers.get('x-message-id') || `sendgrid-${crypto.randomUUID()}`,
-  };
-}
-
-const emailWorker = new Worker(
-  'email',
-  async (job) => {
-    const { eventType, payload, recipients } = job.data;
-
-    for (const rawRecipient of recipients) {
-      const recipient = {
-        email: rawRecipient.email.toLowerCase().trim(),
-        name: rawRecipient.name || rawRecipient.address || rawRecipient.email,
-      };
-
-      const template = createTemplate(eventType, payload);
-      const content = template({
-        recipient,
-        unsubscribeUrl: `/api/notifications/unsubscribe?email=${encodeURIComponent(recipient.email)}&token=TOKEN_PLACEHOLDER`, // Migrate unsubscribe logic later
-        fromName: config.fromName,
-      });
-
-      const message = {
-        to: recipient,
-        subject: content.subject,
-        text: content.text,
-        html: content.html,
-      };
-
-      const result = await sendWithProvider(message, eventType);
-      console.log(`[EmailWorker] Sent to ${recipient.email}: ${result.messageId}`);
+    if (!user) {
+      throw new Error(`User ${userId} not found`);
     }
-  },
-  {
-    connection,
-  },
-);
 
-export default emailWorker;
+    let result;
+    if (channel === 'email') {
+      result = await deliverEmail({
+        to: user.email,
+        subject,
+        html: body,
+        text: body, // Simple fallback
+      });
+    } else if (channel === 'sms') {
+      const phone = data.phone || data.phoneNumber; // Assume passed via data
+      if (!phone) {
+        throw new Error('Phone number missing in data for SMS channel');
+      }
+      result = await deliverSms({
+        to: phone,
+        body,
+      });
+    } else {
+      throw new Error(`Unsupported channel: ${channel}`);
+    }
+
+    if (result.success) {
+      await prisma.notificationDelivery.update({
+        where: { id: deliveryId },
+        data: {
+          status: 'delivered',
+          messageId: result.messageId,
+          deliveredAt: new Date(),
+        }
+      });
+      logger.info(`Delivered ${channel} notification for deliveryId ${deliveryId}`);
+      return result;
+    } else {
+      throw new Error(result.error || 'Unknown delivery error');
+    }
+  } catch (error) {
+    logger.error(`Error processing job ${job.id}:`, error);
+
+    // Check if it's the last attempt based on job options
+    if (job.attemptsMade >= (job.opts.attempts || 3) - 1) {
+      await prisma.notificationDelivery.update({
+        where: { id: deliveryId },
+        data: {
+          status: 'failed',
+          error: error.message,
+        }
+      });
+      // Dead letter queue
+      await dlq.add('failed-notification', job.data);
+    } else {
+      // Just record the error for this attempt, status stays 'queued' 
+      // or we can leave it as is so it retries.
+      await prisma.notificationDelivery.update({
+        where: { id: deliveryId },
+        data: {
+          error: error.message,
+        }
+      });
+    }
+
+    throw error;
+  }
+}, {
+  connection: {
+    host: process.env.REDIS_HOST || '127.0.0.1',
+    port: parseInt(process.env.REDIS_PORT || '6379', 10),
+  },
+});
+
+emailWorker.on('failed', (job, err) => {
+  logger.error(`Job ${job.id} failed with error ${err.message}`);
+});

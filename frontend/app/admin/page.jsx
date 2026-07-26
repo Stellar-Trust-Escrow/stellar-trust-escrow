@@ -1,10 +1,12 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * Admin Dashboard — Main Overview Page
  *
- * Shows platform statistics: total escrows, users, open disputes.
- * Links to sub-sections: users, disputes, audit logs, settings.
+ * Shows platform-wide metrics, arbiter management, and dispute queue.
+ * Protected by requireRole("admin") HOC.
  *
  * Access uses the shared frontend store, which persists the admin API key
  * for subsequent sessions and injects it into the `x-admin-api-key` header.
@@ -12,64 +14,84 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import useSWR from 'swr';
 import { useAdminStore } from '../../store/app-store';
 import { buildAdminHeaders } from '../../store/admin';
+import { requireRole } from '../../components/auth/requireRole';
+import MetricsTile from '../../components/admin/MetricsTile';
+import ArbiterTable from '../../components/admin/ArbiterTable';
+import DisputeQueue from '../../components/admin/DisputeQueue';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
-function StatCard({ label, value, sub, icon, color }) {
-  return (
-    <div className={`card flex items-start gap-4`}>
-      <div className={`text-3xl ${color}`}>{icon}</div>
-      <div>
-        <p className="text-sm text-gray-400 uppercase tracking-wider">{label}</p>
-        <p className="text-3xl font-bold text-white mt-1">{value ?? '—'}</p>
-        {sub && <p className="text-xs text-gray-500 mt-1">{sub}</p>}
-      </div>
-    </div>
-  );
-}
+// SWR fetcher for metrics
+const fetcher = async (url) => {
+  const apiKey = localStorage.getItem('ste-app-store')
+    ? JSON.parse(localStorage.getItem('ste-app-store'))?.admin?.apiKey
+    : null;
 
-export default function AdminDashboard() {
+  if (!apiKey) throw new Error('Not authenticated');
+
+  const res = await fetch(`${API_BASE}${url}`, {
+    headers: buildAdminHeaders(apiKey, {}),
+  });
+
+  if (!res.ok) {
+    const data = await res.json();
+    throw new Error(data.error || 'Failed to fetch data');
+  }
+
+  return res.json();
+};
+
+function AdminDashboardContent() {
   const { apiKey, setApiKey, clearApiKey } = useAdminStore();
   const [inputKey, setInputKey] = useState('');
-  const [stats, setStats] = useState(null);
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [arbiters, setArbiters] = useState([]);
 
   useEffect(() => {
     setInputKey(apiKey);
   }, [apiKey]);
 
-  const fetchStats = useCallback(async (key) => {
-    setLoading(true);
-    setError('');
+  // Fetch metrics with SWR (30s polling)
+  const { data: metrics, error: metricsError } = useSWR(
+    apiKey ? '/api/v1/admin/metrics' : null,
+    fetcher,
+    {
+      refreshInterval: 30000,
+      revalidateOnFocus: false,
+    },
+  );
+
+  const fetchArbiters = useCallback(async () => {
+    if (!apiKey) return;
+
     try {
-      const res = await fetch(`${API_BASE}/api/admin/stats`, {
-        headers: buildAdminHeaders(key, {}),
+      const res = await fetch(`${API_BASE}/api/v1/admin/arbiters`, {
+        headers: buildAdminHeaders(apiKey, {}),
       });
+
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || 'Failed to fetch stats');
+        throw new Error(data.error || 'Failed to fetch arbiters');
       }
-      setStats(await res.json());
+
+      const data = await res.json();
+      setArbiters(data.arbiters || []);
     } catch (err) {
-      setError(err.message);
-      setStats(null);
-    } finally {
-      setLoading(false);
+      console.error('Failed to fetch arbiters:', err);
     }
-  }, []);
+  }, [apiKey]);
+
+  useEffect(() => {
+    fetchArbiters();
+  }, [fetchArbiters]);
 
   const handleLogin = (e) => {
     e.preventDefault();
     setApiKey(inputKey);
-    fetchStats(inputKey);
   };
-
-  useEffect(() => {
-    if (apiKey) fetchStats(apiKey);
-  }, [apiKey, fetchStats]);
 
   const navItems = [
     {
@@ -146,7 +168,7 @@ export default function AdminDashboard() {
               onClick={() => {
                 clearApiKey();
                 setInputKey('');
-                setStats(null);
+                setArbiters([]);
               }}
               className="text-xs text-red-400 hover:text-red-300 transition-colors"
             >
@@ -154,41 +176,70 @@ export default function AdminDashboard() {
             </button>
           </div>
 
-          {error && (
+          {metricsError && (
             <div className="bg-red-900/20 border border-red-500/30 rounded-lg px-4 py-3 mb-6 text-red-400 text-sm">
-              ⚠️ {error}
+              ⚠️ {metricsError.message}
             </div>
           )}
 
-          {/* Stats grid */}
-          {loading ? (
-            <div className="text-gray-400 text-center py-12">Loading statistics…</div>
-          ) : (
-            stats && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-                <StatCard
-                  label="Total Escrows"
-                  value={stats.escrows?.total}
-                  icon="📦"
-                  color="text-indigo-400"
-                  sub={`${stats.escrows?.active} active · ${stats.escrows?.completed} completed`}
-                />
-                <StatCard
-                  label="Registered Users"
-                  value={stats.users?.total}
-                  icon="👤"
-                  color="text-emerald-400"
-                />
-                <StatCard
-                  label="Disputed Escrows"
-                  value={stats.escrows?.disputed}
-                  icon="⚠️"
-                  color="text-amber-400"
-                  sub={`${stats.disputes?.open} open · ${stats.disputes?.resolved} resolved`}
-                />
-              </div>
-            )
-          )}
+          {/* Metrics row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
+            <MetricsTile
+              label="Active Escrows"
+              value={metrics?.activeEscrows}
+              delta={metrics?.activeEscrowsDelta}
+              deltaLabel="vs last week"
+              icon="📦"
+              color="text-indigo-400"
+              improvementDirection="up"
+            />
+            <MetricsTile
+              label="Locked XLM"
+              value={metrics?.totalLockedXLM}
+              delta={metrics?.totalLockedXLMDelta}
+              deltaLabel="vs last week"
+              icon="�"
+              color="text-emerald-400"
+              improvementDirection="up"
+            />
+            <MetricsTile
+              label="Disputes This Week"
+              value={metrics?.disputesThisWeek}
+              delta={metrics?.disputesThisWeekDelta}
+              deltaLabel="vs last week"
+              icon="⚠️"
+              color="text-amber-400"
+              improvementDirection="down"
+            />
+            <MetricsTile
+              label="Avg Resolution Time"
+              value={metrics?.avgResolutionTime}
+              delta={metrics?.avgResolutionTimeDelta}
+              deltaLabel="vs last week"
+              icon="⏱️"
+              color="text-blue-400"
+              improvementDirection="down"
+            />
+            <MetricsTile
+              label="Platform Fees (Month)"
+              value={metrics?.platformFeesMonth}
+              delta={metrics?.platformFeesMonthDelta}
+              deltaLabel="vs last month"
+              icon="💎"
+              color="text-purple-400"
+              improvementDirection="up"
+            />
+          </div>
+
+          {/* Arbiter Management */}
+          <div className="mb-8">
+            <ArbiterTable arbiters={arbiters} onRefresh={fetchArbiters} apiKey={apiKey} />
+          </div>
+
+          {/* Dispute Queue */}
+          <div className="mb-8">
+            <DisputeQueue apiKey={apiKey} />
+          </div>
 
           {/* Nav cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -216,3 +267,5 @@ export default function AdminDashboard() {
     </div>
   );
 }
+
+export default AdminDashboardContent;

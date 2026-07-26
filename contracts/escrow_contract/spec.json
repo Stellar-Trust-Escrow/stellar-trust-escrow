@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "contract": "escrow_contract",
+  "functions": [
+    {
+      "name": "create_escrow",
+      "inputs": [
+        { "name": "caller", "type": "Address" },
+        { "name": "freelancer", "type": "Address" },
+        { "name": "token", "type": "Address" },
+        { "name": "total_amount", "type": "i128" }
+      ],
+      "output": "u64",
+      "doc": "Creates a new escrow. Returns escrow_id."
+    },
+    {
+      "name": "add_milestone",
+      "inputs": [
+        { "name": "caller", "type": "Address" },
+        { "name": "escrow_id", "type": "u64" },
+        { "name": "description", "type": "String" },
+        { "name": "amount", "type": "i128" }
+      ],
+      "output": "u32",
+      "doc": "Adds a milestone to an escrow. Returns milestone_id."
+    },
+    {
+      "name": "submit_milestone",
+      "inputs": [
+        { "name": "caller", "type": "Address" },
+        { "name": "escrow_id", "type": "u64" },
+        { "name": "milestone_id", "type": "u32" }
+      ],
+      "output": null,
+      "doc": "Freelancer marks a milestone as submitted."
+    },
+    {
+      "name": "approve_milestone",
+      "inputs": [
+        { "name": "caller", "type": "Address" },
+        { "name": "escrow_id", "type": "u64" },
+        { "name": "milestone_id", "type": "u32" }
+      ],
+      "output": null,
+      "doc": "Client approves a submitted milestone."
+    },
+    {
+      "name": "release_funds",
+      "inputs": [
+        { "name": "caller", "type": "Address" },
+        { "name": "escrow_id", "type": "u64" },
+        { "name": "milestone_id", "type": "u32" }
+      ],
+      "output": null,
+      "doc": "Releases funds for an approved milestone to the freelancer."
+    },
+    {
+      "name": "cancel_escrow",
+      "inputs": [
+        { "name": "caller", "type": "Address" },
+        { "name": "escrow_id", "type": "u64" }
+      ],
+      "output": null,
+      "doc": "Cancels an escrow and returns funds to client."
+    },
+    {
+      "name": "raise_dispute",
+      "inputs": [
+        { "name": "caller", "type": "Address" },
+        { "name": "escrow_id", "type": "u64" },
+        { "name": "milestone_id", "type": "u32" }
+      ],
+      "output": null,
+      "doc": "Raises a dispute for a milestone."
+    },
+    {
+      "name": "resolve_dispute",
+      "inputs": [
+        { "name": "arbiter", "type": "Address" },
+        { "name": "escrow_id", "type": "u64" },
+        { "name": "milestone_id", "type": "u32" },
+        { "name": "release_to_freelancer", "type": "bool" }
+      ],
+      "output": null,
+      "doc": "Arbiter resolves a dispute."
+    },
+    {
+      "name": "get_escrow",
+      "inputs": [{ "name": "escrow_id", "type": "u64" }],
+      "output": "EscrowState",
+      "doc": "Returns full escrow state."
+    },
+    {
+      "name": "get_milestone",
+      "inputs": [
+        { "name": "escrow_id", "type": "u64" },
+        { "name": "milestone_id", "type": "u32" }
+      ],
+      "output": "Milestone",
+      "doc": "Returns a single milestone."
+    }
+  ]
+}

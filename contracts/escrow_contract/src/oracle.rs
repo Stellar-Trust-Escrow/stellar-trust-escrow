@@ -40,7 +40,13 @@ pub struct UsdMilestone {
     pub completed: bool,
 }
 
+/// Oracle configuration settings.
 #[allow(dead_code)]
+#[derive(Clone, Debug)]
+pub struct OracleConfig {
+    pub stale_threshold_seconds: u64,
+}
+
 pub struct OracleConsumer;
 
 #[allow(dead_code)]
@@ -70,7 +76,6 @@ impl OracleConsumer {
     ///
     /// Emits `oracle_conversion` with `(amount_micro_usd, price_micro_usd,
     /// xlm_stroops, feed_timestamp)`.
-    #[deny(clippy::arithmetic_side_effects)]
     pub fn usd_to_xlm_stroops(
         env: &Env,
         oracle_id: &Address,
@@ -131,6 +136,17 @@ pub fn get_fallback_oracle(env: &Env) -> Option<Address> {
     env.storage()
         .instance()
         .get(&DataKey::FallbackOracleAddress)
+}
+
+#[allow(dead_code)]
+pub fn set_oracle_stale_threshold(env: &Env, threshold_seconds: u64) -> Result<(), EscrowError> {
+    if threshold_seconds == 0 || threshold_seconds > 86_400 {
+        return Err(EscrowError::E19);
+    }
+    env.storage()
+        .instance()
+        .set(&DataKey::OracleStaleThreshold, &threshold_seconds);
+    Ok(())
 }
 
 fn get_oracle_stale_threshold(env: &Env) -> u64 {

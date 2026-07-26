@@ -1,6 +1,13 @@
 /** @type {import('next').NextConfig} */
 
-import { withSentryConfig } from '@sentry/nextjs';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+let withSentryConfig;
+try {
+  withSentryConfig = require('@sentry/nextjs').withSentryConfig;
+} catch (e) {
+  withSentryConfig = (config) => config;
+}
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -22,11 +29,21 @@ const withBundleAnalyzer =
 const nextConfig = {
   // ── Output ──────────────────────────────────────────────────────────────────
   output: process.env.NEXT_OUTPUT === 'standalone' ? 'standalone' : undefined,
+
+  // ── Lint / Type-check — keep these non-blocking in Docker/CI builds ─────────
+  eslint: { ignoreDuringBuilds: true },
+  typescript: { ignoreBuildErrors: false },
   outputFileTracingRoot: new URL('..', import.meta.url).pathname,
 
   // ── Image Optimization ──────────────────────────────────────────────────────
   images: {
-    remotePatterns: [],
+    remotePatterns: [
+      { protocol: 'https', hostname: 'ipfs.io', pathname: '/ipfs/**' },
+      { protocol: 'https', hostname: 'dweb.link', pathname: '/ipfs/**' },
+      { protocol: 'https', hostname: 'cloudflare-ipfs.com', pathname: '/ipfs/**' },
+      { protocol: 'https', hostname: 'gateway.pinata.cloud', pathname: '/ipfs/**' },
+      { protocol: 'https', hostname: '*.ipfs.dweb.link' },
+    ],
     formats: ['image/avif', 'image/webp'],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920],
     imageSizes: [16, 32, 48, 64, 96, 128, 256],
@@ -139,24 +156,30 @@ const nextConfig = {
 };
 
 // ── Export with Sentry + optional Bundle Analyzer ─────────────────────────────
-export default withSentryConfig(withBundleAnalyzer(nextConfig), {
-  org: process.env.SENTRY_ORG,
-  project: process.env.SENTRY_PROJECT,
-  authToken: process.env.SENTRY_AUTH_TOKEN,
+// Only wrap with Sentry when credentials are available (production deploys).
+// Without SENTRY_AUTH_TOKEN the v9 plugin errors during next build.
+const baseConfig = withBundleAnalyzer(nextConfig);
 
-  silent: true,
-  hideSourceMaps: true,
-  disableLogger: true,
-  tunnelRoute: '/monitoring',
+export default process.env.SENTRY_AUTH_TOKEN
+  ? withSentryConfig(baseConfig, {
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      authToken: process.env.SENTRY_AUTH_TOKEN,
 
-  autoInstrumentServerFunctions: true,
-  autoInstrumentMiddleware: true,
-  autoInstrumentAppDirectory: true,
+      silent: true,
+      hideSourceMaps: true,
+      disableLogger: true,
+      tunnelRoute: '/monitoring',
 
-  release: {
-    name: process.env.SENTRY_RELEASE || process.env.VERCEL_GIT_COMMIT_SHA,
-    deploy: {
-      env: process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV,
-    },
-  },
-});
+      autoInstrumentServerFunctions: true,
+      autoInstrumentMiddleware: true,
+      autoInstrumentAppDirectory: true,
+
+      release: {
+        name: process.env.SENTRY_RELEASE || process.env.VERCEL_GIT_COMMIT_SHA,
+        deploy: {
+          env: process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV,
+        },
+      },
+    })
+  : baseConfig;

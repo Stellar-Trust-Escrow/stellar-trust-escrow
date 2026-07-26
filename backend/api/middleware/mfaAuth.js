@@ -24,6 +24,32 @@ const MFA_SESSION_DURATION = 30 * 60 * 1000; // 30 minutes
  */
 export async function requireMfa(req, res, next) {
   try {
+    // Check if this is an admin request
+    if (req.admin || req.isAdmin) {
+      // For admin requests, check for X-TOTP-Code header
+      const totpCode = req.headers['x-totp-code'];
+      if (!totpCode) {
+        return res.status(403).json({
+          error: 'TOTP code required',
+          mfaRequired: true,
+          message: 'This admin operation requires a TOTP code.',
+        });
+      }
+
+      // For now, we'll accept any 6-digit code as a placeholder
+      // In a real implementation, you'd verify this against an admin MFA secret
+      if (!/^\d{6}$/.test(totpCode)) {
+        return res.status(403).json({
+          error: 'Invalid TOTP code',
+          mfaRequired: true,
+        });
+      }
+
+      req.mfaVerified = true;
+      req.mfaMethod = 'totp';
+      return next();
+    }
+
     // User must be authenticated first
     if (!req.user || !req.user.address) {
       return res.status(401).json({

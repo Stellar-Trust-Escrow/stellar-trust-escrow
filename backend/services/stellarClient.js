@@ -17,7 +17,9 @@
  */
 
 import { SorobanRpc, Transaction, Networks } from '@stellar/stellar-sdk';
-import { createModuleLogger } from '../config/logger.js';
+import { createModuleLogger } from '../lib/logger.js';
+import { getTracer, injectTraceContext } from '../lib/tracing.js';
+import { getCorrelationContext } from '../lib/correlationId.js';
 
 const logger = createModuleLogger('service.stellarClient');
 
@@ -200,55 +202,80 @@ export class StellarClient {
       throw new Error('No healthy Stellar endpoints available');
     }
 
-    let lastError;
-    for (const url of endpointOrder) {
-      const health = this.nodeHealth.get(url);
-      try {
-        const startTime = Date.now();
-        const server = new SorobanRpc.Server(url, { allowHttp: url.startsWith('http://') });
+    const tracer = getTracer('horizon');
+    const correlationStore = getCorrelationContext();
+    const correlationId = correlationStore?.correlationId || '';
 
-        // Execute query with timeout
-        const result = await Promise.race([
-          queryFn(server),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Query timeout')), QUERY_TIMEOUT),
-          ),
-        ]);
+    return tracer.startActiveSpan(
+      'horizon.query',
+      {
+        attributes: {
+          'rpc.system': 'stellar-horizon',
+          correlationId,
+        },
+      },
+      async (span) => {
+        let lastError;
+        for (const url of endpointOrder) {
+          const health = this.nodeHealth.get(url);
+          try {
+            const startTime = Date.now();
+            const headers = {};
+            injectTraceContext(headers);
+            const server = new SorobanRpc.Server(url, {
+              allowHttp: url.startsWith('http://'),
+              headers,
+            });
 
-        const latency = Date.now() - startTime;
-        health.recordSuccess(latency);
+            // Execute query with timeout
+            const result = await Promise.race([
+              queryFn(server),
+              new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Query timeout')), QUERY_TIMEOUT),
+              ),
+            ]);
 
-        logger.info({
-          message: 'query_success',
-          activeNode: url,
-          latency,
-          successCount: health.successCount,
+            const latency = Date.now() - startTime;
+            health.recordSuccess(latency);
+
+            logger.info({
+              message: 'query_success',
+              activeNode: url,
+              latency,
+              successCount: health.successCount,
+            });
+
+            span.setStatus({ code: 1 }); // OK
+            span.end();
+            return result;
+          } catch (error) {
+            lastError = error;
+            health.recordFailure();
+
+            logger.warn({
+              message: 'query_failed_attempting_next_node',
+              failedNode: url,
+              error: error.message,
+              failureCount: health.failureCount,
+            });
+
+            // Continue to next endpoint
+          }
+        }
+
+        // All endpoints exhausted
+        logger.error({
+          message: 'all_endpoints_failed',
+          error: lastError.message,
+          attemptedCount: endpointOrder.length,
         });
 
-        return result;
-      } catch (error) {
-        lastError = error;
-        health.recordFailure();
-
-        logger.warn({
-          message: 'query_failed_attempting_next_node',
-          failedNode: url,
-          error: error.message,
-          failureCount: health.failureCount,
-        });
-
-        // Continue to next endpoint
-      }
-    }
-
-    // All endpoints exhausted
-    logger.error({
-      message: 'all_endpoints_failed',
-      error: lastError.message,
-      attemptedCount: endpointOrder.length,
-    });
-
-    throw new Error(`All Stellar endpoints failed: ${lastError.message}`);
+        span.recordException(lastError);
+        span.setStatus({ code: 2, message: lastError.message }); // ERROR
+        span.end();
+        throw new Error(`All Stellar endpoints failed: ${lastError.message}`);
+      },
+    );
   }
 
   /**

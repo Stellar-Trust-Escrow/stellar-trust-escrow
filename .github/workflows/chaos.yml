@@ -1,0 +1,48 @@
+
+name: Chaos Tests
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 1 * * 0' # Sunday at 01:00 UTC
+
+permissions:
+  contents: read
+
+jobs:
+  chaos:
+    name: Chaos Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Start services
+        run: docker compose -f docker-compose.chaos.yml up -d --wait
+
+      - name: Wait for services to be ready
+        run: |
+          echo "Waiting for Toxiproxy..."
+          until curl -s -o /dev/null http://localhost:8474/proxies; do
+            sleep 2
+          done
+          echo "Toxiproxy is ready!"
+          echo "Waiting for Backend..."
+          until curl -s -o /dev/null http://localhost:4000/health; do
+            sleep 2
+          done
+          echo "Backend is ready!"
+
+      - name: Run chaos tests
+        run: node tests/chaos/index.js
+
+      - name: Stop services
+        if: always()
+        run: docker compose -f docker-compose.chaos.yml down

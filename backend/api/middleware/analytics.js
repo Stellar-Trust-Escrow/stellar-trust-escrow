@@ -215,7 +215,13 @@ const analyticsMiddleware = (req, res, next) => {
 
   res.on('finish', () => {
     const durationMs = performance.now() - startMs;
-    const path = req.originalUrl?.split('?')[0] ?? req.path;
+    const rawPath = req.originalUrl?.split('?')[0] ?? req.path;
+
+    // Prefix the metric key with the tenant slug so per-tenant dashboards can
+    // filter without post-processing, and aggregate keys remain unambiguous
+    // across tenants that share the same route patterns.
+    const tenantPrefix = req.tenant?.slug ? `[${req.tenant.slug}] ` : '';
+    const path = `${tenantPrefix}${rawPath}`;
 
     // Defer recording to avoid blocking the response
     setImmediate(() => record(req.method, path, res.statusCode, durationMs));

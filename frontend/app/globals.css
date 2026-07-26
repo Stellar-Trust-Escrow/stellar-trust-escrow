@@ -2,6 +2,107 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   STELLAR TRUST ESCROW — DESIGN TOKEN SYSTEM
+   ============================================================
+   Naming convention: --color-{group}-{variant}
+   
+   Groups:
+     - bg: Background colors (base, surface, elevated, overlay)
+     - border: Border colors (default, subtle)
+     - text: Text colors (primary, secondary, muted)
+     - brand: Brand colors (default, hover, active)
+     - success: Success/positive colors
+     - warning: Warning colors
+     - danger: Danger/error colors
+     - info: Info colors
+   
+   Usage:
+     - Background: bg-[var(--color-bg-surface)]
+     - Text: text-[var(--color-text-primary)]
+     - Border: border-[var(--color-border)]
+   ============================================================ */
+
+/* Light theme (default) */
+:root {
+  /* Backgrounds */
+  --color-bg-base: hsl(0 0% 100%);
+  --color-bg-surface: hsl(220 20% 97%);
+  --color-bg-elevated: hsl(220 20% 94%);
+  --color-bg-overlay: hsl(220 15% 90%);
+  
+  /* Borders */
+  --color-border: hsl(220 15% 82%);
+  --color-border-subtle: hsl(220 15% 88%);
+  
+  /* Text (WCAG AA+ contrast) */
+  --color-text-primary: hsl(220 25% 10%);
+  --color-text-secondary: hsl(220 15% 30%);
+  --color-text-muted: hsl(220 10% 50%);
+  
+  /* Brand colors */
+  --color-brand: hsl(218 80% 42%);
+  --color-brand-hover: hsl(218 80% 35%);
+  --color-brand-active: hsl(218 80% 28%);
+  --color-brand-soft: hsl(218 80% 92%);
+  
+  /* Semantic colors */
+  --color-success: hsl(142 70% 35%);
+  --color-success-soft: hsl(142 70% 92%);
+  --color-warning: hsl(45 95% 45%);
+  --color-warning-soft: hsl(45 95% 92%);
+  --color-danger: hsl(0 75% 45%);
+  --color-danger-soft: hsl(0 75% 92%);
+  --color-info: hsl(210 80% 45%);
+  --color-info-soft: hsl(210 80% 92%);
+  
+  /* Glass effect */
+  --glass-bg: hsl(220 20% 97% / 0.8);
+  --glass-border: hsl(220 15% 60% / 0.2);
+  
+  color-scheme: light;
+}
+
+/* Dark theme */
+:root[data-theme='dark'] {
+  /* Backgrounds */
+  --color-bg-base: hsl(224 20% 6%);
+  --color-bg-surface: hsl(224 18% 10%);
+  --color-bg-elevated: hsl(224 16% 14%);
+  --color-bg-overlay: hsl(224 14% 18%);
+  
+  /* Borders */
+  --color-border: hsl(224 12% 22%);
+  --color-border-subtle: hsl(224 12% 18%);
+  
+  /* Text (WCAG AA+ contrast) */
+  --color-text-primary: hsl(220 20% 95%);
+  --color-text-secondary: hsl(220 10% 65%);
+  --color-text-muted: hsl(220 8% 45%);
+  
+  /* Brand colors */
+  --color-brand: hsl(218 90% 60%);
+  --color-brand-hover: hsl(218 90% 70%);
+  --color-brand-active: hsl(218 90% 80%);
+  --color-brand-soft: hsl(218 90% 15%);
+  
+  /* Semantic colors */
+  --color-success: hsl(142 70% 55%);
+  --color-success-soft: hsl(142 70% 15%);
+  --color-warning: hsl(45 95% 60%);
+  --color-warning-soft: hsl(45 95% 15%);
+  --color-danger: hsl(0 75% 60%);
+  --color-danger-soft: hsl(0 75% 15%);
+  --color-info: hsl(210 80% 60%);
+  --color-info-soft: hsl(210 80% 15%);
+  
+  /* Glass effect */
+  --glass-bg: hsl(224 18% 12% / 0.7);
+  --glass-border: hsl(0 0% 100% / 0.08);
+  
+  color-scheme: dark;
+}
+
 /* Page transition keyframe */
 @keyframes fadeIn {
   from {
@@ -16,25 +117,19 @@
 
 /* Custom base styles */
 @layer base {
-  :root {
-    /* TODO (contributor — easy, Issue #31): define a full design token system */
-    --color-accent: #6366f1; /* indigo-500 */
-    --color-success: #10b981; /* emerald-500 */
-    --color-warning: #f59e0b; /* amber-500 */
-    --color-danger: #ef4444; /* red-500 */
-  }
-
   /* Smooth theme transitions */
   *,
   *::before,
   *::after {
-    transition-property: background-color, border-color, color;
+    transition-property: background-color, border-color, color, box-shadow;
     transition-duration: 200ms;
     transition-timing-function: ease;
   }
 
   body {
-    @apply antialiased bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100;
+    @apply antialiased min-h-screen flex flex-col font-sans;
+    background-color: var(--color-bg-base);
+    color: var(--color-text-primary);
   }
 
   /* RTL support */
@@ -60,20 +155,32 @@
     width: 6px;
   }
   ::-webkit-scrollbar-track {
-    @apply bg-gray-900;
+    background-color: var(--color-bg-surface);
   }
   ::-webkit-scrollbar-thumb {
-    @apply bg-gray-700 rounded-full;
+    background-color: var(--color-border);
+    border-radius: 9999px;
   }
 }
 
 @layer components {
   /* Reusable card style */
   .card {
-    @apply bg-gray-100 border border-gray-200 rounded-xl p-6 dark:bg-gray-900 dark:border-gray-800
-           transition-[transform,box-shadow] duration-200 ease-out
-           hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20
-           focus-within:ring-2 focus-within:ring-indigo-500 focus-within:ring-offset-2 focus-within:ring-offset-gray-950;
+    background-color: var(--color-bg-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    transition-property: transform, box-shadow, background-color, border-color;
+    transition-duration: 200ms;
+    transition-timing-function: ease-out;
+  }
+  .card:hover {
+    transform: translateY(-0.125rem);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  }
+  .card:focus-within {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color-brand), 0 0 0 6px var(--color-brand-soft);
   }
 
   /* High-contrast focus indicators for accessibility */
@@ -82,7 +189,8 @@
   input:focus-visible,
   textarea:focus-visible,
   select:focus-visible {
-    @apply outline-none ring-2 ring-indigo-500 ring-offset-2 ring-offset-gray-950;
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color-brand), 0 0 0 6px var(--color-brand-soft);
   }
 
   /* Visually hidden content for screen readers */
@@ -98,18 +206,26 @@
     border-width: 0;
   }
 
-  /* Status badge styles — TODO (contributor): ensure these match EscrowStatus enum */
+  /* Status badge styles */
   .badge-active {
-    @apply bg-indigo-500/20 text-indigo-400 border border-indigo-500/30;
+    background-color: var(--color-brand-soft);
+    color: var(--color-brand);
+    border: 1px solid var(--color-brand-soft);
   }
   .badge-completed {
-    @apply bg-emerald-500/20 text-emerald-400 border border-emerald-500/30;
+    background-color: var(--color-success-soft);
+    color: var(--color-success);
+    border: 1px solid var(--color-success-soft);
   }
   .badge-disputed {
-    @apply bg-amber-500/20 text-amber-400 border border-amber-500/30;
+    background-color: var(--color-warning-soft);
+    color: var(--color-warning);
+    border: 1px solid var(--color-warning-soft);
   }
   .badge-cancelled {
-    @apply bg-red-500/20 text-red-400 border border-red-500/30;
+    background-color: var(--color-danger-soft);
+    color: var(--color-danger);
+    border: 1px solid var(--color-danger-soft);
   }
 }
 
@@ -128,3 +244,11 @@
 .animate-slide-in {
   animation: slide-in 0.3s ease-out;
 }
+
+/* Disable transitions during SSR hydration to prevent FOUC */
+.no-transitions *,
+.no-transitions *::before,
+.no-transitions *::after {
+  transition: none !important;
+}
+

@@ -29,6 +29,7 @@ import escrowRoutes from './api/routes/escrowRoutes.js';
 import eventRoutes from './api/routes/eventRoutes.js';
 import kycRoutes from './api/routes/kycRoutes.js';
 import adminRoutes from './api/routes/adminRoutes.js';
+import analyticsRoutes from './api/routes/analyticsRoutes.js';
 import notificationRoutes from './api/routes/notificationRoutes.js';
 import paymentRoutes from './api/routes/paymentRoutes.js';
 import relayerRoutes from './api/routes/relayerRoutes.js';
@@ -40,7 +41,12 @@ import complianceRoutes from './api/routes/complianceRoutes.js';
 import incidentRoutes from './api/routes/incidentRoutes.js';
 import batchRoutes from './api/routes/batchRoutes.js';
 import webhookRoutes from './api/routes/webhookRoutes.js';
+import wellKnownRoutes from './api/routes/wellKnownRoutes.js';
+import webhooksV1Routes from './api/routes/webhooks.js';
+import insuranceRoutes from './api/routes/insuranceRoutes.js';
+import metricsRoutes from './api/routes/metricsRoutes.js';
 import tenantMiddleware from './api/middleware/tenant.js';
+import templateRoutes from './api/routes/templateRoutes.js';
 import auditMiddleware from './api/middleware/audit.js';
 import { createWebSocketServer, pool } from './api/websocket/handlers.js';
 import cache from './lib/cache.js';
@@ -56,17 +62,21 @@ import metricsMiddleware from './middleware/metricsMiddleware.js';
 import responseTime from './middleware/responseTime.js';
 import tracingMiddleware from './middleware/tracingMiddleware.js';
 import logger, { getLogger } from './config/logger.js';
-import emailService from './services/emailService.js';
+import './workers/emailWorker.js';
 import complianceService from './services/complianceService.js';
 import { startIndexer } from './services/eventIndexer.js';
 import { startRpcMonitor } from './monitoring/rpcMonitor.js';
 import { createEventWorker, createDeadLetterWorker } from './services/eventWorker.js';
+import { startExportWorker } from './queues/exportQueue.js';
+import { createKeyRotationWorker, scheduleKeyRotationJobs } from './queues/keyRotationQueue.js';
+import './workers/webhookWorker.js';
 import { setupSwagger } from './api/docs/swagger.js';
 import { getBackupStatus } from './services/backupMonitor.js';
 import { syncFromPrisma, ensureIndex } from './services/reputationSearchService.js';
 import { createGateway } from './gateway/index.js';
 import queueDashboardRoutes from './api/routes/queueDashboardRoutes.js';
 import chatRoutes from './api/routes/chatRoutes.js';
+import { startAnalyticsWorker } from './workers/analyticsWorker.js';
 
 // Attach Prisma query instrumentation (metrics + traces)
 attachPrismaMetrics(prisma);
@@ -112,7 +122,7 @@ app.use(cookieParser());
 app.use(sanitizeInputs);
 app.use(csrfProtection);
 app.use('/uploads', express.static('uploads'));
-app.use(auditMiddleware);
+app.use(auditMiddleware());
 
 // ── Sentry tracing handler — after body parsers, before routes ────────────────
 app.use(sentryTracingHandler);
@@ -200,6 +210,7 @@ app.use('/api/disputes', disputeRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/webhooks', webhookRoutes);
+app.use('/api/v1/webhooks', webhooksV1Routes);
 app.use('/api/kyc', kycRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/relayer', relayerRoutes);
@@ -207,10 +218,16 @@ app.use('/api/audit', auditRoutes);
 app.use('/api/compliance', complianceRoutes);
 app.use('/api/incidents', incidentRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/v1/admin/analytics', analyticsRoutes);
 app.use('/api/batch', batchRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/v1/templates', templateRoutes);
+app.use('/api/insurance', insuranceRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/metrics', metricsRoutes);
 app.use('/admin/queues', queueDashboardRoutes);
+app.use('/.well-known', wellKnownRoutes);
 app.use('/docs', docsRouter);
 // Alias — acceptance criteria requires /api-docs
 app.use('/api-docs', docsRouter);
@@ -294,8 +311,7 @@ async function startServer() {
           'Secrets backend loaded',
         );
         logger.info({ port: PORT, network: process.env.STELLAR_NETWORK }, 'API server started');
-        await emailService.start();
-        logger.info('[EmailService] Queue processor started');
+        logger.info('[EmailWorker] Queue processor started');
         complianceService.startScheduler();
         logger.info('[ComplianceService] Scheduler started');
         logger.info('[WebSocket] Server attached');
@@ -303,12 +319,19 @@ async function startServer() {
         try {
           const eventWorker = createEventWorker();
           const deadLetterWorker = createDeadLetterWorker();
-          logger.info('[BullMQ] Event processing workers started');
+          const keyRotationWorker = createKeyRotationWorker();
+          const exportWorker = startExportWorker();
+          logger.info('[BullMQ] Event + export processing workers started');
+
+          // Schedule Key Rotation Jobs
+          await scheduleKeyRotationJobs();
 
           const closeWorkers = async () => {
             logger.info('[BullMQ] Shutting down workers...');
             await eventWorker.close();
             await deadLetterWorker.close();
+            await keyRotationWorker.close();
+            await exportWorker.close();
           };
 
           process.once('SIGTERM', closeWorkers);
@@ -323,6 +346,9 @@ async function startServer() {
           Sentry.captureException(err, { tags: { component: 'indexer' } });
         });
         startRpcMonitor();
+
+        startAnalyticsWorker();
+        logger.info('[Analytics] Worker + cron started');
 
         // Reputation ES sync — ensure index + initial sync on startup
         ensureIndex().then(() =>

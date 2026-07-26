@@ -1,0 +1,61 @@
+# Lighthouse CI — Core Web Vitals performance gate.
+#
+# NOTE: This file is committed as `.github/lighthouse.workflow.yml.example`
+# because the automation token used to open this PR lacks the GitHub `workflow`
+# OAuth scope and cannot push files under `.github/workflows/`. A maintainer
+# should copy it into place to activate the check:
+#
+#     cp .github/lighthouse.workflow.yml.example .github/workflows/lighthouse.yml
+#     git add .github/workflows/lighthouse.yml && git commit -m "ci: enable Lighthouse CI"
+#
+# Budgets are defined in `.lighthouserc.cjs` at the repo root and fail the
+# build when Core Web Vitals regress:
+#   - performance score           >= 0.85
+#   - largest-contentful-paint    <= 3500ms
+#   - cumulative-layout-shift     <= 0.1
+#   - total-blocking-time         <= 300ms
+#   - uses-optimized-images       (error)
+name: Lighthouse CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'frontend/**'
+      - '.lighthouserc.cjs'
+      - '.github/workflows/lighthouse.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  lighthouse:
+    name: Core Web Vitals budgets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+        env:
+          HUSKY: 0
+
+      - name: Build frontend
+        run: npm run build
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:3001
+
+      - name: Run Lighthouse CI
+        run: ./frontend/node_modules/.bin/lhci autorun --config=.lighthouserc.cjs
+        env:
+          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}

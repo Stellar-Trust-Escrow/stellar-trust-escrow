@@ -10,6 +10,10 @@
 import searchService from '../../services/searchService.js';
 import prisma from '../../lib/prisma.js';
 import { parsePagination } from '../../lib/pagination.js';
+import { getLogger } from '../../config/logger.js';
+
+const log = getLogger();
+const SEARCH_MAX_Q_LENGTH = 200;
 
 const VALID_SORT_FIELDS = ['createdAt', 'totalAmount', 'status'];
 const VALID_SORT_ORDERS = ['asc', 'desc'];
@@ -35,7 +39,7 @@ const searchEscrows = async (req, res) => {
   try {
     const { page, limit } = parsePagination(req.query);
     const {
-      q,
+      q: rawQ,
       status,
       client,
       freelancer,
@@ -47,8 +51,21 @@ const searchEscrows = async (req, res) => {
       sortOrder = 'desc',
     } = req.query;
 
+    // Truncate and sanitise the query term before it reaches the search service
+    // or gets written to logs — oversized strings slow ES and fill log storage.
+    const q = rawQ ? String(rawQ).slice(0, SEARCH_MAX_Q_LENGTH).trim() : undefined;
+
     const resolvedSortBy = VALID_SORT_FIELDS.includes(sortBy) ? sortBy : 'createdAt';
     const resolvedSortOrder = VALID_SORT_ORDERS.includes(sortOrder) ? sortOrder : 'desc';
+
+    log.info({
+      type: 'search_query',
+      q: q ?? '',
+      tenantSlug: req.tenant?.slug,
+      requestId: req.id,
+      page,
+      limit,
+    });
 
     const results = await searchService.search({
       q,
@@ -67,7 +84,7 @@ const searchEscrows = async (req, res) => {
 
     res.json(results);
   } catch (err) {
-    console.error('[Search] searchEscrows error:', err.message);
+    log.error({ err, requestId: req.id }, '[Search] searchEscrows error');
     res.status(500).json({ error: 'Search unavailable', detail: err.message });
   }
 };

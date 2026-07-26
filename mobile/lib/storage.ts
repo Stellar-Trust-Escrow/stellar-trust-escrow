@@ -12,6 +12,7 @@ export const storage = new MMKV({ id: 'ste-storage' });
 // Keys
 export const STORAGE_KEYS = {
   WALLET_ADDRESS: 'wallet_address',
+  AUTH_TOKEN: 'auth_token',
   STELLAR_NETWORK: 'stellar_network',
   PUSH_TOKEN: 'push_token',
   BIOMETRIC_ENABLED: 'biometric_enabled',

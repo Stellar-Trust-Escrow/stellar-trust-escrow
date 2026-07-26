@@ -1,0 +1,74 @@
+services:
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.11.1
+    ports:
+      - "8474:8474" # Toxiproxy control API
+      - "26379:26379" # Redis proxy
+      - "25432:25432" # Postgres proxy
+      - "28001:28001" # Stellar proxy
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: stellar_escrow
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d stellar_escrow"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  stellar:
+    image: stellar/quickstart:latest
+    command: --local --enable-soroban-rpc
+    ports:
+      - "8000:8000" # Horizon
+      - "8001:8001" # Soroban RPC
+    environment:
+      NETWORK_PASSPHRASE: 'Standalone Network ; February 2017'
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -sf http://localhost:8000/health || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    volumes:
+      - stellar_data:/opt/stellar
+
+  backend:
+    build:
+      context: .
+      target: backend
+    environment:
+      DATABASE_URL: postgresql://user:password@toxiproxy:25432/stellar_escrow
+      REDIS_URL: redis://toxiproxy:26379
+      SOROBAN_RPC_URL: http://toxiproxy:28001
+      PORT: 4000
+    ports:
+      - "4000:4000"
+    depends_on:
+      - postgres
+      - redis
+      - stellar
+      - toxiproxy
+
+volumes:
+  pgdata:
+  redis_data:
+  stellar_data:

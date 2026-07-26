@@ -8,6 +8,8 @@ const ADDRESS_B = `G${'B'.repeat(55)}`;
 const ADMIN_API_KEY = 'test-admin-key';
 
 process.env.ADMIN_API_KEY = ADMIN_API_KEY;
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-auth-secret';
+process.env.JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || 'test-access-secret';
 
 const okHandler = (_req, res) => res.json({ ok: true });
 
@@ -45,12 +47,13 @@ const relayerMock = {
 
 jest.unstable_mockModule('../api/controllers/authController.js', () => ({
   default: {
-    register: okHandler,
-    login: okHandler,
-    refresh: okHandler,
+    getNonce: okHandler,
+    verifySignatureAndLogin: okHandler,
+    refreshToken: okHandler,
     logout: okHandler,
-    revokeAll: okHandler,
-    sessions: okHandler,
+    listSessions: okHandler,
+    revokeSession: okHandler,
+    revokeAllSessions: okHandler,
   },
 }));
 

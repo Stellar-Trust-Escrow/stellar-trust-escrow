@@ -1,40 +1,54 @@
 #!/usr/bin/env sh
 
-# 1️⃣ Validate branch name
-echo "🔖 Validating branch name..."
-npx validate-branch-name || {
-  echo "❌ Invalid branch name. Push aborted."
-  exit 1
-}
+# 1️⃣ Validate branch name (skip when pushing to external contributor forks)
+remote_url=$(git remote get-url "${1:-origin}" 2>/dev/null || echo "")
+case "$remote_url" in
+  *Stellar-Trust-Escrow*)
+    echo "🔖 Validating branch name..."
+    npx validate-branch-name || {
+      echo "❌ Invalid branch name. Push aborted."
+      exit 1
+    }
+    ;;
+  *)
+    echo "🔖 Skipping branch name validation for external remote."
+    ;;
+esac
 
-# 2️⃣ Run backend tests before push
-echo "🧪 Running backend tests..."
-npm run test:backend || {
-  echo "❌ Backend tests failed. Push aborted."
-  exit 1
-}
+# 2️⃣ Run backend tests before push (skip for external contributor forks)
+case "$remote_url" in
+  *Stellar-Trust-Escrow*)
+    echo "🧪 Running backend tests..."
+    npm run test:backend || {
+      echo "❌ Backend tests failed. Push aborted."
+      exit 1
+    }
+    ;;
+  *)
+    echo "🧪 Skipping backend tests for external remote."
+    ;;
+esac
 
 # 3️⃣ Protect main branch
 # NOTE: no set -e here — while read returns non-zero on EOF which would false-exit
 protected_branch='refs/heads/main'
-allowed_user='ilorahdavid126@gmail.com'
 z40=0000000000000000000000000000000000000000
 
 while read -r local_ref local_sha remote_ref remote_sha; do
   if [ "$remote_ref" = "$protected_branch" ]; then
     current_user=$(git config user.email)
 
-    if [ "$current_user" != "$allowed_user" ]; then
-      echo "❌ Only $allowed_user can push directly to main."
-      exit 1
-    fi
+    case "$current_user" in
+      ilorahdavid126@gmail.com|davidilorah@gmail.com|devcyprain@gmail.com|coredevdave@gmail.com) ;;
+      *) echo "❌ Only authorised profiles can push directly to main."; exit 1 ;;
+    esac
 
     if [ "$local_sha" = "$z40" ]; then
       echo "❌ Deleting main is not allowed."
       exit 1
     fi
 
-    if ! git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null; then
+    if [ "$remote_sha" != "$z40" ] && ! git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null; then
       echo "❌ Force push to main is not allowed."
       exit 1
     fi

@@ -57,13 +57,57 @@ pub enum EcErr {
     E61 = 61,
     E62 = 62,
     E63 = 63,
-    /// A checked arithmetic operation (add/mul/cast) overflowed.
-    ArithmeticOverflow = 64,
+    E64 = 64,
+    E65 = 65,
+    E66 = 66,
     OracleStaleFeed = 67,
     OracleInvalidPrice = 68,
     OraclePriceConversionFailed = 69,
-    /// Milestone title exceeds the maximum allowed length (64 bytes).
-    MilestoneTitleTooLong = 70,
+    E70 = 70, // RbacUnauthorizedRole
+    E71 = 71, // RbacRoleAlreadySet
+    E72 = 72, // RbacInvalidRoleAssignment
+    FeeTooHigh = 73,
+    TreasuryNotConfigured = 74,
+    InvalidMultisigConfig = 75,
+    HighValueMultisigRequired = 76,
+    DuplicateMultisigApproval = 77,
+    MultisigBatchApprovalUnsupported = 78,
+    OracleStalePriceFeed = 130,
+    OracleDriftExceeded = 131,
+    OracleNotConfigured = 132,
+    ContractPaused = 133,
+    UnpauseTooEarly = 134,
+    CannotAcceptOwnProposal = 135,
+    ProposalExpired = 136,
+    InvalidEscrowState = 137,
+    NoCancellationProposal = 138,
+    EscrowNotExpired = 81,
+    EscrowAlreadyExpired = 82,
+
+    /// Caller has already cast an approval vote for this milestone.
+    AlreadyVoted = 139,
+    /// Approval threshold must be > 0 and <= number of approvers.
+    InvalidThreshold = 140,
+    UnregisteredArbiter = 141,
+    Unauthorized = 142,
+    BatchTooLarge = 143,
+    BatchInvalidMilestone = 144,
+    BatchUnauthorized = 145,
+    BatchInvalid = 146,
 }
 
-pub use self::EcErr as EscrowError;
+#[contracterror(export = false)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum BatchError {
+    TooLarge = 143,
+    InvalidMilestone = 144,
+    Unauthorized = 145,
+    InvalidBatch = 146,
+}
+
+/// Backward-compatible alias — existing code imports `EscrowError`; the oracle
+/// refactor renamed the enum to `EcErr` without updating call sites.
+pub type EscrowError = EcErr;
+#[allow(dead_code)]
+pub type ContractError = EcErr;

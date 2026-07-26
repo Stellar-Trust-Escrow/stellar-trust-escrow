@@ -6,13 +6,15 @@ This guide explains how to configure a multisig milestone-approval escrow, how w
 
 ## Overview
 
-By default, only the `client` address can approve milestones. When you call `create_escrow_with_buyer_signers`, you supply a list of additional approvers (`buyer_signers`). The contract stores these addresses in `EscrowMeta.buyer_signers` and, when a `MultisigConfig` is attached, requires a weighted quorum before a milestone is considered approved.
+By default, only the `client` address can approve milestones. A weighted policy is attached at creation through the `multisig_config` argument of `create_escrow`. The contract stores that policy in a namespaced persistent entry and requires its quorum before a milestone is approved or funds are released.
+
+Escrows at or above `HIGH_VALUE_THRESHOLD` must enable multisig. Their policy must require at least two distinct signatures: the threshold must be greater than every individual approver's weight. Lower-value escrows may keep the legacy client-only behavior.
 
 ---
 
 ## Key Types
 
-### `MultisigConfig` (`types.rs` L133)
+### `MultisigConfig`
 
 ```rust
 pub struct MultisigConfig {
@@ -28,9 +30,9 @@ pub struct MultisigConfig {
 | `weights`   | Voting power of each approver. Weights are summed as votes arrive; order must match `approvers`. |
 | `threshold` | The cumulative weight that must be reached for the milestone to transition to `Approved`.        |
 
-An empty `approvers` list disables multisig — only `client` may approve (legacy behaviour).
+Empty `approvers` and `weights` with a zero threshold disable multisig for lower-value escrows. Approvers must be unique, weights must be positive, and the threshold cannot exceed the total weight.
 
-### `ApprovalRecord` (`types.rs` L120)
+### `ApprovalRecord`
 
 ```rust
 pub struct ApprovalRecord {
@@ -41,28 +43,28 @@ pub struct ApprovalRecord {
 
 Each call to `approve_milestone` by a valid signer appends one `ApprovalRecord` to `Milestone.approvals`. The record is permanent and auditable on-chain.
 
-### `EscrowMeta.buyer_signers`
+### Approval authorisation
 
-`buyer_signers` is a `Vec<Address>` stored directly in `EscrowMeta`. It is the authorisation list checked in `approve_milestone`:
+For a configured escrow, only addresses in `MultisigConfig.approvers` may call `approve_milestone`. The same addresses are exposed through `EscrowState.buyer_signers` for backward-compatible clients:
 
 ```rust
-if caller != meta.client && !meta.buyer_signers.contains(&caller) {
-    return Err(EscrowError::Unauthorized);  // error code 3
+if multisig_weight(&config, &caller).is_none() {
+    return Err(EscrowError::E3);
 }
 ```
 
-The `client` address is always appended to `buyer_signers` during escrow creation even if it was not explicitly included in the supplied list.
+The legacy `create_escrow_with_buyer_signers` entry point remains available for lower-value escrows, but it cannot be used to bypass the high-value policy.
 
 ---
 
 ## Weighted Voting in `approve_milestone`
 
-`approve_milestone` (`lib.rs` L1596) processes each vote as follows:
+`approve_milestone` processes each vote as follows:
 
-1. Verify the caller is `client` or a member of `buyer_signers`. Returns `EscrowError::Unauthorized` (3) otherwise.
+1. Verify the caller is a member of `MultisigConfig.approvers`. Returns `EscrowError::E3` (3) otherwise.
 2. Verify the milestone is in `MS_SUBMITTED` state.
-3. Look up the caller's index in `MultisigConfig.approvers` and read their weight.
-4. Append an `ApprovalRecord` to `Milestone.approvals`.
+3. Reject an existing vote from the same caller with `DuplicateMultisigApproval` (72).
+4. Look up the caller's weight and append an `ApprovalRecord` to `Milestone.approvals`.
 5. Sum all recorded weights for this milestone.
 6. **If `accrued_weight < threshold`** — emit `msig_apr` (`emit_multisig_approval_recorded`) and return. The milestone stays in `MS_SUBMITTED`.
 7. **If `accrued_weight >= threshold`** — transition the milestone to `MS_APPROVED`, release funds, emit `mil_apr` (`emit_milestone_approved`), and check for escrow completion.
@@ -115,7 +117,7 @@ soroban contract invoke \
   --source <CLIENT_SECRET_KEY> \
   --network testnet \
   -- \
-  create_escrow_with_buyer_signers \
+  create_escrow \
   --client  GCLIENT... \
   --freelancer GFREELANCER... \
   --token GTOKEN... \
@@ -124,25 +126,20 @@ soroban contract invoke \
   --arbiter null \
   --deadline null \
   --lock_time null \
-  --buyer_signers '["GALICE...", "GBOB...", "GCAROL..."]'
-```
-
-After creation, configure the `MultisigConfig` by calling `set_multisig_config` (or pass it as part of escrow initialisation if your version supports it) with:
-
-```json
-{
-  "approvers": ["GALICE...", "GBOB...", "GCAROL..."],
-  "weights": [3, 2, 2],
-  "threshold": 4
-}
+  --timelock null \
+  --multisig_config '{"approvers":["GALICE...","GBOB...","GCAROL..."],"weights":[3,2,2],"threshold":4}'
 ```
 
 ---
 
 ## Error Reference
 
-| Code | Name                    | When it occurs                                    |
-| ---- | ----------------------- | ------------------------------------------------- |
-| 3    | `Unauthorized`          | Caller is not `client` and not in `buyer_signers` |
-| 9    | `EscrowNotActive`       | Escrow is not in `Active` state                   |
-| 14   | `InvalidMilestoneState` | Milestone is not in `MS_SUBMITTED` state          |
+| Code | Name                               | When it occurs                                             |
+| ---- | ---------------------------------- | ---------------------------------------------------------- |
+| 3    | `Unauthorized`                     | Caller is not a configured approver                        |
+| 9    | `EscrowNotActive`                  | Escrow is not in `Active` state                            |
+| 14   | `InvalidMilestoneState`            | Milestone is not in `MS_SUBMITTED` state                   |
+| 70   | `InvalidMultisigConfig`            | Policy structure, weights, or threshold are invalid        |
+| 71   | `HighValueMultisigRequired`        | High-value policy can be completed by fewer than two votes |
+| 72   | `DuplicateMultisigApproval`        | An approver has already voted on the milestone             |
+| 73   | `MultisigBatchApprovalUnsupported` | Batch approval attempted on a weighted escrow              |

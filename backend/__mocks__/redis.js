@@ -11,6 +11,10 @@ const mockClient = {
   expire: jest.fn().mockResolvedValue(1),
   sAdd: jest.fn().mockResolvedValue(1),
   sMembers: jest.fn().mockResolvedValue([]),
+  scan: jest.fn().mockResolvedValue({ cursor: 0, keys: [] }),
+  rpush: jest.fn().mockResolvedValue(1),
+  lpush: jest.fn().mockResolvedValue(1),
+  lrange: jest.fn().mockResolvedValue([]),
   on: jest.fn(),
 };
 
