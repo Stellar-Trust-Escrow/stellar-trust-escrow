@@ -63,6 +63,7 @@ mod event_names;
 mod event_tests;
 mod events;
 mod governance_escalation_tests;
+mod health_check_tests;
 mod lock_time_enforcement_tests;
 mod max_escrow_amount_tests;
 mod meta_snapshot_tests;
@@ -94,7 +95,7 @@ use types::{FundPayload, ProposalPayload, ProposalType};
 
 use soroban_sdk::{
     contract, contractimpl, contracttype, panic_with_error, symbol_short, token, Address, BytesN,
-    Env, IntoVal, String, Vec,
+    Env, IntoVal, String, Symbol, Vec,
 };
 use stellar_trust_shared::auth as shared_auth;
 use stellar_trust_shared::{
@@ -4907,6 +4908,16 @@ impl EscrowContract {
 
         // Stub: skip nonce and signature checks for now
         Ok(())
+    }
+
+    /// Canonical liveness probe for monitoring tools.
+    ///
+    /// Returns the `Symbol` `OK` without reading or writing any contract
+    /// storage. Requires no authentication and accepts no arguments — safe
+    /// to poll at any frequency to verify the contract is deployed and
+    /// responding.
+    pub fn health_check(_env: Env) -> Symbol {
+        symbol_short!("OK")
     }
 }
 
