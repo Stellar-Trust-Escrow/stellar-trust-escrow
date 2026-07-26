@@ -67,6 +67,7 @@ mod health_check_tests;
 mod lock_time_enforcement_tests;
 mod max_escrow_amount_tests;
 mod meta_snapshot_tests;
+mod milestone_title_view_tests;
 mod nft;
 mod nft_tests;
 mod oracle;
@@ -129,6 +130,8 @@ const RENT_PER_ENTRY_PER_PERIOD: i128 = 1;
 pub const MAX_MILESTONES: u32 = 20;
 pub const MAX_STRING_LEN: u32 = 256;
 pub const MAX_BUYER_SIGNERS: u32 = 10;
+/// Maximum length (bytes) of a milestone title accepted by `create_milestone`.
+pub const MAX_MILESTONE_TITLE_LEN: u32 = 64;
 
 /// Automatic deadline extension when milestone submitted near deadline (7 days).
 pub const AUTO_DEADLINE_EXTENSION_SECONDS: u64 = 604_800;
@@ -4918,6 +4921,52 @@ impl EscrowContract {
     /// responding.
     pub fn health_check(_env: Env) -> Symbol {
         symbol_short!("OK")
+    }
+
+    /// Canonical entry point for creating a milestone with an on-chain title.
+    ///
+    /// Distinct from `add_milestone`: enforces a stricter `MAX_MILESTONE_TITLE_LEN`
+    /// (64 bytes) title limit and emits a dedicated `MilestoneCreated` event
+    /// carrying the title, so indexers and dispute resolution can display
+    /// context without an off-chain lookup.
+    pub fn create_milestone(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+        title: String,
+        description_hash: BytesN<32>,
+        amount: i128,
+    ) -> Result<u32, EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_not_paused(&env)?;
+        ContractStorage::require_not_frozen(&env, escrow_id)?;
+
+        if title.len() > MAX_MILESTONE_TITLE_LEN {
+            return Err(EscrowError::MilestoneTitleTooLong);
+        }
+
+        let milestone_id = Self::add_milestone_internal(
+            &env,
+            &caller,
+            escrow_id,
+            title.clone(),
+            description_hash,
+            amount,
+        )?;
+
+        events::emit_milestone_created(&env, escrow_id, milestone_id, &title);
+        Ok(milestone_id)
+    }
+
+    /// Returns the on-chain title of a milestone.
+    pub fn get_milestone_title(
+        env: Env,
+        escrow_id: u64,
+        milestone_id: u32,
+    ) -> Result<String, EscrowError> {
+        ContractStorage::ensure_live_escrow(&env, escrow_id)?;
+        let milestone = ContractStorage::load_milestone(&env, escrow_id, milestone_id)?;
+        Ok(milestone.title)
     }
 }
 

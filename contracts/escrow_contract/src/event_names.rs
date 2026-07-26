@@ -99,4 +99,8 @@ pub const ADMIN_INITIALIZED: Symbol = symbol_short!("adm_init");
 pub const ADMIN_PROPOSED: Symbol = symbol_short!("adm_prop");
 pub const ADMIN_CHANGED: Symbol = symbol_short!("adm_chg");
 pub const CONTRACT_PAUSED: Symbol = symbol_short!("paused");
+
+// ── Milestone title (canonical create_milestone entry point) ──────────────────
+
+pub const MILESTONE_CREATED: Symbol = symbol_short!("mile_crt");
 pub const CONTRACT_UNPAUSED: Symbol = symbol_short!("unpaused");
