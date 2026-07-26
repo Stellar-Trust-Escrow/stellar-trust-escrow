@@ -53,12 +53,14 @@
 #![allow(clippy::too_many_arguments)]
 
 mod admin_transfer_tests;
+mod arbiter_registry_tests;
 mod arbiter_reputation_tests;
 mod batch_add_milestones_cap_tests;
 mod batch_approve_release_e2e_tests;
 mod bridge;
 mod bridge_tests;
 mod errors;
+mod escrow_creation_time_tests;
 mod event_names;
 mod event_tests;
 mod events;
@@ -97,7 +99,7 @@ use types::{FundPayload, ProposalPayload, ProposalType};
 
 use soroban_sdk::{
     contract, contractimpl, contracttype, panic_with_error, symbol_short, token, Address, BytesN,
-    Env, IntoVal, String, Vec,
+    Env, IntoVal, String, Symbol, Vec,
 };
 use stellar_trust_shared::auth as shared_auth;
 use stellar_trust_shared::{
@@ -133,6 +135,8 @@ pub const MAX_MILESTONES: u32 = 20;
 pub const MAX_BATCH_SIZE: u32 = 10;
 pub const MAX_STRING_LEN: u32 = 256;
 pub const MAX_BUYER_SIGNERS: u32 = 10;
+/// Maximum length (bytes) of a milestone title accepted by `create_milestone`.
+pub const MAX_MILESTONE_TITLE_LEN: u32 = 64;
 
 /// Automatic deadline extension when milestone submitted near deadline (7 days).
 pub const AUTO_DEADLINE_EXTENSION_SECONDS: u64 = 604_800;
@@ -2113,7 +2117,15 @@ impl EscrowContract {
             escrow_id,
         );
 
+        let creation_ledger = env.ledger().sequence();
+        let creation_timestamp = env.ledger().timestamp();
+        env.storage().persistent().set(
+            &DataKey::EscrowCreationInfo(escrow_id),
+            &(creation_ledger, creation_timestamp),
+        );
+
         events::emit_escrow_created(&env, escrow_id, &client, &freelancer, total_amount);
+        events::emit_escrow_creation_time(&env, escrow_id, creation_ledger, creation_timestamp);
         Ok(escrow_id)
     }
 
@@ -6295,6 +6307,123 @@ impl EscrowContract {
 
         // Stub: skip nonce and signature checks for now
         Ok(())
+    }
+
+    /// Canonical liveness probe for monitoring tools.
+    ///
+    /// Returns the `Symbol` `OK` without reading or writing any contract
+    /// storage. Requires no authentication and accepts no arguments — safe
+    /// to poll at any frequency to verify the contract is deployed and
+    /// responding.
+    pub fn health_check(_env: Env) -> Symbol {
+        symbol_short!("OK")
+    }
+
+    /// Canonical entry point for creating a milestone with an on-chain title.
+    ///
+    /// Distinct from `add_milestone`: enforces a stricter `MAX_MILESTONE_TITLE_LEN`
+    /// (64 bytes) title limit and emits a dedicated `MilestoneCreated` event
+    /// carrying the title, so indexers and dispute resolution can display
+    /// context without an off-chain lookup.
+    pub fn create_milestone(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+        title: String,
+        description_hash: BytesN<32>,
+        amount: i128,
+    ) -> Result<u32, EscrowError> {
+        caller.require_auth();
+        ContractStorage::require_not_paused(&env)?;
+        ContractStorage::require_not_frozen(&env, escrow_id)?;
+
+        if title.len() > MAX_MILESTONE_TITLE_LEN {
+            return Err(EscrowError::MilestoneTitleTooLong);
+        }
+
+        let milestone_id = Self::add_milestone_internal(
+            &env,
+            &caller,
+            escrow_id,
+            title.clone(),
+            description_hash,
+            amount,
+        )?;
+
+        events::emit_milestone_created(&env, escrow_id, milestone_id, &title);
+        Ok(milestone_id)
+    }
+
+    /// Returns the on-chain title of a milestone.
+    pub fn get_milestone_title(
+        env: Env,
+        escrow_id: u64,
+        milestone_id: u32,
+    ) -> Result<String, EscrowError> {
+        ContractStorage::ensure_live_escrow(&env, escrow_id)?;
+        let milestone = ContractStorage::load_milestone(&env, escrow_id, milestone_id)?;
+        Ok(milestone.title)
+    }
+
+    /// Registers an arbiter as active. Admin-only. No-op if already present.
+    pub fn register_arbiter(env: Env, caller: Address, address: Address) -> Result<(), EscrowError> {
+        caller.require_auth();
+        Self::require_admin(&env, &caller)?;
+
+        let mut active: Vec<Address> = env
+            .storage()
+            .instance()
+            .get(&DataKey::ActiveArbiters)
+            .unwrap_or(Vec::new(&env));
+
+        if !active.contains(&address) {
+            active.push_back(address);
+            env.storage()
+                .instance()
+                .set(&DataKey::ActiveArbiters, &active);
+        }
+        Ok(())
+    }
+
+    /// Deregisters an arbiter, removing it from the active list. Admin-only.
+    pub fn deregister_arbiter(
+        env: Env,
+        caller: Address,
+        address: Address,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+        Self::require_admin(&env, &caller)?;
+
+        let mut active: Vec<Address> = env
+            .storage()
+            .instance()
+            .get(&DataKey::ActiveArbiters)
+            .unwrap_or(Vec::new(&env));
+
+        if let Some(idx) = active.iter().position(|a| a == address) {
+            active.remove(idx as u32);
+            env.storage()
+                .instance()
+                .set(&DataKey::ActiveArbiters, &active);
+        }
+        Ok(())
+    }
+
+    /// Returns the current list of active (registered) arbiters.
+    pub fn get_active_arbiters(env: Env) -> Vec<Address> {
+        env.storage()
+            .instance()
+            .get(&DataKey::ActiveArbiters)
+            .unwrap_or(Vec::new(&env))
+    }
+
+    /// Returns the immutable `(ledger_sequence, timestamp)` pair recorded
+    /// when the escrow was created.
+    pub fn get_escrow_creation_time(env: Env, escrow_id: u64) -> Result<(u32, u64), EscrowError> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::EscrowCreationInfo(escrow_id))
+            .ok_or(EscrowError::E13)
     }
 }
 

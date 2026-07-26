@@ -106,6 +106,14 @@ pub const ADMIN_INITIALIZED: Symbol = symbol_short!("adm_init");
 pub const ADMIN_PROPOSED: Symbol = symbol_short!("adm_prop");
 pub const ADMIN_CHANGED: Symbol = symbol_short!("adm_chg");
 pub const CONTRACT_PAUSED: Symbol = symbol_short!("paused");
+
+// ── Milestone title (canonical create_milestone entry point) ──────────────────
+
+pub const MILESTONE_CREATED: Symbol = symbol_short!("mile_crt");
+
+// ── Escrow creation timing record ──────────────────────────────────────────────
+
+pub const ESCROW_CREATION_TIME: Symbol = symbol_short!("esc_ctim");
 pub const CONTRACT_UNPAUSED: Symbol = symbol_short!("unpaused");
 pub const EMERGENCY_WITHDRAWAL: Symbol = symbol_short!("emg_wth");
 

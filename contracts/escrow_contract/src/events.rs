@@ -12,9 +12,25 @@
 
 #![allow(dead_code)]
 
-use soroban_sdk::{symbol_short, Address, Env};
+use soroban_sdk::{symbol_short, Address, Env, String};
 
 use crate::event_names as ev;
+
+/// Emitted by the canonical `create_milestone` entry point, carrying the
+/// human-readable title alongside the milestone identifier for indexers.
+pub fn emit_milestone_created(env: &Env, escrow_id: u64, milestone_id: u32, title: &String) {
+    env.events().publish(
+        (ev::MILESTONE_CREATED, escrow_id),
+        (milestone_id, title.clone()),
+    );
+}
+
+/// Emitted alongside `escrow_created` to record the immutable creation
+/// ledger sequence + timestamp for indexers.
+pub fn emit_escrow_creation_time(env: &Env, escrow_id: u64, ledger: u32, timestamp: u64) {
+    env.events()
+        .publish((ev::ESCROW_CREATION_TIME, escrow_id), (ledger, timestamp));
+}
 
 pub fn emit_escrow_created(
     env: &Env,
