@@ -6,6 +6,7 @@ describe('parsePagination', () => {
       page: 1,
       limit: 20,
       skip: 0,
+      cursor: null,
     });
   });
 
@@ -14,6 +15,7 @@ describe('parsePagination', () => {
       page: 1,
       limit: 100,
       skip: 0,
+      cursor: null,
     });
   });
 });
@@ -28,6 +30,8 @@ describe('buildPaginatedResponse', () => {
       totalPages: 3,
       hasNextPage: true,
       hasPreviousPage: true,
+      nextCursor: 'eyJvZmZzZXQiOjR9',
+      previousCursor: 'eyJvZmZzZXQiOjB9',
     });
   });
 
@@ -40,6 +44,8 @@ describe('buildPaginatedResponse', () => {
       totalPages: 0,
       hasNextPage: false,
       hasPreviousPage: false,
+      nextCursor: null,
+      previousCursor: null,
     });
   });
 });

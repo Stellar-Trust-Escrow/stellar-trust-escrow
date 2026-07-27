@@ -42,6 +42,8 @@ import batchRoutes from './api/routes/batchRoutes.js';
 import webhookRoutes from './api/routes/webhookRoutes.js';
 import tenantMiddleware from './api/middleware/tenant.js';
 import auditMiddleware from './api/middleware/audit.js';
+import idempotencyMiddleware from './api/middleware/idempotency.js';
+import zodValidationMiddleware from './api/middleware/zodValidation.js';
 import { createWebSocketServer, pool } from './api/websocket/handlers.js';
 import cache from './lib/cache.js';
 import { attachPrismaMetrics } from './lib/prismaMetrics.js';
@@ -111,6 +113,8 @@ app.use(express.urlencoded({ extended: true, limit: REQUEST_SIZE_LIMIT }));
 app.use(cookieParser());
 app.use(sanitizeInputs);
 app.use(csrfProtection);
+app.use(zodValidationMiddleware);
+app.use(idempotencyMiddleware);
 app.use('/uploads', express.static('uploads'));
 app.use(auditMiddleware);
 
@@ -240,7 +244,12 @@ app.use((err, req, res, _next) => {
 
   // Attach Sentry event ID to response so support can correlate reports
   const sentryId = res.sentry;
-  const body = { error: err.message || 'Internal server error' };
+  const body = {
+    error: {
+      code: err.code || (statusCode >= 500 ? 'INTERNAL_SERVER_ERROR' : 'REQUEST_ERROR'),
+      message: err.message || 'Internal server error',
+    },
+  };
   if (sentryId) body.errorId = sentryId;
 
   const log = req?.log || logger;

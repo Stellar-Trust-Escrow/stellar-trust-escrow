@@ -120,11 +120,21 @@ const ROUTE_MAP = [
   },
 ];
 
+const ESCROW_STATE_CHANGE = {
+  method: /^(POST|PUT|PATCH|DELETE)$/,
+  pattern: /^\/api\/escrows(\/|$)/,
+  category: AuditCategory.ESCROW,
+  action: AuditAction.ESCROW_STATE_CHANGE,
+};
+
 /**
  * Derive the actor from the request.
  * Extend this when JWT auth is added — read req.user.address instead.
  */
 function resolveActor(req) {
+  if (req.user?.walletAddress) return req.user.walletAddress;
+  if (req.user?.address) return req.user.address;
+  if (req.user?.userId) return String(req.user.userId);
   // Admin routes use the API key header; treat as "admin"
   if (req.headers['x-admin-api-key']) return 'admin';
   // Stellar address passed as a body or param field
@@ -141,7 +151,11 @@ function resolveResourceId(req) {
 }
 
 const auditMiddleware = (req, res, next) => {
-  const match = ROUTE_MAP.find((r) => r.method === req.method && r.pattern.test(req.path));
+  const match =
+    ROUTE_MAP.find((r) => r.method === req.method && r.pattern.test(req.path)) ||
+    (ESCROW_STATE_CHANGE.method.test(req.method) && ESCROW_STATE_CHANGE.pattern.test(req.path)
+      ? ESCROW_STATE_CHANGE
+      : null);
 
   if (!match) return next();
 
@@ -155,7 +169,13 @@ const auditMiddleware = (req, res, next) => {
       action: match.action,
       actor: resolveActor(req),
       resourceId: resolveResourceId(req),
-      metadata: res.statusCode >= 400 ? { error: body?.error } : undefined,
+      metadata: {
+        method: req.method,
+        path: req.originalUrl?.split('?')[0],
+        requestId: req.id || req.requestId,
+        body: req.body,
+        response: res.statusCode >= 400 ? { error: body?.error } : undefined,
+      },
       statusCode: res.statusCode,
       ipAddress: req.ip,
     });

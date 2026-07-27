@@ -116,6 +116,7 @@ export const stellarAddressBody = (field = 'address') =>
 export const paginationQuery = [
   query('page').optional().isInt({ min: 1 }).toInt(),
   query('limit').optional().isInt({ min: 1, max: 100 }).toInt(),
+  query('cursor').optional().isBase64().withMessage('cursor must be a valid cursor token'),
 ];
 
 export const escrowIdParam = param('id')
