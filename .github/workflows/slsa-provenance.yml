@@ -1,0 +1,74 @@
+name: SLSA Provenance
+
+# Generates SLSA provenance attestation for the npm package and Docker image
+# on every release tag push (e.g. v1.2.3), and attaches the .intoto.jsonl
+# file as a release asset. Runs separately from release.yml (which gates
+# develop -> main PRs) since this fires on the tag itself.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write # to attach the release asset
+  id-token: write # required by slsa-github-generator for signing
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      digests: ${{ steps.hash.outputs.digests }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build npm package artifact
+        working-directory: sdk
+        run: |
+          npm ci
+          npm run build --if-present
+          npm pack --pack-destination ../dist-npm
+
+      - name: Build Docker image
+        run: |
+          docker build -t stellar-trust-escrow:${{ github.ref_name }} .
+          docker save stellar-trust-escrow:${{ github.ref_name }} -o dist-docker-image.tar
+
+      - name: Generate subject hashes
+        id: hash
+        run: |
+          mkdir -p subjects
+          cp dist-npm/*.tgz subjects/ 2>/dev/null || true
+          cp dist-docker-image.tar subjects/
+          cd subjects
+          echo "digests=$(sha256sum * | base64 -w0)" >> "$GITHUB_OUTPUT"
+
+  provenance:
+    needs: [build]
+    permissions:
+      actions: read
+      id-token: write
+      contents: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
+    with:
+      base64-subjects: '${{ needs.build.outputs.digests }}'
+      provenance-name: '${{ github.ref_name }}.intoto.jsonl'
+
+  attach-to-release:
+    needs: [provenance]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download provenance
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ github.ref_name }}.intoto.jsonl
+
+      - name: Attach provenance to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ github.ref_name }}.intoto.jsonl

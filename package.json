@@ -19,6 +19,7 @@
     "format": "prettier --write .",
     "fix": "npm run lint:fix && npm run format",
     "test": "npm run test -w frontend && npm run test -w backend",
+    "test:scripts": "node --test tests/scripts/*.test.js",
     "test:backend": "npm run test -w backend",
     "test:frontend": "npm run test -w frontend",
     "test:contracts": "cargo test --workspace",
