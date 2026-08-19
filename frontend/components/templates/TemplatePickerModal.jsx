@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
-import { useTemplates, useTemplate } from '../../hooks/useEscrowTemplates';
+import { useTemplates, useTemplate as applyTemplate } from '../../hooks/useEscrowTemplates';
 
 /**
  * Modal that lets a user pick an existing escrow template to pre-fill the
@@ -34,7 +34,7 @@ function TemplatePickerBody({ onClose, onSelect }) {
   const handleSelect = async (template) => {
     // Increment usage count, then hand the template back to the wizard.
     try {
-      await useTemplate(template.id);
+      await applyTemplate(template.id);
     } catch {
       // Non-fatal: the template is still usable even if the counter fails.
     }
