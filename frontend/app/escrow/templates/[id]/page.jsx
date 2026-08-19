@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Button from '../../../../components/ui/Button';
-import { getTemplate, useTemplate } from '../../../../hooks/useEscrowTemplates';
+import { getTemplate, useTemplate as applyTemplate } from '../../../../hooks/useEscrowTemplates';
 import { useToast } from '../../../../contexts/ToastContext';
 
 /**
@@ -45,7 +45,7 @@ export default function TemplateDetailPage() {
 
   const handleUse = async () => {
     try {
-      await useTemplate(id);
+      await applyTemplate(id);
     } catch {
       // Non-fatal: we still navigate to the wizard.
     }

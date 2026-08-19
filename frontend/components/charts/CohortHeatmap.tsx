@@ -7,7 +7,7 @@ interface CohortHeatmapProps {
     retention: number[];
   };
   isLoading: boolean;
-  isError: any;
+  isError: unknown;
   cohortMonth: string;
 }
 
