@@ -1,4 +1,3 @@
-'use strict';
 
 /**
  * @fileoverview GDPR-compliant per-tenant data export pipeline.
@@ -8,10 +7,10 @@
  * signed-URL generation → TTL-based expiry.
  */
 
-const crypto = require('crypto');
-const zlib = require('zlib');
-const { promisify } = require('util');
-const { Readable } = require('stream');
+import crypto from 'crypto';
+import zlib from 'zlib';
+import { promisify } from 'util';
+import { Readable } from 'stream';
 
 const gzip = promisify(zlib.gzip);
 
@@ -20,7 +19,8 @@ const gzip = promisify(zlib.gzip);
 // ---------------------------------------------------------------------------
 
 /** @type {import('@prisma/client').PrismaClient} */
-const prisma = global.__prisma || require('../config/prisma');
+import prismaModule from '../config/prisma.js';
+const prisma = global.__prisma || prismaModule;
 
 /**
  * Minimal S3 stub.  Swap for `new S3Client(…)` from @aws-sdk/client-s3.
@@ -324,7 +324,7 @@ async function _runExportPipeline(jobId, tenantId) {
 // Exports
 // ---------------------------------------------------------------------------
 
-module.exports = {
+export default {
   initiateExport,
   collectTenantData,
   compressAndUpload,
