@@ -180,7 +180,7 @@ export const logout = async (req, res) => {
         if (decoded.header.kid) {
           const matched = validKeys.find(k => k.kid === decoded.header.kid);
           if (matched) {
-            try { payload = jwt.verify(tokenStr, matched.publicKey, { algorithms: ['RS256'] }); } catch(e) {}
+            try { payload = jwt.verify(tokenStr, matched.publicKey, { algorithms: ['RS256'] }); } catch(e) { /* eslint-disable-line no-empty */ }
           }
         }
         
@@ -189,7 +189,7 @@ export const logout = async (req, res) => {
             try {
               payload = jwt.verify(tokenStr, k.publicKey, { algorithms: ['RS256'] });
               break;
-            } catch(e) {}
+            } catch(e) { /* eslint-disable-line no-empty */ }
           }
         }
         

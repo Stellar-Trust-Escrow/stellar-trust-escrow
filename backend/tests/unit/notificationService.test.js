@@ -54,7 +54,7 @@ describe('notificationService', () => {
     it('throws 400 error for unknown template', async () => {
       try {
         await sendNotification({ userId: 1, channel: 'email', template: 'unknown_tpl', data: {} });
-        fail('should have thrown');
+        throw new Error('should have thrown');
       } catch (err) {
         expect(err.status).toBe(400);
       }
@@ -76,7 +76,7 @@ describe('notificationService', () => {
       mockPrisma.user.findUnique.mockResolvedValue({ id: 1, notificationPreferences: { sms: true } });
       try {
         await sendNotification({ userId: 1, channel: 'sms', template: 'escrow_funded', data: { phone: '123' } });
-        fail('should have thrown');
+        throw new Error('should have thrown');
       } catch (err) {
         expect(err.status).toBe(400);
       }
