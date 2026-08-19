@@ -43,9 +43,9 @@ export default function CreateWizard() {
           <legend>Step 2: Milestones</legend>
           {draft.milestones.map((m, i) => (
             <div key={i} className="milestone-row">
-              <input aria-label={Milestone  description} value={m.description} onChange={e => dispatch({ type: 'UPDATE_MILESTONE', index: i, field: 'description', value: e.target.value })} placeholder="Description" />
-              <input aria-label={Milestone  amount} type="number" value={m.amount} onChange={e => dispatch({ type: 'UPDATE_MILESTONE', index: i, field: 'amount', value: e.target.value })} placeholder="Amount (XLM)" />
-              {draft.milestones.length > 1 && <button type="button" onClick={() => dispatch({ type: 'REMOVE_MILESTONE', index: i })} aria-label={Remove milestone }>Remove</button>}
+              <input aria-label={`Milestone ${i + 1} description`} value={m.description} onChange={e => dispatch({ type: 'UPDATE_MILESTONE', index: i, field: 'description', value: e.target.value })} placeholder="Description" />
+              <input aria-label={`Milestone ${i + 1} amount`} type="number" value={m.amount} onChange={e => dispatch({ type: 'UPDATE_MILESTONE', index: i, field: 'amount', value: e.target.value })} placeholder="Amount (XLM)" />
+              {draft.milestones.length > 1 && <button type="button" onClick={() => dispatch({ type: 'REMOVE_MILESTONE', index: i })} aria-label={`Remove milestone ${i + 1}`}>Remove</button>}
             </div>
           ))}
           {draft.milestones.length < 10 && <button type="button" onClick={() => dispatch({ type: 'ADD_MILESTONE' })}>+ Add Milestone</button>}
