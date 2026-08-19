@@ -33,11 +33,12 @@ function reducer(state, action) {
           i === action.index ? { ...m, [action.field]: action.value } : m
         ),
       };
-    case 'REORDER_MILESTONES':
+    case 'REORDER_MILESTONES': {
       const reordered = [...state.milestones];
       const [removed] = reordered.splice(action.from, 1);
       reordered.splice(action.to, 0, removed);
       return { ...state, milestones: reordered };
+    }
     case 'RESET':
       return initialState;
     default:
