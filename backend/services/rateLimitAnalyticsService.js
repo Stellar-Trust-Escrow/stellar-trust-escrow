@@ -1,4 +1,3 @@
-'use strict';
 
 /**
  * @fileoverview Rate-limit analytics service.
@@ -72,7 +71,8 @@ const redis = global.__redis || {
 };
 
 /** @type {import('@prisma/client').PrismaClient} */
-const prisma = global.__prisma || require('../config/prisma');
+import prismaModule from '../config/prisma.js';
+const prisma = global.__prisma || prismaModule;
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -378,7 +378,7 @@ async function detectAbuse(consumerId) {
 // Exports
 // ---------------------------------------------------------------------------
 
-module.exports = {
+export default {
   recordRequest,
   checkQuota,
   recordBreach,
