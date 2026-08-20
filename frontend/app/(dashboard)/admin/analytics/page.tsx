@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { format, subDays, startOfMonth } from 'date-fns';
-import { DayPicker, DateRange } from 'react-day-picker';
+import { DayPicker } from 'react-day-picker';
+import type { DateRange } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
 import { useVolumeAnalytics, useDisputeRateAnalytics, useResolutionTimeAnalytics, useCohortAnalytics } from '../../../../hooks/useAnalytics';
 import { VolumeChart } from '../../../../components/charts/VolumeChart';

@@ -10,7 +10,7 @@ interface VolumeChartProps {
     disputed: number[];
   };
   isLoading: boolean;
-  isError: any;
+  isError: unknown;
 }
 
 export const VolumeChart: React.FC<VolumeChartProps> = ({ data, isLoading, isError }) => {
