@@ -1,6 +1,12 @@
 import { Worker } from 'bullmq';
+
 import prisma from '../lib/prisma.js';
 import { connection } from '../queues/index.js';
+import {
+  calculateRetryDelayMs,
+  emitWebhookDeadEvent,
+  MAX_DELIVERY_ATTEMPTS,
+} from '../services/webhookService.js';
 
 export async function processWebhookJob(job) {
   const { url, payload, headers = {}, deliveryId } = job.data;
@@ -16,33 +22,49 @@ export async function processWebhookJob(job) {
       body: JSON.stringify(payload),
     });
 
+    const responseBody = await response.text();
+
     if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Webhook failed: ${response.status} ${errorText}`);
+      throw Object.assign(new Error(`Webhook failed: ${response.status}`), {
+        responseCode: response.status,
+        responseBody,
+      });
     }
 
     await prisma.webhookDelivery.update({
       where: { id: deliveryId },
       data: {
-        status: 'success',
+        status: 'delivered',
         responseCode: response.status,
+        responseBody,
         attempts,
-        lastAttemptAt: new Date(),
+        nextRetryAt: null,
+      },
+    });
+  } catch (err) {
+    const responseCode = err.responseCode ?? null;
+    const responseBody = err.responseBody ?? err.message;
+    const isTerminal = attempts >= MAX_DELIVERY_ATTEMPTS;
+    const nextRetryAt = isTerminal
+      ? null
+      : new Date(Date.now() + calculateRetryDelayMs(attempts));
+
+    const updated = await prisma.webhookDelivery.update({
+      where: { id: deliveryId },
+      data: {
+        status: isTerminal ? 'dead' : 'failed',
+        responseCode,
+        responseBody,
+        attempts,
+        nextRetryAt,
       },
     });
 
-    console.log(`[WebhookWorker] Delivered to ${url}: ${response.status}`);
-  } catch (err) {
-    const isTerminal = attempts >= (job.opts.attempts ?? 1);
-    await prisma.webhookDelivery.update({
-      where: { id: deliveryId },
-      data: {
-        status: isTerminal ? 'failed' : 'pending',
-        errorMessage: err.message,
-        attempts,
-        lastAttemptAt: new Date(),
-      },
-    });
+    if (isTerminal) {
+      emitWebhookDeadEvent(updated);
+      return;
+    }
+
     throw err;
   }
 }
@@ -50,7 +72,7 @@ export async function processWebhookJob(job) {
 const webhookWorker =
   process.env.NODE_ENV === 'test'
     ? null
-    : new Worker('webhook', processWebhookJob, {
+    : new Worker('webhook-delivery', processWebhookJob, {
         connection,
       });
 

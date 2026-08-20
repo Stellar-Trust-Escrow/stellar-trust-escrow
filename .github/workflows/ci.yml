@@ -2,10 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [main, develop] # support both main and develop for merge-ready CI
+    branches: [main, develop, 'ci-verify/**']
   pull_request:
     branches: [main, develop]
     types: [opened, synchronize, reopened]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,10 +16,6 @@ permissions:
 env:
   HUSKY: 0
   SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   # ─────────────────────────────────────────
@@ -32,7 +29,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '20'
+
       - name: Install root dependencies
         run: npm ci --ignore-scripts
 
@@ -172,6 +170,7 @@ jobs:
   contract-fuzz:
     name: Smart Contract Fuzzing
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' # only on direct pushes to develop, not PRs
 
     steps:
       - uses: actions/checkout@v4
@@ -362,6 +361,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
+          cache: 'npm'
 
       - name: Install dependencies
         if: steps.changes.outputs.changed == 'true'
@@ -448,14 +448,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: npm
+          cache: 'npm'
+
       - name: Install dependencies
         if: steps.changes.outputs.changed == 'true'
         run: npm ci
 
       - name: Install Playwright browsers
         if: steps.changes.outputs.changed == 'true'
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium firefox
         working-directory: frontend
 
       - name: Build frontend
@@ -465,27 +466,11 @@ jobs:
           NEXT_PUBLIC_API_URL: http://127.0.0.1:4000
           NEXT_PUBLIC_CONTRACT_ADDRESS: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 
-      - name: Start frontend server
-        if: steps.changes.outputs.changed == 'true'
-        run: npm run start:test -w frontend &
-        env:
-          NODE_ENV: production
-          NEXT_PUBLIC_API_URL: http://127.0.0.1:4000
-          NEXT_PUBLIC_CONTRACT_ADDRESS: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-
-      - name: Wait for server
-        if: steps.changes.outputs.changed == 'true'
-        run: npx wait-on http://127.0.0.1:3000 --timeout 60000
-        continue-on-error: true
-
       - name: Run Playwright suite
         if: steps.changes.outputs.changed == 'true'
         run: npm run test:e2e -w frontend -- --update-snapshots
-        continue-on-error: true
         env:
           CI: 'true'
-          PLAYWRIGHT_DISABLE_WEBSERVER: '1'
-          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
           NEXT_PUBLIC_API_URL: http://127.0.0.1:4000
           NEXT_PUBLIC_CONTRACT_ADDRESS: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 
@@ -526,7 +511,7 @@ jobs:
               CHANGED=$(git ls-tree -r --name-only HEAD)
             fi
           fi
-          if echo "$CHANGED" | grep -qE '^(frontend/|package(-lock)?\.json|scripts/)'; then
+          if echo "$CHANGED" | grep -qE '^(frontend/|package(-lock)?\.json)'; then
             echo "changed=true" >> $GITHUB_OUTPUT
           else
             echo "changed=false" >> $GITHUB_OUTPUT
@@ -536,7 +521,8 @@ jobs:
         if: steps.changes.outputs.changed == 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '20'
+          cache: 'npm'
 
       - name: Install dependencies
         if: steps.changes.outputs.changed == 'true'
@@ -611,7 +597,6 @@ jobs:
         id: changes
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            # Fetch the base branch to ensure merge-base works
             git fetch --no-tags --depth=50 origin "${{ github.base_ref }}"
             BASE_COMMIT=$(git merge-base HEAD "origin/${{ github.base_ref }}" 2>/dev/null || echo "origin/${{ github.base_ref }}")
             CHANGED=$(git diff --name-only "$BASE_COMMIT"...HEAD 2>/dev/null || git diff --name-only HEAD~1 HEAD)
@@ -622,18 +607,24 @@ jobs:
               CHANGED=$(git ls-tree -r --name-only HEAD)
             fi
           fi
-          if echo "$CHANGED" | grep -qE '^(backend/|frontend/|Dockerfile|package(-lock)?\.json)'; then
-            echo "changed=true" >> $GITHUB_OUTPUT
+          echo "$CHANGED"
+          if echo "$CHANGED" | grep -qE '^(backend/|Dockerfile|package(-lock)?\.json)'; then
+            echo "backend_changed=true" >> $GITHUB_OUTPUT
           else
-            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "backend_changed=false" >> $GITHUB_OUTPUT
+          fi
+          if echo "$CHANGED" | grep -qE '^(frontend/|Dockerfile|package(-lock)?\.json)'; then
+            echo "frontend_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "frontend_changed=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Set up Docker Buildx
-        if: steps.changes.outputs.changed == 'true'
+        if: steps.changes.outputs.backend_changed == 'true' || steps.changes.outputs.frontend_changed == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Build Backend Image
-        if: steps.changes.outputs.changed == 'true'
+        if: steps.changes.outputs.backend_changed == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -642,19 +633,24 @@ jobs:
           tags: stellar-escrow-backend:${{ github.sha }}
 
       - name: Build Frontend Image
-        if: steps.changes.outputs.changed == 'true'
+        if: steps.changes.outputs.frontend_changed == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
           target: frontend
           push: false
           tags: stellar-escrow-frontend:${{ github.sha }}
+          build-args: |
+            NEXT_PUBLIC_API_URL=http://localhost:4000
+            NEXT_PUBLIC_CONTRACT_ADDRESS=CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 
       - name: Job Summary
         if: always()
         run: |
-          if [ "${{ steps.changes.outputs.changed }}" = "true" ]; then
-            echo "✅ Docker builds completed"
+          backend="${{ steps.changes.outputs.backend_changed }}"
+          frontend="${{ steps.changes.outputs.frontend_changed }}"
+          if [ "$backend" = "true" ] || [ "$frontend" = "true" ]; then
+            echo "✅ Docker builds completed (backend=${backend}, frontend=${frontend})"
           else
             echo "⏭️ No Docker-related changes detected — skipped"
           fi

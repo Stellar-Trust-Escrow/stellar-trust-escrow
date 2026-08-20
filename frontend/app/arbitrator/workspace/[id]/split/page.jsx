@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Image from 'next/image';
 import Button from '../../../../../components/ui/Button';
 
 const CLIENT_CASE = {
@@ -87,11 +88,16 @@ function PreviewModal({ file, onClose }) {
 
         <div className="max-h-[75vh] overflow-auto p-4">
           {file.type.startsWith('image/') ? (
-            <img
-              src={file.url}
-              alt={file.name}
-              className="mx-auto max-h-[70vh] rounded-2xl object-contain"
-            />
+            <div className="relative mx-auto h-[70vh] w-full">
+              <Image
+                src={file.url}
+                alt={file.name}
+                fill
+                unoptimized
+                sizes="100vw"
+                className="rounded-2xl object-contain"
+              />
+            </div>
           ) : (
             <iframe
               src={file.url}

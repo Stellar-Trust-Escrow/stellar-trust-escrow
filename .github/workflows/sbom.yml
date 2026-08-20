@@ -1,0 +1,84 @@
+name: SBOM and License Compliance
+
+on:
+  pull_request:
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - 'backend/package.json'
+      - 'backend/package-lock.json'
+      - 'frontend/package.json'
+      - 'frontend/package-lock.json'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'contracts/**'
+
+jobs:
+  sbom-and-license:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: |
+          cargo install cargo-cyclonedx
+
+      - name: Generate SBOM (Backend)
+        run: |
+          cd backend || true
+          npm install --package-lock-only || true
+          npx @cyclonedx/cyclonedx-npm --output-format JSON --output-file ../sbom-backend.json
+
+      - name: Generate SBOM (Frontend)
+        run: |
+          cd frontend || true
+          npm install --package-lock-only || true
+          npx @cyclonedx/cyclonedx-npm --output-format JSON --output-file ../sbom-frontend.json
+
+      - name: Generate SBOM (Rust Contracts)
+        run: |
+          cargo cyclonedx --format json
+
+      - name: Merge SBOMs
+        run: |
+          node --input-type=module -e "
+          import fs from 'fs';
+          let files = ['sbom-backend.json', 'sbom-frontend.json'];
+          try {
+            const dirs = fs.readdirSync('contracts');
+            for (const d of dirs) {
+              try {
+                const subFiles = fs.readdirSync('contracts/' + d);
+                for (const f of subFiles) {
+                  if (f.endsWith('.cdx.json')) files.push('contracts/' + d + '/' + f);
+                }
+              } catch (e) {}
+            }
+          } catch(e) {}
+          let components = [];
+          for (const f of files) {
+            if (fs.existsSync(f)) {
+              const d = JSON.parse(fs.readFileSync(f, 'utf8'));
+              if (d.components) components.push(...d.components);
+            }
+          }
+          fs.writeFileSync('sbom-full.json', JSON.stringify({components}, null, 2));
+          "
+
+      - name: Upload SBOM Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-full
+          path: sbom-full.json
+
+      - name: Enforce License Compliance
+        run: node scripts/check-licenses.js

@@ -31,6 +31,14 @@ mod governance_escalation_tests {
         }
     }
 
+    fn high_value_multisig(env: &Env, client: &Address) -> MultisigConfig {
+        MultisigConfig {
+            approvers: soroban_sdk::vec![env, client.clone(), Address::generate(env)],
+            weights: soroban_sdk::vec![env, 1_u32, 1_u32],
+            threshold: 2,
+        }
+    }
+
     // Test 1: Set and get governance contract address
     #[test]
     fn test_set_and_get_governance_contract() {
@@ -144,7 +152,7 @@ mod governance_escalation_tests {
             &None,
             &None,
             &None,
-            &no_multisig(&env),
+            &high_value_multisig(&env, &client_addr),
         );
 
         // Raise dispute

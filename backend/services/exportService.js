@@ -1,7 +1,43 @@
-import { createHash, randomUUID } from 'crypto';
+import { createHash, createHmac, randomUUID, timingSafeEqual } from 'crypto';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+
+import { format as csvFormat } from '@fast-csv/format';
+import ExcelJS from 'exceljs';
 
 import prisma from '../lib/prisma.js';
+import cacheService from './cacheService.js';
 import { emailQueue } from '../queues/emailQueue.js';
+import { enqueueExportJob } from '../queues/exportQueue.js';
+
+// ── Async escrow-history export configuration ─────────────────────────────────
+
+/** Redis TTL for a job's status record. */
+const JOB_TTL_SECONDS = 60 * 60; // 1 hour
+/** Signed download URLs are short-lived. */
+const SIGNED_URL_TTL_SECONDS = 15 * 60; // 15 minutes
+/** How many escrows to pull per DB page while streaming to disk. */
+const EXPORT_BATCH_SIZE = 1000;
+/** Supported output formats. */
+const EXPORT_FORMATS = ['csv', 'xlsx'];
+/** Directory for generated export files (used when S3 is not configured). */
+const EXPORT_DIR = path.join(os.tmpdir(), 'escrow-exports');
+/** CSV/XLSX column order — must match the issue specification exactly. */
+const EXPORT_COLUMNS = [
+  'escrow_id',
+  'status',
+  'client_address',
+  'freelancer_address',
+  'total_amount',
+  'token',
+  'milestones_count',
+  'milestones_approved',
+  'created_at',
+  'updated_at',
+  'dispute_raised_at',
+  'resolved_at',
+];
 
 function withTenant(where, tenantId) {
   return tenantId ? { ...where, tenantId } : where;
@@ -261,6 +297,313 @@ class ExportService {
     });
 
     return { jobId: job.id, downloadUrl };
+  }
+
+  // ── Async escrow-history export ─────────────────────────────────────────────
+
+  /** Redis key under which a job's status is stored. */
+  jobStatusKey(jobId) {
+    return `export:job:${jobId}`;
+  }
+
+  /** Secret used to sign local download URLs. */
+  signingSecret() {
+    return (
+      process.env.EXPORT_SIGNING_SECRET ||
+      process.env.JWT_SECRET ||
+      'insecure-dev-export-signing-secret'
+    );
+  }
+
+  /** Build a Prisma `where` clause from the requested export filters. */
+  buildExportWhere({ dateFrom, dateTo, status, tenantId } = {}) {
+    const where = tenantId ? { tenantId } : {};
+
+    const createdAt = {};
+    if (dateFrom) createdAt.gte = new Date(dateFrom);
+    if (dateTo) createdAt.lte = new Date(dateTo);
+    if (Object.keys(createdAt).length) where.createdAt = createdAt;
+
+    if (Array.isArray(status) && status.length) {
+      where.status = { in: status };
+    }
+
+    return where;
+  }
+
+  /** Rough completion estimate so the UI can show a sensible progress bar. */
+  estimateExportSeconds(count) {
+    return Math.max(2, Math.ceil(count / 500));
+  }
+
+  /** Persist a job's status record in Redis (with 1h TTL). */
+  async setJobStatus(jobId, status) {
+    const current = (await this.getJobStatus(jobId)) || {};
+    const next = { ...current, ...status, jobId, updatedAt: new Date().toISOString() };
+    await cacheService.set(this.jobStatusKey(jobId), next, JOB_TTL_SECONDS);
+    return next;
+  }
+
+  /** Read a job's status record from Redis. */
+  async getJobStatus(jobId) {
+    return cacheService.get(this.jobStatusKey(jobId));
+  }
+
+  /**
+   * Create and enqueue an async escrow export job.
+   *
+   * @returns {Promise<{ jobId: string, estimatedSeconds: number }>}
+   */
+  async createExportJob({ format = 'csv', dateFrom, dateTo, status, tenantId, requestedBy } = {}) {
+    if (!EXPORT_FORMATS.includes(format)) {
+      throw new Error(`Unsupported export format: ${format}`);
+    }
+
+    const where = this.buildExportWhere({ dateFrom, dateTo, status, tenantId });
+    const count = await prisma.escrow.count({ where });
+    const estimatedSeconds = this.estimateExportSeconds(count);
+    const jobId = randomUUID();
+
+    await this.setJobStatus(jobId, {
+      status: 'pending',
+      progress: 0,
+      format,
+      total: count,
+      params: { dateFrom, dateTo, status: status ?? null },
+      requestedBy: requestedBy ?? null,
+      createdAt: new Date().toISOString(),
+    });
+
+    await enqueueExportJob(jobId, { format, dateFrom, dateTo, status, tenantId, requestedBy });
+
+    return { jobId, estimatedSeconds };
+  }
+
+  /** Map a Prisma escrow (with milestones + dispute) to a flat export row. */
+  escrowToRow(escrow) {
+    const milestones = escrow.milestones ?? [];
+    const approved = milestones.filter((m) => m.status === 'Approved').length;
+
+    return {
+      escrow_id: escrow.id?.toString() ?? '',
+      status: escrow.status ?? '',
+      client_address: escrow.clientAddress ?? '',
+      freelancer_address: escrow.freelancerAddress ?? '',
+      total_amount: escrow.totalAmount ?? '',
+      token: escrow.tokenAddress ?? '',
+      milestones_count: milestones.length,
+      milestones_approved: approved,
+      created_at: toIso(escrow.createdAt) ?? '',
+      updated_at: toIso(escrow.updatedAt) ?? '',
+      dispute_raised_at: escrow.dispute ? (toIso(escrow.dispute.raisedAt) ?? '') : '',
+      resolved_at: escrow.dispute ? (toIso(escrow.dispute.resolvedAt) ?? '') : '',
+    };
+  }
+
+  /**
+   * Stream all escrows matching `where` to a callback in id-ordered batches.
+   * Cursor pagination keeps memory flat even for very large result sets.
+   */
+  async streamEscrows(where, onBatch) {
+    let cursor;
+    for (;;) {
+      const batch = await prisma.escrow.findMany({
+        where,
+        include: { milestones: true, dispute: true },
+        orderBy: { id: 'asc' },
+        take: EXPORT_BATCH_SIZE,
+        ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+      });
+
+      if (!batch.length) break;
+      await onBatch(batch);
+      if (batch.length < EXPORT_BATCH_SIZE) break;
+      cursor = batch[batch.length - 1].id;
+    }
+  }
+
+  /** Write export rows to a CSV file on disk. */
+  async writeCsvFile(filePath, where, onRow) {
+    await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+    const writeStream = fs.createWriteStream(filePath);
+    const csvStream = csvFormat({ headers: EXPORT_COLUMNS, writeHeaders: true });
+    csvStream.pipe(writeStream);
+
+    const finished = new Promise((resolve, reject) => {
+      writeStream.on('finish', resolve);
+      writeStream.on('error', reject);
+      csvStream.on('error', reject);
+    });
+
+    await this.streamEscrows(where, async (batch) => {
+      for (const escrow of batch) {
+        csvStream.write(this.escrowToRow(escrow));
+        if (onRow) await onRow();
+      }
+    });
+
+    csvStream.end();
+    await finished;
+  }
+
+  /** Write export rows to an XLSX file on disk. */
+  async writeXlsxFile(filePath, where, onRow) {
+    await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Escrows');
+    sheet.columns = EXPORT_COLUMNS.map((key) => ({ header: key, key }));
+
+    await this.streamEscrows(where, async (batch) => {
+      for (const escrow of batch) {
+        sheet.addRow(this.escrowToRow(escrow));
+        if (onRow) await onRow();
+      }
+    });
+
+    await workbook.xlsx.writeFile(filePath);
+  }
+
+  /** Absolute path of the generated file for a job. */
+  exportFilePath(jobId, format) {
+    return path.join(EXPORT_DIR, `${jobId}.${format}`);
+  }
+
+  /**
+   * Process an escrow export job: fetch → generate file → upload/store → sign.
+   * Called by the BullMQ worker (and directly by integration tests).
+   *
+   * @returns {Promise<{ status: string, downloadUrl: string }>}
+   */
+  async processExportJob(jobId, params = {}, { onProgress } = {}) {
+    try {
+      const format = EXPORT_FORMATS.includes(params.format) ? params.format : 'csv';
+      const where = this.buildExportWhere(params);
+      const total =
+        (await this.getJobStatus(jobId))?.total ?? (await prisma.escrow.count({ where }));
+
+      await this.setJobStatus(jobId, { status: 'processing', progress: 0 });
+
+      let processed = 0;
+      let lastReported = 0;
+      const bump = async () => {
+        processed += 1;
+        const progress = total > 0 ? Math.min(99, Math.floor((processed / total) * 100)) : 99;
+        if (progress !== lastReported) {
+          lastReported = progress;
+          if (onProgress) await onProgress(progress);
+          await this.setJobStatus(jobId, { status: 'processing', progress });
+        }
+      };
+
+      const filePath = this.exportFilePath(jobId, format);
+      if (format === 'xlsx') {
+        await this.writeXlsxFile(filePath, where, bump);
+      } else {
+        await this.writeCsvFile(filePath, where, bump);
+      }
+
+      const filename = `escrow-export-${jobId}.${format}`;
+      const downloadUrl = await this.generateSignedDownloadUrl(jobId, {
+        filePath,
+        filename,
+        format,
+      });
+
+      await this.setJobStatus(jobId, {
+        status: 'done',
+        progress: 100,
+        downloadUrl,
+        filePath,
+        filename,
+        completedAt: new Date().toISOString(),
+      });
+
+      return { status: 'done', downloadUrl };
+    } catch (error) {
+      await this.setJobStatus(jobId, {
+        status: 'failed',
+        error: error.message || 'Export failed',
+        failedAt: new Date().toISOString(),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Upload the generated file to S3 and return a 15-minute presigned URL.
+   * Returns null when S3 is not configured (or the SDK is unavailable), so the
+   * caller falls back to a locally-signed download endpoint.
+   */
+  async uploadToS3AndSign(filePath, key, contentType) {
+    const bucket = process.env.AWS_S3_BUCKET;
+    if (!bucket) return null;
+
+    try {
+      const [{ S3Client, PutObjectCommand, GetObjectCommand }, { getSignedUrl }] =
+        await Promise.all([import('@aws-sdk/client-s3'), import('@aws-sdk/s3-request-presigner')]);
+
+      const region = process.env.AWS_REGION || 'us-east-1';
+      const client = new S3Client({ region });
+      const body = await fs.promises.readFile(filePath);
+
+      await client.send(
+        new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: contentType }),
+      );
+
+      return getSignedUrl(client, new GetObjectCommand({ Bucket: bucket, Key: key }), {
+        expiresIn: SIGNED_URL_TTL_SECONDS,
+      });
+    } catch {
+      // SDK missing or upload failed — fall back to local signed endpoint.
+      return null;
+    }
+  }
+
+  /** MIME type for a given export format. */
+  contentTypeFor(format) {
+    return format === 'xlsx'
+      ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      : 'text/csv';
+  }
+
+  /**
+   * Produce a signed, short-lived download URL for a completed export.
+   * Prefers an S3 presigned URL; otherwise returns a locally-signed endpoint.
+   */
+  async generateSignedDownloadUrl(jobId, { filePath, filename, format }) {
+    const s3Url = await this.uploadToS3AndSign(
+      filePath,
+      `escrow-exports/${filename}`,
+      this.contentTypeFor(format),
+    );
+    if (s3Url) return s3Url;
+
+    const expires = Date.now() + SIGNED_URL_TTL_SECONDS * 1000;
+    const signature = this.signDownload(jobId, expires);
+    return `/api/v1/escrows/export/${jobId}/download?expires=${expires}&signature=${signature}`;
+  }
+
+  /** Compute the HMAC signature for a local download URL. */
+  signDownload(jobId, expires) {
+    return createHmac('sha256', this.signingSecret()).update(`${jobId}.${expires}`).digest('hex');
+  }
+
+  /**
+   * Validate a local download request's signature and expiry.
+   * @returns {{ valid: boolean, reason?: string }}
+   */
+  verifyDownloadSignature(jobId, expires, signature) {
+    const expiresNum = Number(expires);
+    if (!expiresNum || Number.isNaN(expiresNum)) return { valid: false, reason: 'invalid_expiry' };
+    if (Date.now() > expiresNum) return { valid: false, reason: 'expired' };
+
+    const expected = this.signDownload(jobId, expiresNum);
+    const a = Buffer.from(expected);
+    const b = Buffer.from(String(signature || ''));
+    if (a.length !== b.length || !timingSafeEqual(a, b)) {
+      return { valid: false, reason: 'bad_signature' };
+    }
+    return { valid: true };
   }
 
   pseudonymForAddress(address) {

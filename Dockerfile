@@ -6,18 +6,22 @@ ENV HUSKY=0
 COPY package*.json ./
 COPY backend/package*.json ./backend/
 COPY frontend/package*.json ./frontend/
+COPY sdk/package*.json ./sdk/
 RUN npm ci --ignore-scripts
 
 # Backend build stage
 FROM base AS backend-builder
 COPY backend/ ./backend/
-# No build step usually for Express, but could run typescripts build if needed
-# RUN cd backend && npm run build 
 
 # Frontend build stage
 FROM base AS frontend-builder
+COPY sdk/ ./sdk/
 COPY frontend/ ./frontend/
 ARG NEXT_PUBLIC_API_URL=http://localhost:4000
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_CONTRACT_ADDRESS=CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+ENV NEXT_PUBLIC_CONTRACT_ADDRESS=$NEXT_PUBLIC_CONTRACT_ADDRESS
+RUN npm run build -w sdk
 RUN cd frontend && npm run build
 
 # Final Backend Image

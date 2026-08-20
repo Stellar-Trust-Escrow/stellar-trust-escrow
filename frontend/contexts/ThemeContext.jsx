@@ -1,35 +1,62 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
+import {
+  getInitialTheme,
+  applyTheme,
+  toggleTheme as toggleThemeUtil,
+  THEMES,
+  THEME_KEY,
+} from '../lib/theme';
 
 const ThemeContext = createContext(null);
 
 export function ThemeProvider({ children }) {
-  const [theme, setTheme] = useState(null);
+  const [theme, setTheme] = useState(getInitialTheme);
+  // Track whether the user has explicitly chosen a theme (vs system-derived)
+  const hasManualPreference = useRef(
+    typeof window !== 'undefined' && !!localStorage.getItem(THEME_KEY),
+  );
 
-  // On mount: read localStorage or fall back to system preference
   useEffect(() => {
-    const stored = localStorage.getItem('theme');
-    if (stored === 'dark' || stored === 'light') {
-      setTheme(stored);
+    // Apply CSS — write to localStorage only if user had a stored preference
+    if (hasManualPreference.current) {
+      applyTheme(theme);
     } else {
-      setTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
     }
+
+    requestAnimationFrame(() => {
+      document.documentElement.classList.remove('no-transitions');
+    });
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e) => {
+      if (!hasManualPreference.current) {
+        setTheme(e.matches ? THEMES.DARK : THEMES.LIGHT);
+      }
+    };
+    mediaQuery.addEventListener('change', handleChange);
+    return () => {
+      mediaQuery.removeEventListener('change', handleChange);
+    };
   }, []);
 
-  // Apply / remove the `dark` class on <html> whenever theme changes
   useEffect(() => {
-    if (theme === null) return;
-    const root = document.documentElement;
-    if (theme === 'dark') {
-      root.classList.add('dark');
+    if (hasManualPreference.current) {
+      applyTheme(theme);
     } else {
-      root.classList.remove('dark');
+      document.documentElement.setAttribute('data-theme', theme);
     }
-    localStorage.setItem('theme', theme);
   }, [theme]);
 
-  const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
+  const toggleTheme = useCallback(() => {
+    hasManualPreference.current = true;
+    const newTheme = toggleThemeUtil(theme);
+    localStorage.setItem(THEME_KEY, newTheme);
+    setTheme(newTheme);
+    // persistTheme(newTheme); // manual user choice — persist as override
+  }, [theme]);
 
   return <ThemeContext.Provider value={{ theme, toggleTheme }}>{children}</ThemeContext.Provider>;
 }

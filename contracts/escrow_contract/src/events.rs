@@ -169,6 +169,13 @@ pub fn emit_escrow_cancelled(env: &Env, escrow_id: u64, returned_amount: i128) {
         .publish((ev::ESCROW_CANCELLED, escrow_id), returned_amount);
 }
 
+pub fn emit_escrow_expired(env: &Env, escrow_id: u64, refunded_to: &Address, amount: i128) {
+    env.events().publish(
+        (ev::ESCROW_EXPIRED, escrow_id),
+        (refunded_to.clone(), amount),
+    );
+}
+
 pub fn emit_dispute_raised(env: &Env, escrow_id: u64, raised_by: &Address) {
     env.events()
         .publish((ev::DISPUTE_RAISED, escrow_id), raised_by.clone());
@@ -241,6 +248,13 @@ pub fn emit_contract_paused(env: &Env, admin: &Address) {
 pub fn emit_contract_unpaused(env: &Env, admin: &Address) {
     env.events()
         .publish((ev::CONTRACT_UNPAUSED,), admin.clone());
+}
+
+pub fn emit_emergency_withdrawal(env: &Env, escrow_id: u64, recipient: &Address, amount: i128) {
+    env.events().publish(
+        (ev::EMERGENCY_WITHDRAWAL, escrow_id),
+        (recipient.clone(), amount),
+    );
 }
 
 pub fn emit_cancellation_executed(
@@ -343,6 +357,27 @@ pub fn emit_admin_changed(env: &Env, old_admin: &Address, new_admin: &Address) {
         .publish((ev::ADMIN_CHANGED,), (old_admin.clone(), new_admin.clone()));
 }
 
+pub fn emit_admin_transferred(env: &Env, old_admin: &Address, new_admin: &Address) {
+    env.events().publish(
+        (soroban_sdk::Symbol::new(env, "AdminTransferred"),),
+        (old_admin.clone(), new_admin.clone()),
+    );
+}
+
+pub fn emit_arbiter_registered(env: &Env, arbiter: &Address) {
+    env.events().publish(
+        (soroban_sdk::Symbol::new(env, "ArbiterRegistered"),),
+        arbiter.clone(),
+    );
+}
+
+pub fn emit_arbiter_removed(env: &Env, arbiter: &Address) {
+    env.events().publish(
+        (soroban_sdk::Symbol::new(env, "ArbiterRemoved"),),
+        arbiter.clone(),
+    );
+}
+
 pub fn emit_max_milestones_set(env: &Env, new_max: u32) {
     env.events().publish((ev::MAX_MILESTONES_SET,), new_max);
 }
@@ -407,6 +442,56 @@ pub fn emit_deadline_extended(env: &Env, escrow_id: u64, old_deadline: u64, new_
     );
 }
 
+/// Emitted when a deadline extension is requested by one party.
+///
+/// # Arguments
+/// * `escrow_id` - The escrow ID
+/// * `requester` - The party requesting the extension
+/// * `new_deadline` - The proposed new deadline
+/// * `reason` - Reason for the extension
+pub fn emit_deadline_extension_requested(
+    env: &Env,
+    escrow_id: u64,
+    requester: &Address,
+    new_deadline: u64,
+    reason: &soroban_sdk::String,
+) {
+    env.events().publish(
+        (ev::DEADLINE_EXTENSION_REQUESTED, escrow_id),
+        (requester.clone(), new_deadline, reason.clone()),
+    );
+}
+
+/// Emitted when a deadline extension request is approved by the counterparty.
+///
+/// # Arguments
+/// * `escrow_id` - The escrow ID
+/// * `approver` - The party who approved the extension
+/// * `new_deadline` - The approved deadline
+pub fn emit_deadline_extension_approved(
+    env: &Env,
+    escrow_id: u64,
+    approver: &Address,
+    new_deadline: u64,
+) {
+    env.events().publish(
+        (ev::DEADLINE_EXTENSION_APPROVED, escrow_id),
+        (approver.clone(), new_deadline),
+    );
+}
+
+/// Emitted when a deadline extension request is cancelled.
+///
+/// # Arguments
+/// * `escrow_id` - The escrow ID
+/// * `requester` - The party who requested the extension
+pub fn emit_deadline_extension_cancelled(env: &Env, escrow_id: u64, requester: &Address) {
+    env.events().publish(
+        (ev::DEADLINE_EXTENSION_CANCELLED, escrow_id),
+        requester.clone(),
+    );
+}
+
 /// Emitted when a partial cancellation is performed.
 ///
 /// # Arguments
@@ -443,9 +528,61 @@ pub fn emit_dispute_escalated_to_governance(
 /// * `escrow_id` - The escrow ID
 /// * `referrer` - The address of the referrer
 /// * `amount` - The referral payout amount
+pub fn emit_fee_collected(
+    env: &Env,
+    escrow_id: u64,
+    milestone_id: u32,
+    fee: i128,
+    treasury: &Address,
+) {
+    env.events().publish(
+        (ev::FEE_COLLECTED, escrow_id),
+        (milestone_id, fee, treasury.clone()),
+    );
+}
+
 pub fn emit_referral_payout(env: &Env, escrow_id: u64, referrer: &Address, amount: i128) {
     env.events().publish(
         (symbol_short!("ref_pay"), escrow_id),
         (referrer.clone(), amount),
     );
+}
+
+/// Emitted when a mutual-consent cancellation proposal is created.
+pub fn emit_cancellation_proposed(
+    env: &Env,
+    escrow_id: u64,
+    proposer: &Address,
+    client_refund_bps: u32,
+    terms_hash: &soroban_sdk::BytesN<32>,
+) {
+    env.events().publish(
+        (ev::CANCELLATION_PROPOSED, escrow_id),
+        (proposer.clone(), client_refund_bps, terms_hash.clone()),
+    );
+}
+
+/// Emitted when a mutual-consent cancellation proposal is rejected by either party.
+pub fn emit_cancellation_rejected(env: &Env, escrow_id: u64, rejector: &Address) {
+    env.events()
+        .publish((ev::CANCELLATION_REJECTED, escrow_id), rejector.clone());
+}
+
+/// Emitted when a mutual-consent cancellation is completed via acceptance.
+pub fn emit_mutual_cancellation_completed(
+    env: &Env,
+    escrow_id: u64,
+    client_received: i128,
+    contractor_received: i128,
+    terms_hash: &soroban_sdk::BytesN<32>,
+) {
+    env.events().publish(
+        (ev::MUTUAL_CANCEL_DONE, escrow_id),
+        (client_received, contractor_received, terms_hash.clone()),
+    );
+}
+
+pub fn emit_batch_completed(env: &Env, count: u32, total_amount: i128) {
+    env.events()
+        .publish((ev::BATCH_COMPLETED, count), total_amount);
 }

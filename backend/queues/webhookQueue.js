@@ -1,14 +1,35 @@
 import { webhookQueue } from './index.js';
+import { getLogger } from '../config/logger.js';
+import { BACKOFF_BASE_MS, MAX_DELIVERY_ATTEMPTS } from '../services/webhookService.js';
 
-export async function enqueueWebhookDelivery(deliveryId, url, payload, headers = {}, options = {}) {
+const log = getLogger();
+
+const REMOVE_ON_FAIL_KEEP = parseInt(process.env.WEBHOOK_KEEP_FAILED_JOBS ?? '100', 10);
+
+export async function enqueueWebhookDelivery({
+  deliveryId,
+  endpointId,
+  url,
+  payload,
+  headers = {},
+}) {
+  log.debug({
+    type: 'webhook_enqueue',
+    deliveryId,
+    endpointId,
+    attempts: MAX_DELIVERY_ATTEMPTS,
+    backoffDelayMs: BACKOFF_BASE_MS,
+  });
+
   return webhookQueue.add(
-    'webhook',
-    { deliveryId, url, payload, headers },
+    'webhook-delivery',
+    { deliveryId, endpointId, url, payload, headers },
     {
-      attempts: options.attempts ?? 5,
-      backoff: options.backoff ?? { type: 'exponential', delay: 5000 },
+      attempts: MAX_DELIVERY_ATTEMPTS,
+      backoff: { type: 'exponential', delay: BACKOFF_BASE_MS },
       removeOnComplete: true,
-      removeOnFail: 50,
+      removeOnFail: REMOVE_ON_FAIL_KEEP,
+      jobId: `webhook-delivery:${deliveryId}`,
     },
   );
 }

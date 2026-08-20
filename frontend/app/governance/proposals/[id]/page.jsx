@@ -1,10 +1,19 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, ResponsiveContainer } from 'recharts';
+import dynamic from 'next/dynamic';
 import { ThumbsUp, ThumbsDown, MessageCircle, Clock } from 'lucide-react';
 import Button from '../../../../components/ui/Button';
+import { Skeleton } from '../../../../components/ui/Skeleton';
 import { useI18n } from '../../../../i18n/index.jsx';
+
+const VoteDistributionChart = dynamic(
+  () => import('../../../../components/governance/VoteDistributionChart'),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-[300px] w-full rounded-lg" />,
+  },
+);
 
 const COLORS = ['#10b981', '#ef4444', '#f59e0b'];
 
@@ -197,24 +206,7 @@ export default function ProposalPage({ params }) {
         <div className="card space-y-4">
           <h2 className="font-semibold text-white">Vote Distribution</h2>
           <div role="region" aria-label="Vote distribution pie chart">
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={voteDistribution}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {voteDistribution.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index]} />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
+            <VoteDistributionChart data={voteDistribution} colors={COLORS} />
           </div>
         </div>
 

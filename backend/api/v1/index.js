@@ -3,6 +3,7 @@ import { versioning } from '../middleware/version.js';
 
 import disputeRoutes from '../routes/disputeRoutes.js';
 import escrowRoutes from '../routes/escrowRoutes.js';
+import exportRoutes from '../routes/exportRoutes.js';
 import eventRoutes from '../routes/eventRoutes.js';
 import kycRoutes from '../routes/kycRoutes.js';
 import notificationRoutes from '../routes/notificationRoutes.js';
@@ -17,6 +18,9 @@ const router = express.Router();
 // Apply v1 versioning to all routes in this router
 router.use(versioning('v1'));
 
+// Mounted before /escrows so the more specific export prefix wins over the
+// escrow `/:id` catch-all route.
+router.use('/escrows/export', exportRoutes);
 router.use('/escrows', escrowRoutes);
 router.use('/users', userRoutes);
 router.use('/reputation', reputationRoutes);

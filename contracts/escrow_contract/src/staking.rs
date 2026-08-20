@@ -100,9 +100,9 @@ pub fn slash_stake_to_client(
     let slash_amount_u128 = (meta.required_freelancer_stake as u128)
         .checked_mul(slash_percentage as u128)
         .and_then(|v| v.checked_div(100))
-        .ok_or(EscrowError::ArithmeticOverflow)?;
+        .ok_or(EscrowError::E28)?;
     let slash_amount =
-        i128::try_from(slash_amount_u128).map_err(|_| EscrowError::ArithmeticOverflow)?;
+        i128::try_from(slash_amount_u128).map_err(|_| EscrowError::E28)?;
 
     if slash_amount > 0 {
         token::Client::new(env, &meta.token).transfer(

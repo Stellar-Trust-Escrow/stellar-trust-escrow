@@ -25,9 +25,11 @@ import { useWallet } from '../../hooks/useWallet';
 import { useToast } from '../../contexts/ToastContext';
 import { buildRaiseDisputeTx, broadcastTransaction } from '../../lib/stellar';
 import Modal from '../ui/Modal';
+import FileDropZone from '../ui/FileDropZone';
 
 export default function DisputeModal({ isOpen, onClose, escrowId, onSuccess }) {
   const [reason, setReason] = useState('');
+  const [evidence, setEvidence] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
@@ -98,6 +100,23 @@ export default function DisputeModal({ isOpen, onClose, escrowId, onSuccess }) {
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             disabled={isSubmitting}
+          />
+        </div>
+
+        {/* Evidence upload — thumb-friendly file area (Issue #1444) */}
+        <div>
+          <label className="block text-sm text-gray-400 mb-1">
+            Attach evidence <span className="text-gray-600">(optional)</span>
+          </label>
+          <FileDropZone
+            onFilesAccepted={(files) => setEvidence(files)}
+            maxFiles={5}
+            acceptedTypes={{
+              'application/pdf': 'PDF',
+              'image/png': 'PNG',
+              'image/jpeg': 'JPG',
+              'text/plain': 'TXT',
+            }}
           />
         </div>
 

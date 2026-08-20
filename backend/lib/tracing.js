@@ -6,12 +6,9 @@
  *  - Auto-instrumentation for HTTP, Express, and fetch
  *  - W3C TraceContext + Baggage propagators
  *
- * MUST be imported before any other module in server.js so that
- * auto-instrumentation patches are applied at startup.
- *
  * Environment variables:
  *  OTEL_EXPORTER_OTLP_ENDPOINT  — default: http://localhost:4318
- *  OTEL_SERVICE_NAME            — default: stellar-trust-escrow
+ *  OTEL_SERVICE_NAME            — default: trustchain-api
  *  OTEL_ENVIRONMENT             — default: development
  *  TRACING_ENABLED              — set to "false" to disable (e.g. in tests)
  *
@@ -33,8 +30,9 @@ import {
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { trace, context, SpanStatusCode, propagation } from '@opentelemetry/api';
+import logger from './logger.js';
 
-const SERVICE_NAME = process.env.OTEL_SERVICE_NAME || 'stellar-trust-escrow';
+const SERVICE_NAME = process.env.OTEL_SERVICE_NAME || 'trustchain-api';
 const ENVIRONMENT = process.env.OTEL_ENVIRONMENT || process.env.NODE_ENV || 'development';
 const OTLP_ENDPOINT = process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://localhost:4318';
 const TRACING_ENABLED = process.env.TRACING_ENABLED !== 'false';
@@ -76,7 +74,7 @@ export function initTracing() {
   });
 
   sdk.start();
-  console.log(`[Tracing] OpenTelemetry started → ${OTLP_ENDPOINT} (service: ${SERVICE_NAME})`);
+  logger.info(`[Tracing] OpenTelemetry started → ${OTLP_ENDPOINT} (service: ${SERVICE_NAME})`);
 
   process.on('SIGTERM', () => shutdownTracing());
   process.on('SIGINT', () => shutdownTracing());
@@ -87,9 +85,9 @@ export async function shutdownTracing() {
   if (!sdk) return;
   try {
     await sdk.shutdown();
-    console.log('[Tracing] SDK shut down cleanly');
+    logger.info('[Tracing] SDK shut down cleanly');
   } catch (err) {
-    console.error('[Tracing] Error during shutdown:', err.message);
+    logger.error(`[Tracing] Error during shutdown: ${err.message}`);
   }
 }
 
@@ -109,12 +107,6 @@ export function getTracer(name = SERVICE_NAME) {
  * @param {object} [attributes] - initial span attributes
  * @param {Function} fn - async function receiving the active span
  * @returns {Promise<*>}
- *
- * @example
- * const result = await withSpan('stellarService.submitTransaction', { 'tx.hash': hash }, async (span) => {
- *   // ... do work
- *   return result;
- * });
  */
 export async function withSpan(spanName, attributes = {}, fn) {
   if (!TRACING_ENABLED)

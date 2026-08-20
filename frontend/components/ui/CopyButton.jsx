@@ -1,50 +1,37 @@
-/**
- * CopyButton Component
- *
- * Button that copies text to clipboard with visual feedback.
- *
- * @param {object}   props
- * @param {string}   props.text - Text to copy
- * @param {string}   [props.label='Copy'] - Button label
- * @param {number}   [props.feedbackDuration=2000] - How long to show "Copied!" feedback
- */
-
 'use client';
-
 import { useState } from 'react';
 
-export default function CopyButton({ text, label = 'Copy', feedbackDuration = 2000 }) {
-  const [isCopied, setIsCopied] = useState(false);
+export function CopyButton({ text, value, label = 'Copy', feedbackDuration = 2000 }) {
+  const [copied, setCopied] = useState(false);
+  const textToCopy = text ?? value ?? '';
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(text);
-      setIsCopied(true);
-      setTimeout(() => setIsCopied(false), feedbackDuration);
+      await navigator.clipboard.writeText(textToCopy);
+      setCopied(true);
+      setTimeout(() => setCopied(false), feedbackDuration);
     } catch (err) {
       console.error('Failed to copy:', err);
     }
   };
 
+  const accessibleName = copied ? 'Copied!' : `Copy ${label}`;
+
   return (
     <button
+      type="button"
       onClick={handleCopy}
-      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium
-                 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white
-                 border border-gray-700 rounded-lg transition-colors"
-      title={isCopied ? 'Copied!' : `Copy ${label}`}
+      title={copied ? 'Copied!' : `Copy ${label}`}
+      aria-label={`Copy ${label ?? textToCopy}`}
+      className="ml-1 rounded p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
     >
-      {isCopied ? (
-        <>
-          <span>✓</span>
-          <span>Copied!</span>
-        </>
+      {copied ? (
+        <span className="text-green-500 text-xs font-medium">Copied!</span>
       ) : (
-        <>
-          <span>📋</span>
-          <span>{label}</span>
-        </>
+        <span className="text-xs font-medium">{label}</span>
       )}
     </button>
   );
 }
+
+export default CopyButton;

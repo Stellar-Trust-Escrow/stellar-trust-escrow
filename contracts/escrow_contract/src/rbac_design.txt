@@ -1,0 +1,32 @@
+# RBAC Design Note
+
+## Roles and Permissions
+1. Admin (Global)
+   - Permitted: System configuration, pausing, upgrading, governance, oracle management, template creation, platform fee management.
+   - Storage: `DataKey::Admin` (already exists).
+   - Guard: `ContractStorage::require_admin` (partially implemented, needs to use new typed error instead of E4, or keep E4).
+
+2. Arbiter (Per-Escrow)
+   - Permitted: Resolving disputes (`resolve_dispute`), updating arbiter (`update_arbiter`).
+   - Storage: `EscrowMeta::arbiter` (already exists).
+   - Guard: Need to create `ContractStorage::require_arbiter(env, caller, escrow_id)`.
+
+3. Participants (Per-Escrow)
+   - Permitted: Escrow lifecycle actions.
+     - Client: add milestones, approve, cancel, split, etc.
+     - Freelancer: submit work, release funds, withdraw overpayment.
+   - Storage: `EscrowMeta::client` and `EscrowMeta::freelancer` (already exists).
+   - Guard: Need to create `ContractStorage::require_participant(env, caller, escrow_id)` or `require_client` / `require_freelancer`.
+
+## Storage Keys
+Since `DataKey::Admin` already exists, and `EscrowMeta` stores the participants and arbiter, we do NOT need new storage keys for the basic roles. The prompt's mention of new keys is covered by the existing "RBAC is partially implemented" clause.
+
+## ContractError Variants
+We will add new variants to `EcErr` (matching existing style):
+- `E70 = 70, // RbacUnauthorizedRole`
+- `E71 = 71, // RbacRoleAlreadySet`
+- `E72 = 72, // RbacInvalidRoleAssignment`
+
+## Open Questions / Assumptions
+- The prompt says "returning the typed errors from Phase 1 on failure rather than panicking with a generic message". We must make sure `require_auth` does not panic if we want to return a typed error? 
+Wait, `require_auth()` in Soroban always traps (panics) if the transaction is missing the signature. However, if the caller *is* authenticated but *lacks the role*, we return the typed error. We will call `caller.require_auth()` and then do our role check and return `E70` if the role check fails.
