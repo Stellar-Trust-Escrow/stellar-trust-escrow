@@ -6,6 +6,7 @@ import escrowController, {
   validatePagination,
 } from '../controllers/escrowController.js';
 import ownershipRoutes from './ownershipRoutes.js';
+import ledgerRoutes from './ledgerRoutes.js';
 import { cacheResponse, invalidateOn, TTL } from '../middleware/cache.js';
 import authMiddleware from '../middleware/auth.js';
 
@@ -86,5 +87,7 @@ router.get('/:id/audit/export', validateEscrowId, exportBundle);
 router.use('/:id/approvals', thresholdRoutes);
 // Client-rights ownership transfer
 router.use('/:id/ownership', ownershipRoutes);
+// Double-entry ledger entries for an escrow
+router.use('/:id/ledger', validateEscrowId, ledgerRoutes);
 
 export default router;

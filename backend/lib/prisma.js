@@ -29,6 +29,7 @@ const TENANT_SCOPED_MODELS = new Set([
   'WebhookEndpoint',
   'AdminAuditLog',
   'AuditLog',
+  'LedgerEntry',
 ]);
 
 const READ_MANY_ACTIONS = new Set([

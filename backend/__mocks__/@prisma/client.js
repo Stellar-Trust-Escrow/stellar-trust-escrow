@@ -228,7 +228,31 @@ function createModel(name, db) {
     count: jest.fn(
       async ({ where } = {}) => db[name].filter((entry) => matchesWhere(entry, where)).length,
     ),
-    aggregate: jest.fn().mockResolvedValue({}),
+    aggregate: jest.fn(async ({ where, _sum, _count } = {}) => {
+      const matched = db[name].filter((entry) => matchesWhere(entry, where));
+      const result = {};
+
+      if (_sum) {
+        result._sum = {};
+        for (const field of Object.keys(_sum)) {
+          let total = 0;
+          for (const record of matched) {
+            const v = record[field];
+            if (v != null) total += Number(v);
+          }
+          result._sum[field] = total > 0 ? String(total) : null;
+        }
+      }
+
+      if (_count) {
+        result._count = {};
+        for (const field of Object.keys(_count)) {
+          result._count[field] = matched.filter((r) => r[field] != null).length;
+        }
+      }
+
+      return result;
+    }),
     groupBy: jest.fn().mockResolvedValue([]),
   };
 
@@ -280,4 +304,41 @@ export class PrismaClient {
   }
 }
 
-export default { PrismaClient };
+/**
+ * Minimal Prisma namespace mock.
+ * Provides Decimal so ledgerService.js can do `new Prisma.Decimal(str)`.
+ * Uses the built-in JS BigDecimal-style wrapper backed by Number for test
+ * purposes (real production uses the actual prisma Decimal).
+ */
+export const Prisma = {
+  Decimal: class Decimal {
+    constructor(value) {
+      this._value = Number(String(value));
+    }
+    isNaN() { return Number.isNaN(this._value); }
+    isFinite() { return Number.isFinite(this._value); }
+    lte(other) { return this._value <= Number(String(other instanceof Decimal ? other._value : other)); }
+    eq(other) { return this._value === Number(String(other instanceof Decimal ? other._value : other)); }
+    plus(other) {
+      const o = other instanceof Decimal ? other._value : Number(String(other));
+      const d = new Decimal(0);
+      d._value = this._value + o;
+      return d;
+    }
+    minus(other) {
+      const o = other instanceof Decimal ? other._value : Number(String(other));
+      const d = new Decimal(0);
+      d._value = this._value - o;
+      return d;
+    }
+    abs() {
+      const d = new Decimal(0);
+      d._value = Math.abs(this._value);
+      return d;
+    }
+    toFixed() { return String(this._value); }
+    toString() { return String(this._value); }
+  },
+};
+
+export default { PrismaClient, Prisma };

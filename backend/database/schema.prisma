@@ -57,6 +57,7 @@ model Tenant {
   failedEvents         FailedEvent[]
   chatRoomKeys         ChatRoomKey[]
   chatMessages         ChatMessage[]
+  ledgerEntries        LedgerEntry[]
 
   @@map("tenants")
 }
@@ -215,9 +216,10 @@ model Escrow {
   /// Stellar ledger sequence when this escrow was created
   createdLedger     BigInt       @map("created_ledger")
 
-  tenant     Tenant      @relation(fields: [tenantId], references: [id])
-  milestones Milestone[]
-  dispute    Dispute?
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  milestones    Milestone[]
+  dispute       Dispute?
+  ledgerEntries LedgerEntry[]
 
   @@index([tenantId])
   @@index([tenantId, clientAddress])
@@ -949,6 +951,62 @@ model InsuranceStake {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@map("insurance_stakes")
+}
+
+// ── Double-Entry Ledger ────────────────────────────────────────────────────────
+//
+// Every fund movement (funding, release, refund, fee collection, dispute
+// resolution, penalty, or manual adjustment) is recorded as a pair of rows:
+// one Debit and one Credit.  Invariant: for every escrow,
+//   SUM(amount WHERE direction=Debit) == SUM(amount WHERE direction=Credit)
+//
+// Rows are INSERT-only — no UPDATE or DELETE ever touches this table.
+
+enum LedgerAccountType {
+  Escrow
+  Buyer
+  Seller
+  Platform
+  Arbiter
+}
+
+enum LedgerDirection {
+  Debit
+  Credit
+}
+
+enum LedgerEntryType {
+  Fund
+  Release
+  Refund
+  Fee
+  Penalty
+  Adjustment
+}
+
+model LedgerEntry {
+  id          String             @id @default(cuid())
+  tenantId    String             @map("tenant_id")
+  escrowId    BigInt             @map("escrow_id")
+  accountType LedgerAccountType  @map("account_type")
+  direction   LedgerDirection
+  /// Decimal amount stored as a fixed-precision string to avoid floating-point loss.
+  amount      String
+  currency    String             @default("XLM")
+  entryType   LedgerEntryType    @map("entry_type")
+  /// Links the entry to the triggering event (Stellar tx hash, dispute id, etc.)
+  referenceId String             @map("reference_id")
+  createdAt   DateTime           @default(now()) @map("created_at")
+
+  tenant  Tenant @relation(fields: [tenantId], references: [id])
+  escrow  Escrow @relation(fields: [escrowId], references: [id])
+
+  @@index([escrowId, createdAt(sort: Desc)])
+  @@index([tenantId, escrowId])
+  @@index([accountType, direction])
+  @@index([entryType])
+  @@index([createdAt(sort: Desc)])
+  @@map("ledger_entries")
 }
 
 model AnalyticsSnapshot {

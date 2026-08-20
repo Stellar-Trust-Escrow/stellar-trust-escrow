@@ -16,6 +16,7 @@ import * as featureFlagController from '../controllers/featureFlagController.js'
 import { getAuditLog, rotateSecrets } from '../../lib/secrets.js';
 import cache from '../../lib/cache.js';
 import auditRoutes from './auditRoutes.js';
+import { getReconciliationReportHandler } from '../controllers/ledgerController.js';
 
 // Apply admin authentication to all routes in this file
 router.use(adminAuth);
@@ -229,6 +230,15 @@ router.get('/cache/stats', (_req, res) => {
   res.json(cache.analytics());
 });
 
+// ── Ledger / Reconciliation ────────────────────────────────────────────────────
+
+/**
+ * @route  GET /api/admin/reconciliation-report
+ * @desc   Aggregate double-entry ledger report: total funded, released, fees,
+ *         refunded, platform net revenue — filterable by date range + currency.
+ * @query  from, to, currency
+ */
+router.get('/reconciliation-report', getReconciliationReportHandler);
 /**
  * @route  DELETE /api/admin/cache
  * @desc   Flush the entire cache (all tags and keys).

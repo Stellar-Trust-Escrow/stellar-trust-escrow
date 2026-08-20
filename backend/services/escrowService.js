@@ -33,6 +33,7 @@ import {
 } from '../lib/escrowStateMachine.js';
 import { emitEscrowEvent } from './escrowRealtime.js';
 import { createModuleLogger } from '../config/logger.js';
+import { recordMovement, AccountType, EntryType } from './ledgerService.js';
 
 const log = createModuleLogger('service.escrowService');
 
@@ -226,6 +227,18 @@ export async function fundEscrow(data) {
           },
         });
 
+        // ── Double-entry ledger: Buyer → Escrow (Fund) ────────────────────
+        await recordMovement({
+          tx,
+          tenantId: created.tenantId,
+          escrowId: id,
+          fromAccount: AccountType.Buyer,
+          toAccount: AccountType.Escrow,
+          amount: String(totalAmount),
+          entryType: EntryType.Fund,
+          referenceId: String(id),
+        });
+
         return created;
       },
       { isolationLevel: 'Serializable' },
@@ -247,7 +260,7 @@ export async function fundEscrow(data) {
  * (this is what guards against double-spend), and 409 if the escrow is not in a
  * releasable state. Transitions to `Released` once the balance hits zero.
  */
-export async function releaseMilestone({ escrowId, milestoneIndex, amount, callerAddress }) {
+export async function releaseMilestone({ escrowId, milestoneIndex, amount, callerAddress, referenceId }) {
   const result = await withEscrowLock(escrowId, () =>
     withTransaction(
       async (tx) => {
@@ -300,6 +313,19 @@ export async function releaseMilestone({ escrowId, milestoneIndex, amount, calle
             performedBy: callerAddress || 'system',
             performedAt: now,
           },
+        });
+
+        // ── Double-entry ledger: Escrow → Seller (Release) ────────────────
+        const ledgerRef = referenceId ?? `${escrowId}:milestone:${milestoneIndex ?? 'unknown'}`;
+        await recordMovement({
+          tx,
+          tenantId: escrow.tenantId,
+          escrowId,
+          fromAccount: AccountType.Escrow,
+          toAccount: AccountType.Seller,
+          amount: String(amt),
+          entryType: EntryType.Release,
+          referenceId: ledgerRef,
         });
 
         return { escrow: updated, newBalance: newBalance.toString(), status: updated.status };
@@ -391,7 +417,7 @@ export async function raiseDispute({ escrowId, raisedByAddress, milestoneIndex }
  * Resolve a dispute. `clientAmount + freelancerAmount` must equal the remaining
  * balance exactly (422 otherwise). Transitions `Disputed → Resolved`.
  */
-export async function resolveDispute({ escrowId, clientAmount, freelancerAmount, resolvedBy, resolution }) {
+export async function resolveDispute({ escrowId, clientAmount, freelancerAmount, resolvedBy, resolution, arbiterFee, referenceId }) {
   const result = await withEscrowLock(escrowId, () =>
     withTransaction(
       async (tx) => {
@@ -413,7 +439,6 @@ export async function resolveDispute({ escrowId, clientAmount, freelancerAmount,
             422,
           );
         }
-
         const proxy = { status: 'disputed' };
         stepTo(proxy, 'resolved');
 
@@ -446,6 +471,48 @@ export async function resolveDispute({ escrowId, clientAmount, freelancerAmount,
           },
         });
 
+        // ── Double-entry ledger ────────────────────────────────────────────
+        // Freelancer share: Escrow → Seller (Release)
+        const ledgerRef = referenceId ?? `dispute:${dispute.id}`;
+        if (freelancer > 0n) {
+          await recordMovement({
+            tx,
+            tenantId: escrow.tenantId,
+            escrowId,
+            fromAccount: AccountType.Escrow,
+            toAccount: AccountType.Seller,
+            amount: String(freelancer),
+            entryType: EntryType.Release,
+            referenceId: `${ledgerRef}:seller`,
+          });
+        }
+        // Client refund share: Escrow → Buyer (Refund)
+        if (client > 0n) {
+          await recordMovement({
+            tx,
+            tenantId: escrow.tenantId,
+            escrowId,
+            fromAccount: AccountType.Escrow,
+            toAccount: AccountType.Buyer,
+            amount: String(client),
+            entryType: EntryType.Refund,
+            referenceId: `${ledgerRef}:buyer`,
+          });
+        }
+        // Optional arbiter fee: Escrow → Arbiter (Fee)
+        if (arbiterFee && BigInt(arbiterFee) > 0n) {
+          await recordMovement({
+            tx,
+            tenantId: escrow.tenantId,
+            escrowId,
+            fromAccount: AccountType.Escrow,
+            toAccount: AccountType.Arbiter,
+            amount: String(BigInt(arbiterFee)),
+            entryType: EntryType.Fee,
+            referenceId: `${ledgerRef}:arbiter_fee`,
+          });
+        }
+
         return { escrow: updated, dispute };
       },
       { isolationLevel: 'Serializable' },
@@ -466,7 +533,7 @@ export async function resolveDispute({ escrowId, clientAmount, freelancerAmount,
 /**
  * Expire an escrow. Only valid from `Funded` or `InProgress`.
  */
-export async function expireEscrow({ escrowId, expiredLedger }) {
+export async function expireEscrow({ escrowId, expiredLedger, referenceId }) {
   const result = await withEscrowLock(escrowId, () =>
     withTransaction(
       async (tx) => {
@@ -502,6 +569,21 @@ export async function expireEscrow({ escrowId, expiredLedger }) {
           },
         });
 
+        // ── Double-entry ledger: Escrow → Buyer (Refund) ──────────────────
+        const expireBalance = BigInt(escrow.remainingBalance);
+        if (expireBalance > 0n) {
+          await recordMovement({
+            tx,
+            tenantId: escrow.tenantId,
+            escrowId,
+            fromAccount: AccountType.Escrow,
+            toAccount: AccountType.Buyer,
+            amount: String(expireBalance),
+            entryType: EntryType.Refund,
+            referenceId: referenceId ?? `expire:${escrowId}:ledger:${expiredLedger}`,
+          });
+        }
+
         return { escrow: updated };
       },
       { isolationLevel: 'Serializable' },
@@ -520,7 +602,7 @@ export async function expireEscrow({ escrowId, expiredLedger }) {
 /**
  * Cancel an escrow. Valid from `Funded`, `InProgress`, or `Disputed`.
  */
-export async function cancelEscrow({ escrowId, cancelledBy, reason }) {
+export async function cancelEscrow({ escrowId, cancelledBy, reason, referenceId }) {
   const result = await withEscrowLock(escrowId, () =>
     withTransaction(
       async (tx) => {
@@ -551,6 +633,22 @@ export async function cancelEscrow({ escrowId, cancelledBy, reason }) {
             performedAt: now,
           },
         });
+
+        // ── Double-entry ledger: Escrow → Buyer (Refund) ──────────────────
+        // Only record if there is a non-zero balance to refund.
+        const cancelBalance = BigInt(escrow.remainingBalance);
+        if (cancelBalance > 0n) {
+          await recordMovement({
+            tx,
+            tenantId: escrow.tenantId,
+            escrowId,
+            fromAccount: AccountType.Escrow,
+            toAccount: AccountType.Buyer,
+            amount: String(cancelBalance),
+            entryType: EntryType.Refund,
+            referenceId: referenceId ?? `cancel:${escrowId}`,
+          });
+        }
 
         return { escrow: updated };
       },

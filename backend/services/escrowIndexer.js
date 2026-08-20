@@ -186,6 +186,7 @@ function buildHandlerArgs(type, escrowId, value, event) {
         milestoneIndex: value[0] != null ? Number(value[0]) : undefined,
         amount: value[1],
         callerAddress: value[2],
+        referenceId: event.txHash ?? String(escrowId),
       };
     case 'DisputeRaised':
       return {
@@ -200,17 +201,20 @@ function buildHandlerArgs(type, escrowId, value, event) {
         freelancerAmount: value[1],
         resolvedBy: value[2],
         resolution: value[3],
+        referenceId: event.txHash ?? String(escrowId),
       };
     case 'EscrowCancelled':
       return {
         escrowId,
         cancelledBy: value[0],
         reason: value[1],
+        referenceId: event.txHash ?? String(escrowId),
       };
     case 'LockTimeExpired':
       return {
         escrowId,
         expiredLedger: event.ledger,
+        referenceId: event.txHash ?? String(escrowId),
       };
     default:
       return { escrowId };
