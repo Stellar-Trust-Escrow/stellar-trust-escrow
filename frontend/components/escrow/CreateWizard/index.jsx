@@ -21,7 +21,7 @@ export default function CreateWizard() {
     <div className="create-wizard" role="region" aria-label="Escrow Creation Wizard">
       <div className="wizard-progress" aria-live="polite">
         {STEPS.map((label, i) => (
-          <div key={i} className={wizard-step  }>
+          <div key={i} className={`wizard-step ${i === draft.step - 1 ? 'active' : ''}`}>
             <span className="step-number">{i + 1}</span>
             <span className="step-label">{label}</span>
           </div>
