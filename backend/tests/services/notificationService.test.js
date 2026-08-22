@@ -22,6 +22,10 @@ jest.unstable_mockModule('@prisma/client', () => ({
   PrismaClient: jest.fn().mockImplementation(() => ({})),
 }));
 
+jest.unstable_mockModule('../../queues/emailQueue.js', () => ({
+  notificationsQueue: { add: jest.fn() },
+}));
+
 const { renderTemplate } = await import('../../services/notificationService.js');
 
 describe('notificationService', () => {
