@@ -76,6 +76,7 @@ import { syncFromPrisma, ensureIndex } from './services/reputationSearchService.
 import { createGateway } from './gateway/index.js';
 import queueDashboardRoutes from './api/routes/queueDashboardRoutes.js';
 import chatRoutes from './api/routes/chatRoutes.js';
+import milestoneDagRoutes from './api/routes/milestoneDagRoutes.js';
 import { startAnalyticsWorker } from './workers/analyticsWorker.js';
 
 // Attach Prisma query instrumentation (metrics + traces)
@@ -224,6 +225,7 @@ app.use('/api/search', searchRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/v1/templates', templateRoutes);
 app.use('/api/insurance', insuranceRoutes);
+app.use('/api/milestones/dag', milestoneDagRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/metrics', metricsRoutes);
 app.use('/admin/queues', queueDashboardRoutes);
