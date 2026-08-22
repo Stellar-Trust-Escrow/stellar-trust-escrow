@@ -12,6 +12,7 @@ import reputationRoutes from '../routes/reputationRoutes.js';
 import userRoutes from '../routes/userRoutes.js';
 import auditRoutes from '../routes/auditRoutes.js';
 import complianceRoutes from '../routes/complianceRoutes.js';
+import feeEstimationRoutes from '../routes/feeEstimationRoutes.js';
 
 const router = express.Router();
 
@@ -31,5 +32,6 @@ router.use('/kyc', kycRoutes);
 router.use('/payments', paymentRoutes);
 router.use('/audit', auditRoutes);
 router.use('/compliance', complianceRoutes);
+router.use('/escrows', feeEstimationRoutes);
 
 export default router;
