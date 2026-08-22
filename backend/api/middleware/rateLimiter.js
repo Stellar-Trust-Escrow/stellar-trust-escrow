@@ -120,6 +120,8 @@ export class SlidingWindowStore {
     return ts.length;
   }
 
+  increment(key, windowMs) { return Promise.resolve(this.record(key, windowMs)); }
+
   /**
    * Count requests for `key` within the last `windowMs` ms (prunes stale entries).
    * @param {string} key
