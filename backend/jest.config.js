@@ -21,7 +21,9 @@ export default {
     'api/controllers/**/*.js',
     'lib/pagination.js',
     'services/**/*.js',
+    'middleware/**/*.js',
     '!**/node_modules/**',
+    '!services/**/__tests__/**',
   ],
   coverageReporters: ['text', 'lcov'],
   moduleNameMapper: {
