@@ -1,23 +1,19 @@
-import { describe, test, expect, beforeAll, jest } from '@jest/globals';
+import { describe, test, expect, jest } from '@jest/globals';
 
-jest.mock('../services/ipfsService.js', () => ({
+jest.unstable_mockModule('../services/ipfsService.js', () => ({
   default: {
     pinFile: jest.fn().mockResolvedValue('QmMockCID1234567890abcd'),
     fetchBuffer: jest.fn().mockResolvedValue(Buffer.from('')),
   },
 }));
 
-jest.mock('../config/logger.js', () => ({
+jest.unstable_mockModule('../config/logger.js', () => ({
   createModuleLogger: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn() }),
 }));
 
+const svc = await import('../services/documentService.js');
+
 describe('documentService', () => {
-  let svc;
-
-  beforeAll(async () => {
-    svc = await import('../services/documentService.js');
-  });
-
   test('uploadDocument returns cid and AES-256-GCM metadata', async () => {
     const result = await svc.uploadDocument({
       file: Buffer.from('hello escrow document'),
@@ -29,9 +25,9 @@ describe('documentService', () => {
     expect(result).toHaveProperty('encryptionKey');
     expect(result).toHaveProperty('iv');
     expect(result).toHaveProperty('authTag');
-    expect(result.encryptionKey).toHaveLength(64); // 32 bytes hex
-    expect(result.iv).toHaveLength(24);            // 12 bytes hex
-    expect(result.authTag).toHaveLength(32);       // 16 bytes hex
+    expect(result.encryptionKey).toHaveLength(64);
+    expect(result.iv).toHaveLength(24);
+    expect(result.authTag).toHaveLength(32);
     expect(result.size).toBe(21);
   });
 
