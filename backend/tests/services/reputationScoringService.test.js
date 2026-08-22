@@ -1,10 +1,12 @@
-import { jest } from '@jest/globals';
-jest.mock('../../config/logger.js', () => ({ createModuleLogger: () => ({ info: jest.fn(), warn: jest.fn() }) }));
+import { jest, describe, test, expect, beforeAll } from '@jest/globals';
+
+jest.unstable_mockModule('../../config/logger.js', () => ({
+  createModuleLogger: () => ({ info: jest.fn(), warn: jest.fn() }),
+}));
+
+const svc = await import('../../services/reputationScoringService.js');
 
 describe('reputationScoringService', () => {
-  let svc;
-  beforeAll(async () => { svc = await import('../../services/reputationScoringService.js'); });
-
   test('calculateReputation returns score and tier', () => {
     const r = svc.calculateReputation('GABC1234', { milestonesCompleted: 5, onTimeDelivery: 3 });
     expect(r.score).toBeGreaterThan(0);
