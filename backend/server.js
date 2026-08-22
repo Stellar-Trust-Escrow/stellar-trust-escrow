@@ -26,9 +26,11 @@ import docsRouter from './docs/index.js';
 import disputeRoutes from './api/routes/disputeRoutes.js';
 import searchRoutes from './api/routes/searchRoutes.js';
 import escrowRoutes from './api/routes/escrowRoutes.js';
+import documentRoutes from './api/routes/documentRoutes.js';
 import eventRoutes from './api/routes/eventRoutes.js';
 import kycRoutes from './api/routes/kycRoutes.js';
 import adminRoutes from './api/routes/adminRoutes.js';
+import adminRateLimitsRoutes from './api/routes/adminRateLimits.js';
 import analyticsRoutes from './api/routes/analyticsRoutes.js';
 import notificationRoutes from './api/routes/notificationRoutes.js';
 import paymentRoutes from './api/routes/paymentRoutes.js';
@@ -201,6 +203,7 @@ app.use('/api', tenantMiddleware);
 app.use('/api/auth', authRoutes);
 app.use('/api/tenant', tenantRoutes);
 app.use('/api/escrows', escrowRoutes);
+app.use('/api/documents', documentRoutes);
 
 // ── API Documentation ─────────────────────────────────────────────────────────
 setupSwagger(app);
@@ -218,6 +221,7 @@ app.use('/api/audit', auditRoutes);
 app.use('/api/compliance', complianceRoutes);
 app.use('/api/incidents', incidentRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin', adminRateLimitsRoutes);
 app.use('/api/v1/admin/analytics', analyticsRoutes);
 app.use('/api/batch', batchRoutes);
 app.use('/api/search', searchRoutes);

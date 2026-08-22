@@ -59,3 +59,48 @@ export async function broadcastEscrowUpdate(update) {
 }
 
 export default { emitEscrowEvent, broadcastEscrowUpdate, EVENTS_CHANNEL, UPDATES_CHANNEL };
+
+// ── Per-escrow WebSocket subscription helpers ─────────────────────────────────
+
+const _subscriptions = new Map(); // escrowId → Set<WebSocket>
+
+/**
+ * Register a WebSocket connection as subscriber for a specific escrow.
+ * Automatically removes the connection when it closes.
+ */
+export function subscribeToEscrow(ws, escrowId) {
+  if (!_subscriptions.has(escrowId)) _subscriptions.set(escrowId, new Set());
+  _subscriptions.get(escrowId).add(ws);
+  ws.on?.('close', () => unsubscribeFromEscrow(ws, escrowId));
+}
+
+/**
+ * Remove a WebSocket connection from the subscriber set for an escrow.
+ */
+export function unsubscribeFromEscrow(ws, escrowId) {
+  const subs = _subscriptions.get(escrowId);
+  if (!subs) return;
+  subs.delete(ws);
+  if (subs.size === 0) _subscriptions.delete(escrowId);
+}
+
+/**
+ * Push an event payload to all WebSocket clients subscribed to an escrow.
+ * @returns {number} number of clients reached
+ */
+export function broadcastEscrowEvent(escrowId, eventType, data) {
+  const subs = _subscriptions.get(escrowId);
+  if (!subs || subs.size === 0) return 0;
+  const payload = JSON.stringify({ escrowId, eventType, data, ts: new Date().toISOString() });
+  let reached = 0;
+  for (const ws of subs) {
+    try {
+      if (ws.readyState === 1 /* OPEN */) { ws.send(payload); reached++; }
+      else subs.delete(ws);
+    } catch (err) {
+      log.warn({ message: 'ws_send_failed', escrowId, error: err.message });
+      subs.delete(ws);
+    }
+  }
+  return reached;
+}

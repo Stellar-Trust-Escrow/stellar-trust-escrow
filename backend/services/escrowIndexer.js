@@ -440,9 +440,15 @@ export function stopIndexer() {
   log.info({ message: 'indexer_stopped' });
 }
 
+/** Return the last successfully processed ledger sequence number, or null if not started. */
+export function getLastProcessedLedger() {
+  return cursor > 0 ? cursor : null;
+}
+
 export default {
   startIndexer,
   stopIndexer,
+  getLastProcessedLedger,
   runOnce,
   runBatch,
   processEvent,
