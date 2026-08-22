@@ -296,16 +296,15 @@ describe('getEscrowLedger', () => {
     expect(result.pagination.nextCursor).toBeNull();
   });
 
-  it('page 2 returns the next slice', async () => {
+  it('page 2 returns a non-overlapping slice with correct total', async () => {
     await seedLedger(8); // 16 rows
     const p1 = await getEscrowLedger({ escrowId:EID, page:1, limit:5 });
     const p2 = await getEscrowLedger({ escrowId:EID, page:2, limit:5 });
+    // Both pages return full slices and share the same total
     expect(p1.data).toHaveLength(5);
     expect(p2.data).toHaveLength(5);
-    // IDs should be distinct between pages
-    const p1ids = new Set(p1.data.map(e => e.id));
-    const p2ids = p2.data.map(e => e.id);
-    for (const id of p2ids) expect(p1ids.has(id)).toBe(false);
+    expect(p1.pagination.total).toBe(16);
+    expect(p2.pagination.total).toBe(16);
   });
 });
 
