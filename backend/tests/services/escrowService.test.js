@@ -1,12 +1,18 @@
 import { jest, describe, expect, it, beforeEach } from '@jest/globals';
-import {
-  fundEscrow,
-  releaseMilestone,
-  raiseDispute,
-  resolveDispute,
-  expireEscrow,
-  cancelEscrow,
-} from '../../services/escrowService.js';
+
+jest.unstable_mockModule('../../services/stellarService.js', () => ({
+  submitTransaction: jest.fn().mockResolvedValue({ hash: 'txhash', status: 'SUCCESS' }),
+  simulateTransaction: jest.fn().mockResolvedValue({ success: true, cost: { cpuInsns: '100', memBytes: '1024' } }),
+  getLatestLedger: jest.fn().mockResolvedValue(1000),
+  default: {},
+}));
+
+jest.unstable_mockModule('../../config/logger.js', () => ({
+  createModuleLogger: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }),
+}));
+
+const { fundEscrow, releaseMilestone, raiseDispute, expireEscrow, cancelEscrow } =
+  await import('../../services/escrowService.js');
 
 const makeEscrow = (overrides = {}) => ({
   id: 1n,
@@ -39,18 +45,6 @@ const makePrisma = () => ({
   },
   $transaction: jest.fn(async (fn) => (typeof fn === 'function' ? fn(makePrisma()) : Promise.all(fn))),
 });
-
-jest.mock('../../services/stellarService.js', () => ({
-  submitTransaction: jest.fn().mockResolvedValue({ hash: 'txhash', status: 'SUCCESS' }),
-  simulateTransaction: jest.fn().mockResolvedValue({ success: true, cost: { cpuInsns: '100', memBytes: '1024' } }),
-  getLatestLedger: jest.fn().mockResolvedValue(1000),
-  stellarService: {},
-  default: {},
-}));
-
-jest.mock('../../config/logger.js', () => ({
-  createModuleLogger: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }),
-}));
 
 describe('escrowService', () => {
   describe('fundEscrow', () => {

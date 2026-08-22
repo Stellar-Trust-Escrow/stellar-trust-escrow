@@ -1,45 +1,11 @@
-import { jest, describe, expect, it, beforeEach } from '@jest/globals';
-import {
-  appendAuditEntry,
-  verifyEntry,
-  log,
-  AuditCategory,
-  AuditAction,
-} from '../../services/auditService.js';
+import { jest, describe, expect, it } from '@jest/globals';
 
-jest.mock('../../config/logger.js', () => ({
+jest.unstable_mockModule('../../config/logger.js', () => ({
   createModuleLogger: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }),
 }));
 
-const makePrisma = () => ({
-  auditEntry: {
-    findFirst: jest.fn().mockResolvedValue(null),
-    create: jest.fn().mockResolvedValue({
-      id: 'audit-1',
-      action: 'CREATED',
-      chainHash: 'hash1',
-      prevHash: null,
-      createdAt: new Date(),
-    }),
-    findUnique: jest.fn().mockResolvedValue({
-      id: 'audit-1',
-      chainHash: 'recomputed',
-      prevHash: null,
-      action: 'ESCROW_CREATED',
-      targetAddress: 'GABC',
-      performedBy: 'system',
-      escrowId: null,
-      metadata: '{}',
-      reason: '',
-      tenantId: 'default',
-      createdAt: new Date(),
-    }),
-  },
-  auditLog: {
-    create: jest.fn().mockResolvedValue({ id: 1n }),
-    findMany: jest.fn().mockResolvedValue([]),
-  },
-});
+const { appendAuditEntry, verifyEntry, log, AuditCategory, AuditAction } =
+  await import('../../services/auditService.js');
 
 describe('auditService', () => {
   describe('AuditCategory and AuditAction constants', () => {
@@ -66,7 +32,7 @@ describe('auditService', () => {
       ).resolves.toBeDefined();
     });
 
-    it('returns an object with id and action fields', async () => {
+    it('returns an object with id field', async () => {
       const result = await appendAuditEntry({
         action: 'ESCROW_CREATED',
         targetAddress: 'GABC',
@@ -91,9 +57,8 @@ describe('auditService', () => {
       expect(typeof verifyEntry).toBe('function');
     });
 
-    it('resolves for a valid entry id format', async () => {
+    it('resolves or rejects for a nonexistent entry', async () => {
       const result = await verifyEntry('nonexistent-id').catch(e => ({ error: e.message }));
-      // May throw or return { valid: false } — both are acceptable
       expect(result !== undefined).toBe(true);
     });
   });
