@@ -1,0 +1,9 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "components": [
+    { "type": "library", "name": "lodash", "version": "4.17.15", "purl": "pkg:npm/lodash@4.17.15" },
+    { "type": "library", "name": "minimist", "version": "1.2.5", "purl": "pkg:npm/minimist@1.2.5" },
+    { "type": "library", "name": "left-pad", "version": "1.3.0", "purl": "pkg:npm/left-pad@1.3.0" }
+  ]
+}

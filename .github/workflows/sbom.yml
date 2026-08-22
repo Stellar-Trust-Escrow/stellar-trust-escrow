@@ -13,12 +13,25 @@ on:
       - 'Cargo.lock'
       - 'contracts/**'
 
+# osv-scanner version is pinned here (single source of truth). Bumped by
+# Dependabot's github-actions ecosystem entry in .github/dependabot.yml,
+# which also tracks the actions used in this workflow.
+env:
+  OSV_SCANNER_VERSION: v1.9.2
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
 jobs:
   sbom-and-license:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -28,57 +41,133 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install dependencies
+      - name: Install SBOM tooling
         run: |
           cargo install cargo-cyclonedx
+          npm install -g @cyclonedx/cyclonedx-npm
 
-      - name: Generate SBOM (Backend)
+      - name: Unit test the SBOM/OSV gate scripts
+        run: node --test tests/scripts/*.test.js
+
+      - name: Install osv-scanner ${{ env.OSV_SCANNER_VERSION }}
         run: |
-          cd backend || true
-          npm install --package-lock-only || true
-          npx @cyclonedx/cyclonedx-npm --output-format JSON --output-file ../sbom-backend.json
+          curl -sSL "https://github.com/google/osv-scanner/releases/download/${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64" -o /usr/local/bin/osv-scanner
+          chmod +x /usr/local/bin/osv-scanner
 
-      - name: Generate SBOM (Frontend)
+      - name: Generate SBOM (npm — backend + frontend)
         run: |
-          cd frontend || true
-          npm install --package-lock-only || true
-          npx @cyclonedx/cyclonedx-npm --output-format JSON --output-file ../sbom-frontend.json
+          mkdir -p sbom
+          (cd backend && npm install --package-lock-only && cyclonedx-npm --output-format JSON --output-file ../sbom/npm-sbom-backend.json) || true
+          (cd frontend && npm install --package-lock-only && cyclonedx-npm --output-format JSON --output-file ../sbom/npm-sbom-frontend.json) || true
+          node --input-type=module -e "
+          import fs from 'fs';
+          const files = ['sbom/npm-sbom-backend.json', 'sbom/npm-sbom-frontend.json'].filter(f => fs.existsSync(f));
+          const components = files.flatMap(f => JSON.parse(fs.readFileSync(f, 'utf8')).components || []);
+          fs.writeFileSync('sbom/npm-sbom.json', JSON.stringify({ bomFormat: 'CycloneDX', specVersion: '1.5', components }, null, 2));
+          "
 
-      - name: Generate SBOM (Rust Contracts)
+      - name: Generate SBOM (Cargo contracts)
         run: |
-          cargo cyclonedx --format json
+          cargo cyclonedx --format json --all
+          node --input-type=module -e "
+          import fs from 'fs';
+          import path from 'path';
+          function walk(dir, acc) {
+            for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+              const full = path.join(dir, e.name);
+              if (e.isDirectory() && e.name !== 'target') walk(full, acc);
+              else if (e.name.endsWith('.cdx.json')) acc.push(full);
+            }
+            return acc;
+          }
+          const files = walk('contracts', []);
+          const components = files.flatMap(f => JSON.parse(fs.readFileSync(f, 'utf8')).components || []);
+          fs.writeFileSync('sbom/cargo-sbom.json', JSON.stringify({ bomFormat: 'CycloneDX', specVersion: '1.5', components }, null, 2));
+          "
 
-      - name: Merge SBOMs
+      - name: Fetch main's committed SBOM baseline
+        run: |
+          git fetch origin main --depth 1 2>/dev/null || true
+          mkdir -p /tmp/baseline
+          git show origin/main:sbom/npm-sbom.json > /tmp/baseline/npm-sbom.json 2>/dev/null || echo '{"components":[]}' > /tmp/baseline/npm-sbom.json
+          git show origin/main:sbom/cargo-sbom.json > /tmp/baseline/cargo-sbom.json 2>/dev/null || echo '{"components":[]}' > /tmp/baseline/cargo-sbom.json
+
+      - name: SBOM diff (npm)
+        run: node scripts/sbom-diff.js /tmp/baseline/npm-sbom.json sbom/npm-sbom.json npm-diff.md
+
+      - name: SBOM diff (cargo)
+        run: node scripts/sbom-diff.js /tmp/baseline/cargo-sbom.json sbom/cargo-sbom.json cargo-diff.md
+
+      - name: Collect direct dependency names
+        run: node scripts/collect-direct-deps.js direct-deps.json
+
+      - name: Merge SBOMs for scanning
         run: |
           node --input-type=module -e "
           import fs from 'fs';
-          let files = ['sbom-backend.json', 'sbom-frontend.json'];
-          try {
-            const dirs = fs.readdirSync('contracts');
-            for (const d of dirs) {
-              try {
-                const subFiles = fs.readdirSync('contracts/' + d);
-                for (const f of subFiles) {
-                  if (f.endsWith('.cdx.json')) files.push('contracts/' + d + '/' + f);
-                }
-              } catch (e) {}
-            }
-          } catch(e) {}
-          let components = [];
-          for (const f of files) {
-            if (fs.existsSync(f)) {
-              const d = JSON.parse(fs.readFileSync(f, 'utf8'));
-              if (d.components) components.push(...d.components);
-            }
-          }
-          fs.writeFileSync('sbom-full.json', JSON.stringify({components}, null, 2));
+          const npm = JSON.parse(fs.readFileSync('sbom/npm-sbom.json', 'utf8')).components || [];
+          const cargo = JSON.parse(fs.readFileSync('sbom/cargo-sbom.json', 'utf8')).components || [];
+          fs.writeFileSync('sbom/full-sbom.json', JSON.stringify({ bomFormat: 'CycloneDX', specVersion: '1.5', components: [...npm, ...cargo] }, null, 2));
           "
 
-      - name: Upload SBOM Artifact
+      - name: OSV exploitability gate
+        id: osv_gate
+        run: node scripts/osv-gate.js sbom/full-sbom.json direct-deps.json osv-report.md
+
+      - name: License deny-list check
+        if: always()
+        run: bash scripts/check-licenses.sh sbom/npm-sbom.json sbom/cargo-sbom.json
+
+      - name: Upload SBOM artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: sbom-full
-          path: sbom-full.json
+          name: sbom-${{ github.sha }}
+          path: |
+            sbom/npm-sbom.json
+            sbom/cargo-sbom.json
+            sbom/full-sbom.json
 
-      - name: Enforce License Compliance
-        run: node scripts/check-licenses.js
+      - name: Post/update PR comment
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        continue-on-error: true
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- sbom-diff-report -->';
+            const npmDiff = fs.existsSync('npm-diff.md') ? fs.readFileSync('npm-diff.md', 'utf8') : '';
+            const cargoDiff = fs.existsSync('cargo-diff.md') ? fs.readFileSync('cargo-diff.md', 'utf8') : '';
+            const osvReport = fs.existsSync('osv-report.md') ? fs.readFileSync('osv-report.md', 'utf8') : '';
+
+            const body = [
+              marker,
+              '### 📦 Dependency SBOM Diff (npm)',
+              npmDiff.replace(marker, '').trim(),
+              '### 📦 Dependency SBOM Diff (Cargo)',
+              cargoDiff.replace(marker, '').trim(),
+              osvReport,
+            ].join('\n\n');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find((c) => c.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
