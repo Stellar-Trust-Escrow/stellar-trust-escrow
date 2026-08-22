@@ -26,6 +26,7 @@ import docsRouter from './docs/index.js';
 import disputeRoutes from './api/routes/disputeRoutes.js';
 import searchRoutes from './api/routes/searchRoutes.js';
 import escrowRoutes from './api/routes/escrowRoutes.js';
+import documentRoutes from './api/routes/documentRoutes.js';
 import eventRoutes from './api/routes/eventRoutes.js';
 import kycRoutes from './api/routes/kycRoutes.js';
 import adminRoutes from './api/routes/adminRoutes.js';
@@ -201,6 +202,7 @@ app.use('/api', tenantMiddleware);
 app.use('/api/auth', authRoutes);
 app.use('/api/tenant', tenantRoutes);
 app.use('/api/escrows', escrowRoutes);
+app.use('/api/documents', documentRoutes);
 
 // ── API Documentation ─────────────────────────────────────────────────────────
 setupSwagger(app);
