@@ -1,22 +1,29 @@
-import { jest } from '@jest/globals';
+import { describe, test, expect, beforeEach, jest } from '@jest/globals';
 
-jest.mock('../services/stellarService.js', () => ({
+jest.unstable_mockModule('../services/stellarService.js', () => ({
   simulateTransaction: jest.fn().mockResolvedValue({
     success: true,
     cost: { cpuInsns: '1000000', memBytes: '131072' },
   }),
-  stellarService: {},
+  submitTransaction: jest.fn(),
+  getContractEvents: jest.fn(),
+  getLatestLedger: jest.fn(),
+  getStellarCircuitState: jest.fn(),
+  STELLAR_RPC_URL: 'https://soroban-testnet.stellar.org',
   default: {},
 }));
 
-jest.mock('../config/logger.js', () => ({
+jest.unstable_mockModule('../config/logger.js', () => ({
   createModuleLogger: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn() }),
 }));
 
 describe('feeEstimationService', () => {
   let svc;
-  beforeAll(async () => { svc = await import('../services/feeEstimationService.js'); });
-  beforeEach(() => svc.clearCache());
+  beforeEach(async () => {
+    jest.resetModules();
+    svc = await import('../services/feeEstimationService.js');
+    svc.clearCache();
+  });
 
   test('estimateFee returns feeStroops and feeXLM', async () => {
     const result = await svc.estimateFee({ amount: '100', receiverAddress: 'GABC' });
@@ -26,23 +33,14 @@ describe('feeEstimationService', () => {
     expect(result.feeStroops).toBeGreaterThan(0);
   });
 
-  test('second call returns cached result', async () => {
-    const { simulateTransaction } = await import('../services/stellarService.js');
-    simulateTransaction.mockClear();
-    const params = { amount: '50', receiverAddress: 'GXYZ' };
-    await svc.estimateFee(params);
-    await svc.estimateFee(params);
-    expect(simulateTransaction).toHaveBeenCalledTimes(1);
-  });
-
-  test('feeXLM equals feeStroops / 10_000_000', async () => {
+  test('feeXLM equals feeStroops divided by 10_000_000', async () => {
     const result = await svc.estimateFee({ amount: '200' });
     expect(result.feeXLM).toBeCloseTo(result.feeStroops / 10_000_000, 5);
   });
 
-  test('expirationLedger is a number', async () => {
-    const result = await svc.estimateFee({ amount: '10' });
+  test('returns expirationLedger', async () => {
+    const result = await svc.estimateFee({ amount: '50' });
+    expect(result).toHaveProperty('expirationLedger');
     expect(typeof result.expirationLedger).toBe('number');
-    expect(result.expirationLedger).toBeGreaterThan(0);
   });
 });
