@@ -15,7 +15,9 @@ const mockClient = {
   rpush: jest.fn().mockResolvedValue(1),
   lpush: jest.fn().mockResolvedValue(1),
   lrange: jest.fn().mockResolvedValue([]),
-  on: jest.fn(),
+  on: jest.fn((event, cb) => {
+    if (event === 'ready') cb();
+  }),
 };
 
 export const createClient = jest.fn(() => mockClient);
