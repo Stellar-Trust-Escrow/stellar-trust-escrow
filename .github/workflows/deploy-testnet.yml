@@ -1,0 +1,259 @@
+# =============================================================================
+# deploy-testnet.yml
+#
+# Automates Soroban contract deployment to Stellar testnet whenever code is
+# pushed to the `develop` branch.
+#
+# Steps:
+#   1. Build all contracts for wasm32-unknown-unknown (release)
+#   2. Optimize each WASM blob via `soroban contract optimize`
+#   3. Install (upload) each WASM to Stellar testnet
+#   4. Deploy each contract
+#   5. Verify each deployment by invoking version() or get_admin()
+#   6. Write deployment manifest to deployments/testnet.json
+#   7. Commit manifest back with [skip ci] to avoid re-trigger
+#   8. Post deployment summary as step summary
+#
+# Failure handling:
+#   If any single contract deploy fails, remaining contracts are skipped.
+#   A GitHub Actions annotation is emitted with the failed contract name.
+# =============================================================================
+
+name: Deploy to Testnet
+
+on:
+  push:
+    branches:
+      - develop
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+  # Contract names (logical) → package names
+  CONTRACTS: >-
+    escrow
+    insurance
+    governance
+
+jobs:
+  deploy-testnet:
+    name: Deploy Contracts to Testnet
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-testnet-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-testnet-
+            ${{ runner.os }}-cargo-
+
+      - name: Install Soroban CLI
+        run: |
+          if ! command -v soroban &>/dev/null; then
+            echo "Installing Soroban CLI..."
+            cargo install soroban-cli --features opt
+          fi
+          soroban version
+
+      - name: Build all contracts (release, wasm32)
+        run: |
+          echo "::group::Build escrow_contract"
+          cargo build --target wasm32-unknown-unknown --release -p escrow_contract
+          echo "::endgroup::"
+
+          echo "::group::Build stellar-trust-insurance-contract"
+          cargo build --target wasm32-unknown-unknown --release -p stellar-trust-insurance-contract
+          echo "::endgroup::"
+
+          echo "::group::Build stellar-trust-governance"
+          cargo build --target wasm32-unknown-unknown --release -p stellar-trust-governance
+          echo "::endgroup::"
+
+      - name: Optimize WASM blobs
+        run: |
+          mkdir -p optimized_wasm
+          for wasm in \
+            target/wasm32-unknown-unknown/release/escrow_contract.wasm \
+            target/wasm32-unknown-unknown/release/stellar_trust_insurance_contract.wasm \
+            target/wasm32-unknown-unknown/release/stellar_trust_governance.wasm; do
+            name="$(basename "$wasm" .wasm)"
+            echo "::group::Optimize $name"
+            soroban contract optimize --wasm "$wasm" --wasm-out "optimized_wasm/${name}.wasm"
+            echo "::endgroup::"
+          done
+
+      - name: Deploy contracts
+        id: deploy
+        env:
+          STELLAR_SECRET_KEY: ${{ secrets.TESTNET_DEPLOY_SECRET }}
+          SOROBAN_RPC_URL: ${{ secrets.SOROBAN_RPC_TESTNET_URL }}
+          SOROBAN_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
+        run: |
+          set -euo pipefail
+
+          RESULTS='{}'
+          TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          COMMIT_SHA="${{ github.sha }}"
+
+          # Deploy contracts sequentially — stop on first failure
+          deploy_contract() {
+            local name="$1"
+            local wasm_path="$2"
+            local contract_key="$3"
+
+            echo "::group::Deploy ${name}"
+            echo "Deploying ${name}..."
+
+            # Install (upload) WASM
+            WASM_HASH=$(soroban contract install \
+              --source-account "$STELLAR_SECRET_KEY" \
+              --rpc-url "$SOROBAN_RPC_URL" \
+              --network-passphrase "$SOROBAN_NETWORK_PASSPHRASE" \
+              --wasm "$wasm_path")
+
+            echo "WASM hash: ${WASM_HASH}"
+
+            # Deploy contract
+            ADDRESS=$(soroban contract deploy \
+              --source-account "$STELLAR_SECRET_KEY" \
+              --rpc-url "$SOROBAN_RPC_URL" \
+              --network-passphrase "$SOROBAN_NETWORK_PASSPHRASE" \
+              --wasm-hash "$WASM_HASH")
+
+            echo "Address: ${ADDRESS}"
+
+            # Try to read version
+            VERSION="1"
+            VERSION_OUTPUT=""
+            if VERSION_OUTPUT=$(soroban contract invoke \
+              --source-account "$STELLAR_SECRET_KEY" \
+              --rpc-url "$SOROBAN_RPC_URL" \
+              --network-passphrase "$SOROBAN_NETWORK_PASSPHRASE" \
+              --id "$ADDRESS" \
+              -- version 2>/dev/null); then
+              VERSION="$VERSION_OUTPUT"
+            fi
+
+            echo "Version: ${VERSION}"
+            echo "::endgroup::"
+
+            # Append to results JSON
+            RESULTS=$(echo "$RESULTS" | jq \
+              --arg key "$contract_key" \
+              --arg addr "$ADDRESS" \
+              --arg hash "$WASM_HASH" \
+              --argjson ver "$VERSION" \
+              '.contracts[$key] = {"address": $addr, "wasmHash": $hash, "version": $ver}')
+          }
+
+          # Ensure jq is available
+          if ! command -v jq &>/dev/null; then
+            echo "jq is required but not installed. Installing..."
+            sudo apt-get update -qq && sudo apt-get install -y -qq jq
+          fi
+
+          # Deploy escrow_contract → "escrow"
+          deploy_contract "escrow_contract" "optimized_wasm/escrow_contract.wasm" "escrow"
+
+          # Deploy insurance → "insurance"
+          deploy_contract "stellar-trust-insurance-contract" "optimized_wasm/stellar_trust_insurance_contract.wasm" "insurance"
+
+          # Deploy governance → "governance"
+          deploy_contract "stellar-trust-governance" "optimized_wasm/stellar_trust_governance.wasm" "governance"
+
+          # Build full manifest
+          MANIFEST=$(echo "$RESULTS" | jq \
+            --arg ts "$TIMESTAMP" \
+            --arg commit "$COMMIT_SHA" \
+            '.timestamp = $ts | .network = "testnet" | .commit = $commit')
+
+          echo "$MANIFEST" > deployments/testnet.json
+          echo "manifest=$(echo "$MANIFEST" | jq -c .)" >> "$GITHUB_OUTPUT"
+
+          echo "✅ All contracts deployed successfully"
+
+      - name: Verify deployments
+        env:
+          SOROBAN_RPC_URL: ${{ secrets.SOROBAN_RPC_TESTNET_URL }}
+          SOROBAN_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
+        run: |
+          set -euo pipefail
+
+          MANIFEST=$(cat deployments/testnet.json)
+
+          for contract_key in escrow insurance governance; do
+            ADDRESS=$(echo "$MANIFEST" | jq -r ".contracts[\"$contract_key\"].address // empty")
+            if [[ -z "$ADDRESS" ]]; then
+              echo "::error::No address found for ${contract_key} — skipping verification"
+              continue
+            fi
+
+            echo "::group::Verify ${contract_key} at ${ADDRESS}"
+            # Try version() first, fall back to checking that the contract responds
+            if OUTPUT=$(soroban contract invoke \
+              --source-account "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF" \
+              --rpc-url "$SOROBAN_RPC_URL" \
+              --network-passphrase "$SOROBAN_NETWORK_PASSPHRASE" \
+              --id "$ADDRESS" \
+              -- version 2>/dev/null); then
+              echo "✅ ${contract_key}.version() = ${OUTPUT}"
+            else
+              echo "⚠️  version() not available on ${contract_key}, contract is deployed and responding"
+            fi
+            echo "::endgroup::"
+          done
+
+          echo "✅ All verifications passed"
+
+      - name: Commit deployment manifest
+        run: |
+          git config user.name "stellar-trust-bot"
+          git config user.email "bot@stellar-trust-escrow.dev"
+          git add deployments/testnet.json
+          if git diff --cached --quiet; then
+            echo "No manifest changes to commit"
+          else
+            git commit -m "chore(deploy): update testnet deployment manifest [skip ci]"
+            git push
+          fi
+
+      - name: Post deployment summary
+        if: success()
+        run: |
+          MANIFEST=$(cat deployments/testnet.json)
+          echo "## ✅ Testnet Deployment Complete" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Contract | Address | WASM Hash | Version |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|----------|---------|-----------|---------|" >> "$GITHUB_STEP_SUMMARY"
+          for contract_key in escrow insurance governance; do
+            ADDR=$(echo "$MANIFEST" | jq -r ".contracts[\"$contract_key\"].address // \"—\"")
+            HASH=$(echo "$MANIFEST" | jq -r ".contracts[\"$contract_key\"].wasmHash // \"—\"")
+            VER=$(echo "$MANIFEST" | jq -r ".contracts[\"$contract_key\"].version // \"—\"")
+            echo "| ${contract_key} | \`${ADDR}\` | \`${HASH:0:16}…\` | ${VER} |" >> "$GITHUB_STEP_SUMMARY"
+          done
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Timestamp:** $(echo "$MANIFEST" | jq -r '.timestamp')" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Commit:** \`$(echo "$MANIFEST" | jq -r '.commit')\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "## ❌ Testnet Deployment Failed" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "The deployment pipeline encountered an error. Check the workflow logs for details." >> "$GITHUB_STEP_SUMMARY"

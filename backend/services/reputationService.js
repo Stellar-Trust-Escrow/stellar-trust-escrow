@@ -1,19 +1,37 @@
-import { createModuleLogger } from '../config/logger.js';
-const log = createModuleLogger('service.reputation');
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 export async function recalculateFromEventHistory(tenantId) {
-  log.info({ message: 'reputation.recalculateFromEventHistory', tenantId });
-  return { recalculated: 0 };
+  const events = await prisma.escrowEvent.findMany({
+    where: { tenantId },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  let score = 50;
+  for (const event of events) {
+    if (event.type === 'COMPLETED') score = Math.min(100, score + 5);
+    else if (event.type === 'DISPUTED') score = Math.max(0, score - 10);
+    else if (event.type === 'RELEASED') score = Math.min(100, score + 3);
+  }
+
+  await prisma.reputationScore.upsert({
+    where: { tenantId },
+    update: { score, updatedAt: new Date() },
+    create: { tenantId, score, updatedAt: new Date() },
+  });
+
+  return { tenantId, score };
 }
 
-export async function getReputation(walletAddress) {
-  log.info({ message: 'reputation.getReputation', walletAddress });
-  return { walletAddress, score: 0, tier: 'Unrated' };
+export async function getScore(tenantId) {
+  const record = await prisma.reputationScore.findUnique({ where: { tenantId } });
+  return record?.score ?? 50;
 }
 
-export async function updateReputation(walletAddress, delta) {
-  log.info({ message: 'reputation.updateReputation', walletAddress, delta });
-  return { walletAddress, updated: true };
+export async function getLeaderboard(limit = 10) {
+  return prisma.reputationScore.findMany({
+    orderBy: { score: 'desc' },
+    take: limit,
+  });
 }
-
-export default { recalculateFromEventHistory, getReputation, updateReputation };

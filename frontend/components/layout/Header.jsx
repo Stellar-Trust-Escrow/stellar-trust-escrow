@@ -23,6 +23,7 @@ import MobileDrawer from './MobileDrawer';
 import ThemeToggle from './ThemeToggle';
 import CurrencySelector from '../ui/CurrencySelector';
 import NetworkIndicator from './NetworkIndicator';
+import RateTicker from './RateTicker';
 import { cn } from '../../lib/utils';
 
 export default function Header() {
@@ -109,6 +110,9 @@ export default function Header() {
 
             {/* Wallet Status */}
             <WalletStatus wallet={wallet} />
+
+            {/* Live XLM/USD rate */}
+            <RateTicker />
 
             {/* Currency Selector */}
             <CurrencySelector size="sm" />

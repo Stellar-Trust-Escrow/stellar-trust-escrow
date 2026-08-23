@@ -81,6 +81,7 @@ import queueDashboardRoutes from './api/routes/queueDashboardRoutes.js';
 import chatRoutes from './api/routes/chatRoutes.js';
 import { startAnalyticsWorker } from './workers/analyticsWorker.js';
 import { startLedgerBalanceWorker } from './workers/ledgerBalanceWorker.js';
+import { startPriceOracleWorker } from './workers/priceOracleWorker.js';
 
 // Attach Prisma query instrumentation (metrics + traces)
 attachPrismaMetrics(prisma);
@@ -322,6 +323,9 @@ async function startServer() {
         complianceService.startScheduler();
         logger.info('[ComplianceService] Scheduler started');
         logger.info('[WebSocket] Server attached');
+
+        startPriceOracleWorker();
+        logger.info('[PriceOracle] Cache pre-warm worker started');
 
         try {
           const eventWorker = createEventWorker();

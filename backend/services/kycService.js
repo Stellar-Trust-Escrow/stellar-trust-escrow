@@ -1,19 +1,39 @@
-import { createModuleLogger } from '../config/logger.js';
-const log = createModuleLogger('service.kyc');
+import { PrismaClient } from '@prisma/client';
 
-async function getStatus(address) {
-  log.info({ message: 'kyc.getStatus', address });
-  return { status: 'not_configured', address };
-}
+const prisma = new PrismaClient();
 
-async function submitVerification(address, data) {
-  log.info({ message: 'kyc.submitVerification', address });
-  throw new Error('KYC provider not configured');
-}
+const kycService = {
+  async getStatus(address) {
+    const record = await prisma.kycRecord.findUnique({ where: { address } });
+    return record ? record.status : 'not_started';
+  },
 
-async function getVerifications(address) {
-  log.info({ message: 'kyc.getVerifications', address });
-  return [];
-}
+  async submit(address, documents) {
+    return prisma.kycRecord.upsert({
+      where: { address },
+      update: { status: 'pending', documents, submittedAt: new Date() },
+      create: { address, status: 'pending', documents, submittedAt: new Date() },
+    });
+  },
 
-export default { getStatus, submitVerification, getVerifications };
+  async approve(address) {
+    return prisma.kycRecord.update({
+      where: { address },
+      data: { status: 'approved', reviewedAt: new Date() },
+    });
+  },
+
+  async reject(address, reason) {
+    return prisma.kycRecord.update({
+      where: { address },
+      data: { status: 'rejected', rejectionReason: reason, reviewedAt: new Date() },
+    });
+  },
+
+  async isApproved(address) {
+    const record = await prisma.kycRecord.findUnique({ where: { address } });
+    return record?.status === 'approved';
+  },
+};
+
+export default kycService;

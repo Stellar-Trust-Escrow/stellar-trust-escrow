@@ -266,7 +266,7 @@ export function getStellarCircuitState() {
   return breaker.state;
 }
 
-export default {
+const stellarService = {
   STELLAR_RPC_URL,
   submitTransaction,
   getContractEvents,
@@ -275,3 +275,6 @@ export default {
   getStellarCircuitState,
   __setSleep,
 };
+
+export { stellarService };
+export default stellarService;
