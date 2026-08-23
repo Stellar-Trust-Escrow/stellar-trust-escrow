@@ -16,7 +16,11 @@ let timer = null;
 async function tick() {
   try {
     const entry = await refreshCache();
-    log.info({ message: 'price_oracle_refreshed', source: entry.source, price_usd: entry.price_usd });
+    log.info({
+      message: 'price_oracle_refreshed',
+      source: entry.source,
+      price_usd: entry.price_usd,
+    });
   } catch (err) {
     log.error({ message: 'price_oracle_refresh_failed', error: err.message });
   }

@@ -20,9 +20,7 @@ export default function XlmAmount({ amount, className = '' }) {
   const xlm = Number.isFinite(amount) ? amount : 0;
   const usd = Number.isFinite(rate_usd) ? xlm * rate_usd : null;
   const usdLabel =
-    usd !== null
-      ? usd.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
-      : null;
+    usd !== null ? usd.toLocaleString('en-US', { style: 'currency', currency: 'USD' }) : null;
 
   return (
     <span className={className}>

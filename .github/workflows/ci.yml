@@ -422,6 +422,73 @@ jobs:
           JWT_SECRET: test-secret-for-ci-only
           STELLAR_NETWORK: testnet
 
+      - name: Start server for security headers audit
+        id: start_server
+        if: steps.changes.outputs.changed == 'true' && matrix.node-version == 22
+        run: |
+          cd backend
+          node scripts/start-audit-server.js 4000 &
+          echo $! > /tmp/backend-server.pid
+          npx wait-on http://localhost:4000/api/health/live -t 15000
+
+      - name: Security headers audit
+        id: security_headers_audit
+        if: steps.changes.outputs.changed == 'true' && matrix.node-version == 22
+        continue-on-error: true
+        run: cd backend && node scripts/audit-security-headers.js
+
+      - name: Stop server
+        if: steps.changes.outputs.changed == 'true' && matrix.node-version == 22 && always()
+        run: kill "$(cat /tmp/backend-server.pid)" 2>/dev/null || true
+
+      - name: Commit security header score history
+        # Only same-repo PRs get a GITHUB_TOKEN with push access to the head
+        # branch; forked PRs' default token is read-only and this step would
+        # otherwise fail the whole job with a 403 on every fork contribution.
+        if: steps.changes.outputs.changed == 'true' && matrix.node-version == 22 && steps.security_headers_audit.outcome == 'success' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
+        run: |
+          if [ -n "$(git status --porcelain backend/security-header-scores.jsonl)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add backend/security-header-scores.jsonl
+            git commit -m "chore: record security header score for ${{ github.sha }}"
+            git push origin HEAD:${{ github.head_ref }}
+          fi
+
+      - name: Security headers score comment
+        if: steps.changes.outputs.changed == 'true' && matrix.node-version == 22 && always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        continue-on-error: true
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- security-headers-score -->';
+            let lines = [];
+            try {
+              lines = fs.readFileSync('backend/security-header-scores.jsonl', 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
+            } catch {}
+            const current = lines[lines.length - 1];
+            const body = current
+              ? `${marker}\n### 🔒 Security Headers Score\n\n**${current.score}/100** (commit \`${current.commit_sha.slice(0, 7)}\`)\n\n${current.score < 90 ? '❌ Below the required threshold of 90.' : current.score < 100 ? '⚠️ Passing, but not a perfect score.' : '✅ Perfect score.'}`
+              : `${marker}\n### 🔒 Security Headers Score\n\nAudit did not produce a score this run.`;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find((c) => c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner: context.repo.owner, repo: context.repo.repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, body });
+            }
+
+      - name: Fail if security headers audit failed
+        if: steps.changes.outputs.changed == 'true' && matrix.node-version == 22 && steps.security_headers_audit.outcome == 'failure'
+        run: exit 1
+
       - name: Job Summary
         if: always()
         run: |

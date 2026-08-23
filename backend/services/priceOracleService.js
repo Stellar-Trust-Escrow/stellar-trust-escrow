@@ -59,9 +59,7 @@ async function fetchFromCoingecko() {
 
 async function fetchFromBinance() {
   const start = Date.now();
-  const data = await fetchWithTimeout(
-    'https://api.binance.com/api/v3/ticker/price?symbol=XLMUSDT',
-  );
+  const data = await fetchWithTimeout('https://api.binance.com/api/v3/ticker/price?symbol=XLMUSDT');
   const price = parseFloat(data?.price);
   if (!Number.isFinite(price) || price <= 0) throw new Error('Invalid Binance payload');
   return { price_usd: price, source: 'binance', latencyMs: Date.now() - start };

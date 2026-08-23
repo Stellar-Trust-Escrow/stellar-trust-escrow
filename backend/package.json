@@ -27,7 +27,9 @@
     "chaos:db": "node backend/chaos/runner.js --scenario db-disconnect",
     "chaos:redis": "node backend/chaos/runner.js --scenario redis-timeout",
     "chaos:rpc": "node backend/chaos/runner.js --scenario rpc-lag",
-    "chaos:tx": "node backend/chaos/runner.js --scenario duplicate-transaction"
+    "chaos:tx": "node backend/chaos/runner.js --scenario duplicate-transaction",
+    "generate:sdk": "node scripts/generate-sdk.js",
+    "validate:openapi": "node scripts/validate-openapi.js"
   },
   "dependencies": {
     "@bull-board/api": "^5.3.2",
@@ -52,6 +54,7 @@
     "bullmq": "^5.71.1",
     "clamscan": "^2.1.2",
     "compression": "^1.7.4",
+    "content-security-policy-parser": "^0.6.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "csv-stringify": "^6.7.0",
@@ -79,6 +82,7 @@
     "redis": "^4.7.0",
     "rotating-file-stream": "^2.1.5",
     "sharp": "^0.33.5",
+    "stripe": "^22.5.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
     "twilio": "^6.0.2",
@@ -89,41 +93,14 @@
     "yaml": "^2.4.2"
   },
   "devDependencies": {
-    "toxiproxy-node-client": "^4.1.0",
     "cross-env": "^10.1.0",
     "fast-check": "^4.6.0",
     "jest": "^29.7.0",
     "nodemon": "^3.0.0",
     "prisma": "^5.0.0",
     "supertest": "^6.3.4",
-    "swagger-typescript-api": "^13.0.0"
-  },
-  "scripts": {
-    "dev": "nodemon server.js",
-    "build": "echo 'No build step required for backend'",
-    "prestart": "node ../scripts/check-env.js",
-    "start": "node server.js",
-    "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --runInBand --passWithNoTests --forceExit",
-    "test:chaos": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --runInBand --testPathPattern=tests/chaos --passWithNoTests",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix",
-    "format": "prettier --write .",
-    "db:migrate": "node database/migrations/migrate.js up",
-    "db:migrate:up": "node database/migrations/migrate.js up",
-    "db:migrate:down": "node database/migrations/migrate.js down",
-    "db:migrate:status": "node database/migrations/migrate.js status",
-    "db:migrate:create": "node database/migrations/migrate.js create",
-    "db:migrate:deploy": "node database/migrations/migrate.js up",
-    "db:generate": "npx prisma generate --schema=database/schema.prisma",
-    "db:seed": "node database/seed/index.js",
-    "db:seed:reset": "node database/seed/index.js --reset",
-    "chaos": "node backend/chaos/runner.js",
-    "chaos:db": "node backend/chaos/runner.js --scenario db-disconnect",
-    "chaos:redis": "node backend/chaos/runner.js --scenario redis-timeout",
-    "chaos:rpc": "node backend/chaos/runner.js --scenario rpc-lag",
-    "chaos:tx": "node backend/chaos/runner.js --scenario duplicate-transaction",
-    "generate:sdk": "node scripts/generate-sdk.js",
-    "validate:openapi": "node scripts/validate-openapi.js"
+    "swagger-typescript-api": "^13.0.0",
+    "toxiproxy-node-client": "^4.1.0"
   },
   "validate-branch-name": {
     "pattern": "^(main|develop|live)$|^(feature|fix|refactor|hotfix|release|conflict|docs|chore|test)\\/[A-Za-z0-9._-]+$",

@@ -30,8 +30,7 @@ import { createModuleLogger } from '../config/logger.js';
 const log = createModuleLogger('service.stellarService');
 
 /** RPC endpoint. Override with STELLAR_RPC_URL in non-test environments. */
-export const STELLAR_RPC_URL =
-  process.env.STELLAR_RPC_URL || 'https://soroban-testnet.stellar.org';
+export const STELLAR_RPC_URL = process.env.STELLAR_RPC_URL || 'https://soroban-testnet.stellar.org';
 
 const NETWORK = process.env.STELLAR_NETWORK || 'testnet';
 const NETWORK_PASSPHRASE = NETWORK === 'mainnet' ? Networks.PUBLIC : Networks.TESTNET;

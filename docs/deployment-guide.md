@@ -8,20 +8,20 @@ to Stellar testnet and mainnet.
 The pipeline automates building, optimizing, installing, deploying, and verifying
 Soroban contracts. It consists of two GitHub Actions workflows:
 
-| Workflow | Trigger | Environment | Approval Gate |
-|----------|---------|-------------|---------------|
-| `deploy-testnet.yml` | Push to `develop` | Testnet | None (automated) |
-| `deploy-mainnet.yml` | `workflow_dispatch` | Mainnet | 2-of-3 maintainer approval |
+| Workflow             | Trigger             | Environment | Approval Gate              |
+| -------------------- | ------------------- | ----------- | -------------------------- |
+| `deploy-testnet.yml` | Push to `develop`   | Testnet     | None (automated)           |
+| `deploy-mainnet.yml` | `workflow_dispatch` | Mainnet     | 2-of-3 maintainer approval |
 
 ## Contracts Deployed
 
 The pipeline deploys three Soroban contracts in sequence:
 
-| Logical Name | Package Name | WASM Output |
-|-------------|--------------|-------------|
-| `escrow` | `escrow_contract` | `escrow_contract.wasm` |
-| `insurance` | `stellar-trust-insurance-contract` | `stellar_trust_insurance_contract.wasm` |
-| `governance` | `stellar-trust-governance` | `stellar_trust_governance.wasm` |
+| Logical Name | Package Name                       | WASM Output                             |
+| ------------ | ---------------------------------- | --------------------------------------- |
+| `escrow`     | `escrow_contract`                  | `escrow_contract.wasm`                  |
+| `insurance`  | `stellar-trust-insurance-contract` | `stellar_trust_insurance_contract.wasm` |
+| `governance` | `stellar-trust-governance`         | `stellar_trust_governance.wasm`         |
 
 ## Testnet Deployment
 
@@ -122,18 +122,19 @@ Same structure with `"network": "mainnet"`.
 
 The following secrets must be configured in the GitHub repository:
 
-| Secret | Description | Used By |
-|--------|-------------|---------|
-| `TESTNET_DEPLOY_SECRET` | Stellar account secret key for testnet deploys | Testnet workflow |
-| `MAINNET_DEPLOY_SECRET` | Stellar account secret key for mainnet deploys | Mainnet workflow |
-| `SOROBAN_RPC_TESTNET_URL` | Soroban RPC URL for Stellar testnet | Testnet workflow |
-| `SOROBAN_RPC_MAINNET_URL` | Soroban RPC URL for Stellar mainnet | Mainnet workflow |
+| Secret                    | Description                                    | Used By          |
+| ------------------------- | ---------------------------------------------- | ---------------- |
+| `TESTNET_DEPLOY_SECRET`   | Stellar account secret key for testnet deploys | Testnet workflow |
+| `MAINNET_DEPLOY_SECRET`   | Stellar account secret key for mainnet deploys | Mainnet workflow |
+| `SOROBAN_RPC_TESTNET_URL` | Soroban RPC URL for Stellar testnet            | Testnet workflow |
+| `SOROBAN_RPC_MAINNET_URL` | Soroban RPC URL for Stellar mainnet            | Mainnet workflow |
 
 ### Setting up secrets
 
 1. Go to **Settings → Secrets and variables → Actions** in the GitHub repository.
 2. Click **New repository secret** for each secret above.
 3. Generate a Stellar keypair for each environment:
+
    ```bash
    # For testnet
    soroban keys generate testnet-deployer --network testnet
@@ -142,6 +143,7 @@ The following secrets must be configured in the GitHub repository:
    # For mainnet (fund manually with real XLM)
    soroban keys generate mainnet-deployer --network mainnet
    ```
+
 4. Export the secret key and add it to GitHub Secrets:
    ```bash
    soroban keys show testnet-deployer
@@ -199,6 +201,7 @@ bash scripts/verify-deployment.sh escrow "C..." \
 To roll back a deployment:
 
 1. **If the manifest was committed:** Revert the manifest commit:
+
    ```bash
    git revert <manifest-commit-hash>
    git push
