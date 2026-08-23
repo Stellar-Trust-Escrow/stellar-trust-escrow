@@ -80,7 +80,7 @@ export async function up(prisma) {
       "currency"     TEXT         NOT NULL DEFAULT 'XLM',
       "entry_type"   "LedgerEntryType"   NOT NULL,
       "reference_id" TEXT         NOT NULL,
-      "created_at"   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+      "created_at"   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
       CONSTRAINT "ledger_entries_pkey" PRIMARY KEY ("id"),
       CONSTRAINT "ledger_entries_tenant_fkey"
@@ -115,6 +115,33 @@ export async function up(prisma) {
   await prisma.$executeRawUnsafe(`
     CREATE INDEX IF NOT EXISTS "ledger_entries_account_direction_idx"
       ON "ledger_entries" ("account_type", "direction")
+  `);
+
+  // 4. Indexes matching prisma/schema.prisma's @@index declarations for this
+  //    model. schema.prisma is pushed once at the start of the migration
+  //    history (via `prisma db push`) and creates these under Prisma's own
+  //    naming convention; because DROP TABLE (in down()) removes them along
+  //    with everything else, they must also be recreated here so that a
+  //    rollback + reapply of just this migration is self-contained.
+  await prisma.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "ledger_entries_escrow_id_created_at_idx"
+      ON "ledger_entries" ("escrow_id", "created_at" DESC)
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "ledger_entries_tenant_id_escrow_id_idx"
+      ON "ledger_entries" ("tenant_id", "escrow_id")
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "ledger_entries_account_type_direction_idx"
+      ON "ledger_entries" ("account_type", "direction")
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "ledger_entries_entry_type_idx"
+      ON "ledger_entries" ("entry_type")
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "ledger_entries_created_at_idx"
+      ON "ledger_entries" ("created_at" DESC)
   `);
 }
 
