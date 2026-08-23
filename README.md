@@ -540,6 +540,56 @@ Source: `contracts/escrow_contract/src/lib.rs`
 
 All write calls require a Stellar transaction simulation step (`simulateTransaction`) before submission. See `frontend/lib/soroban.ts` for reference patterns.
 
+### WASM Binary Size Budgets
+
+Every contract has a maximum compiled (optimised) size defined in
+[`contracts/size-budgets.json`](contracts/size-budgets.json), keyed by
+contract directory name, values in bytes:
+
+```json
+{
+  "escrow_contract": 524288,
+  "escrow_extensions": 262144,
+  "escrow_linking": 131072,
+  "escrow_ownership": 131072,
+  "governance": 262144,
+  "insurance_contract": 196608,
+  "reputation_staking": 196608
+}
+```
+
+**Why this matters:** Soroban WASM binaries consume ledger entry storage,
+and every byte costs XLM in deployment fees. The `wasm-size-budget` CI job
+runs `wasm-opt -Oz` (Binaryen's size-optimising pass — the actual
+production build, not raw debug output) on every contract after `cargo
+build --release --target wasm32-unknown-unknown`, and fails the PR if any
+contract exceeds its budget. A new contract with no entry in
+`size-budgets.json` fails CI with `No budget defined for {contract}. Add
+it to size-budgets.json.` rather than silently passing unchecked.
+
+**Checking a single contract locally:**
+
+```bash
+cargo build --release --target wasm32-unknown-unknown -p escrow_contract
+scripts/check-wasm-size.sh target/wasm32-unknown-unknown/release/escrow_contract.wasm escrow_contract
+```
+
+**Updating a budget:**
+
+```bash
+scripts/update-wasm-budget.sh {contract_name} {new_budget_bytes}
+```
+
+This requires the contract to already be built (so "current size" reflects
+reality) and **refuses to set a new budget more than 10% above the
+current measured size.** That guard exists because it's easy for a size
+regression to get "fixed" by just raising the ceiling instead of
+addressing the actual bloat — a 10% cap keeps growth deliberate,
+justified, and visible in the git history one commit at a time, rather
+than allowing a single PR to silently double a contract's budget to make
+a regression disappear. A genuinely necessary larger increase is still
+possible; it just takes more than one step, which is the point.
+
 ---
 
 ## Security Practices

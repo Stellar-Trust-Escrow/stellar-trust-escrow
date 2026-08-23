@@ -79,6 +79,8 @@ import { syncFromPrisma, ensureIndex } from './services/reputationSearchService.
 import { createGateway } from './gateway/index.js';
 import queueDashboardRoutes from './api/routes/queueDashboardRoutes.js';
 import chatRoutes from './api/routes/chatRoutes.js';
+import streamRoutes from './api/routes/streamRoutes.js';
+import { startIndexer as startStreamingIndexer } from './services/streamingIndexer.js';
 import { startAnalyticsWorker } from './workers/analyticsWorker.js';
 import { startLedgerBalanceWorker } from './workers/ledgerBalanceWorker.js';
 import { startPriceOracleWorker } from './workers/priceOracleWorker.js';
@@ -202,6 +204,13 @@ app.get('/api/csrf-token', generateCsrfToken);
 // Auth is handled by the gateway above — no per-route authMiddleware needed.
 app.use('/api/health', healthRoutes);
 app.use('/ws/health', wsHealthRoutes);
+
+// Root-level liveness endpoint for load balancers / deploy pipelines that
+// expect the conventional /healthz path (e.g. blue-green smoke tests).
+// Deliberately a thin liveness check, not the full dependency check that
+// /api/health/ready does — a slow DB shouldn't fail a smoke-test gate that
+// only wants to know "did the new container start".
+app.get('/healthz', (_req, res) => res.status(200).json({ status: 'ok' }));
 app.use('/api', tenantMiddleware);
 app.use('/api/auth', authRoutes);
 app.use('/api/tenant', tenantRoutes);
@@ -233,6 +242,7 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/v1/templates', templateRoutes);
 app.use('/api/insurance', insuranceRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/v1/streams', streamRoutes);
 app.use('/metrics', metricsRoutes);
 app.use('/admin/queues', queueDashboardRoutes);
 app.use('/.well-known', wellKnownRoutes);
@@ -355,6 +365,10 @@ async function startServer() {
         startIndexer().catch((err) => {
           logger.error({ err, component: 'indexer' }, 'Indexer failed to start');
           Sentry.captureException(err, { tags: { component: 'indexer' } });
+        });
+        startStreamingIndexer().catch((err) => {
+          logger.error({ err, component: 'streaming-indexer' }, 'Streaming indexer failed to start');
+          Sentry.captureException(err, { tags: { component: 'streaming-indexer' } });
         });
         startRpcMonitor();
 

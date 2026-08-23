@@ -1048,3 +1048,28 @@ model OwnershipTransferLog {
   @@index([toOwner])
   @@map("ownership_transfer_logs")
 }
+
+// ── Payment Streams ──────────────────────────────────────────────────────────
+
+model PaymentStream {
+  id              String   @id @default(cuid())
+  streamId        BigInt   @unique
+  senderAddress   String   @map("sender_address")
+  recipientAddress String  @map("recipient_address")
+  tokenAddress    String   @map("token_address")
+  totalAmount     String   @map("total_amount")
+  ratePerSecond   String   @map("rate_per_second")
+  startAt         DateTime @map("start_at")
+  status          String   @default("Active")
+  claimedTotal    String   @default("0") @map("claimed_total")
+  lastClaimedAt   DateTime? @map("last_claimed_at")
+  cancelledAt     DateTime? @map("cancelled_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([senderAddress])
+  @@index([recipientAddress])
+  @@index([status])
+  @@index([senderAddress, createdAt(sort: Desc)])
+  @@index([recipientAddress, createdAt(sort: Desc)])
+  @@map("payment_streams")
+}

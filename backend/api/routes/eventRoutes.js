@@ -28,6 +28,12 @@ router.get(
 );
 
 router.get(
+  '/escrow-ids-by-tx',
+  cacheResponse({ ttl: TTL.EVENTS, tags: ['events:escrow-ids-by-tx'] }),
+  eventController.getEscrowIdsByTxHashes,
+);
+
+router.get(
   '/:id',
   cacheResponse({
     ttl: TTL.STATIC,

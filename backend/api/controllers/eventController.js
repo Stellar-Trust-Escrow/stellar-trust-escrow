@@ -207,4 +207,47 @@ const serializeEvent = (event) => ({
   escrowId: event.escrowId?.toString() ?? null,
 });
 
-export default { listEvents, getEvent, listEscrowEvents, listEventTypes, getEventStats };
+/**
+ * GET /api/events/escrow-ids-by-tx?hashes=hash1,hash2,...
+ *
+ * Batch lookup: maps a list of Stellar transaction hashes to the escrow_id
+ * their indexed contract event(s) belong to (if any). Used by the wallet
+ * transaction history panel to group raw Horizon operations by escrow
+ * without an extra round-trip per operation.
+ */
+const getEscrowIdsByTxHashes = async (req, res) => {
+  try {
+    const hashes = String(req.query.hashes || '')
+      .split(',')
+      .map((h) => h.trim())
+      .filter(Boolean)
+      .slice(0, 200); // matches Horizon's own page size cap
+
+    if (hashes.length === 0) {
+      return res.json({ map: {} });
+    }
+
+    const rows = await prisma.contractEvent.findMany({
+      where: { txHash: { in: hashes }, escrowId: { not: null } },
+      select: { txHash: true, escrowId: true },
+    });
+
+    const map = {};
+    for (const row of rows) {
+      map[row.txHash] = row.escrowId.toString();
+    }
+    return res.json({ map });
+  } catch (err) {
+    logControllerError('events.getEscrowIdsByTxHashes', err, req);
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+export default {
+  listEvents,
+  getEvent,
+  listEscrowEvents,
+  listEventTypes,
+  getEventStats,
+  getEscrowIdsByTxHashes,
+};

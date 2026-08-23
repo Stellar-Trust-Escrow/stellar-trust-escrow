@@ -9,6 +9,7 @@ import StatCard from '../../../components/ui/StatCard';
 import Button from '../../../components/ui/Button';
 import Badge from '../../../components/ui/Badge';
 import Modal from '../../../components/ui/Modal';
+import WalletHistoryPanel from '../../../components/wallet/WalletHistoryPanel';
 import { useWallet } from '../../../hooks/useWallet';
 import {
   generateIdenticon,
@@ -365,6 +366,13 @@ export default function ProfilePage({ params }) {
             </Button>
           </div>
         )}
+      </section>
+
+      <section className="space-y-4" aria-labelledby="wallet-history-heading">
+        <h2 id="wallet-history-heading" className="text-xl font-semibold text-white">
+          Wallet Transaction History
+        </h2>
+        <WalletHistoryPanel address={address} />
       </section>
 
       <Modal

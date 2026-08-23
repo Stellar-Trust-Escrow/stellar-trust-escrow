@@ -1,0 +1,9 @@
+{
+  "escrow_contract": 524288,
+  "escrow_extensions": 262144,
+  "escrow_linking": 131072,
+  "escrow_ownership": 131072,
+  "governance": 262144,
+  "insurance_contract": 196608,
+  "reputation_staking": 196608
+}

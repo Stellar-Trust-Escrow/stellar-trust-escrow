@@ -1,0 +1,200 @@
+name: Blue-Green Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  SLACK_WEBHOOK: ${{ secrets.SLACK_DEPLOY_WEBHOOK }}
+  GREEN_URL: green.${{ vars.BASE_DOMAIN || 'example.com' }}
+
+concurrency:
+  group: blue-green-deploy
+  cancel-in-progress: false # never cancel mid-cutover
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  # ── Build & push image, tagged by commit SHA ──────────────────────────────────
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: tag
+        run: echo "tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+      - name: Build and push Docker image
+        run: |
+          # Placeholder — wire to your actual registry (ECR/GCR/Docker Hub),
+          # same fidelity as the existing deploy.yml's staging/production
+          # jobs. Real version:
+          #   docker build -t "$REGISTRY/stellar-trust-escrow:${{ steps.tag.outputs.tag }}" .
+          #   docker push "$REGISTRY/stellar-trust-escrow:${{ steps.tag.outputs.tag }}"
+          echo "Building and pushing image tagged :${{ steps.tag.outputs.tag }}"
+
+  # ── Deploy to green (blue keeps serving 100% of traffic throughout) ───────────
+  deploy-green:
+    needs: [build]
+    runs-on: ubuntu-latest
+    environment: green
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy image to green environment
+        run: |
+          # Placeholder for the real ECS/K8s replica-set deploy, e.g.:
+          #   aws ecs update-service --cluster prod --service green-svc \
+          #     --force-new-deployment --task-definition "...:${{ needs.build.outputs.image_tag }}"
+          # Green runs alongside blue on a separate port/target-group the
+          # whole time — blue is never touched by this job.
+          echo "Deploying ${{ needs.build.outputs.image_tag }} to green (${{ env.GREEN_URL }})"
+
+  # ── Smoke tests against green only — blue is untouched and uninterrupted ──────
+  smoke-test:
+    needs: [deploy-green]
+    runs-on: ubuntu-latest
+    outputs:
+      passed: ${{ steps.summary.outputs.passed }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install k6
+        run: |
+          curl -sSL https://github.com/grafana/k6/releases/download/v0.54.0/k6-v0.54.0-linux-amd64.tar.gz -o k6.tar.gz
+          tar -xzf k6.tar.gz --strip-components=1 -C /usr/local/bin k6-v0.54.0-linux-amd64/k6
+      - name: Install Playwright
+        working-directory: tests/smoke
+        run: |
+          npm init -y --silent > /dev/null
+          npm install --no-save @playwright/test@^1.52.0 --silent
+          npx playwright install --with-deps chromium
+
+      - name: Run k6 single-user smoke test
+        id: k6
+        continue-on-error: true
+        run: k6 run tests/smoke/smoke.k6.js
+        env:
+          BASE_URL: https://${{ env.GREEN_URL }}
+
+      - name: Run Playwright smoke suite
+        id: playwright
+        continue-on-error: true
+        working-directory: tests/smoke
+        run: npx playwright test
+        env:
+          SMOKE_TARGET_URL: https://${{ env.GREEN_URL }}
+
+      - id: summary
+        run: |
+          if [[ "${{ steps.k6.outcome }}" == "success" && "${{ steps.playwright.outcome }}" == "success" ]]; then
+            echo "passed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "passed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload smoke test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-results-${{ github.sha }}
+          path: |
+            tests/smoke/playwright-report/
+            tests/smoke/test-results/
+
+  # ── On failure: rollback within the 2-minute SLA, notify, open an issue ───────
+  smoke-test-failed:
+    needs: [smoke-test, build]
+    if: needs.smoke-test.outputs.passed != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tear down green and notify
+        env:
+          SLACK_DEPLOY_WEBHOOK: ${{ secrets.SLACK_DEPLOY_WEBHOOK }}
+        run: bash scripts/rollback.sh
+
+      - name: Create failure issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Blue-green smoke test failure — ${{ needs.build.outputs.image_tag }}`,
+              body: [
+                '## Smoke test failure — green deployment rolled back',
+                '',
+                `**Commit SHA:** \`${{ needs.build.outputs.image_tag }}\``,
+                '**Environment:** green',
+                `**Logs:** ${runUrl}`,
+                '',
+                'Green was torn down and traffic shifted back to blue automatically.',
+                'See the linked run for failed test names.',
+              ].join('\n'),
+              labels: ['deploy-failure', 'priority: high'],
+            });
+
+  # ── Feature-flag-gated cutover ─────────────────────────────────────────────────
+  cutover-gate:
+    needs: [smoke-test]
+    if: needs.smoke-test.outputs.passed == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      flag_enabled: ${{ steps.check.outputs.enabled }}
+    steps:
+      - id: check
+        run: |
+          RESPONSE=$(curl -sf "${{ vars.API_BASE_URL }}/api/v1/flags/enable_blue_green_cutover/status" || echo '{"enabled":false}')
+          ENABLED=$(echo "$RESPONSE" | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).enabled')
+          echo "enabled=$ENABLED" >> "$GITHUB_OUTPUT"
+          echo "Feature flag enable_blue_green_cutover: $ENABLED"
+
+  # Hard gate: flag off -> exit 0 (not a failure), green stays running for
+  # manual approval. This job intentionally does nothing but succeed.
+  awaiting-manual-approval:
+    needs: [cutover-gate]
+    if: needs.cutover-gate.outputs.flag_enabled != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "enable_blue_green_cutover flag is off — green is deployed and smoke-tested,"
+          echo "but traffic has NOT been shifted. Enable the flag or promote manually."
+          exit 0
+
+  # ── Atomic traffic shift + drain + blue teardown ───────────────────────────────
+  cutover:
+    needs: [cutover-gate]
+    if: needs.cutover-gate.outputs.flag_enabled == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shift 100% of traffic to green
+        run: bash scripts/shift-traffic.sh green
+
+      - name: Tag previous blue for teardown after drain
+        run: echo "Blue tagged for teardown at $(date -u -d '+10 minutes' +%FT%TZ 2>/dev/null || date -u -v+10M +%FT%TZ)"
+
+      - name: Wait for drain period
+        run: sleep 600 # 10-minute drain
+
+      - name: Tear down previous blue
+        run: |
+          # Placeholder for the real ECS/K8s teardown of the now-retired blue
+          # environment, e.g.: aws ecs update-service --desired-count 0 ...
+          echo "Tearing down previous blue environment"
+
+      - name: Slack notification — cutover complete
+        if: env.SLACK_WEBHOOK != ''
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_DEPLOY_WEBHOOK }}
+          SLACK_COLOR: good
+          SLACK_MESSAGE: 'Blue-green cutover complete — green is now serving 100% of traffic.'
