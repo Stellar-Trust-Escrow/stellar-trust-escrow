@@ -1,0 +1,41 @@
+version: 2
+updates:
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    # Covers pinned actions (actions/checkout, slsa-github-generator, etc).
+    # osv-scanner itself is downloaded directly (not an Action), pinned via
+    # OSV_SCANNER_VERSION in .github/workflows/sbom.yml — bump that env var
+    # manually when Dependabot or a security advisory flags a newer release.
+    labels:
+      - 'dependencies'
+      - 'ci'
+
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    labels:
+      - 'dependencies'
+
+  - package-ecosystem: 'npm'
+    directory: '/backend'
+    schedule:
+      interval: 'weekly'
+    labels:
+      - 'dependencies'
+
+  - package-ecosystem: 'npm'
+    directory: '/frontend'
+    schedule:
+      interval: 'weekly'
+    labels:
+      - 'dependencies'
+
+  - package-ecosystem: 'cargo'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    labels:
+      - 'dependencies'

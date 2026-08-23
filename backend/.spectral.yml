@@ -1,6 +1,6 @@
 
+extends: spectral:oas
 rules:
   operation-operationId: error
   operation-tags: error
   operation-success-response: error
-  oas3-missing-schema-definition: warn
