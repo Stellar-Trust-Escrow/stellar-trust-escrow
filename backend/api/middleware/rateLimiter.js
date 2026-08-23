@@ -69,7 +69,7 @@ return {limit - count, 0}
  * For distributed deployments swap this with a RedisWindowStore that uses
  * Redis sorted sets:  ZADD key score member  /  ZREMRANGEBYSCORE  /  ZCARD.
  */
-class SlidingWindowStore {
+export class SlidingWindowStore {
   constructor() {
     /** @type {Map<string, number[]>} */
     this._store = new Map();
@@ -119,6 +119,8 @@ class SlidingWindowStore {
     ts.push(now);
     return ts.length;
   }
+
+  increment(key, windowMs) { return Promise.resolve(this.record(key, windowMs)); }
 
   /**
    * Count requests for `key` within the last `windowMs` ms (prunes stale entries).
@@ -439,3 +441,83 @@ export function createPerUserRateLimiter({
 }
 
 export const perUserRateLimit = createPerUserRateLimiter();
+
+// ── Per-wallet rate limiter ────────────────────────────────────────────────────
+
+const BYPASS_PATHS = new Set(['/health', '/ready', '/ping']);
+
+/**
+ * Redis sliding window store with in-memory fallback.
+ * Uses Lua for atomic ZADD + ZREMRANGEBYSCORE + ZCARD.
+ */
+export class RedisWindowStore {
+  constructor(redisClient) {
+    this._redis = redisClient || null;
+    this._fallback = new SlidingWindowStore();
+  }
+
+  async increment(key, windowMs) {
+    if (!this._redis) return this._fallback.increment(key, windowMs);
+    try {
+      const now = Date.now();
+      const windowStart = now - windowMs;
+      const lua = `
+        local key = KEYS[1]
+        local now = tonumber(ARGV[1])
+        local windowStart = tonumber(ARGV[2])
+        local ttl = tonumber(ARGV[3])
+        redis.call('ZREMRANGEBYSCORE', key, '-inf', windowStart)
+        local member = now .. '-' .. math.random(1, 999999)
+        redis.call('ZADD', key, now, member)
+        redis.call('PEXPIRE', key, ttl)
+        return redis.call('ZCARD', key)
+      `;
+      return await this._redis.eval(lua, 1, key, now, windowStart, windowMs);
+    } catch {
+      return this._fallback.increment(key, windowMs);
+    }
+  }
+
+  async getCount(key, windowMs) {
+    if (!this._redis) return this._fallback.getCount(key, windowMs);
+    try {
+      const windowStart = Date.now() - windowMs;
+      return await this._redis.zcount(key, windowStart, '+inf');
+    } catch {
+      return this._fallback.getCount(key, windowMs);
+    }
+  }
+}
+
+/**
+ * Per-wallet rate limit middleware factory.
+ * Applies a sliding window limit per wallet address on write endpoints.
+ */
+export function walletRateLimit({ max = 20, windowMs = 60_000, store } = {}) {
+  const _store = store || new SlidingWindowStore();
+  return async (req, res, next) => {
+    if (BYPASS_PATHS.has(req.path)) return next();
+    const wallet =
+      req.user?.walletAddress ||
+      req.body?.walletAddress ||
+      req.headers['x-wallet-address'];
+    if (!wallet) return next();
+
+    const key = `wallet:rl:${wallet}`;
+    const count = await _store.increment(key, windowMs);
+    const remaining = Math.max(0, max - count);
+
+    res.setHeader('X-RateLimit-Limit', max);
+    res.setHeader('X-RateLimit-Remaining', remaining);
+    res.setHeader('X-RateLimit-Reset', Math.ceil((Date.now() + windowMs) / 1000));
+
+    if (count > max) {
+      res.setHeader('Retry-After', Math.ceil(windowMs / 1000));
+      return res.status(429).json({
+        error: 'Too Many Requests',
+        message: `Wallet rate limit exceeded. Retry after ${Math.ceil(windowMs / 1000)}s.`,
+      });
+    }
+    next();
+  };
+}

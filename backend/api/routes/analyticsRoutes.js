@@ -30,4 +30,7 @@ router.get('/resolution-time', analyticsController.getResolutionTime);
  */
 router.get('/cohort', analyticsController.getCohortRetention);
 
+router.get('/summary', analyticsController.getSummary);
+router.get('/export/:dataset', analyticsController.exportCSV);
+
 export default router;

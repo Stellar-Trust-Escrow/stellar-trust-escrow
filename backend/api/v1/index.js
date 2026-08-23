@@ -1,6 +1,7 @@
 import express from 'express';
 import { versioning } from '../middleware/version.js';
 
+import assetRoutes from '../routes/assetRoutes.js';
 import disputeRoutes from '../routes/disputeRoutes.js';
 import escrowRoutes from '../routes/escrowRoutes.js';
 import exportRoutes from '../routes/exportRoutes.js';
@@ -12,6 +13,7 @@ import reputationRoutes from '../routes/reputationRoutes.js';
 import userRoutes from '../routes/userRoutes.js';
 import auditRoutes from '../routes/auditRoutes.js';
 import complianceRoutes from '../routes/complianceRoutes.js';
+import feeEstimationRoutes from '../routes/feeEstimationRoutes.js';
 
 const router = express.Router();
 
@@ -20,6 +22,7 @@ router.use(versioning('v1'));
 
 // Mounted before /escrows so the more specific export prefix wins over the
 // escrow `/:id` catch-all route.
+router.use('/assets', assetRoutes);
 router.use('/escrows/export', exportRoutes);
 router.use('/escrows', escrowRoutes);
 router.use('/users', userRoutes);
@@ -31,5 +34,6 @@ router.use('/kyc', kycRoutes);
 router.use('/payments', paymentRoutes);
 router.use('/audit', auditRoutes);
 router.use('/compliance', complianceRoutes);
+router.use('/escrows', feeEstimationRoutes);
 
 export default router;
