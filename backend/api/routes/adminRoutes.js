@@ -17,11 +17,19 @@ import { getAuditLog, rotateSecrets } from '../../lib/secrets.js';
 import cache from '../../lib/cache.js';
 import auditRoutes from './auditRoutes.js';
 import { getReconciliationReportHandler } from '../controllers/ledgerController.js';
+import referralController from '../controllers/referralController.js';
 
 // Apply admin authentication to all routes in this file
 router.use(adminAuth);
 
 router.use('/audit', auditRoutes);
+
+// ── Referrals ────────────────────────────────────────────────────────────────
+/**
+ * @route  POST /api/admin/referrals/pay-out
+ * @desc   Batch pay out pending referral earnings (max 100 per invocation).
+ */
+router.post('/referrals/pay-out', referralController.payOutBatch);
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
 /**

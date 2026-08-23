@@ -82,6 +82,7 @@ model User {
   mfaMethods           MfaMethod[]
   mfaAttempts          MfaAttempt[]
   notificationDeliveries NotificationDelivery[]
+  referralCodes        ReferralCode[]
 
   @@index([tenantId, createdAt(sort: Desc)])
   @@index([tenantId, email])
@@ -1047,6 +1048,46 @@ model OwnershipTransferLog {
   @@index([fromOwner])
   @@index([toOwner])
   @@map("ownership_transfer_logs")
+}
+
+// ── Referrals ────────────────────────────────────────────────────────────────
+
+model ReferralCode {
+  code            String   @id
+  referrerUserId  Int      @map("referrer_user_id")
+  totalReferrals  Int      @default(0) @map("total_referrals")
+  totalEarnedXlm  Decimal  @default(0) @map("total_earned_xlm") @db.Decimal(20, 7)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  referrer User             @relation(fields: [referrerUserId], references: [id])
+  earnings ReferralEarning[]
+
+  @@index([referrerUserId])
+  @@map("referral_codes")
+}
+
+enum ReferralTriggerEvent {
+  release
+  completion
+}
+
+model ReferralEarning {
+  id               String                @id @default(cuid())
+  referralCode     String                @map("referral_code")
+  escrowId         BigInt                @map("escrow_id")
+  triggeredByEvent ReferralTriggerEvent  @map("triggered_by_event")
+  earnedXlm        Decimal               @map("earned_xlm") @db.Decimal(20, 7)
+  paidOut          Boolean               @default(false) @map("paid_out")
+  paidOutAt        DateTime?             @map("paid_out_at")
+  createdAt        DateTime              @default(now()) @map("created_at")
+
+  code ReferralCode @relation(fields: [referralCode], references: [code])
+
+  @@unique([referralCode, escrowId, triggeredByEvent])
+  @@index([referralCode])
+  @@index([paidOut])
+  @@index([escrowId])
+  @@map("referral_earnings")
 }
 
 // ── Payment Streams ──────────────────────────────────────────────────────────

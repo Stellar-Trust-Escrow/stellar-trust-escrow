@@ -32,6 +32,7 @@ import {
   transition,
 } from '../lib/escrowStateMachine.js';
 import { emitEscrowEvent } from './escrowRealtime.js';
+import { calculateEarning } from './referralService.js';
 import { createModuleLogger } from '../config/logger.js';
 import { recordMovement, AccountType, EntryType } from './ledgerService.js';
 
@@ -341,6 +342,12 @@ export async function releaseMilestone({ escrowId, milestoneIndex, amount, calle
     amount,
     callerAddress,
   });
+
+  // Referral fee-split accounting. Fire-and-forget: a referral lookup/write
+  // failure must never block or fail the release itself (calculateEarning
+  // already catches its own errors internally and returns null on failure).
+  const referralTrigger = result.status === 'Released' ? 'completion' : 'release';
+  calculateEarning(escrowId, referralTrigger).catch(() => {});
 
   return result;
 }
