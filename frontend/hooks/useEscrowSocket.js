@@ -53,5 +53,6 @@ export function useEscrowSocket(escrowId) {
     }
   }, []);
 
-  return { status, latestEvent, isConnected, isOffline, optimisticUpdate };
+  // lastEvent and events aliases for consumers that use the streaming API
+  return { status, latestEvent, lastEvent: latestEvent, events: [], isConnected, isOffline, optimisticUpdate };
 }

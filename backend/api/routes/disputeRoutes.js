@@ -2,6 +2,7 @@ import express from 'express';
 import disputeController from '../controllers/disputeController.js';
 import { cacheResponse, invalidateOn, TTL } from '../middleware/cache.js';
 import authMiddleware from '../middleware/auth.js';
+import { raiseDispute, resolveDispute, getDisputeStatus } from '../../services/disputeArbitrationService.js';
 import { handleUploadError } from '../middleware/fileUpload.js';
 import {
   validate,
@@ -88,5 +89,52 @@ router.patch(
   invalidateOn({ tags: ['disputes'] }),
   disputeController.patchAppeal,
 );
+
+// ── Arbitration endpoints ─────────────────────────────────────────────────────
+
+router.post('/escrow/:escrowId/raise', async (req, res) => {
+  try {
+    const { reason, evidenceHash } = req.body;
+    if (!reason) return res.status(400).json({ error: 'reason is required' });
+    const result = await raiseDispute(
+      req.params.escrowId,
+      req.user?.walletAddress || req.body.raisedByAddress,
+      reason,
+      evidenceHash ?? null,
+    );
+    res.status(201).json(result);
+  } catch (err) {
+    const status = err.status ?? 500;
+    res.status(status).json({ error: err.message, code: err.code });
+  }
+});
+
+router.post('/escrow/:escrowId/resolve-arbitration', async (req, res) => {
+  try {
+    const { resolution, arbitratorAddress, outcome } = req.body;
+    if (!resolution || !arbitratorAddress) {
+      return res.status(400).json({ error: 'resolution and arbitratorAddress are required' });
+    }
+    const result = await resolveDispute(
+      req.params.escrowId,
+      resolution,
+      arbitratorAddress,
+      outcome,
+    );
+    res.json(result);
+  } catch (err) {
+    const status = err.status ?? 500;
+    res.status(status).json({ error: err.message, code: err.code });
+  }
+});
+
+router.get('/escrow/:escrowId/status', async (req, res) => {
+  try {
+    const result = await getDisputeStatus(req.params.escrowId);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 export default router;
