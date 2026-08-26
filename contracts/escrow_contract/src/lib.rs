@@ -2696,6 +2696,14 @@ impl EscrowContract {
             return Err(EscrowError::E9);
         }
 
+        // Check if escrow deadline has passed
+        if let Some(deadline) = meta.deadline {
+            let now = env.ledger().timestamp();
+            if now > deadline {
+                return Err(EscrowError::EscrowAlreadyExpired);
+            }
+        }
+
         // Check if lock time has expired (legacy lock_time behaviour)
         ContractStorage::check_lock_time_expired(&env, escrow_id, meta.lock_time)?;
 
@@ -2995,6 +3003,10 @@ impl EscrowContract {
                     escrow_id,
                 );
                 events::emit_escrow_completed(&env, escrow_id);
+
+                // Update reputation for both parties on escrow completion
+                Self::_update_reputation_internal(&env, &meta.freelancer, true, false, meta.total_amount);
+                Self::_update_reputation_internal(&env, &meta.client, true, false, meta.total_amount);
             }
 
             ContractStorage::save_escrow_meta(&env, &meta);
