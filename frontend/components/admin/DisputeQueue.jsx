@@ -173,43 +173,68 @@ export default function DisputeQueue({ apiKey }) {
               <tr className="border-b border-gray-700">
                 <th
                   scope="col"
-                  className="text-left py-3 px-4 text-gray-400 font-medium cursor-pointer hover:text-white transition-colors"
-                  onClick={() => handleSort('escrowId')}
+                  className="text-left py-3 px-4 text-gray-400 font-medium"
                   aria-sort={getSortAria('escrowId')}
                 >
-                  Escrow ID {getSortIcon('escrowId')}
+                  <button
+                    type="button"
+                    onClick={() => handleSort('escrowId')}
+                    className="font-medium hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded"
+                  >
+                    Escrow ID {getSortIcon('escrowId')}
+                  </button>
                 </th>
                 <th
                   scope="col"
-                  className="text-left py-3 px-4 text-gray-400 font-medium cursor-pointer hover:text-white transition-colors"
-                  onClick={() => handleSort('raisedAt')}
+                  className="text-left py-3 px-4 text-gray-400 font-medium"
                   aria-sort={getSortAria('raisedAt')}
                 >
-                  Raised At {getSortIcon('raisedAt')}
+                  <button
+                    type="button"
+                    onClick={() => handleSort('raisedAt')}
+                    className="font-medium hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded"
+                  >
+                    Raised At {getSortIcon('raisedAt')}
+                  </button>
                 </th>
                 <th
                   scope="col"
-                  className="text-left py-3 px-4 text-gray-400 font-medium cursor-pointer hover:text-white transition-colors"
-                  onClick={() => handleSort('currentArbiter')}
+                  className="text-left py-3 px-4 text-gray-400 font-medium"
                   aria-sort={getSortAria('currentArbiter')}
                 >
-                  Current Arbiter {getSortIcon('currentArbiter')}
+                  <button
+                    type="button"
+                    onClick={() => handleSort('currentArbiter')}
+                    className="font-medium hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded"
+                  >
+                    Current Arbiter {getSortIcon('currentArbiter')}
+                  </button>
                 </th>
                 <th
                   scope="col"
-                  className="text-left py-3 px-4 text-gray-400 font-medium cursor-pointer hover:text-white transition-colors"
-                  onClick={() => handleSort('escalationCount')}
+                  className="text-left py-3 px-4 text-gray-400 font-medium"
                   aria-sort={getSortAria('escalationCount')}
                 >
-                  Escalations {getSortIcon('escalationCount')}
+                  <button
+                    type="button"
+                    onClick={() => handleSort('escalationCount')}
+                    className="font-medium hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded"
+                  >
+                    Escalations {getSortIcon('escalationCount')}
+                  </button>
                 </th>
                 <th
                   scope="col"
-                  className="text-left py-3 px-4 text-gray-400 font-medium cursor-pointer hover:text-white transition-colors"
-                  onClick={() => handleSort('autoEscalateAt')}
+                  className="text-left py-3 px-4 text-gray-400 font-medium"
                   aria-sort={getSortAria('autoEscalateAt')}
                 >
-                  Time Until Escalate {getSortIcon('autoEscalateAt')}
+                  <button
+                    type="button"
+                    onClick={() => handleSort('autoEscalateAt')}
+                    className="font-medium hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded"
+                  >
+                    Time Until Escalate {getSortIcon('autoEscalateAt')}
+                  </button>
                 </th>
               </tr>
             </thead>

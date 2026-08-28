@@ -34,7 +34,23 @@ export default function EscrowDetailPage() {
   var error = result.error;
   var isLoading = result.isLoading;
 
-  if (isLoading) return React.createElement('div', { className: 'skeleton' }, 'Loading...');
+  if (isLoading) {
+    return React.createElement('div', { className: 'escrow-detail', 'aria-busy': 'true', 'aria-label': 'Loading escrow' },
+      React.createElement('header', null,
+        React.createElement('div', { className: 'h-7 w-48 bg-slate-200 rounded animate-pulse mb-3' }),
+        React.createElement('div', { className: 'h-5 w-20 bg-slate-200 rounded-full animate-pulse mb-3' }),
+        React.createElement('div', { className: 'h-4 w-32 bg-slate-100 rounded animate-pulse' })
+      ),
+      React.createElement('section', null,
+        React.createElement('div', { className: 'h-5 w-24 bg-slate-200 rounded animate-pulse mb-2' }),
+        React.createElement('div', { className: 'h-4 w-40 bg-slate-100 rounded animate-pulse' })
+      ),
+      React.createElement('section', null,
+        React.createElement('div', { className: 'h-5 w-32 bg-slate-200 rounded animate-pulse mb-2' }),
+        React.createElement('div', { className: 'h-4 w-36 bg-slate-100 rounded animate-pulse' })
+      )
+    );
+  }
   if (error) return React.createElement('div', null, 'Error loading escrow');
   var escrow = data;
 
