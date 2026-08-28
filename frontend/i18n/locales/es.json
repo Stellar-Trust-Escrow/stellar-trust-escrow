@@ -95,5 +95,31 @@
         "desc": "Sin intermediarios. Toda la lógica vive en un contrato inteligente Soroban."
       }
     }
+  },
+  "compare": {
+    "title": "Comparar Depósitos",
+    "emptyTitle": "Ningún depósito seleccionado",
+    "emptyDescription": "Activa el modo Comparar y marca hasta 4 depósitos para ver sus atributos lado a lado.",
+    "attributeColumn": "Atributo",
+    "exportCsv": "Exportar CSV",
+    "clear": "Limpiar",
+    "expandMilestones": "Expandir hitos",
+    "collapseMilestones": "Contraer hitos",
+    "maxHint": "Máximo 4 depósitos — deselecciona uno antes de añadir otro.",
+    "remove": "Quitar",
+    "removeColumnHint": "Flechas mueven entre columnas · Suprimir elimina este depósito",
+    "attributes": {
+      "title": "Título",
+      "status": "Estado",
+      "amount": "Monto",
+      "currency": "Moneda",
+      "parties": "Partes",
+      "milestones": "Hitos",
+      "arbiter": "Árbitro",
+      "created": "Creado",
+      "deadline": "Fecha límite",
+      "feeRate": "Comisión",
+      "disputes": "Disputas"
+    }
   }
 }

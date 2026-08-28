@@ -2,16 +2,25 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, SlidersHorizontal, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  Search,
+  SlidersHorizontal,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  GitCompareArrows,
+} from 'lucide-react';
 import Spinner from '../../components/ui/Spinner';
 // import EscrowCard from '../../components/escrow/EscrowCard';
 import EscrowListItem from '../../components/escrow/EscrowListItem';
+import EscrowComparePanel from '../../components/escrow/EscrowComparePanel';
 import DisputeModal from '../../components/escrow/DisputeModal';
 import SearchFilters from '../../components/explorer/SearchFilters';
 import Button from '../../components/ui/Button';
 import EmptyState from '../../components/ui/EmptyState';
 import ErrorBoundary from '../../components/error/ErrorBoundary';
 import { useEscrowFilterParams } from '../../hooks/useEscrowFilterParams';
+import { useCompareParams, MAX_COMPARE_ESCOWS } from '../../hooks/useCompareParams';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -21,10 +30,19 @@ function normaliseEscrow(e) {
     title: `Escrow #${e.id}`,
     status: e.status,
     totalAmount: `${Number(e.totalAmount).toLocaleString()} USDC`,
+    rawTotalAmount: e.totalAmount,
+    currency: 'USDC',
     milestoneProgress: '0 / 0',
     counterparty: e.clientAddress
       ? `${e.clientAddress.slice(0, 4)}…${e.clientAddress.slice(-4)}`
       : '—',
+    clientAddress: e.clientAddress,
+    freelancerAddress: e.freelancerAddress,
+    arbiterAddress: e.arbiterAddress || null,
+    deadline: e.deadline || null,
+    createdAt: e.createdAt || null,
+    remainingBalance: e.remainingBalance || null,
+    transactionHash: e.transactionHash || null,
     role: 'client',
   };
 }
@@ -33,9 +51,13 @@ function ExplorerContent() {
   const router = useRouter();
   const { filters, setFilter, resetFilters, copyFilterUrl, activeFilterCount, apiQueryString } =
     useEscrowFilterParams();
+  const { compareIds, toggleCompare, removeCompare, clearCompare, isCompareSelected } =
+    useCompareParams();
 
   const [search, setSearch] = useState(filters.q);
   const [showFilters, setShowFilters] = useState(false);
+  const [compareMode, setCompareMode] = useState(compareIds.length > 0);
+  const [compareError, setCompareError] = useState(false);
   const [escrows, setEscrows] = useState([]);
   const [meta, setMeta] = useState({
     total: 0,
@@ -76,6 +98,27 @@ function ExplorerContent() {
     };
   }, [apiQueryString]);
 
+  const handleToggleCompare = (id) => {
+    const strId = String(id);
+    if (!isCompareSelected(strId) && (compareIds ?? []).length >= MAX_COMPARE_ESCOWS) {
+      setCompareError(true);
+      return;
+    }
+    setCompareError(false);
+    toggleCompare(strId);
+  };
+
+  const handleClearCompare = () => {
+    setCompareError(false);
+    setCompareMode(false);
+    clearCompare();
+  };
+
+  const handleCompareModeToggle = () => {
+    setCompareError(false);
+    setCompareMode((v) => !v);
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -110,6 +153,20 @@ function ExplorerContent() {
         </div>
 
         <button
+          onClick={handleCompareModeToggle}
+          aria-pressed={compareMode}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border bg-gray-900 ${
+            compareMode ? 'border-indigo-500 text-indigo-300' : 'border-gray-800 text-gray-300'
+          }`}
+        >
+          <GitCompareArrows size={15} />
+          {compareMode ? 'Compare ON' : 'Compare'}
+          {(compareIds ?? []).length > 0 && (
+            <span className="text-xs">{(compareIds ?? []).length}</span>
+          )}
+        </button>
+
+        <button
           onClick={() => setShowFilters((v) => !v)}
           className="flex items-center gap-2 px-4 py-2.5 rounded-lg border bg-gray-900 border-gray-800 text-gray-300"
         >
@@ -118,6 +175,17 @@ function ExplorerContent() {
           {activeFilterCount > 0 && <span className="text-xs">{activeFilterCount}</span>}
         </button>
       </div>
+
+      {compareError && (
+        <div
+          role="alert"
+          data-testid="compare-error"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-red-500/40 bg-red-500/10 text-red-300 text-sm"
+        >
+          <span aria-hidden="true">⚠</span> Max {MAX_COMPARE_ESCOWS} escrows — deselect one before
+          adding another.
+        </div>
+      )}
 
       <div className={`flex gap-6 ${showFilters ? 'items-start' : ''}`}>
         {showFilters && (
@@ -133,6 +201,18 @@ function ExplorerContent() {
         )}
 
         <div className="flex-1 min-w-0">
+          {(compareIds ?? []).length > 0 && (
+            <div className="mb-4">
+              <EscrowComparePanel
+                escrows={escrows}
+                compareIds={compareIds}
+                onToggleCompare={handleToggleCompare}
+                onRemoveCompare={removeCompare}
+                onClearCompare={handleClearCompare}
+              />
+            </div>
+          )}
+
           {loading ? (
             <div className="flex flex-col items-center justify-center py-24 gap-4 text-gray-400">
               <Spinner />
@@ -156,12 +236,32 @@ function ExplorerContent() {
               className={`grid gap-4 ${showFilters ? 'md:grid-cols-2' : 'md:grid-cols-2 lg:grid-cols-3'}`}
             >
               {escrows.map((escrow) => (
-                <EscrowListItem
-                  key={escrow.id}
-                  escrow={escrow}
-                  canReleaseAll={escrow.status === 'Active'}
-                  onDispute={(e) => setDisputeEscrowId(Number(e.id))}
-                />
+                <div key={escrow.id} className="relative">
+                  {compareMode && (
+                    <div className="absolute top-2 right-2 z-10">
+                      <label className="flex items-center gap-1.5 cursor-pointer bg-gray-950/80 border border-gray-800 rounded-lg px-2 py-1.5">
+                        <input
+                          type="checkbox"
+                          data-testid={`compare-check-${escrow.id}`}
+                          aria-label={`Compare ${escrow.title}`}
+                          checked={isCompareSelected(escrow.id)}
+                          disabled={
+                            !isCompareSelected(escrow.id) &&
+                            (compareIds ?? []).length >= MAX_COMPARE_ESCOWS
+                          }
+                          onChange={() => handleToggleCompare(escrow.id)}
+                          className="h-4 w-4 accent-indigo-500"
+                        />
+                        <span className="text-xs text-gray-300">Compare</span>
+                      </label>
+                    </div>
+                  )}
+                  <EscrowListItem
+                    escrow={escrow}
+                    canReleaseAll={escrow.status === 'Active'}
+                    onDispute={(e) => setDisputeEscrowId(Number(e.id))}
+                  />
+                </div>
               ))}
             </div>
           )}

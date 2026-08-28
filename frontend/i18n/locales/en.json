@@ -32,6 +32,32 @@
       "cancel": "Cancel Escrow"
     }
   },
+  "compare": {
+    "title": "Compare Escrows",
+    "emptyTitle": "No escrows selected",
+    "emptyDescription": "Toggle Compare mode and tick up to 4 escrows to inspect their attributes side by side.",
+    "attributeColumn": "Attribute",
+    "exportCsv": "Export CSV",
+    "clear": "Clear",
+    "expandMilestones": "Expand milestones",
+    "collapseMilestones": "Collapse milestones",
+    "maxHint": "Maximum 4 escrows — deselect one before adding another.",
+    "remove": "Remove",
+    "removeColumnHint": "Arrow keys move between columns · Delete removes this escrow",
+    "attributes": {
+      "title": "Title",
+      "status": "Status",
+      "amount": "Amount",
+      "currency": "Currency",
+      "parties": "Parties",
+      "milestones": "Milestones",
+      "arbiter": "Arbiter",
+      "created": "Created",
+      "deadline": "Deadline",
+      "feeRate": "Fee rate",
+      "disputes": "Disputes"
+    }
+  },
   "milestone": {
     "status": {
       "pending": "Pending",

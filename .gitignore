@@ -108,3 +108,5 @@ seed-load-report.json
 
 # Storybook static build output
 frontend/storybook-static/
+
+frontend/tsconfig.tsbuildinfo

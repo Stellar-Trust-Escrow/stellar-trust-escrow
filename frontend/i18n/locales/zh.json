@@ -83,5 +83,31 @@
         "desc": "无中间商。所有逻辑都在开放可审计的 Soroban 智能合约中。"
       }
     }
+  },
+  "compare": {
+    "title": "比较托管",
+    "emptyTitle": "未选择托管",
+    "emptyDescription": "开启比较模式并勾选最多 4 个托管，并排查看它们的属性。",
+    "attributeColumn": "属性",
+    "exportCsv": "导出 CSV",
+    "clear": "清除",
+    "expandMilestones": "展开里程碑",
+    "collapseMilestones": "收起里程碑",
+    "maxHint": "最多 4 个托管 — 请先取消一个再添加另一个。",
+    "remove": "移除",
+    "removeColumnHint": "方向键在列间移动 · Delete 删除此托管",
+    "attributes": {
+      "title": "标题",
+      "status": "状态",
+      "amount": "金额",
+      "currency": "币种",
+      "parties": "参与方",
+      "milestones": "里程碑",
+      "arbiter": "仲裁员",
+      "created": "创建时间",
+      "deadline": "截止日期",
+      "feeRate": "费率",
+      "disputes": "争议"
+    }
   }
 }

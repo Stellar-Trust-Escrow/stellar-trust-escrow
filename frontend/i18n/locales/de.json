@@ -95,5 +95,31 @@
         "desc": "Keine Vermittler. Alles läuft in einem Soroban-Smart-Contract."
       }
     }
+  },
+  "compare": {
+    "title": "Treuhand vergleichen",
+    "emptyTitle": "Keine Treuhand ausgewählt",
+    "emptyDescription": "Aktivieren Sie den Vergleichsmodus und markieren Sie bis zu 4 Treuhandverträge, um ihre Attribute nebeneinander zu sehen.",
+    "attributeColumn": "Attribut",
+    "exportCsv": "CSV exportieren",
+    "clear": "Löschen",
+    "expandMilestones": "Meilensteine erweitern",
+    "collapseMilestones": "Meilensteine einklappen",
+    "maxHint": "Maximal 4 Treuhandverträge — wählen Sie einen ab, bevor Sie einen weiteren hinzufügen.",
+    "remove": "Entfernen",
+    "removeColumnHint": "Pfeiltasten wechseln Spalten · Entf entfernt diesen Vertrag",
+    "attributes": {
+      "title": "Titel",
+      "status": "Status",
+      "amount": "Betrag",
+      "currency": "Währung",
+      "parties": "Parteien",
+      "milestones": "Meilensteine",
+      "arbiter": "Schlichter",
+      "created": "Erstellt",
+      "deadline": "Frist",
+      "feeRate": "Gebühr",
+      "disputes": "Streitfälle"
+    }
   }
 }
