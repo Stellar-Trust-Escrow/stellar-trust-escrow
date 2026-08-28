@@ -89,5 +89,31 @@
         "desc": "لا وسطاء. كل المنطق يعيش في عقد ذكي Soroban مفتوح المصدر."
       }
     }
+  },
+  "compare": {
+    "title": "مقارنة الحسابات",
+    "emptyTitle": "لم يتم تحديد أي حساب",
+    "emptyDescription": "فعّل وضع المقارنة وحدد حتى 4 حسابات لعرض سماتها جنبًا إلى جنب.",
+    "attributeColumn": "السمة",
+    "exportCsv": "تصدير CSV",
+    "clear": "مسح",
+    "expandMilestones": "توسيع المراحل",
+    "collapseMilestones": "طي المراحل",
+    "maxHint": "الحد الأقصى 4 حسابات — قم بإلغاء تحديد أحدها قبل إضافة آخر.",
+    "remove": "إزالة",
+    "removeColumnHint": "الأسهم تتنقل بين الأعمدة · Delete يزيل هذا الحساب",
+    "attributes": {
+      "title": "العنوان",
+      "status": "الحالة",
+      "amount": "المبلغ",
+      "currency": "العملة",
+      "parties": "الأطراف",
+      "milestones": "المراحل",
+      "arbiter": "المحكم",
+      "created": "تاريخ الإنشاء",
+      "deadline": "الموعد النهائي",
+      "feeRate": "الرسوم",
+      "disputes": "النزاعات"
+    }
   }
 }
