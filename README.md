@@ -521,6 +521,7 @@ GET /health/ready     readiness probe — 503 when the database is unavailable
 | `ANALYTICS_FLUSH_INTERVAL_MS`      | `10000`                 | How often in-memory analytics flush to time-series DB     |
 | `EXPO_PUBLIC_API_URL`              | `http://localhost:4000` | Mobile app backend URL                                    |
 | `EXPO_PUBLIC_OFFLINE_CACHE_TTL_MS` | `300000`                | SQLite offline cache TTL (5 min)                          |
+| `NEXT_PUBLIC_API_URL`              | `http://localhost:4000` | Frontend backend URL; the dispute UI also derives its WebSocket URL from it |
 
 ---
 
