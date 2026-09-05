@@ -16,6 +16,11 @@ permissions:
 env:
   HUSKY: 0
   SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+  NEXT_PUBLIC_SENTRY_DSN: https://examplePublicKey@o0.ingest.sentry.io/0
+  SENTRY_DSN: https://examplePublicKey@o0.ingest.sentry.io/0
+  SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+  SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+  SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
 
 jobs:
   # ─────────────────────────────────────────
@@ -834,6 +839,10 @@ jobs:
           build-args: |
             NEXT_PUBLIC_API_URL=http://localhost:4000
             NEXT_PUBLIC_CONTRACT_ADDRESS=CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+            NEXT_PUBLIC_SENTRY_DSN=https://examplePublicKey@o0.ingest.sentry.io/0
+            SENTRY_AUTH_TOKEN=${{ secrets.SENTRY_AUTH_TOKEN }}
+            SENTRY_ORG=${{ secrets.SENTRY_ORG }}
+            SENTRY_PROJECT=${{ secrets.SENTRY_PROJECT }}
 
       - name: Job Summary
         if: always()

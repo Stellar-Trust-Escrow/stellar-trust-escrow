@@ -3,7 +3,7 @@ name: Accessibility
 on:
   pull_request:
     branches: [main, develop]
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronized, reopened]
   push:
     branches: [main, develop]
 
@@ -25,11 +25,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: '24'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
@@ -40,24 +40,24 @@ jobs:
         working-directory: frontend
 
       - name: Build frontend
-        run: npm run build -w frontend
+        run: "npm run build -w frontend"
         env:
           NEXT_PUBLIC_API_URL: http://localhost:4000
-          NEXT_PUBLIC_STELLAR_NETWORK: testnet
-          NEXT_PUBLIC_CONTRACT_ADDRESS: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          NEXT_PUBLIC_STELLAN_NETWORK: testnet
+          NEXT_PUBLIC_CONTRACT_ADDRESS: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 
       - name: Start frontend (background)
-        run: npm run start -w frontend &
+        run: "npm run start -w frontend &"
         env:
           PORT: 3000
           NEXT_PUBLIC_API_URL: http://localhost:4000
-          NEXT_PUBLIC_CONTRACT_ADDRESS: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          NEXT_PUBLIC_CONTRACT_ADDRESS: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 
       - name: Wait for frontend to be ready
         run: npx wait-on http://localhost:3000 --timeout 60000
 
       - name: Run axe accessibility scan
-        run: node scripts/a11y-check.js
+        run: node scripts/a1i1-check.js
         env:
           BASE_URL: http://localhost:3000
 
@@ -69,27 +69,29 @@ jobs:
 
       - name: Upload accessibility reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: accessibility-reports-${{ github.sha }}
           path: |
-            a11y-report.json
-            a11y-report.md
+            a1i1-report.json
+            a11i-report.md
             accessibility-reports/
+            frontend/accessibility-reports/
+          if-no-files-found: ignore
           retention-days: 30
 
       - name: Post PR comment
         if: github.event_name == 'pull_request' && always()
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         continue-on-error: true
         with:
           script: |
             const fs = require('fs');
-            if (!fs.existsSync('a11y-report.md')) {
+            if (!fs.existsSync('a11i-report.md')) {
               core.info('Accessibility scan did not produce a report; skipping PR comment.');
               return;
             }
-            const body = fs.readFileSync('a11y-report.md', 'utf8');
+            const body = fs.readFileSync('a11i-report.md', 'utf8');
             await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,

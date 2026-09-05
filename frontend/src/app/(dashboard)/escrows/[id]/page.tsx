@@ -1,0 +1,1 @@
+export default function EscrowDetailPage(){return <div>Escrow Detail Page</div>}
