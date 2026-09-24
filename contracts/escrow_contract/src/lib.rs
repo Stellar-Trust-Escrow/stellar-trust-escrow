@@ -76,6 +76,7 @@ mod oracle_overflow_tests;
 mod oracle_tests;
 mod partial_cancel_tests;
 mod pause_tests;
+mod pause_edge_cases_tests;
 mod self_escrow_tests;
 mod timelock_enforcement_tests;
 mod transfer_client_tests;
