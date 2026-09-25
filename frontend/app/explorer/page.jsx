@@ -8,6 +8,7 @@ import Spinner from '../../components/ui/Spinner';
 import EscrowListItem from '../../components/escrow/EscrowListItem';
 import DisputeModal from '../../components/escrow/DisputeModal';
 import SearchFilters from '../../components/explorer/SearchFilters';
+import StaleIndexerWarning from '../../components/explorer/StaleIndexerWarning';
 import Button from '../../components/ui/Button';
 import EmptyState from '../../components/ui/EmptyState';
 import ErrorBoundary from '../../components/error/ErrorBoundary';
@@ -47,6 +48,32 @@ function ExplorerContent() {
   const [error, setError] = useState(null);
   const [disputeEscrowId, setDisputeEscrowId] = useState(null);
 
+  // ── Indexer lag detection (Issue #234) ──────────────────────────────────────
+  const [indexerStatus, setIndexerStatus] = useState({
+    lastProcessedLedger: 0,
+    currentLedger: 0,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_BASE}/api/indexer/status`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        setIndexerStatus({
+          lastProcessedLedger: data.lastProcessedLedger ?? 0,
+          currentLedger: data.currentLedger ?? 0,
+        });
+      })
+      .catch(() => {
+        // Indexer status is best-effort; silently ignore errors
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  // ────────────────────────────────────────────────────────────────────────────
+
   useEffect(() => {
     setSearch(filters.q);
   }, [filters.q]);
@@ -82,6 +109,13 @@ function ExplorerContent() {
         <h1 className="text-2xl font-bold text-white">Escrow Explorer</h1>
         <p className="text-gray-400 mt-1">Browse all public escrow agreements.</p>
       </div>
+
+      {/* Stale indexer warning — Issue #234 */}
+      <StaleIndexerWarning
+        lastProcessedLedger={indexerStatus.lastProcessedLedger}
+        currentLedger={indexerStatus.currentLedger}
+        isLoading={loading}
+      />
 
       <div className="flex gap-3">
         <div className="relative flex-1">
