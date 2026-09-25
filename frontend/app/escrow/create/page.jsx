@@ -26,6 +26,7 @@ import Button from '../../../components/ui/Button';
 import TemplateSelector from '../../../components/escrow/TemplateSelector';
 import StellarAddressInput from '../../../components/ui/StellarAddressInput';
 import XLMAmountInput from '../../../components/ui/XLMAmountInput';
+import SlippageControl from '../../../components/escrow/SlippageControl';
 import templatesData from '../../../data/templates.json';
 import { useToast } from '../../../contexts/ToastContext';
 import { useWallet } from '../../../hooks/useWallet';
@@ -62,6 +63,7 @@ function applyTemplateToForm(currentForm, template) {
     totalAmount: template.totalAmount || '',
     briefDescription: template.briefDescription || '',
     deadline: template.deadline || '',
+    slippagePct: currentForm.slippagePct,
     milestones,
   };
 }
@@ -85,6 +87,7 @@ export default function CreateEscrowPage() {
     totalAmount: '',
     briefDescription: '',
     deadline: '',
+    slippagePct: 0.5,
     milestones: [{ ...DEFAULT_MILESTONE }],
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -353,6 +356,22 @@ function StepCounterparty({ formData, setFormData, setTouched, amountError, desc
         )}
         {/* TODO (contributor): upload to IPFS and store hash */}
       </div>
+
+      {/* Slippage controls — Issue #236 (shown for path-payment / multi-asset escrows) */}
+      {formData.tokenAddress === 'custom' && (
+        <div className="space-y-1">
+          <p className="text-xs text-gray-500 uppercase tracking-wider">
+            Path Payment Settings
+          </p>
+          <SlippageControl
+            sendAmount={Number(formData.totalAmount) || 0}
+            receiveAsset="USDC"
+            estimatedRate={1}
+            value={formData.slippagePct}
+            onChange={(val) => setFormData((data) => ({ ...data, slippagePct: val }))}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -454,6 +473,12 @@ function StepReview({ formData }) {
         <p>
           Milestones: <span className="text-white">{formData.milestones.length}</span>
         </p>
+        {formData.tokenAddress === 'custom' && (
+          <p>
+            Slippage Tolerance:{' '}
+            <span className="text-white">{formData.slippagePct}%</span>
+          </p>
+        )}
       </div>
       <p className="text-xs text-gray-500">
         ⚠️ By proceeding, you authorize locking{' '}
