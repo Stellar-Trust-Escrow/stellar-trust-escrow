@@ -96,6 +96,12 @@ export default function AdminDashboard() {
       icon: '⚙️',
       desc: 'Manage fees and configuration',
     },
+    {
+      href: '/admin/queues',
+      label: 'Queue Management',
+      icon: '📭',
+      desc: 'Inspect and replay dead-letter jobs',
+    },
   ];
 
   return (
