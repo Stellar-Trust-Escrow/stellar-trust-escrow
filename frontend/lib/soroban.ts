@@ -2,6 +2,7 @@
 // Uses existing `frontend/lib/stellar.js` build helpers and Freighter in-browser signer.
 
 import * as stellar from './stellar';
+import { SorobanSimulator, SimulationResult } from './soroban-simulator';
 
 const NETWORK_PASSPHRASE =
   (process.env.NEXT_PUBLIC_STELLAR_NETWORK || 'testnet') === 'mainnet'
@@ -40,6 +41,19 @@ export async function signWithFreighter(unsignedXdr: string): Promise<string> {
   }
 }
 
+export async function simulateTransaction(
+  unsignedXdr: string,
+  options?: { methodName?: string; args?: Record<string, any>; xlmUsdRate?: number },
+): Promise<SimulationResult> {
+  const rpcUrl =
+    process.env.NEXT_PUBLIC_STELLAR_RPC_URL ||
+    ((process.env.NEXT_PUBLIC_STELLAR_NETWORK || 'testnet') === 'mainnet'
+      ? 'https://mainnet.sorobanrpc.com'
+      : 'https://soroban-testnet.stellar.org');
+
+  return SorobanSimulator.simulate(unsignedXdr, rpcUrl, options);
+}
+
 export async function buildSignAndBroadcastCreateEscrow(params: unknown) {
   // Build unsigned XDR using existing helper
   const unsigned = await (stellar as unknown as Record<string, (p: unknown) => Promise<string>>)['buildCreateEscrowTx'](params);
@@ -54,6 +68,7 @@ export async function signAndBroadcast(signedXdr: string) {
 
 export default {
   signWithFreighter,
+  simulateTransaction,
   buildSignAndBroadcastCreateEscrow,
   signAndBroadcast,
 };
