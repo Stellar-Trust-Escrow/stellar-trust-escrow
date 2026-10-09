@@ -7,7 +7,7 @@ A platform where communities pool funds, contractors deliver work in verifiable 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Built on Stellar](https://img.shields.io/badge/Built%20on-Stellar-7B2FBE?logo=stellar)](https://stellar.org)
 [![Soroban Contracts](https://img.shields.io/badge/Smart%20Contracts-Soroban%20%2F%20Rust-orange)](https://soroban.stellar.org)
-[![Backend Tests](https://img.shields.io/badge/backend%20tests-425%20passing-brightgreen)](#testing)
+[![Backend Tests](https://img.shields.io/badge/backend%20tests-see%20CI-blue)](#testing)
 [![Node](https://img.shields.io/badge/Node.js-%3E%3D18-339933?logo=node.js)](https://nodejs.org)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-blue)](CONTRIBUTING.md)
 
@@ -212,7 +212,7 @@ Stellar-Crowd-Fund-Escrow/
 │   │   ├── schema.prisma              # All data models + composite indexes
 │   │   └── migrations/                # Tracked migration history
 │   │
-│   └── tests/                         # Jest — 39 suites, 425 tests
+│   └── tests/                         # Jest and integration test suites
 │
 ├── frontend/                          # Next.js 14 web dashboard
 │   ├── app/                           # App Router pages
@@ -384,7 +384,7 @@ docker compose down
 ```bash
 cd backend
 
-npm test                  # run all 39 test suites (425 tests)
+npm test                  # run the backend and frontend test suites
 npm run test:watch        # watch mode — re-runs on file save
 npm run test:coverage     # coverage report in /coverage
 ```
@@ -625,7 +625,7 @@ This codebase applies defence-in-depth at every layer:
 
 **Pre-push enforcement**
 
-- Every push runs 425 backend tests; a failing test blocks the push
+- CI runs the configured backend and frontend test suites; a failing test blocks the push
 - Direct pushes to `main` require the committer email to be on the authorised list
 - Force-pushes and branch deletions on `main` are blocked by the hook
 
@@ -699,7 +699,7 @@ Types: `feat`, `fix`, `perf`, `security`, `refactor`, `test`, `docs`, `chore`
 **Pull requests:**
 
 - Target `develop`, not `main`
-- All 425 tests must pass (the pre-push hook enforces this)
+- The configured test suites must pass (the pre-push hook enforces this)
 - New features need a test
 - One logical change per PR
 
