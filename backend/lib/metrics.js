@@ -48,6 +48,13 @@ export const httpRequestsInFlight = new client.Gauge({
   registers: [register],
 });
 
+export const tenantResolutionTotal = new client.Counter({
+  name: 'tenant_resolution_total',
+  help: 'Tenant resolution outcomes by selector source',
+  labelNames: ['source', 'outcome'],
+  registers: [register],
+});
+
 // ── Database Metrics ──────────────────────────────────────────────────────────
 
 export const dbQueryDuration = new client.Histogram({
