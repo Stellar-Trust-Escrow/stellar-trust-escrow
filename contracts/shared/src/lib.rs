@@ -11,6 +11,45 @@ use soroban_sdk::{Env, IntoVal, Val};
 pub mod auth;
 
 // ── TTL constants ─────────────────────────────────────────────────────────────
+//
+// Issue #770 — ledger-time, fee, and transaction-size assumptions behind the
+// numbers below, recorded next to the implementation so a future change to
+// either can be checked against the reasoning that picked them.
+//
+// ## Ledger-time assumption
+//
+// Soroban ledgers close roughly every 5 seconds on mainnet (the same
+// assumption behind the common `DAY_IN_LEDGERS = 17_280` constant). At that
+// rate:
+//   - `*_TTL_THRESHOLD` (5,000 ledgers)  ≈ 25,000s  ≈ ~6.9 hours
+//   - `*_TTL_EXTEND_TO` (50,000 ledgers) ≈ 250,000s ≈ ~2.9 days
+//
+// So a bump fires once remaining TTL drops under ~7 hours, and resets the
+// entry to live for roughly another ~2.9 days from that point.
+//
+// ## Why threshold < extend_to, and by how much
+//
+// The ~7h/~2.9d gap is the safety margin: as long as an entry is touched by
+// `bump_*_ttl` at least once every ~2.9 days, it never reaches zero TTL. The
+// ~7h threshold window exists so a bump isn't deferred to the last possible
+// ledger — it still has slack if a bump transaction is delayed or fails.
+// An entry that goes untouched for longer than ~2.9 days (no read/write that
+// calls `bump_*_ttl` on it) is the one real risk: it gets archived and
+// requires an explicit, separately-feed restore (`RestoreFootprintOp`)
+// before it's readable again. Entries under active use are not expected to
+// hit this — every documented read/write path bumps on the way through.
+//
+// ## Fee / transaction-size assumption
+//
+// `extend_ttl` is a storage operation: it adds to the transaction's ledger
+// footprint and its resource fee, same as any other storage read/write.
+// Bumping is conditional on the threshold check above rather than
+// unconditional on every call, so the extra fee is paid roughly once per
+// ~7-hour window of activity per entry, not on every single transaction
+// that touches it. A contract calling `bump_*_ttl` on many keys in one
+// transaction (e.g. a batch operation) multiplies this footprint linearly
+// per key — keep batch sizes bounded (see `MAX_MILESTONES` below) so a
+// single transaction's resource fee stays predictable.
 
 /// Bump instance storage TTL when remaining ledgers fall below this threshold.
 pub const INSTANCE_TTL_THRESHOLD: u32 = 5_000;
