@@ -1,6 +1,19 @@
 import prisma from '../../lib/prisma.js';
 import { DEFAULT_TENANT_SLUG, runWithTenantContext } from '../../lib/tenantContext.js';
 
+const tenantSelect = {
+  id: true,
+  slug: true,
+  name: true,
+  status: true,
+  domains: true,
+  branding: true,
+  configuration: true,
+  metadata: true,
+  createdAt: true,
+  updatedAt: true,
+};
+
 function extractHostname(req) {
   const forwardedHost = req.headers['x-forwarded-host'];
   const rawHost = Array.isArray(forwardedHost)
@@ -17,52 +30,33 @@ async function findTenant(req) {
   const tenantSlug = req.headers['x-tenant-slug'];
   const hostname = extractHostname(req);
 
-  const or = [];
+  const candidates = [];
   if (typeof tenantId === 'string' && tenantId.trim()) {
-    or.push({ id: tenantId.trim() });
+    candidates.push({ id: tenantId.trim() });
   }
   if (typeof tenantSlug === 'string' && tenantSlug.trim()) {
-    or.push({ slug: tenantSlug.trim().toLowerCase() });
+    candidates.push({ slug: tenantSlug.trim().toLowerCase() });
   }
   if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
-    or.push({ domains: { has: hostname } });
+    candidates.push({ domains: { has: hostname } });
   }
 
-  if (or.length > 0) {
-    const matchedTenant = await prisma.tenant.findFirst({
-      where: { OR: or },
-      select: {
-        id: true,
-        slug: true,
-        name: true,
-        status: true,
-        domains: true,
-        branding: true,
-        configuration: true,
-        metadata: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+  if (candidates.length > 0) {
+    for (const where of candidates) {
+      const matchedTenant = await prisma.tenant.findFirst({
+        where,
+        select: tenantSelect,
+      });
 
-    if (matchedTenant) return matchedTenant;
+      if (matchedTenant) return matchedTenant;
+    }
+
     return null;
   }
 
   return prisma.tenant.findFirst({
     where: { slug: DEFAULT_TENANT_SLUG },
-    select: {
-      id: true,
-      slug: true,
-      name: true,
-      status: true,
-      domains: true,
-      branding: true,
-      configuration: true,
-      metadata: true,
-      createdAt: true,
-      updatedAt: true,
-    },
+    select: tenantSelect,
   });
 }
 

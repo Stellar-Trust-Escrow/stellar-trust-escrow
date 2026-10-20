@@ -62,12 +62,68 @@ describe('tenant middleware', () => {
 
     expect(prismaMock.tenant.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { OR: [{ slug: 'acme' }] },
+        where: { slug: 'acme' },
       }),
     );
     expect(req.tenant).toEqual(tenant);
     expect(next).toHaveBeenCalled();
     expect(res.headers['X-Tenant-Slug']).toBe('acme');
+  });
+
+  it('prefers tenant ID over slug and hostname when multiple selectors are supplied', async () => {
+    const tenantById = {
+      id: 'tenant_id',
+      slug: 'by-id',
+      status: 'active',
+    };
+    prismaMock.tenant.findFirst.mockResolvedValue(tenantById);
+
+    const req = {
+      headers: {
+        'x-tenant-id': 'tenant_id',
+        'x-tenant-slug': 'by-slug',
+        host: 'by-host.example.com',
+      },
+    };
+    const res = createRes();
+    const next = jest.fn();
+
+    await tenantMiddleware(req, res, next);
+
+    expect(prismaMock.tenant.findFirst).toHaveBeenCalledTimes(1);
+    expect(prismaMock.tenant.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'tenant_id' } }),
+    );
+    expect(req.tenant).toBe(tenantById);
+    expect(next).toHaveBeenCalled();
+  });
+
+  it('tries the next selector when a higher-priority tenant ID does not match', async () => {
+    const tenantBySlug = {
+      id: 'tenant_slug',
+      slug: 'by-slug',
+      status: 'active',
+    };
+    prismaMock.tenant.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(tenantBySlug);
+
+    const req = {
+      headers: {
+        'x-tenant-id': 'missing-tenant',
+        'x-tenant-slug': 'by-slug',
+        host: 'by-host.example.com',
+      },
+    };
+    const res = createRes();
+    const next = jest.fn();
+
+    await tenantMiddleware(req, res, next);
+
+    expect(prismaMock.tenant.findFirst.mock.calls.map(([query]) => query.where)).toEqual([
+      { id: 'missing-tenant' },
+      { slug: 'by-slug' },
+    ]);
+    expect(req.tenant).toBe(tenantBySlug);
+    expect(next).toHaveBeenCalled();
   });
 
   it('falls back to the default tenant when no identifier is supplied', async () => {
