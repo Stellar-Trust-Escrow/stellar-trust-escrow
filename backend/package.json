@@ -5,10 +5,10 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "dev": "nodemon server.js",
-    "build": "echo 'No build step required for backend'",
+    "dev": "node api.js && nodemon server.js",
+    "build": "node api.js && echo 'No build step required for backend'",
     "prestart": "node ../scripts/check-env.js",
-    "start": "node server.js",
+    "start": "node api.js && node server.js",
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --runInBand --passWithNoTests --forceExit",
     "test:chaos": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --runInBand --testPathPattern=tests/chaos --passWithNoTests",
     "lint": "eslint .",
